@@ -1,6 +1,6 @@
 # Проверка PHASE 1 — Project Bootstrap
 
-Обновлено: **2026-09-06**, проверки выполнялись 5–6 сентября. Статус этапа: **OPEN — локальная контейнерная приёмка пройдена, ожидается удалённый CI**. После разрешения пользователя установлены Docker Desktop и WSL 2; реальные integration и smoke завершились успешно. PHASE 2 не начата: для полного закрытия [плана приёмки](../phase-0/implementation-plan.md) ещё требуется запуск GitHub Actions в выбранном пользователем репозитории.
+Обновлено: **2026-09-06**, проверки выполнялись 5–6 сентября. Статус этапа: **PASS — PHASE 1 завершена**. Локальная приёмка, реальные PostgreSQL/Redis integration, Docker smoke и все обязательные jobs удалённого GitHub Actions прошли. Проверенный код: [`c4c83b0`](https://github.com/dendenden-boop/tradeGPTbot/commit/c4c83b0a5125faea20e024884140e40290e2fa67), [успешный CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34032682895). PHASE 2 ещё не начата.
 
 ## Реализовано
 
@@ -18,7 +18,7 @@ Readiness использует реальные драйверы `pg`/`ioredis`:
 
 Установщики дополнительно проверены через Authenticode: Docker Inc и Microsoft Corporation, статус Valid. SHA-256 Docker Desktop: `854626704af28a160d5af68b96b3e32eacf08ab397ce6c12eb02a04788d73681`; WSL MSI: `a3505a50f4cc585551d11d9de824ba4375448d7a68f2e71d3fb315fa986fc754`. Источники: [Docker release/checksum](https://docs.docker.com/desktop/release-notes/#4890), [WSL 2.7.13](https://github.com/microsoft/WSL/releases/tag/2.7.13). Docker расположен в `%LOCALAPPDATA%\Programs\DockerDesktop`, WSL — `C:\Program Files\WSL`. Файлы установщиков и журналы сохранены локально в игнорируемой `.tools/installers`.
 
-`pnpm test:clean` создал новую копию исходников в `.cache/clean-dWD4S6`, без `node_modules` и `dist`, выполнил offline frozen install из локального store, сборку всех трёх пакетов, production deploy и разрешение runtime imports из deployment. SHA-256 lockfile до и после установки совпал: `3833dbc9968d0376378b7c2909b8990f56264f7cc3e10e346c8d663767a7610f`. Это проверка свежего дерева исходников на Windows. Linux frozen install/build также выполнен при первой сборке Docker-образа; GitHub-hosted clean checkout подтверждается отдельным CI.
+`pnpm test:clean` создал новую копию исходников в `.cache/clean-dWD4S6`, без `node_modules` и `dist`, выполнил offline frozen install из локального store, сборку всех трёх пакетов, production deploy и разрешение runtime imports из deployment. SHA-256 lockfile до и после установки совпал: `3833dbc9968d0376378b7c2909b8990f56264f7cc3e10e346c8d663767a7610f`. Это проверка свежего дерева исходников на Windows. Linux frozen install/build также выполнен при первой сборке Docker-образа; GitHub-hosted clean checkout, frozen install и build подтверждены на Linux и Windows в [успешном CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34032682895); lockfile не изменился.
 
 ## Выполненные команды
 
@@ -42,7 +42,7 @@ Readiness использует реальные драйверы `pg`/`ioredis`:
 | `pnpm test:integration`                                                         | PASS, exit 0: 3 теста с реальными PostgreSQL/Redis; два последовательных чистых прогона      |
 | `pnpm test:smoke`                                                               | PASS, exit 0: production image, non-root, readiness, outage/recovery, secrets и SIGTERM      |
 | Linux lint/typecheck/unit/HTTP/runtime в Docker                                 | PASS, все команды exit 0; отдельный контейнер и настоящая доставка OS SIGTERM                |
-| GitHub Actions                                                                  | PENDING: репозиторий dendenden-boop/tradeGPTbot выбран, удалённый запуск готовится           |
+| GitHub Actions                                                                  | PASS: Windows, Linux и Real services and Docker smoke; run 34032682895                       |
 
 Unit suites: config — 66, logger — 15, health — 5, lifecycle — 6. Всего с HTTP — **105 успешных тестов**, плюс **3 реальных dependency integration теста** (108 уникальных сценариев; повторения на другой ОС не удваивают это число). HTTP suite подменяет только границу зависимостей; она не выдаётся за проверку PostgreSQL/Redis. Ноль найденных тестов настроен как ошибка.
 
@@ -52,11 +52,25 @@ Windows не доставляет дочернему Node-процессу POSIX
 
 Проверенный runtime image ID: `sha256:1d0089544d90489d8bc39ec503d793f13025f63509d28423d9c89880d659b549`. Дополнительный запуск с `--read-only --network none` подтвердил UID **1000**, отсутствие `/app/.env` и установленных TypeScript/Vitest/ESLint в runtime. `docker image inspect` вернул Size **83563830 байт**. Smoke также проверил реальные отказы и восстановление обеих зависимостей, отсутствие тестовых паролей в HTTP/логах/image config и очистку своего проекта.
 
-`pnpm docs:check` также завершился с exit 0: 19 UTF-8 документов, 81 локальная ссылка, 34 таблицы и 16 блоков кода. Финальный `pnpm format:check` прошёл после добавления отчёта.
+`pnpm docs:check` также завершился с exit 0: 19 UTF-8 документов, 82 локальные ссылки, 35 таблиц и 16 блоков кода. Финальный `pnpm format:check` прошёл после добавления отчёта.
 
 Машинные результаты находятся в игнорируемом `test-results/`: `unit.json`, `http.json`, `runtime.json`, `clean-install.json`, `integration.json`, `smoke.json`. Integration/smoke теперь содержат **PASS**; прежние причины неуспеха разобраны ниже. Cleanup failure переводит результат Docker-runner в FAIL.
 
 Linux lint, strict typecheck, 92 unit + 13 HTTP tests и compiled runtime прошли в отдельном контейнере с отключённой внешней сетью. Параметры pnpm соответствовали build stage: `--config.store-dir=/pnpm/store --config.verify-deps-before-run=error`. 64 readiness-запроса: **579 мс**, максимум **2** dependency sockets; завершение по настоящему OS SIGTERM: **15 мс**. Отчёты: `test-results/linux-checks.json`, `linux-checks-unit.json`, `linux-checks-http.json`, `linux-checks-runtime.json`. Начальное несовпадение store/CI-настроек тестового контейнера исправлено в окружении runner, проверки оставлены включёнными. Тестовые контейнеры удалены.
+
+## Подтверждённый удалённый CI
+
+[Bootstrap checks #34032682895](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34032682895) выполнен 6 сентября с 12:17:55 до 12:21:02 UTC для commit `c4c83b0a5125faea20e024884140e40290e2fa67`. Все три обязательных job завершились с conclusion `success`.
+
+| Job                            | Подтверждённый результат                                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Checks (ubuntu-24.04)          | Frozen install/build, formatter, lint, strict typecheck, 92 unit + 13 HTTP, runtime, audit и неизменный lockfile — PASS |
+| Checks (windows-2025)          | Тот же набор — PASS; LF checkout исправлен                                                                              |
+| Real services and Docker smoke | 3 реальных integration-сценария, production image, outages/recovery, non-root, secrets и OS SIGTERM — PASS              |
+
+Скачаны и проверены артефакты `bootstrap-ubuntu-24.04`, `bootstrap-windows-2025`, `bootstrap-docker`; локальная копия находится в игнорируемой `.cache/ci-34032682895/`. JSON unit/HTTP reports содержат 92/13 passed и ноль failed на каждой ОС; runtime, integration и smoke содержат PASS. Workflow хранит опубликованные артефакты 7 дней.
+
+В Linux CI 64 readiness-запроса завершились за 539 мс, максимум dependency sockets — 2, OS SIGTERM shutdown — 12 мс; после закрытия stdout ещё 16 liveness-запросов прошли, shutdown — 8 мс, exit 0. Windows: 567 мс, максимум 2 сокета, shutdown 35 мс; после закрытия stdout — 18 мс, exit 0 через описанный выше тестовый IPC. Docker smoke: shutdown 230 мс, image ID `sha256:c757648f25ea954c25a04e1385037f22b92781b7a96e6074e93180cd4db56e7b`. Это измерения конкретного прогона, не benchmark.
 
 ## Исправления по результатам проверок
 
@@ -85,7 +99,7 @@ Linux lint, strict typecheck, 92 unit + 13 HTTP tests и compiled runtime про
 
 Pino redaction дополняет явно выбранные поля логирования; она не объявляется универсальным фильтром произвольных объектов любой глубины. Новые места логирования должны передавать статические сообщения и безопасные поля. Денежных вычислений и реальных биржевых вызовов нет.
 
-`.env` исключён из Git и Docker build context; пароли передаются только при runtime. Образы закреплены digest, GitHub Actions — commit SHA. Проверены границы тестовых project names, очистка созданных контейнеров/volumes, runtime UID, подключения к живым PostgreSQL/Redis, outage/recovery и Linux SIGTERM. Проверка image config и runtime filesystem не является полным forensic-аудитом всех слоёв. Production TLS-handshake и удалённый GitHub Actions пока не проверены. Dependency audit не заменяет эти проверки.
+`.env` исключён из Git и Docker build context; пароли передаются только при runtime. Образы закреплены digest, GitHub Actions — commit SHA. Проверены границы тестовых project names, очистка созданных контейнеров/volumes, runtime UID, подключения к живым PostgreSQL/Redis, outage/recovery и Linux SIGTERM. Проверка image config и runtime filesystem не является полным forensic-аудитом всех слоёв. Удалённый GitHub Actions прошёл; production TLS-handshake пока не проверен. Dependency audit не заменяет эти проверки.
 
 ## Файлы этапа
 
@@ -147,6 +161,8 @@ docs/phase-1/verification.md
 
 `README.md` обновлён инструкциями bootstrap. Formatter изменил только оформление ранее созданных `scripts/check-docs.mjs`, `docs/adr/README.md`, `docs/architecture.md`, `docs/database.md`, `docs/deployment.md`, `docs/exchange-adapters.md`, `docs/execution.md`, `docs/market-data.md`, `docs/risk-engine.md`, `docs/security.md`. Исторические документы `docs/phase-0` сохранены как отчёт предыдущего этапа. Рабочие `.env`, `.tools`, `.pnpm-store`, `.cache`, `node_modules`, `dist`, `test-results` не предназначены для коммита.
 
-## Осталось до закрытия
+## Итог приёмки
 
-Пользователь разрешил загрузку исходников в [dendenden-boop/tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot). Подготовлены локальный Git и remote. Осталось подтвердить успешный Linux/Windows workflow в GitHub Actions. Локальные команды и Linux-контейнеры не выдаются за удалённый CI. До его успешного результата этап остаётся открытым. Следующий этап после приёмки — PHASE 2: схема БД, migrations, constraints/indexes и проверяемый development seed.
+Исходники опубликованы в `main` репозитория [dendenden-boop/tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot). Все обязательные проверки PHASE 1 прошли, включая удалённый Linux/Windows workflow и Docker job. Первые два CI-сбоя сохранены в истории и разобраны выше; проверки не удалялись и не ослаблялись. Перед первым push проверены 68 staged файлов: локальные credentials не найдены, `.env` и служебные каталоги исключены. Последующие изменения добавили `.gitattributes`, regression-сценарий и совместимые команды Compose.
+
+Следующий этап — PHASE 2: схема БД, migrations, constraints/indexes и проверяемый development seed. Торговля, авторизация и готовность всей платформы к production этим результатом не заявляются.

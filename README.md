@@ -2,7 +2,7 @@
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
-Текущий этап: **PHASE 1 — Project Bootstrap, ожидает удалённый CI**. Реализованы monorepo, конфигурация, JSON-логи, API lifecycle и проверки доступности PostgreSQL/Redis. Docker Desktop и WSL 2 установлены; реальные integration и Docker smoke прошли. Фактически выполненные команды и результаты перечислены в [отчёте PHASE 1](docs/phase-1/verification.md). GitHub Actions настроен; удалённый прогон готовится в [tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot).
+Текущий этап: **PHASE 1 — Project Bootstrap завершена**. Реализованы monorepo, конфигурация, JSON-логи, API lifecycle и проверки доступности PostgreSQL/Redis. Локальные проверки, реальные integration и Docker smoke прошли. На GitHub успешно выполнены все три job: Linux, Windows и Docker — [результат CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34032682895). Файлы, команды, результаты и границы проверки перечислены в [отчёте PHASE 1](docs/phase-1/verification.md). Исходники опубликованы в [tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot); следующий этап — PHASE 2, схема БД и миграции.
 
 В этой фазе доступны только health endpoints. Схема БД, авторизация, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 
