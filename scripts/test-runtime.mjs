@@ -143,6 +143,56 @@ try {
   assert.ok(!api.output().includes(secret), 'Runtime log leaked credential');
   assert.ok(!/uncaught_exception|unhandled_rejection|api_stop_failed/.test(api.output()));
   for (const line of api.output().trim().split('\n')) JSON.parse(line);
+
+  // Exercise the real stdout pipe, not a synthetic stream error. Pino's default
+  // destination stops writing after EPIPE; health and shutdown must stay usable.
+  const closedSink = launch(
+    windows ? 'scripts/runtime-child.mjs' : 'apps/api/dist/server.js',
+    env,
+    windows,
+  );
+  const sinkStartupDeadline = Date.now() + 5000;
+  let sinkLive = false;
+  while (Date.now() < sinkStartupDeadline) {
+    try {
+      const response = await fetch(base + '/health/live', {
+        signal: AbortSignal.timeout(500),
+      });
+      await response.text();
+      sinkLive = response.status === 200 && closedSink.output().includes('api_started');
+      if (sinkLive) break;
+    } catch {
+      /* The new child may not have bound its socket yet. */
+    }
+    await delay(50);
+  }
+  assert.ok(sinkLive, 'Closed-sink child did not become live and produce logs');
+  await deadline(
+    new Promise((resolve) => {
+      closedSink.child.stdout.once('close', resolve);
+      closedSink.child.stdout.destroy();
+    }),
+    1000,
+  );
+  for (let i = 0; i < 16; i++) {
+    const response = await fetch(base + '/health/live', {
+      signal: AbortSignal.timeout(1000),
+    });
+    await response.text();
+    assert.equal(response.status, 200, 'Closed stdout interrupted liveness');
+  }
+  const sinkStopStarted = performance.now();
+  if (windows) closedSink.child.send('test-sigterm');
+  else closedSink.child.kill('SIGTERM');
+  assert.equal(
+    (await deadline(closedSink.completed, 3000)).code,
+    0,
+    'Closed stdout prevented clean shutdown',
+  );
+  const closedSinkShutdownMs = Math.round(performance.now() - sinkStopStarted);
+  assert.ok(!closedSink.output().includes(secret), 'Closed-sink diagnostics leaked credential');
+  assert.ok(!/uncaught_exception|unhandled_rejection|api_stop_failed/.test(closedSink.output()));
+  for (const line of closedSink.output().trim().split('\n')) JSON.parse(line);
   await report('runtime', {
     status: 'PASS',
     startedAt,
@@ -153,6 +203,12 @@ try {
     maximumDependencySockets: maximumSockets,
     readinessBatchMs,
     shutdownMs,
+    closedLogSink: {
+      mechanism: 'Parent closes actual child stdout pipe after startup',
+      livenessRequestsAfterClose: 16,
+      shutdownMs: closedSinkShutdownMs,
+      exitCode: 0,
+    },
     shutdownMechanism: windows
       ? 'test-only IPC emits registered SIGTERM event; OS signal requires Linux smoke'
       : 'OS SIGTERM',
