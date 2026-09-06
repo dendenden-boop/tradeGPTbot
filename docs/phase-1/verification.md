@@ -75,6 +75,8 @@ Linux lint, strict typecheck, 92 unit + 13 HTTP tests и compiled runtime про
 
 - Первый удалённый CI прошёл на Linux, но Windows checkout заменил LF на CRLF, и formatter отклонил 53 файла. В `.gitattributes` закреплены LF для текстовых файлов; проверка форматирования сохранена. [Первый прогон](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34019129930).
 
+- Во втором CI обе ОС прошли, но предустановленный Compose **2.38.2** GitHub runner не поддержал `start --wait`. Перезапуск теперь использует обычный [`compose start`](https://docs.docker.com/reference/cli/docker/compose/start/); готовность проверяется непосредственно через API в прежнем окне 6500 мс, которое теперь включает запуск зависимости без предварительного ожидания Docker healthcheck. [Прогон с выявленной несовместимостью](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34032355504).
+
 ## Security и границы проверки
 
 Проверены fail-fast env, отсутствие sentinel credentials в ответах и логах, вложенные ошибки, заголовки и cookies, URL query/path, malformed JSON, prototype poisoning, oversized body, unsupported content type, неизвестные маршруты, handler exception, client disconnect, конфликт порта, повторные start/stop и зависшее закрытие. Таймауты, pool size, request body, requestId и кэш ограничены. Закрытие одной зависимости не препятствует попытке закрыть вторую, даже если драйвер синхронно бросил ошибку.

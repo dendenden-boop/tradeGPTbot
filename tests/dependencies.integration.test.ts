@@ -83,7 +83,8 @@ describe('real PostgreSQL and Redis lifecycle', () => {
             throw new Error('Readiness leaked credentials');
         }
       } finally {
-        await compose(['start', '--wait', '--wait-timeout', '45', dependency]);
+        // Poll API readiness below, including service startup in the recovery window.
+        await compose(['start', dependency]);
       }
       const publishedPort = await execute(
         'docker',

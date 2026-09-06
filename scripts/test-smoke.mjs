@@ -58,7 +58,8 @@ try {
     await compose(['stop', '--timeout', '1', dependency]);
     await waitStatus(base, 503);
     await waitStatus(base, 200, '/health/live');
-    await compose(['start', '--wait', '--wait-timeout', '45', dependency]);
+    // API recovery polling also covers startup; no version-specific start --wait flag.
+    await compose(['start', dependency]);
     await waitStatus(base, 200);
   }
   const stopStarted = Date.now();
