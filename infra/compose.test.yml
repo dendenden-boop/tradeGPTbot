@@ -1,0 +1,62 @@
+# The test runner MUST supply a unique --project-name for every run.
+# No named volumes or shared host ports: bindings are selected separately for each run.
+services:
+  postgres:
+    image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+    environment:
+      POSTGRES_USER: ctp_test
+      POSTGRES_DB: ctp_test
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?The test runner must generate a password}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - '127.0.0.1:${CTP_TEST_POSTGRES_PORT:?The test runner must select a loopback port}:5432'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'PGPASSWORD="$$POSTGRES_PASSWORD" psql --host=127.0.0.1 --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB" --no-password --tuples-only --command="SELECT 1" >/dev/null'
+      interval: 1s
+      timeout: 2s
+      start_period: 5s
+      retries: 40
+    tmpfs:
+      - /var/lib/postgresql/data:size=256m,mode=0700
+    mem_limit: 512m
+    pids_limit: 128
+    stop_grace_period: 10s
+
+  redis:
+    image: redis:8.2.9-bookworm@sha256:7d1e4ce8b9395088377ab382d1f6cfdbd13b3690795198a0399ab8d683064d6d
+    user: redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?The test runner must generate a password}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?The test runner must generate a password}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        case "$$REDIS_PASSWORD" in
+          ''|*[!a-fA-F0-9]*) echo 'REDIS_PASSWORD must be hexadecimal' >&2; exit 1 ;;
+        esac
+        test "$${#REDIS_PASSWORD}" -ge 32
+        umask 077
+        printf '%s\n' 'bind 0.0.0.0' 'protected-mode yes' "requirepass $$REDIS_PASSWORD" 'save ""' 'appendonly no' 'maxmemory 64mb' 'maxmemory-policy noeviction' > /tmp/ctp-redis.conf
+        exec redis-server /tmp/ctp-redis.conf
+    ports:
+      - '127.0.0.1:${CTP_TEST_REDIS_PORT:?The test runner must select a loopback port}:6379'
+    healthcheck:
+      test: [CMD-SHELL, 'test "$$(redis-cli --raw ping)" = PONG']
+      interval: 1s
+      timeout: 2s
+      start_period: 2s
+      retries: 40
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /data:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 64
+    stop_grace_period: 10s

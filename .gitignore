@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.tools/
+.pnpm-store/
+.cache/
+.env
+.env.*
+!.env.example
+test-results/
+*.tsbuildinfo
+*.log

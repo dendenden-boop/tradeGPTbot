@@ -1,0 +1,33 @@
+# Allow only workspace build inputs into any image layer.
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig*.json
+!.node-version
+!apps/
+!apps/**
+!packages/
+!packages/**
+!scripts/
+!scripts/**
+!infra/
+!infra/Dockerfile
+
+# Exclusions apply even inside the admitted source directories.
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/.env
+**/.env.*
+**/.npmrc
+**/.git
+**/.codex
+**/.agents
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.log
+**/*.tsbuildinfo

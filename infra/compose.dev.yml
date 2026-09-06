@@ -1,0 +1,105 @@
+name: ctp-dev
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: runtime
+    init: true
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: '3000'
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # env:init supplies hexadecimal passwords, safe in these URL components.
+      DATABASE_URL: postgresql://ctp:${POSTGRES_PASSWORD:?Run pnpm env:init first}@postgres:5432/ctp
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Run pnpm env:init first}@redis:6379/0
+    ports:
+      - '127.0.0.1:${API_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health/ready', {signal: AbortSignal.timeout(2000)}).then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 2s
+      timeout: 3s
+      start_period: 5s
+      retries: 25
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    stop_grace_period: 12s
+
+  postgres:
+    image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+    environment:
+      POSTGRES_USER: ctp
+      POSTGRES_DB: ctp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run pnpm env:init first}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'PGPASSWORD="$$POSTGRES_PASSWORD" psql --host=127.0.0.1 --username="$$POSTGRES_USER" --dbname="$$POSTGRES_DB" --no-password --tuples-only --command="SELECT 1" >/dev/null'
+      interval: 2s
+      timeout: 2s
+      start_period: 5s
+      retries: 25
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    mem_limit: 512m
+    pids_limit: 128
+    stop_grace_period: 10s
+
+  redis:
+    image: redis:8.2.9-bookworm@sha256:7d1e4ce8b9395088377ab382d1f6cfdbd13b3690795198a0399ab8d683064d6d
+    user: redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run pnpm env:init first}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?Run pnpm env:init first}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        case "$$REDIS_PASSWORD" in
+          ''|*[!a-fA-F0-9]*) echo 'REDIS_PASSWORD must be hexadecimal' >&2; exit 1 ;;
+        esac
+        test "$${#REDIS_PASSWORD}" -ge 32
+        umask 077
+        printf '%s\n' 'bind 0.0.0.0' 'protected-mode yes' "requirepass $$REDIS_PASSWORD" 'dir /data' 'appendonly yes' 'maxmemory 128mb' 'maxmemory-policy noeviction' > /tmp/ctp-redis.conf
+        exec redis-server /tmp/ctp-redis.conf
+    healthcheck:
+      test: [CMD-SHELL, 'test "$$(redis-cli --raw ping)" = PONG']
+      interval: 2s
+      timeout: 2s
+      start_period: 2s
+      retries: 25
+    volumes:
+      - redis-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
+    stop_grace_period: 10s
+
+volumes:
+  postgres-data:
+  redis-data:

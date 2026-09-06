@@ -1,0 +1,43 @@
+{
+  "name": "crypto-trading-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24.20.0 <25",
+    "pnpm": "11.25.0"
+  },
+  "scripts": {
+    "preinstall": "node scripts/check-runtime.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "pnpm -r --sort build",
+    "test": "pnpm test:unit && pnpm test:http",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:http": "vitest run --config vitest.http.config.ts",
+    "test:integration": "node scripts/test-integration.mjs",
+    "test:smoke": "node scripts/test-smoke.mjs",
+    "test:runtime": "node scripts/test-runtime.mjs",
+    "test:clean": "node scripts/test-clean-install.mjs",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "start": "node --env-file-if-exists=.env apps/api/dist/server.js",
+    "dev": "pnpm build && pnpm start",
+    "env:init": "node scripts/init-env.mjs",
+    "docs:check": "node -e \"import('./scripts/check-docs.mjs').then(m => m.checkDocs()).then(console.log)\"",
+    "audit:dependencies": "pnpm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "@types/pg": "8.23.1",
+    "eslint": "10.10.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "vitest": "4.1.11",
+    "vite": "7.3.6"
+  }
+}

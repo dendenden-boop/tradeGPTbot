@@ -1,0 +1,90 @@
+name: Bootstrap checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bootstrap-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0 --ignore-scripts
+      - name: Record runtime identifiers
+        run: node -e "require('node:fs').mkdirSync('test-results', {recursive:true}); require('node:fs').writeFileSync('test-results/runtime.json', JSON.stringify({node:process.version, platform:process.platform, arch:process.arch, pnpm:'11.25.0'}, null, 2))"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm test:http
+      - run: pnpm test:runtime
+      - run: pnpm audit:dependencies
+      - name: Verify frozen install did not change the lockfile
+        run: git diff --exit-code -- pnpm-lock.yaml
+      - name: Upload sanitized check reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bootstrap-${{ matrix.os }}
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    name: Real services and Docker smoke
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0 --ignore-scripts
+      - name: Record runtime identifiers
+        run: |
+          mkdir -p test-results
+          node --version > test-results/node-version.txt
+          pnpm --version > test-results/pnpm-version.txt
+          docker version --format '{{json .}}' > test-results/docker-version.json
+          docker compose version > test-results/compose-version.txt
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Exercise PostgreSQL and Redis failure and recovery
+        run: pnpm test:integration
+      - name: Exercise the built API container and shutdown
+        run: pnpm test:smoke
+      - name: Upload sanitized integration reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bootstrap-docker
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 7

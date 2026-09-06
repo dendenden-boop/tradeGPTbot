@@ -1,0 +1,9 @@
+# Optional host-development ports. Run only postgres and redis; start API with pnpm dev.
+# Use together with compose.dev.yml and --env-file .env from the workspace root.
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:5432:5432'
+  redis:
+    ports:
+      - '127.0.0.1:6379:6379'

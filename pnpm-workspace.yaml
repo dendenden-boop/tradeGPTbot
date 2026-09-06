@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+injectWorkspacePackages: true
+syncInjectedDepsAfterScripts:
+  - build
+strictPeerDependencies: true
+minimumReleaseAge: 1440
+storeDir: .pnpm-store
+engineStrict: true
+saveExact: true
+allowBuilds:
+  esbuild@0.28.2: true

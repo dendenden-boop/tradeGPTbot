@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.tools
+.cache
+dist
+coverage
+test-results
+pnpm-lock.yaml
+docs/phase-0
