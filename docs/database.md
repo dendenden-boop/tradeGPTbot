@@ -1,6 +1,6 @@
 # Database design
 
-PHASE 0: логическая схема и ограничения; Prisma schema и SQL migrations ещё не созданы. PostgreSQL — источник истины финансового состояния; Redis cache/queue не заменяет ledger. Tenant соответствует пользователю; организация/несколько членов — возможное расширение с отдельным ADR.
+PHASE 2: логическая схема реализована в [Prisma schema](../packages/database/prisma/schema.prisma) и SQL migrations; [команды и роли](phase-2/operations.md), [критерии проверки](phase-2/requirements.md). Проверки текущего этапа продолжаются. PostgreSQL — источник истины финансового состояния; Redis cache/queue не заменяет ledger. Tenant соответствует пользователю; организация/несколько членов — возможное расширение с отдельным ADR.
 
 ## Сущности и владение
 
@@ -44,7 +44,7 @@ erDiagram
 
 ## Типы и constraints
 
-Internal IDs — UUID; внешние IDs — bounded string даже если состоят из цифр. UTC `timestamptz`; cursor содержит timestamp+ID. Кандидат начального диапазона amount columns — `NUMERIC(38,18)`: приложение отклоняет значения вне 20 integer/18 fractional digits **до SQL**, не полагается на implicit DB rounding. Это не универсальный scale для всех полей: PHASE 2 закрепляет диапазон каждого поля по metadata и размерам накоплений согласно ADR-005. Промежуточная Decimal precision минимум 80 значащих цифр — проектный предел, проверяется property tests; новые инструменты сверх диапазона блокируются до migration/ADR. Contract count — отдельный integer/decimal по подтверждённым instrument rules. Все денежные сущности несут asset/unit, нельзя складывать BTC и USDT без valuation.
+Internal IDs — UUID; внешние IDs — bounded string даже если состоят из цифр. UTC `timestamptz(3)`; cursor содержит timestamp+ID. PHASE 2 хранит деньги как `NUMERIC` без typmod: явные SQL CHECK отклоняют over-scale, overflow и специальные значения до возможного округления. Для price/quantity/amount допустимы 20 целых и 18 дробных цифр, для aggregate — 30 и 18, для rate — 2 и 18. Категория и знак указаны у каждого поля в Prisma schema. `decimalText` проверяет и нормализует строки без арифметики JavaScript number. Промежуточная Decimal precision минимум 80 значащих цифр остаётся требованием будущих расчётных writers; PHASE 2 не выполняет PnL/valuation arithmetic. Contract count — отдельный integer/decimal по подтверждённым instrument rules. Все денежные сущности несут asset/unit, нельзя складывать BTC и USDT без valuation.
 
 | Ограничение                                                                               | Цель                                                                   |
 | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |

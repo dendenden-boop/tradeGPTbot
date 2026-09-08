@@ -33,6 +33,7 @@ jobs:
       - name: Record runtime identifiers
         run: node -e "require('node:fs').mkdirSync('test-results', {recursive:true}); require('node:fs').writeFileSync('test-results/runtime.json', JSON.stringify({node:process.version, platform:process.platform, arch:process.arch, pnpm:'11.25.0'}, null, 2))"
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:validate
       - run: pnpm build
       - run: pnpm format:check
       - run: pnpm lint
@@ -40,6 +41,7 @@ jobs:
       - run: pnpm test:unit
       - run: pnpm test:http
       - run: pnpm test:runtime
+      - run: pnpm test:clean
       - run: pnpm audit:dependencies
       - name: Verify frozen install did not change the lockfile
         run: git diff --exit-code -- pnpm-lock.yaml
@@ -75,8 +77,9 @@ jobs:
           docker version --format '{{json .}}' > test-results/docker-version.json
           docker compose version > test-results/compose-version.txt
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:validate
       - run: pnpm build
-      - name: Exercise PostgreSQL and Redis failure and recovery
+      - name: Verify database migrations, constraints and service failure recovery
         run: pnpm test:integration
       - name: Exercise the built API container and shutdown
         run: pnpm test:smoke

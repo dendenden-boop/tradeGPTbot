@@ -1,0 +1,1900 @@
+// PHASE 2: PostgreSQL relational persistence. Additional CHECK/RLS/append-only
+// constraints are installed by reviewed SQL migrations. No trading execution is implemented.
+// Money uses unconstrained NUMERIC; SQL rejects unsupported precision instead of rounding.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TradingMode {
+  PAPER
+  TESTNET
+  DEMO
+  LIVE
+}
+
+enum Exchange {
+  BINANCE
+  BYBIT
+  OKX
+  HTX
+}
+
+enum MarketType {
+  SPOT
+  MARGIN
+  PERPETUAL
+  FUTURES
+  OPTION
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  RECONCILIATION_REQUIRED
+  DISABLED
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DELETION_REQUESTED
+  PSEUDONYMIZED
+}
+
+enum CredentialStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  SUPERSEDED
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum PositionSide {
+  NET
+  LONG
+  SHORT
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+  STOP_MARKET
+  STOP_LIMIT
+  TAKE_PROFIT_MARKET
+  TAKE_PROFIT_LIMIT
+  TRAILING_STOP
+}
+
+enum TimeInForce {
+  GTC
+  IOC
+  FOK
+  POST_ONLY
+}
+
+enum OrderStatus {
+  CREATED
+  RISK_APPROVED
+  SUBMITTING
+  SUBMITTED
+  PARTIALLY_FILLED
+  FILLED
+  CANCEL_PENDING
+  CANCELED
+  REJECTED
+  EXPIRED
+  UNKNOWN
+  RECONCILIATION_REQUIRED
+}
+
+enum ReconciliationState {
+  REQUIRED
+  IN_PROGRESS
+  CONSISTENT
+  UNRESOLVED
+}
+
+enum IntentOrigin {
+  USER
+  STRATEGY
+  EXTERNAL
+  RISK_REDUCTION
+}
+
+enum Destination {
+  PAPER_ENGINE
+  EXCHANGE
+}
+
+enum SubmissionOperation {
+  PLACE
+  CANCEL
+  AMEND
+}
+
+enum SubmissionStatus {
+  DISPATCHING
+  ACKNOWLEDGED
+  REJECTED
+  UNKNOWN
+  RECONCILED
+}
+
+enum StrategyStatus {
+  DRAFT
+  STOPPED
+  STARTING
+  RUNNING
+  PAUSED
+  FAILED
+  ARCHIVED
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum RiskVerdict {
+  APPROVE
+  REJECT
+  REDUCE_ONLY
+}
+
+enum ReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+  EXPIRED
+  UNRESOLVED
+}
+
+enum RiskScope {
+  USER
+  ACCOUNT
+  STRATEGY
+  INSTRUMENT
+}
+
+enum LedgerCause {
+  FILL
+  FEE
+  FUNDING
+  DEPOSIT
+  WITHDRAWAL_OBSERVED
+  TRANSFER
+  PAPER_SEED
+  ADJUSTMENT
+}
+
+enum LedgerBucket {
+  AVAILABLE
+  RESERVED
+  POSITION
+  FEE
+  FUNDING
+  EXTERNAL
+  EQUITY
+}
+
+enum LiquidityRole {
+  MAKER
+  TAKER
+  UNKNOWN
+}
+
+enum FeeKind {
+  CHARGE
+  REBATE
+}
+
+enum DataQuality {
+  VERIFIED
+  PROVISIONAL
+  GAP
+  INVALID
+}
+
+enum NotificationStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum Severity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum CircuitStatus {
+  CLOSED
+  OPEN
+  HALF_OPEN
+}
+
+model User {
+  id                            String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emailNormalized               String?                  @unique @db.VarChar(320)
+  passwordHash                  String?                  @db.VarChar(512)
+  status                        UserStatus               @default(PENDING_VERIFICATION)
+  emailVerifiedAt               DateTime?                @db.Timestamptz(3)
+  passwordChangedAt             DateTime?                @db.Timestamptz(3)
+  sessionEpoch                  Int                      @default(0)
+  deletionRequestedAt           DateTime?                @db.Timestamptz(3)
+  pseudonymizedAt               DateTime?                @db.Timestamptz(3)
+  updatedAt                     DateTime                 @updatedAt @db.Timestamptz(3)
+  createdAt                     DateTime                 @default(now()) @db.Timestamptz(3)
+  userSessionRecords            UserSession[]            @relation("UserSession_tenant")
+  emailVerificationTokenRecords EmailVerificationToken[] @relation("EmailVerificationToken_tenant")
+  passwordResetTokenRecords     PasswordResetToken[]     @relation("PasswordResetToken_tenant")
+  twoFactorConfigRecords        TwoFactorConfig?         @relation("TwoFactorConfig_tenant")
+  recoveryCodeRecords           RecoveryCode[]           @relation("RecoveryCode_tenant")
+  exchangeAccountRecords        ExchangeAccount[]        @relation("ExchangeAccount_tenant")
+  exchangeConnectionRecords     ExchangeConnection[]     @relation("ExchangeConnection_tenant")
+  encryptedCredentialRecords    EncryptedCredential[]    @relation("EncryptedCredential_tenant")
+  liveGrantRecords              LiveGrant[]              @relation("LiveGrant_tenant")
+  balanceSnapshotRecords        BalanceSnapshot[]        @relation("BalanceSnapshot_tenant")
+  positionRecords               Position[]               @relation("Position_tenant")
+  accountStateVersionRecords    AccountStateVersion[]    @relation("AccountStateVersion_tenant")
+  ledgerTransactionRecords      LedgerTransaction[]      @relation("LedgerTransaction_tenant")
+  ledgerEntryRecords            LedgerEntry[]            @relation("LedgerEntry_tenant")
+  assetValuationRecords         AssetValuation[]         @relation("AssetValuation_tenant")
+  orderIntentRecords            OrderIntent[]            @relation("OrderIntent_tenant")
+  idempotencyRecordRecords      IdempotencyRecord[]      @relation("IdempotencyRecord_tenant")
+  orderRecords                  Order[]                  @relation("Order_tenant")
+  algoOrderRecords              AlgoOrder[]              @relation("AlgoOrder_tenant")
+  submissionAttemptRecords      SubmissionAttempt[]      @relation("SubmissionAttempt_tenant")
+  orderEventRecords             OrderEvent[]             @relation("OrderEvent_tenant")
+  tradeRecords                  Trade[]                  @relation("Trade_tenant")
+  fillRecords                   Fill[]                   @relation("Fill_tenant")
+  feeRecords                    Fee[]                    @relation("Fee_tenant")
+  fundingPaymentRecords         FundingPayment[]         @relation("FundingPayment_tenant")
+  strategyInstanceRecords       StrategyInstance[]       @relation("StrategyInstance_tenant")
+  strategyRunRecords            StrategyRun[]            @relation("StrategyRun_tenant")
+  strategyStateRecords          StrategyState[]          @relation("StrategyState_tenant")
+  signalRecords                 Signal[]                 @relation("Signal_tenant")
+  riskProfileRecords            RiskProfile[]            @relation("RiskProfile_tenant")
+  riskDecisionRecords           RiskDecision[]           @relation("RiskDecision_tenant")
+  riskEventRecords              RiskEvent[]              @relation("RiskEvent_tenant")
+  riskReservationRecords        RiskReservation[]        @relation("RiskReservation_tenant")
+  riskBudgetRecords             RiskBudget[]             @relation("RiskBudget_tenant")
+  tradingPauseRecords           TradingPause[]           @relation("TradingPause_tenant")
+  circuitStateRecords           CircuitState[]           @relation("CircuitState_tenant")
+  paperAccountRecords           PaperAccount[]           @relation("PaperAccount_tenant")
+  paperOrderRecords             PaperOrder[]             @relation("PaperOrder_tenant")
+  paperPositionRecords          PaperPosition[]          @relation("PaperPosition_tenant")
+  backtestRecords               Backtest[]               @relation("Backtest_tenant")
+  backtestTradeRecords          BacktestTrade[]          @relation("BacktestTrade_tenant")
+  backtestMetricRecords         BacktestMetric[]         @relation("BacktestMetric_tenant")
+  outboxEventRecords            OutboxEvent[]            @relation("OutboxEvent_tenant")
+  consumerInboxRecords          ConsumerInbox[]          @relation("ConsumerInbox_tenant")
+  notificationRecords           Notification[]           @relation("Notification_tenant")
+  auditLogRecords               AuditLog[]               @relation("AuditLog_tenant")
+  reconciliationRunRecords      ReconciliationRun[]      @relation("ReconciliationRun_tenant")
+
+  @@map("user")
+}
+
+model UserSession {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @db.Uuid
+  tokenHash     Bytes     @unique
+  expiresAt     DateTime  @db.Timestamptz(3)
+  idleExpiresAt DateTime  @db.Timestamptz(3)
+  lastSeenAt    DateTime  @default(now()) @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  stepUpAt      DateTime? @db.Timestamptz(3)
+  sessionEpoch  Int
+  userAgentHash Bytes?
+  ipPrefixHash  Bytes?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  tenant        User      @relation("UserSession_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, revokedAt, expiresAt])
+  @@map("user_session")
+}
+
+model EmailVerificationToken {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String    @db.Uuid
+  tokenHash       Bytes     @unique
+  emailNormalized String    @db.VarChar(320)
+  expiresAt       DateTime  @db.Timestamptz(3)
+  consumedAt      DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  tenant          User      @relation("EmailVerificationToken_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, expiresAt])
+  @@map("email_verification_token")
+}
+
+model PasswordResetToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @db.Uuid
+  tokenHash    Bytes     @unique
+  expiresAt    DateTime  @db.Timestamptz(3)
+  consumedAt   DateTime? @db.Timestamptz(3)
+  sessionEpoch Int
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  tenant       User      @relation("PasswordResetToken_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, expiresAt])
+  @@map("password_reset_token")
+}
+
+model TwoFactorConfig {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String         @db.Uuid
+  ciphertext        Bytes
+  nonce             Bytes
+  tag               Bytes
+  wrappedDek        Bytes
+  kmsKeyId          String         @db.VarChar(512)
+  kmsKeyVersion     String         @db.VarChar(256)
+  encryptionVersion Int
+  aadVersion        Int
+  lastAcceptedStep  BigInt?
+  enabledAt         DateTime?      @db.Timestamptz(3)
+  revokedAt         DateTime?      @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(3)
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  tenant            User           @relation("TwoFactorConfig_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recoveryCodes     RecoveryCode[] @relation("RecoveryCode_twoFactorConfig")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId])
+  @@map("two_factor_config")
+}
+
+model RecoveryCode {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String          @db.Uuid
+  twoFactorConfigId String          @db.Uuid
+  codeHash          Bytes           @unique
+  consumedAt        DateTime?       @db.Timestamptz(3)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  tenant            User            @relation("RecoveryCode_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  twoFactorConfig   TwoFactorConfig @relation("RecoveryCode_twoFactorConfig", fields: [tenantId, twoFactorConfigId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, twoFactorConfigId])
+  @@map("recovery_code")
+}
+
+model ExchangeAccount {
+  id                         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                   String                @db.Uuid
+  exchange                   Exchange
+  mode                       TradingMode           @default(PAPER)
+  /// Stable exchange account UID or generated paper namespace; never a credential.
+  externalAccountId          String                @db.VarChar(128)
+  region                     String                @db.VarChar(32)
+  accountMode                String                @db.VarChar(32)
+  status                     AccountStatus         @default(PENDING)
+  reconciliationEpoch        BigInt                @default(0)
+  permissionEpoch            BigInt                @default(0)
+  clientIdEpoch              String                @db.VarChar(64)
+  clientIdHighWatermark      BigInt                @default(0)
+  version                    Int                   @default(0)
+  reconciledAt               DateTime?             @db.Timestamptz(3)
+  updatedAt                  DateTime              @updatedAt @db.Timestamptz(3)
+  createdAt                  DateTime              @default(now()) @db.Timestamptz(3)
+  tenant                     User                  @relation("ExchangeAccount_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  exchangeConnectionRecords  ExchangeConnection[]  @relation("ExchangeConnection_account")
+  balanceSnapshotRecords     BalanceSnapshot[]     @relation("BalanceSnapshot_account")
+  positionRecords            Position[]            @relation("Position_account")
+  accountStateVersionRecords AccountStateVersion[] @relation("AccountStateVersion_account")
+  ledgerTransactionRecords   LedgerTransaction[]   @relation("LedgerTransaction_account")
+  ledgerEntryRecords         LedgerEntry[]         @relation("LedgerEntry_account")
+  assetValuationRecords      AssetValuation[]      @relation("AssetValuation_account")
+  orderIntentRecords         OrderIntent[]         @relation("OrderIntent_account")
+  orderRecords               Order[]               @relation("Order_account")
+  algoOrderRecords           AlgoOrder[]           @relation("AlgoOrder_account")
+  tradeRecords               Trade[]               @relation("Trade_account")
+  fillRecords                Fill[]                @relation("Fill_account")
+  fundingPaymentRecords      FundingPayment[]      @relation("FundingPayment_account")
+  strategyInstanceRecords    StrategyInstance[]    @relation("StrategyInstance_account")
+  strategyRunRecords         StrategyRun[]         @relation("StrategyRun_account")
+  riskDecisionRecords        RiskDecision[]        @relation("RiskDecision_account")
+  riskReservationRecords     RiskReservation[]     @relation("RiskReservation_account")
+  riskBudgetRecords          RiskBudget[]          @relation("RiskBudget_account")
+  paperAccountRecords        PaperAccount?         @relation("PaperAccount_account")
+  reconciliationRunRecords   ReconciliationRun[]   @relation("ReconciliationRun_account")
+  riskEventRecords           RiskEvent[]           @relation("RiskEvent_account")
+  tradingPauseRecords        TradingPause[]        @relation("TradingPause_account")
+  circuitStateRecords        CircuitState[]        @relation("CircuitState_account")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, mode])
+  @@unique([tenantId, exchange, mode, region, externalAccountId])
+  @@index([tenantId, status])
+  @@map("exchange_account")
+}
+
+model ExchangeConnection {
+  id                           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                     String                @db.Uuid
+  accountId                    String                @db.Uuid
+  mode                         TradingMode
+  label                        String                @db.VarChar(100)
+  status                       AccountStatus         @default(PENDING)
+  permissionsVersion           Int                   @default(0)
+  permissionsVerifiedAt        DateTime?             @db.Timestamptz(3)
+  /// Allowlisted permission flags only; no credentials or exchange response body.
+  permissions                  Json
+  withdrawalPermissionDetected Boolean               @default(false)
+  version                      Int                   @default(0)
+  disabledAt                   DateTime?             @db.Timestamptz(3)
+  updatedAt                    DateTime              @updatedAt @db.Timestamptz(3)
+  createdAt                    DateTime              @default(now()) @db.Timestamptz(3)
+  tenant                       User                  @relation("ExchangeConnection_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account                      ExchangeAccount       @relation("ExchangeConnection_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  credentials                  EncryptedCredential[] @relation("EncryptedCredential_connection")
+  liveGrants                   LiveGrant[]           @relation("LiveGrant_connection")
+  orderIntentRecords           OrderIntent[]         @relation("OrderIntent_connection")
+  orderRecords                 Order[]               @relation("Order_connection")
+  reconciliationRunRecords     ReconciliationRun[]   @relation("ReconciliationRun_connection")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, mode])
+  @@unique([tenantId, id, accountId, mode], map: "connection_account_scope")
+  @@index([tenantId, accountId, status])
+  @@map("exchange_connection")
+}
+
+model EncryptedCredential {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String             @db.Uuid
+  connectionId      String             @db.Uuid
+  version           Int
+  status            CredentialStatus   @default(PENDING)
+  ciphertext        Bytes
+  nonce             Bytes
+  tag               Bytes
+  wrappedDek        Bytes
+  kmsKeyId          String             @db.VarChar(512)
+  kmsKeyVersion     String             @db.VarChar(256)
+  encryptionVersion Int
+  aadVersion        Int
+  activatedAt       DateTime?          @db.Timestamptz(3)
+  revokedAt         DateTime?          @db.Timestamptz(3)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  tenant            User               @relation("EncryptedCredential_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  connection        ExchangeConnection @relation("EncryptedCredential_connection", fields: [tenantId, connectionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  liveGrants        LiveGrant[]        @relation("LiveGrant_credential")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, connectionId, version])
+  @@unique([tenantId, id, connectionId, version], map: "credential_connection_version")
+  @@map("encrypted_credential")
+}
+
+model LiveGrant {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String              @db.Uuid
+  connectionId       String              @db.Uuid
+  credentialId       String              @db.Uuid
+  riskProfileId      String              @db.Uuid
+  mode               TradingMode         @default(LIVE)
+  credentialVersion  Int
+  permissionsVersion Int
+  riskPolicyVersion  Int
+  permissionEpoch    BigInt
+  stepUpAt           DateTime            @db.Timestamptz(3)
+  expiresAt          DateTime            @db.Timestamptz(3)
+  revokedAt          DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  tenant             User                @relation("LiveGrant_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  connection         ExchangeConnection  @relation("LiveGrant_connection", fields: [tenantId, connectionId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  credential         EncryptedCredential @relation("LiveGrant_credential", fields: [tenantId, credentialId, connectionId, credentialVersion], references: [tenantId, id, connectionId, version], onDelete: Restrict, onUpdate: Restrict)
+  riskProfile        RiskProfile         @relation("LiveGrant_riskProfile", fields: [tenantId, riskProfileId, riskPolicyVersion], references: [tenantId, id, version], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, connectionId, expiresAt])
+  @@map("live_grant")
+}
+
+model Instrument {
+  id                            String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  exchange                      Exchange
+  market                        MarketType
+  mode                          TradingMode
+  exchangeSymbol                String                   @db.VarChar(128)
+  baseAsset                     String                   @db.VarChar(32)
+  quoteAsset                    String                   @db.VarChar(32)
+  settlementAsset               String?                  @db.VarChar(32)
+  expiryAt                      DateTime?                @db.Timestamptz(3)
+  isInverse                     Boolean                  @default(false)
+  active                        Boolean                  @default(false)
+  updatedAt                     DateTime                 @updatedAt @db.Timestamptz(3)
+  createdAt                     DateTime                 @default(now()) @db.Timestamptz(3)
+  ruleVersions                  InstrumentRuleVersion[]  @relation("InstrumentRuleVersion_instrument")
+  positionRecords               Position[]               @relation("Position_instrument")
+  assetValuationRecords         AssetValuation[]         @relation("AssetValuation_instrument")
+  orderIntentRecords            OrderIntent[]            @relation("OrderIntent_instrument")
+  orderRecords                  Order[]                  @relation("Order_instrument")
+  algoOrderRecords              AlgoOrder[]              @relation("AlgoOrder_instrument")
+  tradeRecords                  Trade[]                  @relation("Trade_instrument")
+  fillRecords                   Fill[]                   @relation("Fill_instrument")
+  fundingPaymentRecords         FundingPayment[]         @relation("FundingPayment_instrument")
+  signalRecords                 Signal[]                 @relation("Signal_instrument")
+  tradingPauseRecords           TradingPause[]           @relation("TradingPause_instrument")
+  backtestTradeRecords          BacktestTrade[]          @relation("BacktestTrade_instrument")
+  candleRecords                 Candle[]                 @relation("Candle_instrument")
+  marketGapRecords              MarketGap[]              @relation("MarketGap_instrument")
+  marketCheckpointRecords       MarketCheckpoint[]       @relation("MarketCheckpoint_instrument")
+  subscriptionAssignmentRecords SubscriptionAssignment[] @relation("SubscriptionAssignment_instrument")
+
+  @@unique([exchange, market, mode, exchangeSymbol])
+  @@unique([id, market])
+  @@map("instrument")
+}
+
+model InstrumentRuleVersion {
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instrumentId         String          @db.Uuid
+  version              Int
+  isCurrent            Boolean         @default(false)
+  effectiveAt          DateTime        @db.Timestamptz(3)
+  fetchedAt            DateTime        @db.Timestamptz(3)
+  sourceHash           Bytes
+  /// @decimal price 38,18 positive
+  priceTick            Decimal         @db.Decimal
+  /// @decimal quantity 38,18 positive
+  quantityStep         Decimal         @db.Decimal
+  /// @decimal quantity 38,18 nonnegative
+  minQuantity          Decimal         @db.Decimal
+  /// @decimal quantity 38,18 positive
+  maxQuantity          Decimal?        @db.Decimal
+  /// @decimal amount 38,18 nonnegative
+  minNotional          Decimal?        @db.Decimal
+  /// @decimal quantity 38,18 positive
+  contractSize         Decimal?        @db.Decimal
+  contractUnit         String?         @db.VarChar(32)
+  /// Allowlisted versioned rule metadata, never raw private exchange payloads.
+  rules                Json
+  createdAt            DateTime        @default(now()) @db.Timestamptz(3)
+  instrument           Instrument      @relation("InstrumentRuleVersion_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  positionRecords      Position[]      @relation("Position_ruleVersion")
+  orderIntentRecords   OrderIntent[]   @relation("OrderIntent_ruleVersion")
+  orderRecords         Order[]         @relation("Order_ruleVersion")
+  fillRecords          Fill[]          @relation("Fill_ruleVersion")
+  signalRecords        Signal[]        @relation("Signal_ruleVersion")
+  backtestTradeRecords BacktestTrade[] @relation("BacktestTrade_ruleVersion")
+  candleRecords        Candle[]        @relation("Candle_ruleVersion")
+  riskDecisions        RiskDecision[]  @relation("RiskDecision_ruleVersion")
+
+  @@unique([instrumentId, version])
+  @@unique([id, instrumentId])
+  @@unique([id, instrumentId, version], map: "instrument_rule_version_scope")
+  @@index([instrumentId, effectiveAt])
+  @@map("instrument_rule_version")
+}
+
+model CapabilitySnapshot {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  exchange       Exchange
+  market         MarketType
+  mode           TradingMode
+  region         String         @db.VarChar(32)
+  accountMode    String         @db.VarChar(32)
+  version        Int
+  profileVersion String         @db.VarChar(64)
+  verifiedAt     DateTime       @db.Timestamptz(3)
+  expiresAt      DateTime       @db.Timestamptz(3)
+  capabilities   Json
+  evidenceHash   Bytes
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  riskDecisions  RiskDecision[] @relation("RiskDecision_capabilitySnapshot")
+
+  @@unique([exchange, market, mode, region, accountMode, version])
+  @@map("capability_snapshot")
+}
+
+model BalanceSnapshot {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String              @db.Uuid
+  accountId      String              @db.Uuid
+  mode           TradingMode
+  stateVersionId String              @db.Uuid
+  asset          String              @db.VarChar(32)
+  /// @decimal aggregate 48,18 signed
+  total          Decimal             @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  available      Decimal             @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  reserved       Decimal             @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  borrowed       Decimal             @default(0) @db.Decimal
+  sourceAt       DateTime            @db.Timestamptz(3)
+  receivedAt     DateTime            @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  tenant         User                @relation("BalanceSnapshot_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account        ExchangeAccount     @relation("BalanceSnapshot_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  stateVersion   AccountStateVersion @relation("BalanceSnapshot_stateVersion", fields: [tenantId, stateVersionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, stateVersionId, asset])
+  @@index([tenantId, accountId, sourceAt(sort: Desc)])
+  @@map("balance_snapshot")
+}
+
+model Position {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String                @db.Uuid
+  accountId         String                @db.Uuid
+  mode              TradingMode
+  instrumentId      String                @db.Uuid
+  ruleVersionId     String                @db.Uuid
+  positionSide      PositionSide
+  positionBucket    String                @db.VarChar(64)
+  asset             String                @db.VarChar(32)
+  /// @decimal quantity 38,18 signed
+  quantity          Decimal               @default(0) @db.Decimal
+  /// @decimal price 38,18 nonnegative
+  averageEntryPrice Decimal               @default(0) @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  realizedPnl       Decimal               @default(0) @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  unrealizedPnl     Decimal               @default(0) @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  feesPaid          Decimal               @default(0) @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  fundingPaid       Decimal               @default(0) @db.Decimal
+  version           Int                   @default(0)
+  sourceAt          DateTime              @db.Timestamptz(3)
+  receivedAt        DateTime              @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @db.Timestamptz(3)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  tenant            User                  @relation("Position_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account           ExchangeAccount       @relation("Position_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument        Instrument            @relation("Position_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion       InstrumentRuleVersion @relation("Position_ruleVersion", fields: [ruleVersionId, instrumentId], references: [id, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  fundingPayments   FundingPayment[]      @relation("FundingPayment_position")
+  paper             PaperPosition?        @relation("PaperPosition_position")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, instrumentId, positionSide, positionBucket])
+  @@unique([tenantId, id, accountId, mode, instrumentId], map: "position_full_account_scope")
+  @@unique([tenantId, id, accountId, mode], map: "position_account_scope")
+  @@map("position")
+}
+
+model AccountStateVersion {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String            @db.Uuid
+  accountId           String            @db.Uuid
+  mode                TradingMode
+  version             BigInt
+  sourceCursor        String            @db.VarChar(512)
+  sourceAt            DateTime          @db.Timestamptz(3)
+  receivedAt          DateTime          @db.Timestamptz(3)
+  reconciledAt        DateTime?         @db.Timestamptz(3)
+  reconciliationEpoch BigInt
+  stateHash           Bytes
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  tenant              User              @relation("AccountStateVersion_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account             ExchangeAccount   @relation("AccountStateVersion_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  balanceSnapshots    BalanceSnapshot[] @relation("BalanceSnapshot_stateVersion")
+  riskDecisions       RiskDecision[]    @relation("RiskDecision_stateVersion")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, version])
+  @@unique([tenantId, id, accountId, mode])
+  @@map("account_state_version")
+}
+
+model LedgerTransaction {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String              @db.Uuid
+  accountId        String              @db.Uuid
+  mode             TradingMode
+  cause            LedgerCause
+  causeIdentity    String              @db.VarChar(256)
+  fillId           String?             @db.Uuid
+  fundingPaymentId String?             @db.Uuid
+  correctionOfId   String?             @db.Uuid
+  effectiveAt      DateTime            @db.Timestamptz(3)
+  postedAt         DateTime            @default(now()) @db.Timestamptz(3)
+  /// Closed postings are immutable; SQL validates conservation per transaction and asset.
+  descriptionCode  String              @db.VarChar(64)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  tenant           User                @relation("LedgerTransaction_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account          ExchangeAccount     @relation("LedgerTransaction_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  entries          LedgerEntry[]       @relation("LedgerEntry_transaction")
+  fill             Fill?               @relation("LedgerTransaction_fill", fields: [tenantId, fillId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  fundingPayment   FundingPayment?     @relation("LedgerTransaction_fundingPayment", fields: [tenantId, fundingPaymentId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  correctionOf     LedgerTransaction?  @relation("LedgerTransaction_correctionOf", fields: [tenantId, correctionOfId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  corrections      LedgerTransaction[] @relation("LedgerTransaction_correctionOf")
+  valuations       AssetValuation[]    @relation("AssetValuation_ledgerTransaction")
+  fees             Fee[]               @relation("Fee_ledgerTransaction")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, cause, causeIdentity])
+  @@unique([tenantId, id, accountId, mode])
+  @@index([tenantId, accountId, effectiveAt, id])
+  @@map("ledger_transaction")
+}
+
+model LedgerEntry {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String            @db.Uuid
+  transactionId String            @db.Uuid
+  accountId     String            @db.Uuid
+  mode          TradingMode
+  entryIndex    Int
+  asset         String            @db.VarChar(32)
+  bucket        LedgerBucket
+  /// @decimal aggregate 48,18 signed
+  amount        Decimal           @db.Decimal
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  tenant        User              @relation("LedgerEntry_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account       ExchangeAccount   @relation("LedgerEntry_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  transaction   LedgerTransaction @relation("LedgerEntry_transaction", fields: [tenantId, transactionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, transactionId, entryIndex])
+  @@index([tenantId, accountId, mode, asset, createdAt, id])
+  @@map("ledger_entry")
+}
+
+model AssetValuation {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String             @db.Uuid
+  accountId           String             @db.Uuid
+  mode                TradingMode
+  ledgerTransactionId String?            @db.Uuid
+  instrumentId        String?            @db.Uuid
+  baseAsset           String             @db.VarChar(32)
+  quoteAsset          String             @db.VarChar(32)
+  /// @decimal price 38,18 positive
+  price               Decimal            @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  baseAmount          Decimal            @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  quoteAmount         Decimal            @db.Decimal
+  source              String             @db.VarChar(64)
+  sourceIdentity      String             @db.VarChar(256)
+  valuedAt            DateTime           @db.Timestamptz(3)
+  receivedAt          DateTime           @db.Timestamptz(3)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  tenant              User               @relation("AssetValuation_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account             ExchangeAccount    @relation("AssetValuation_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument          Instrument?        @relation("AssetValuation_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ledgerTransaction   LedgerTransaction? @relation("AssetValuation_ledgerTransaction", fields: [tenantId, ledgerTransactionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, accountId, valuedAt(sort: Desc), id])
+  @@map("asset_valuation")
+}
+
+model OrderIntent {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String                @db.Uuid
+  accountId          String                @db.Uuid
+  mode               TradingMode           @default(PAPER)
+  connectionId       String?               @db.Uuid
+  instrumentId       String                @db.Uuid
+  ruleVersionId      String                @db.Uuid
+  signalId           String?               @db.Uuid
+  origin             IntentOrigin
+  destination        Destination
+  operation          String                @db.VarChar(64)
+  idempotencyKey     String                @db.VarChar(128)
+  commandHash        Bytes
+  side               OrderSide
+  positionSide       PositionSide          @default(NET)
+  orderType          OrderType
+  timeInForce        TimeInForce?
+  quantityAsset      String                @db.VarChar(32)
+  priceAsset         String                @db.VarChar(32)
+  /// @decimal quantity 38,18 positive
+  quantity           Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  limitPrice         Decimal?              @db.Decimal
+  /// @decimal price 38,18 positive
+  triggerPrice       Decimal?              @db.Decimal
+  reduceOnly         Boolean               @default(false)
+  expiresAt          DateTime?             @db.Timestamptz(3)
+  createdAt          DateTime              @default(now()) @db.Timestamptz(3)
+  tenant             User                  @relation("OrderIntent_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account            ExchangeAccount       @relation("OrderIntent_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument         Instrument            @relation("OrderIntent_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion        InstrumentRuleVersion @relation("OrderIntent_ruleVersion", fields: [ruleVersionId, instrumentId], references: [id, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  connection         ExchangeConnection?   @relation("OrderIntent_connection", fields: [tenantId, connectionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  signal             Signal?               @relation("OrderIntent_signal", fields: [tenantId, signalId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  idempotencyRecords IdempotencyRecord[]   @relation("IdempotencyRecord_intent")
+  order              Order?                @relation("Order_intent")
+  riskDecisions      RiskDecision[]        @relation("RiskDecision_intent")
+  reservations       RiskReservation[]     @relation("RiskReservation_intent")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, operation, idempotencyKey])
+  @@unique([tenantId, id, accountId, mode, instrumentId], map: "intent_full_account_scope")
+  @@unique([tenantId, id, accountId, mode], map: "intent_account_scope")
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("order_intent")
+}
+
+model IdempotencyRecord {
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String       @db.Uuid
+  operation          String       @db.VarChar(64)
+  idempotencyKey     String       @db.VarChar(128)
+  requestHash        Bytes
+  intentId           String?      @db.Uuid
+  responseCode       Int?
+  responseResourceId String?      @db.Uuid
+  completedAt        DateTime?    @db.Timestamptz(3)
+  retainUntil        DateTime     @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  tenant             User         @relation("IdempotencyRecord_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  intent             OrderIntent? @relation("IdempotencyRecord_intent", fields: [tenantId, intentId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, operation, idempotencyKey])
+  @@map("idempotency_record")
+}
+
+model Order {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String                @db.Uuid
+  intentId            String                @unique @db.Uuid
+  accountId           String                @db.Uuid
+  mode                TradingMode           @default(PAPER)
+  connectionId        String?               @db.Uuid
+  instrumentId        String                @db.Uuid
+  ruleVersionId       String                @db.Uuid
+  parentAlgoOrderId   String?               @db.Uuid
+  tradeId             String?               @db.Uuid
+  clientIdNamespace   String                @db.VarChar(64)
+  clientId            String                @db.VarChar(128)
+  exchangeOrderId     String?               @db.VarChar(128)
+  market              MarketType
+  status              OrderStatus           @default(CREATED)
+  /// SQL-owned stored generated flag; use parameterized SQL for indexed active reads under RLS.
+  isActive            Boolean               @default(dbgenerated()) @ignore
+  reconciliationState ReconciliationState   @default(REQUIRED)
+  side                OrderSide
+  positionSide        PositionSide          @default(NET)
+  orderType           OrderType
+  timeInForce         TimeInForce?
+  quantityAsset       String                @db.VarChar(32)
+  priceAsset          String                @db.VarChar(32)
+  /// @decimal quantity 38,18 positive
+  quantity            Decimal               @db.Decimal
+  /// @decimal quantity 38,18 nonnegative
+  filledQuantity      Decimal               @default(0) @db.Decimal
+  /// @decimal price 38,18 positive
+  limitPrice          Decimal?              @db.Decimal
+  /// @decimal price 38,18 nonnegative
+  averageFillPrice    Decimal               @default(0) @db.Decimal
+  reduceOnly          Boolean               @default(false)
+  version             Int                   @default(0)
+  lastExchangeAt      DateTime?             @db.Timestamptz(3)
+  terminalAt          DateTime?             @db.Timestamptz(3)
+  updatedAt           DateTime              @updatedAt @db.Timestamptz(3)
+  createdAt           DateTime              @default(now()) @db.Timestamptz(3)
+  tenant              User                  @relation("Order_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account             ExchangeAccount       @relation("Order_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument          Instrument            @relation("Order_instrument", fields: [instrumentId, market], references: [id, market], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion         InstrumentRuleVersion @relation("Order_ruleVersion", fields: [ruleVersionId, instrumentId], references: [id, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  connection          ExchangeConnection?   @relation("Order_connection", fields: [tenantId, connectionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  intent              OrderIntent           @relation("Order_intent", fields: [tenantId, intentId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  fills               Fill[]                @relation("Fill_order")
+  algo                AlgoOrder?            @relation("AlgoOrder_order")
+  parentAlgoOrder     AlgoOrder?            @relation("Order_parentAlgoOrder", fields: [tenantId, parentAlgoOrderId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  trade               Trade?                @relation("Order_trade", fields: [tenantId, tradeId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  submissionAttempts  SubmissionAttempt[]   @relation("SubmissionAttempt_order")
+  events              OrderEvent[]          @relation("OrderEvent_order")
+  paper               PaperOrder?           @relation("PaperOrder_order")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, clientIdNamespace, clientId], map: "order_client_identity")
+  @@unique([tenantId, accountId, mode, market, instrumentId, exchangeOrderId], map: "order_exchange_identity")
+  @@unique([tenantId, intentId, accountId, mode, instrumentId], map: "order_unique_intent_scope")
+  @@unique([tenantId, id, accountId, mode, instrumentId], map: "order_full_account_scope")
+  @@unique([tenantId, id, accountId, mode], map: "order_account_scope")
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([tenantId, connectionId, status, instrumentId])
+  @@index([tenantId, connectionId, reconciliationState, updatedAt])
+  @@map("order")
+}
+
+model AlgoOrder {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String          @db.Uuid
+  orderId        String          @unique @db.Uuid
+  accountId      String          @db.Uuid
+  mode           TradingMode
+  instrumentId   String          @db.Uuid
+  algoKind       String          @db.VarChar(32)
+  exchangeAlgoId String?         @db.VarChar(128)
+  triggerSource  String          @db.VarChar(32)
+  /// @decimal price 38,18 positive
+  triggerPrice   Decimal?        @db.Decimal
+  /// @decimal rate 20,18 nonnegative
+  trailingRate   Decimal?        @db.Decimal
+  triggeredAt    DateTime?       @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  tenant         User            @relation("AlgoOrder_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account        ExchangeAccount @relation("AlgoOrder_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument     Instrument      @relation("AlgoOrder_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  order          Order           @relation("AlgoOrder_order", fields: [tenantId, orderId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  childOrders    Order[]         @relation("Order_parentAlgoOrder")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, orderId])
+  @@unique([tenantId, accountId, mode, instrumentId, exchangeAlgoId], map: "algo_exchange_identity")
+  @@unique([tenantId, orderId, accountId, mode, instrumentId], map: "algo_unique_order_scope")
+  @@unique([tenantId, id, accountId, mode, instrumentId], map: "algo_full_account_scope")
+  @@map("algo_order")
+}
+
+model SubmissionAttempt {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String              @db.Uuid
+  orderId            String              @db.Uuid
+  operationVersion   Int
+  operation          SubmissionOperation
+  status             SubmissionStatus    @default(DISPATCHING)
+  permissionEpoch    BigInt
+  reservationId      String?             @db.Uuid
+  workerId           String              @db.VarChar(128)
+  commandHash        Bytes
+  permitConsumedAt   DateTime            @db.Timestamptz(3)
+  deadlineAt         DateTime            @db.Timestamptz(3)
+  transportStartedAt DateTime?           @db.Timestamptz(3)
+  responseReceivedAt DateTime?           @db.Timestamptz(3)
+  resolvedAt         DateTime?           @db.Timestamptz(3)
+  responseCode       String?             @db.VarChar(64)
+  evidenceHash       Bytes?
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  tenant             User                @relation("SubmissionAttempt_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  order              Order               @relation("SubmissionAttempt_order", fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  reservation        RiskReservation?    @relation("SubmissionAttempt_reservation", fields: [tenantId, reservationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  events             OrderEvent[]        @relation("OrderEvent_attempt")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, orderId, operationVersion])
+  @@unique([tenantId, id, orderId], map: "attempt_order_scope")
+  @@index([tenantId, status, createdAt])
+  @@map("submission_attempt")
+}
+
+model OrderEvent {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String             @db.Uuid
+  orderId        String             @db.Uuid
+  attemptId      String?            @db.Uuid
+  version        Int
+  previousStatus OrderStatus?
+  status         OrderStatus
+  source         String             @db.VarChar(64)
+  sourceIdentity String             @db.VarChar(256)
+  evidenceHash   Bytes
+  occurredAt     DateTime           @db.Timestamptz(3)
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  tenant         User               @relation("OrderEvent_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  order          Order              @relation("OrderEvent_order", fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  attempt        SubmissionAttempt? @relation("OrderEvent_attempt", fields: [tenantId, attemptId, orderId], references: [tenantId, id, orderId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, orderId, version])
+  @@unique([tenantId, orderId, source, sourceIdentity])
+  @@map("order_event")
+}
+
+model Trade {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String          @db.Uuid
+  accountId     String          @db.Uuid
+  mode          TradingMode
+  instrumentId  String          @db.Uuid
+  strategyRunId String?         @db.Uuid
+  positionSide  PositionSide
+  pnlAsset      String          @db.VarChar(32)
+  /// @decimal aggregate 48,18 signed
+  grossPnl      Decimal         @default(0) @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  netPnl        Decimal         @default(0) @db.Decimal
+  openedAt      DateTime        @db.Timestamptz(3)
+  closedAt      DateTime?       @db.Timestamptz(3)
+  version       Int             @default(0)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  tenant        User            @relation("Trade_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account       ExchangeAccount @relation("Trade_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument    Instrument      @relation("Trade_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  orders        Order[]         @relation("Order_trade")
+  fills         Fill[]          @relation("Fill_trade")
+  strategyRun   StrategyRun?    @relation("Trade_strategyRun", fields: [tenantId, strategyRunId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, accountId, mode, instrumentId], map: "trade_full_account_scope")
+  @@index([tenantId, openedAt(sort: Desc), id(sort: Desc)])
+  @@map("trade")
+}
+
+model Fill {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String                @db.Uuid
+  orderId            String                @db.Uuid
+  accountId          String                @db.Uuid
+  mode               TradingMode
+  instrumentId       String                @db.Uuid
+  ruleVersionId      String                @db.Uuid
+  tradeId            String?               @db.Uuid
+  market             MarketType
+  executionIdentity  String                @db.VarChar(256)
+  exchangeTradeId    String?               @db.VarChar(128)
+  side               OrderSide
+  liquidityRole      LiquidityRole         @default(UNKNOWN)
+  baseAsset          String                @db.VarChar(32)
+  quoteAsset         String                @db.VarChar(32)
+  /// @decimal quantity 38,18 positive
+  quantity           Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  price              Decimal               @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  quoteAmount        Decimal               @db.Decimal
+  timestamp          DateTime              @db.Timestamptz(3)
+  receivedAt         DateTime              @db.Timestamptz(3)
+  evidenceHash       Bytes
+  createdAt          DateTime              @default(now()) @db.Timestamptz(3)
+  tenant             User                  @relation("Fill_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account            ExchangeAccount       @relation("Fill_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument         Instrument            @relation("Fill_instrument", fields: [instrumentId, market], references: [id, market], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion        InstrumentRuleVersion @relation("Fill_ruleVersion", fields: [ruleVersionId, instrumentId], references: [id, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  ledgerTransactions LedgerTransaction[]   @relation("LedgerTransaction_fill")
+  order              Order                 @relation("Fill_order", fields: [tenantId, orderId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  trade              Trade?                @relation("Fill_trade", fields: [tenantId, tradeId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  fees               Fee[]                 @relation("Fee_fill")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, market, instrumentId, executionIdentity], map: "fill_execution_identity")
+  @@unique([tenantId, id, accountId, mode])
+  @@index([tenantId, orderId, timestamp, id])
+  @@index([tenantId, instrumentId, timestamp(sort: Desc), id(sort: Desc)])
+  @@map("fill")
+}
+
+model Fee {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String             @db.Uuid
+  fillId              String             @db.Uuid
+  ledgerTransactionId String?            @db.Uuid
+  feeIdentity         String             @db.VarChar(128)
+  asset               String             @db.VarChar(32)
+  kind                FeeKind
+  /// @decimal amount 38,18 signed
+  amount              Decimal            @db.Decimal
+  /// @decimal rate 20,18 signed
+  rate                Decimal?           @db.Decimal
+  timestamp           DateTime           @db.Timestamptz(3)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  tenant              User               @relation("Fee_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fill                Fill               @relation("Fee_fill", fields: [tenantId, fillId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  ledgerTransaction   LedgerTransaction? @relation("Fee_ledgerTransaction", fields: [tenantId, ledgerTransactionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, fillId, feeIdentity])
+  @@map("fee")
+}
+
+model FundingPayment {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String              @db.Uuid
+  accountId          String              @db.Uuid
+  mode               TradingMode
+  instrumentId       String              @db.Uuid
+  positionId         String?             @db.Uuid
+  paymentIdentity    String              @db.VarChar(256)
+  asset              String              @db.VarChar(32)
+  /// @decimal amount 38,18 signed
+  amount             Decimal             @db.Decimal
+  /// @decimal rate 20,18 signed
+  rate               Decimal             @db.Decimal
+  timestamp          DateTime            @db.Timestamptz(3)
+  receivedAt         DateTime            @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  tenant             User                @relation("FundingPayment_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account            ExchangeAccount     @relation("FundingPayment_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  instrument         Instrument          @relation("FundingPayment_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ledgerTransactions LedgerTransaction[] @relation("LedgerTransaction_fundingPayment")
+  position           Position?           @relation("FundingPayment_position", fields: [tenantId, positionId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, instrumentId, paymentIdentity], map: "funding_payment_identity")
+  @@unique([tenantId, id, accountId, mode])
+  @@map("funding_payment")
+}
+
+model StrategyDefinition {
+  id                      String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key                     String              @db.VarChar(64)
+  version                 Int
+  name                    String              @db.VarChar(120)
+  description             String              @db.VarChar(2000)
+  implementationHash      Bytes
+  parameterSchemaVersion  Int
+  minimumWarmupBars       Int
+  allowedMarkets          MarketType[]
+  publishedAt             DateTime?           @db.Timestamptz(3)
+  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
+  parameters              StrategyParameter[] @relation("StrategyParameter_definition")
+  strategyInstanceRecords StrategyInstance[]  @relation("StrategyInstance_definition")
+  strategyRunRecords      StrategyRun[]       @relation("StrategyRun_definition")
+  backtestRecords         Backtest[]          @relation("Backtest_definition")
+
+  @@unique([key, version])
+  @@map("strategy_definition")
+}
+
+model StrategyParameter {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  definitionId String             @db.Uuid
+  name         String             @db.VarChar(64)
+  valueType    String             @db.VarChar(32)
+  required     Boolean            @default(true)
+  defaultValue Json?
+  validation   Json
+  description  String             @db.VarChar(1000)
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  definition   StrategyDefinition @relation("StrategyParameter_definition", fields: [definitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([definitionId, name])
+  @@map("strategy_parameter")
+}
+
+model StrategyInstance {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String             @db.Uuid
+  accountId           String             @db.Uuid
+  mode                TradingMode        @default(PAPER)
+  definitionId        String             @db.Uuid
+  riskProfileId       String             @db.Uuid
+  label               String             @db.VarChar(120)
+  status              StrategyStatus     @default(DRAFT)
+  /// SQL-owned stored generated flag; applications cannot supply or overwrite it.
+  isRunning           Boolean            @default(dbgenerated()) @ignore
+  parameters          Json
+  /// Immutable at each version; global instrument IDs selected by the validated service.
+  instrumentSelection Json
+  selectionHash       Bytes
+  version             Int                @default(0)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  tenant              User               @relation("StrategyInstance_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account             ExchangeAccount    @relation("StrategyInstance_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  definition          StrategyDefinition @relation("StrategyInstance_definition", fields: [definitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  riskProfile         RiskProfile        @relation("StrategyInstance_riskProfile", fields: [tenantId, riskProfileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  runs                StrategyRun[]      @relation("StrategyRun_instance")
+  pauses              TradingPause[]     @relation("TradingPause_strategyInstance")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, accountId, mode])
+  @@index([tenantId, status, id])
+  @@map("strategy_instance")
+}
+
+model StrategyRun {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String             @db.Uuid
+  instanceId         String             @db.Uuid
+  accountId          String             @db.Uuid
+  mode               TradingMode
+  definitionId       String             @db.Uuid
+  instanceVersion    Int
+  status             RunStatus          @default(PENDING)
+  parametersSnapshot Json
+  instrumentSnapshot Json
+  modelVersion       String             @db.VarChar(64)
+  inputCursor        String?            @db.VarChar(512)
+  inputVersion       BigInt             @default(0)
+  seed               BigInt
+  startedAt          DateTime?          @db.Timestamptz(3)
+  endedAt            DateTime?          @db.Timestamptz(3)
+  failureCode        String?            @db.VarChar(64)
+  version            Int                @default(0)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(3)
+  tenant             User               @relation("StrategyRun_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account            ExchangeAccount    @relation("StrategyRun_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  definition         StrategyDefinition @relation("StrategyRun_definition", fields: [definitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  instance           StrategyInstance   @relation("StrategyRun_instance", fields: [tenantId, instanceId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  trades             Trade[]            @relation("Trade_strategyRun")
+  state              StrategyState?     @relation("StrategyState_run")
+  signals            Signal[]           @relation("Signal_run")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, accountId, mode])
+  @@index([tenantId, instanceId, createdAt(sort: Desc)])
+  @@map("strategy_run")
+}
+
+model StrategyState {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String      @db.Uuid
+  runId         String      @unique @db.Uuid
+  schemaVersion Int
+  version       BigInt      @default(0)
+  inputCursor   String      @db.VarChar(512)
+  state         Json
+  stateHash     Bytes
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  tenant        User        @relation("StrategyState_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run           StrategyRun @relation("StrategyState_run", fields: [tenantId, runId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, runId])
+  @@map("strategy_state")
+}
+
+model Signal {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                @db.Uuid
+  runId                String                @db.Uuid
+  instrumentId         String                @db.Uuid
+  ruleVersionId        String                @db.Uuid
+  inputIdentity        String                @db.VarChar(256)
+  ruleVersion          Int
+  signalKind           String                @db.VarChar(64)
+  side                 OrderSide?
+  payloadSchemaVersion Int
+  payload              Json
+  commandHash          Bytes
+  occurredAt           DateTime              @db.Timestamptz(3)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  tenant               User                  @relation("Signal_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  instrument           Instrument            @relation("Signal_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  instrumentRule       InstrumentRuleVersion @relation("Signal_ruleVersion", fields: [ruleVersionId, instrumentId, ruleVersion], references: [id, instrumentId, version], onDelete: Restrict, onUpdate: Restrict)
+  intents              OrderIntent[]         @relation("OrderIntent_signal")
+  run                  StrategyRun           @relation("Signal_run", fields: [tenantId, runId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, runId, instrumentId, inputIdentity, ruleVersion, signalKind], map: "signal_input_identity")
+  @@map("signal")
+}
+
+model RiskProfile {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String             @db.Uuid
+  name              String             @db.VarChar(100)
+  version           Int
+  policyHash        Bytes
+  valuationAsset    String             @db.VarChar(32)
+  /// @decimal aggregate 48,18 nonnegative
+  maxNotional       Decimal            @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  maxDailyLoss      Decimal            @db.Decimal
+  /// @decimal rate 20,18 nonnegative
+  maxDrawdownRate   Decimal            @db.Decimal
+  maxOpenOrders     Int
+  /// Versioned allowlisted additional policy; no executable expressions.
+  policy            Json
+  effectiveAt       DateTime           @db.Timestamptz(3)
+  retiredAt         DateTime?          @db.Timestamptz(3)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  tenant            User               @relation("RiskProfile_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  liveGrants        LiveGrant[]        @relation("LiveGrant_riskProfile")
+  strategyInstances StrategyInstance[] @relation("StrategyInstance_riskProfile")
+  decisions         RiskDecision[]     @relation("RiskDecision_profile")
+  events            RiskEvent[]        @relation("RiskEvent_profile")
+  budgets           RiskBudget[]       @relation("RiskBudget_profile")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, name, version])
+  @@unique([tenantId, id, version], map: "risk_profile_version_scope")
+  @@map("risk_profile")
+}
+
+model RiskDecision {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                @db.Uuid
+  intentId             String                @db.Uuid
+  accountId            String                @db.Uuid
+  mode                 TradingMode
+  profileId            String                @db.Uuid
+  stateVersionId       String                @db.Uuid
+  ruleVersionId        String                @db.Uuid
+  capabilitySnapshotId String                @db.Uuid
+  verdict              RiskVerdict
+  policyVersion        Int
+  commandHash          Bytes
+  reasonCodes          String[]
+  permissionEpoch      BigInt
+  expiresAt            DateTime              @db.Timestamptz(3)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  tenant               User                  @relation("RiskDecision_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account              ExchangeAccount       @relation("RiskDecision_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion          InstrumentRuleVersion @relation("RiskDecision_ruleVersion", fields: [ruleVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  stateVersion         AccountStateVersion   @relation("RiskDecision_stateVersion", fields: [tenantId, stateVersionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  intent               OrderIntent           @relation("RiskDecision_intent", fields: [tenantId, intentId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  profile              RiskProfile           @relation("RiskDecision_profile", fields: [tenantId, profileId, policyVersion], references: [tenantId, id, version], onDelete: Restrict, onUpdate: Restrict)
+  capabilitySnapshot   CapabilitySnapshot    @relation("RiskDecision_capabilitySnapshot", fields: [capabilitySnapshotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  events               RiskEvent[]           @relation("RiskEvent_decision")
+  reservation          RiskReservation?      @relation("RiskReservation_decision")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, id, intentId, accountId, mode], map: "risk_decision_intent_scope")
+  @@index([tenantId, intentId, createdAt])
+  @@map("risk_decision")
+}
+
+model RiskEvent {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String           @db.Uuid
+  decisionId    String?          @db.Uuid
+  accountId     String?          @db.Uuid
+  profileId     String?          @db.Uuid
+  scope         RiskScope
+  scopeKey      String           @db.VarChar(256)
+  code          String           @db.VarChar(64)
+  severity      Severity
+  schemaVersion Int
+  details       Json
+  occurredAt    DateTime         @db.Timestamptz(3)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  tenant        User             @relation("RiskEvent_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account       ExchangeAccount? @relation("RiskEvent_account", fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  decision      RiskDecision?    @relation("RiskEvent_decision", fields: [tenantId, decisionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  profile       RiskProfile?     @relation("RiskEvent_profile", fields: [tenantId, profileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, occurredAt(sort: Desc), id(sort: Desc)])
+  @@map("risk_event")
+}
+
+model RiskReservation {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String              @db.Uuid
+  decisionId         String              @unique @db.Uuid
+  intentId           String              @db.Uuid
+  accountId          String              @db.Uuid
+  mode               TradingMode
+  budgetId           String              @db.Uuid
+  status             ReservationStatus   @default(ACTIVE)
+  asset              String              @db.VarChar(32)
+  /// @decimal aggregate 48,18 nonnegative
+  amount             Decimal             @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  consumedAmount     Decimal             @default(0) @db.Decimal
+  expiresAt          DateTime            @db.Timestamptz(3)
+  releasedAt         DateTime?           @db.Timestamptz(3)
+  version            Int                 @default(0)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  tenant             User                @relation("RiskReservation_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account            ExchangeAccount     @relation("RiskReservation_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  submissionAttempts SubmissionAttempt[] @relation("SubmissionAttempt_reservation")
+  decision           RiskDecision        @relation("RiskReservation_decision", fields: [tenantId, decisionId, intentId, accountId, mode], references: [tenantId, id, intentId, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  intent             OrderIntent         @relation("RiskReservation_intent", fields: [tenantId, intentId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  budget             RiskBudget          @relation("RiskReservation_budget", fields: [tenantId, budgetId, mode, asset], references: [tenantId, id, mode, asset], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, decisionId])
+  @@unique([tenantId, decisionId, intentId, accountId, mode], map: "reservation_decision_scope")
+  @@index([tenantId, accountId, status, expiresAt])
+  @@map("risk_reservation")
+}
+
+model RiskBudget {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String            @db.Uuid
+  accountId      String?           @db.Uuid
+  profileId      String            @db.Uuid
+  mode           TradingMode
+  scope          RiskScope
+  scopeKey       String            @db.VarChar(256)
+  asset          String            @db.VarChar(32)
+  windowStart    DateTime          @db.Timestamptz(3)
+  windowEnd      DateTime          @db.Timestamptz(3)
+  /// @decimal aggregate 48,18 nonnegative
+  limitAmount    Decimal           @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  reservedAmount Decimal           @default(0) @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  consumedAmount Decimal           @default(0) @db.Decimal
+  version        Int               @default(0)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  tenant         User              @relation("RiskBudget_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account        ExchangeAccount?  @relation("RiskBudget_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  reservations   RiskReservation[] @relation("RiskReservation_budget")
+  profile        RiskProfile       @relation("RiskBudget_profile", fields: [tenantId, profileId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, mode, scope, scopeKey, asset, windowStart], map: "risk_budget_scope_window")
+  @@unique([tenantId, id, mode, asset], map: "risk_budget_asset_scope")
+  @@map("risk_budget")
+}
+
+model TradingPause {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String            @db.Uuid
+  accountId          String?           @db.Uuid
+  strategyInstanceId String?           @db.Uuid
+  instrumentId       String?           @db.Uuid
+  scope              RiskScope
+  scopeKey           String            @db.VarChar(256)
+  epoch              BigInt
+  reasonCode         String            @db.VarChar(64)
+  initiator          String            @db.VarChar(64)
+  pausedAt           DateTime          @db.Timestamptz(3)
+  resumedAt          DateTime?         @db.Timestamptz(3)
+  evidenceHash       Bytes?
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  tenant             User              @relation("TradingPause_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account            ExchangeAccount?  @relation("TradingPause_account", fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  instrument         Instrument?       @relation("TradingPause_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  strategyInstance   StrategyInstance? @relation("TradingPause_strategyInstance", fields: [tenantId, strategyInstanceId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, scope, scopeKey, epoch])
+  @@index([tenantId, resumedAt])
+  @@map("trading_pause")
+}
+
+model CircuitState {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String           @db.Uuid
+  accountId     String?          @db.Uuid
+  scope         RiskScope
+  scopeKey      String           @db.VarChar(256)
+  circuitKey    String           @db.VarChar(64)
+  status        CircuitStatus    @default(OPEN)
+  epoch         BigInt           @default(0)
+  failureCount  Int              @default(0)
+  lastFailureAt DateTime?        @db.Timestamptz(3)
+  nextProbeAt   DateTime?        @db.Timestamptz(3)
+  reasonCode    String           @db.VarChar(64)
+  version       Int              @default(0)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  tenant        User             @relation("CircuitState_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account       ExchangeAccount? @relation("CircuitState_account", fields: [tenantId, accountId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, scope, scopeKey, circuitKey])
+  @@map("circuit_state")
+}
+
+model PaperAccount {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String          @db.Uuid
+  accountId      String          @unique @db.Uuid
+  mode           TradingMode     @default(PAPER)
+  modelVersion   String          @db.VarChar(64)
+  seed           BigInt
+  valuationAsset String          @db.VarChar(32)
+  /// @decimal aggregate 48,18 positive
+  initialCapital Decimal         @db.Decimal
+  slippageModel  Json
+  feeModel       Json
+  resetEpoch     BigInt          @default(0)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  tenant         User            @relation("PaperAccount_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account        ExchangeAccount @relation("PaperAccount_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  orders         PaperOrder[]    @relation("PaperOrder_paperAccount")
+  positions      PaperPosition[] @relation("PaperPosition_paperAccount")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId])
+  @@unique([tenantId, accountId, mode])
+  @@unique([tenantId, id, accountId, mode], map: "paper_account_scope")
+  @@map("paper_account")
+}
+
+model PaperOrder {
+  id                     String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String       @db.Uuid
+  orderId                String       @unique @db.Uuid
+  paperAccountId         String       @db.Uuid
+  accountId              String       @db.Uuid
+  mode                   TradingMode  @default(PAPER)
+  modelVersion           String       @db.VarChar(64)
+  seed                   BigInt
+  inputIdentity          String       @db.VarChar(256)
+  eligibleAfter          DateTime     @db.Timestamptz(3)
+  /// @decimal rate 20,18 nonnegative
+  slippageRate           Decimal      @db.Decimal
+  /// Extension only: status/filledQuantity live on the shared Order.
+  simulationEvidenceHash Bytes?
+  createdAt              DateTime     @default(now()) @db.Timestamptz(3)
+  tenant                 User         @relation("PaperOrder_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  order                  Order        @relation("PaperOrder_order", fields: [tenantId, orderId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  paperAccount           PaperAccount @relation("PaperOrder_paperAccount", fields: [tenantId, paperAccountId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, orderId])
+  @@unique([tenantId, orderId, accountId, mode])
+  @@map("paper_order")
+}
+
+model PaperPosition {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @db.Uuid
+  positionId     String       @unique @db.Uuid
+  paperAccountId String       @db.Uuid
+  accountId      String       @db.Uuid
+  mode           TradingMode  @default(PAPER)
+  modelVersion   String       @db.VarChar(64)
+  /// Extension only: quantities and PnL live on the shared Position.
+  resetEpoch     BigInt
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  tenant         User         @relation("PaperPosition_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  position       Position     @relation("PaperPosition_position", fields: [tenantId, positionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+  paperAccount   PaperAccount @relation("PaperPosition_paperAccount", fields: [tenantId, paperAccountId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, positionId])
+  @@unique([tenantId, positionId, accountId, mode])
+  @@map("paper_position")
+}
+
+model Backtest {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String             @db.Uuid
+  definitionId         String             @db.Uuid
+  datasetManifestId    String             @db.Uuid
+  status               RunStatus          @default(PENDING)
+  parameters           Json
+  parametersHash       Bytes
+  rulesManifestHash    Bytes
+  engineVersion        String             @db.VarChar(64)
+  slippageModelVersion String             @db.VarChar(64)
+  feeModelVersion      String             @db.VarChar(64)
+  seed                 BigInt
+  valuationAsset       String             @db.VarChar(32)
+  /// @decimal aggregate 48,18 positive
+  initialCapital       Decimal            @db.Decimal
+  startAt              DateTime           @db.Timestamptz(3)
+  endAt                DateTime           @db.Timestamptz(3)
+  startedAt            DateTime?          @db.Timestamptz(3)
+  completedAt          DateTime?          @db.Timestamptz(3)
+  artifactUri          String?            @db.VarChar(2048)
+  artifactHash         Bytes?
+  failureCode          String?            @db.VarChar(64)
+  version              Int                @default(0)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  tenant               User               @relation("Backtest_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  definition           StrategyDefinition @relation("Backtest_definition", fields: [definitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  datasetManifest      DatasetManifest    @relation("Backtest_datasetManifest", fields: [datasetManifestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trades               BacktestTrade[]    @relation("BacktestTrade_backtest")
+  metrics              BacktestMetric[]   @relation("BacktestMetric_backtest")
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("backtest")
+}
+
+model BacktestTrade {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String                @db.Uuid
+  backtestId    String                @db.Uuid
+  instrumentId  String                @db.Uuid
+  ruleVersionId String                @db.Uuid
+  sequence      Int
+  side          OrderSide
+  baseAsset     String                @db.VarChar(32)
+  quoteAsset    String                @db.VarChar(32)
+  pnlAsset      String                @db.VarChar(32)
+  /// @decimal quantity 38,18 positive
+  quantity      Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  entryPrice    Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  exitPrice     Decimal?              @db.Decimal
+  /// @decimal aggregate 48,18 signed
+  netPnl        Decimal               @db.Decimal
+  /// @decimal amount 38,18 signed
+  fees          Decimal               @db.Decimal
+  openedAt      DateTime              @db.Timestamptz(3)
+  closedAt      DateTime?             @db.Timestamptz(3)
+  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
+  tenant        User                  @relation("BacktestTrade_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  instrument    Instrument            @relation("BacktestTrade_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion   InstrumentRuleVersion @relation("BacktestTrade_ruleVersion", fields: [ruleVersionId, instrumentId], references: [id, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+  backtest      Backtest              @relation("BacktestTrade_backtest", fields: [tenantId, backtestId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, backtestId, sequence])
+  @@map("backtest_trade")
+}
+
+model BacktestMetric {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @db.Uuid
+  backtestId         String   @db.Uuid
+  name               String   @db.VarChar(64)
+  unit               String   @db.VarChar(32)
+  /// @decimal aggregate 48,18 signed
+  value              Decimal  @db.Decimal
+  sampleCount        BigInt
+  calculationVersion String   @db.VarChar(64)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  tenant             User     @relation("BacktestMetric_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  backtest           Backtest @relation("BacktestMetric_backtest", fields: [tenantId, backtestId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, backtestId, name])
+  @@map("backtest_metric")
+}
+
+model DatasetManifest {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String      @db.VarChar(128)
+  version           Int
+  startAt           DateTime    @db.Timestamptz(3)
+  endAt             DateTime    @db.Timestamptz(3)
+  artifactUri       String      @db.VarChar(2048)
+  artifactHash      Bytes       @unique
+  schemaVersion     Int
+  sourceVersion     String      @db.VarChar(128)
+  rulesManifestHash Bytes
+  quality           DataQuality
+  rowCount          BigInt
+  provenance        Json
+  sealedAt          DateTime    @db.Timestamptz(3)
+  createdAt         DateTime    @default(now()) @db.Timestamptz(3)
+  backtests         Backtest[]  @relation("Backtest_datasetManifest")
+
+  @@unique([name, version])
+  @@map("dataset_manifest")
+}
+
+model Candle {
+  id               String                @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instrumentId     String                @db.Uuid
+  ruleVersionId    String                @db.Uuid
+  timeframeSeconds Int
+  openTime         DateTime              @db.Timestamptz(3)
+  closeTime        DateTime              @db.Timestamptz(3)
+  /// @decimal price 38,18 positive
+  open             Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  high             Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  low              Decimal               @db.Decimal
+  /// @decimal price 38,18 positive
+  close            Decimal               @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  baseVolume       Decimal               @db.Decimal
+  /// @decimal aggregate 48,18 nonnegative
+  quoteVolume      Decimal               @db.Decimal
+  tradeCount       BigInt
+  isClosed         Boolean               @default(false)
+  revision         Int                   @default(0)
+  quality          DataQuality
+  source           String                @db.VarChar(64)
+  sourceHash       Bytes
+  receivedAt       DateTime              @db.Timestamptz(3)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  instrument       Instrument            @relation("Candle_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion      InstrumentRuleVersion @relation("Candle_ruleVersion", fields: [ruleVersionId, instrumentId], references: [id, instrumentId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([id, openTime])
+  @@unique([instrumentId, timeframeSeconds, openTime])
+  @@index([openTime])
+  @@map("candle")
+}
+
+model MarketGap {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instrumentId       String     @db.Uuid
+  stream             String     @db.VarChar(64)
+  startAt            DateTime   @db.Timestamptz(3)
+  endAt              DateTime?  @db.Timestamptz(3)
+  expectedCursor     String?    @db.VarChar(512)
+  observedCursor     String?    @db.VarChar(512)
+  reasonCode         String     @db.VarChar(64)
+  repairedAt         DateTime?  @db.Timestamptz(3)
+  repairEvidenceHash Bytes?
+  createdAt          DateTime   @default(now()) @db.Timestamptz(3)
+  instrument         Instrument @relation("MarketGap_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([instrumentId, repairedAt, startAt])
+  @@map("market_gap")
+}
+
+model MarketCheckpoint {
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instrumentId   String     @db.Uuid
+  stream         String     @db.VarChar(64)
+  cursor         String     @db.VarChar(512)
+  eventAt        DateTime   @db.Timestamptz(3)
+  sourceRevision BigInt
+  ownerEpoch     BigInt
+  version        Int        @default(0)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  instrument     Instrument @relation("MarketCheckpoint_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([instrumentId, stream])
+  @@map("market_checkpoint")
+}
+
+model SubscriptionAssignment {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  instrumentId    String     @db.Uuid
+  stream          String     @db.VarChar(64)
+  workerId        String     @db.VarChar(128)
+  ownerEpoch      BigInt
+  leaseExpiresAt  DateTime   @db.Timestamptz(3)
+  lastHeartbeatAt DateTime   @db.Timestamptz(3)
+  version         Int        @default(0)
+  createdAt       DateTime   @default(now()) @db.Timestamptz(3)
+  instrument      Instrument @relation("SubscriptionAssignment_instrument", fields: [instrumentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([instrumentId, stream])
+  @@index([workerId, leaseExpiresAt])
+  @@map("subscription_assignment")
+}
+
+model OutboxEvent {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String          @db.Uuid
+  eventType        String          @db.VarChar(128)
+  schemaVersion    Int
+  aggregateType    String          @db.VarChar(64)
+  aggregateId      String          @db.Uuid
+  aggregateVersion BigInt
+  /// Validated domain data or IDs only; credentials and tokens are forbidden.
+  payload          Json
+  occurredAt       DateTime        @db.Timestamptz(3)
+  availableAt      DateTime        @default(now()) @db.Timestamptz(3)
+  attempts         Int             @default(0)
+  claimedBy        String?         @db.VarChar(128)
+  claimExpiresAt   DateTime?       @db.Timestamptz(3)
+  deliveredAt      DateTime?       @db.Timestamptz(3)
+  lastErrorCode    String?         @db.VarChar(64)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  tenant           User            @relation("OutboxEvent_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  consumerReceipts ConsumerInbox[] @relation("ConsumerInbox_event")
+  notifications    Notification[]  @relation("Notification_event")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, aggregateType, aggregateId, aggregateVersion, eventType], map: "outbox_aggregate_event")
+  @@index([tenantId, deliveredAt, availableAt, id])
+  @@map("outbox_event")
+}
+
+model ConsumerInbox {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String      @db.Uuid
+  consumer      String      @db.VarChar(128)
+  eventId       String      @db.Uuid
+  eventType     String      @db.VarChar(128)
+  schemaVersion Int
+  payloadHash   Bytes
+  processedAt   DateTime    @default(now()) @db.Timestamptz(3)
+  retainUntil   DateTime    @db.Timestamptz(3)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  tenant        User        @relation("ConsumerInbox_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  event         OutboxEvent @relation("ConsumerInbox_event", fields: [tenantId, eventId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([consumer, eventId])
+  @@index([tenantId, processedAt])
+  @@map("consumer_inbox")
+}
+
+model Notification {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String             @db.Uuid
+  eventId          String?            @db.Uuid
+  channel          String             @db.VarChar(32)
+  templateKey      String             @db.VarChar(64)
+  templateVersion  Int
+  status           NotificationStatus @default(PENDING)
+  /// Safe template parameters; no credentials, session tokens, or private payload capture.
+  parameters       Json
+  deduplicationKey String             @db.VarChar(256)
+  attempts         Int                @default(0)
+  nextAttemptAt    DateTime?          @db.Timestamptz(3)
+  deliveredAt      DateTime?          @db.Timestamptz(3)
+  readAt           DateTime?          @db.Timestamptz(3)
+  lastErrorCode    String?            @db.VarChar(64)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  tenant           User               @relation("Notification_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  event            OutboxEvent?       @relation("Notification_event", fields: [tenantId, eventId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channel, deduplicationKey])
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("notification")
+}
+
+model AuditLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @db.Uuid
+  actorType     String   @db.VarChar(32)
+  actorIdentity String   @db.VarChar(128)
+  action        String   @db.VarChar(128)
+  resourceType  String   @db.VarChar(64)
+  resourceId    String?  @db.Uuid
+  requestId     String   @db.VarChar(64)
+  outcome       String   @db.VarChar(32)
+  schemaVersion Int
+  /// Allowlisted audit metadata; never a raw request/response or credential.
+  details       Json
+  previousHash  Bytes?
+  entryHash     Bytes
+  occurredAt    DateTime @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  tenant        User     @relation("AuditLog_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("audit_log")
+}
+
+model SystemEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  service       String   @db.VarChar(64)
+  eventType     String   @db.VarChar(128)
+  severity      Severity
+  schemaVersion Int
+  correlationId String?  @db.VarChar(128)
+  /// Platform diagnostics only; no tenant payload or secret-bearing error messages.
+  details       Json
+  evidenceHash  Bytes?
+  occurredAt    DateTime @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([eventType, occurredAt(sort: Desc), id(sort: Desc)])
+  @@map("system_event")
+}
+
+model ReconciliationRun {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String              @db.Uuid
+  accountId       String              @db.Uuid
+  mode            TradingMode
+  connectionId    String?             @db.Uuid
+  market          MarketType
+  epoch           BigInt
+  state           ReconciliationState @default(REQUIRED)
+  trigger         String              @db.VarChar(64)
+  startCursor     String?             @db.VarChar(512)
+  endCursor       String?             @db.VarChar(512)
+  startedAt       DateTime            @db.Timestamptz(3)
+  completedAt     DateTime?           @db.Timestamptz(3)
+  unresolvedCount Int                 @default(0)
+  evidenceHash    Bytes?
+  failureCode     String?             @db.VarChar(64)
+  version         Int                 @default(0)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  tenant          User                @relation("ReconciliationRun_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account         ExchangeAccount     @relation("ReconciliationRun_account", fields: [tenantId, accountId, mode], references: [tenantId, id, mode], onDelete: Restrict, onUpdate: Restrict)
+  connection      ExchangeConnection? @relation("ReconciliationRun_connection", fields: [tenantId, connectionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, accountId, mode, market, epoch])
+  @@index([tenantId, state, startedAt])
+  @@map("reconciliation_run")
+}

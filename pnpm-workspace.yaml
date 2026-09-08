@@ -10,5 +10,10 @@ minimumReleaseAge: 1440
 storeDir: .pnpm-store
 engineStrict: true
 saveExact: true
+overrides:
+  '@prisma/config@7.10.0>deepmerge-ts': 8.0.0
+  'prisma@7.10.0>mysql2': 3.23.1
 allowBuilds:
   esbuild@0.28.2: true
+  prisma@7.10.0: true
+  '@prisma/engines@7.10.0': true

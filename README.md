@@ -2,9 +2,9 @@
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
-Текущий этап: **PHASE 1 — Project Bootstrap завершена**. Реализованы monorepo, конфигурация, JSON-логи, API lifecycle и проверки доступности PostgreSQL/Redis. Локальные проверки, реальные integration и Docker smoke прошли. На GitHub успешно выполнены все три job: Linux, Windows и Docker — [результат CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34032682895). Файлы, команды, результаты и границы проверки перечислены в [отчёте PHASE 1](docs/phase-1/verification.md). Исходники опубликованы в [tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot); следующий этап — PHASE 2, схема БД и миграции.
+Текущий этап: **PHASE 2 — Database, локальные проверки пройдены, ожидается CI**. Реализованы 59 Prisma-моделей, SQL migrations, ограничения денежных значений, tenant RLS, неизменяемость evidence, балансировка ledger на commit, partitioning свечей и development seed. [Отчёт и файлы](docs/phase-2/verification.md), [команды и роли](docs/phase-2/operations.md), [требования этапа](docs/phase-2/requirements.md), [зависимости](docs/phase-2/dependencies.md). Базовый bootstrap завершён и проверен в [PHASE 1](docs/phase-1/verification.md). Исходники проекта публикуются в [tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot).
 
-В этой фазе доступны только health endpoints. Схема БД, авторизация, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
+В этой фазе доступны только health endpoints. Авторизация, прикладные финансовые writers, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 
 ## Подготовка
 
@@ -100,6 +100,7 @@ pnpm audit:dependencies
 pnpm test:runtime
 pnpm test:clean
 pnpm test:integration
+pnpm test:database
 pnpm test:smoke
 ```
 

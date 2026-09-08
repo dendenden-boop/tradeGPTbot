@@ -3,6 +3,7 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!.pnpmfile.mjs
 !tsconfig*.json
 !.node-version
 !apps/
@@ -17,6 +18,7 @@
 # Exclusions apply even inside the admitted source directories.
 **/node_modules
 **/dist
+packages/database/src/generated
 **/coverage
 **/test-results
 **/.env

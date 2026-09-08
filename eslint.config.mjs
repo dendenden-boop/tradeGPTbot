@@ -7,6 +7,7 @@ export default defineConfig([
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      'packages/database/src/generated/**',
       '.tools/**',
       '.pnpm-store/**',
       '.cache/**',

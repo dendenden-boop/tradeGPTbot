@@ -59,26 +59,38 @@ try {
   const redisPort = localPort(
     await run('docker', composeArgs(file, test.project, ['port', 'redis', '6379']), options),
   );
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.dependencies.config.ts',
-    ],
-    {
-      ...options,
-      echo: true,
-      env: {
-        ...test.env,
-        NODE_ENV: 'test',
-        CTP_TEST_PROJECT: test.project,
-        DATABASE_URL: `postgresql://ctp_test:${test.env.POSTGRES_PASSWORD}@127.0.0.1:${postgresPort}/ctp_test`,
-        REDIS_URL: `redis://:${test.env.REDIS_PASSWORD}@127.0.0.1:${redisPort}/0`,
+  if (!process.argv.includes('--database-only'))
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.dependencies.config.ts',
+      ],
+      {
+        ...options,
+        echo: true,
+        env: {
+          ...test.env,
+          NODE_ENV: 'test',
+          CTP_TEST_PROJECT: test.project,
+          DATABASE_URL: `postgresql://ctp_test:${test.env.POSTGRES_PASSWORD}@127.0.0.1:${postgresPort}/ctp_test`,
+          REDIS_URL: `redis://:${test.env.REDIS_PASSWORD}@127.0.0.1:${redisPort}/0`,
+        },
       },
+    );
+  await run(process.execPath, ['scripts/test-database.mjs'], {
+    ...options,
+    echo: true,
+    timeoutMs: 300000,
+    env: {
+      ...test.env,
+      NODE_ENV: 'test',
+      CTP_TEST_PROJECT: test.project,
+      DATABASE_MIGRATION_URL: `postgresql://ctp_test:${test.env.POSTGRES_PASSWORD}@127.0.0.1:${postgresPort}/ctp_test`,
     },
-  );
+  });
   outcome.status = 'PASS';
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Integration runner failed';
