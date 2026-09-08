@@ -1,6 +1,6 @@
 # PHASE 2 — проверка базы данных
 
-Дата: **2026-09-08**. Статус: **все локальные проверки пройдены; GitHub CI ожидает публикации**. Базовая версия предыдущей фазы — `c1b9879`. Этот отчёт относится к схеме и инфраструктуре БД; auth и торговые сервисы следующих фаз не реализованы.
+Дата: **2026-09-08**. Статус: **PHASE 2 завершена**. Реализация `1d4bbcfb056216fb22b42d4ea90cf55be43069d4` прошла все локальные проверки и три job [GitHub CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34228676860): Ubuntu 24.04, Windows 2025 и реальные сервисы/Docker smoke. Базовая версия предыдущей фазы — `c1b9879`. Этот отчёт относится к схеме и инфраструктуре БД; auth и торговые сервисы следующих фаз не реализованы.
 
 ## Реализовано
 
@@ -14,22 +14,22 @@ Ledger требует сбалансированные entries по каждом
 
 ## Выполненные проверки
 
-| Команда / сценарий                         | Результат                                                                                                               |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `pnpm db:validate`, Prisma format/generate | PASS, exit 0                                                                                                            |
-| `pnpm build`                               | PASS, exit 0; генерация клиента и четыре workspace package builds                                                       |
-| `pnpm format`                              | PASS, exit 0                                                                                                            |
-| `pnpm lint`                                | PASS, exit 0, без предупреждений                                                                                        |
-| `pnpm typecheck`                           | PASS, exit 0; strict и skipLibCheck=false                                                                               |
-| `pnpm test:unit`                           | PASS, 151 тест: 92 bootstrap + 59 database/CLI boundary                                                                 |
-| `pnpm test:http`                           | PASS, 13 тестов реальных loopback HTTP-соединений                                                                       |
-| `pnpm test:runtime`                        | PASS, exit 0: fail-fast config, liveness, driver timeouts, coalescing, shutdown, закрытый stdout, безопасные логи       |
-| `pnpm test:database`                       | PASS, 47 PostgreSQL-тестов + fresh/repeat/upgrade/reset                                                                 |
-| `pnpm test:clean`                          | PASS, frozen offline install из чистых исходников, build, production deploy и изолированные imports API/DB              |
-| `pnpm audit --json`                        | PASS, exit 0; 0 info/low/moderate/high/critical в итоговом графе                                                        |
-| `pnpm docs:check`                          | PASS, UTF-8, структура Markdown и локальные ссылки                                                                      |
-| `pnpm test:integration`, `pnpm test:smoke` | PASS, exit 0: 3 service recovery + 47 DB tests; non-root Docker API, health/outages/recovery, SIGTERM и безопасные логи |
-| GitHub CI                                  | Ожидает отправки окончательного изменения                                                                               |
+| Команда / сценарий                         | Результат                                                                                                                    |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm db:validate`, Prisma format/generate | PASS, exit 0                                                                                                                 |
+| `pnpm build`                               | PASS, exit 0; генерация клиента и четыре workspace package builds                                                            |
+| `pnpm format`                              | PASS, exit 0                                                                                                                 |
+| `pnpm lint`                                | PASS, exit 0, без предупреждений                                                                                             |
+| `pnpm typecheck`                           | PASS, exit 0; strict и skipLibCheck=false                                                                                    |
+| `pnpm test:unit`                           | PASS, 151 тест: 92 bootstrap + 59 database/CLI boundary                                                                      |
+| `pnpm test:http`                           | PASS, 13 тестов реальных loopback HTTP-соединений                                                                            |
+| `pnpm test:runtime`                        | PASS, exit 0: fail-fast config, liveness, driver timeouts, coalescing, shutdown, закрытый stdout, безопасные логи            |
+| `pnpm test:database`                       | PASS, 47 PostgreSQL-тестов + fresh/repeat/upgrade/reset                                                                      |
+| `pnpm test:clean`                          | PASS, frozen offline install из чистых исходников, build, production deploy и изолированные imports API/DB                   |
+| `pnpm audit --json`                        | PASS, exit 0; 0 info/low/moderate/high/critical в итоговом графе                                                             |
+| `pnpm docs:check`                          | PASS, UTF-8, структура Markdown и локальные ссылки                                                                           |
+| `pnpm test:integration`, `pnpm test:smoke` | PASS, exit 0: 3 service recovery + 47 DB tests; non-root Docker API, health/outages/recovery, SIGTERM и безопасные логи      |
+| GitHub CI                                  | PASS, все 3 job, [run 34228676860](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34228676860), commit `1d4bbcf` |
 
 В PostgreSQL-тестах проверены реально конкурирующие транзакции intent/fill/inbox, один победитель CAS, rollback outbox, read/write tenant isolation, чужие и несовместимые FK, unsafe role rejection, numeric boundaries напрямую через SQL, stale SQL timeout, повторный/concurrent seed и идемпотентное закрытие helper. Ledger покрывает commit-time rollback, отдельный баланс каждого актива, early seal через SET CONSTRAINTS, late append, конкурентность, stale REPEATABLE READ, непривилегированный доступ к internal schema и signed margin balances.
 

@@ -1,6 +1,6 @@
 # Database design
 
-PHASE 2: логическая схема реализована в [Prisma schema](../packages/database/prisma/schema.prisma) и SQL migrations; [команды и роли](phase-2/operations.md), [критерии проверки](phase-2/requirements.md). Проверки текущего этапа продолжаются. PostgreSQL — источник истины финансового состояния; Redis cache/queue не заменяет ledger. Tenant соответствует пользователю; организация/несколько членов — возможное расширение с отдельным ADR.
+PHASE 2 завершена: логическая схема реализована в [Prisma schema](../packages/database/prisma/schema.prisma) и SQL migrations; [команды и роли](phase-2/operations.md), [критерии проверки](phase-2/requirements.md), [результаты локальных проверок и CI](phase-2/verification.md). PostgreSQL — источник истины финансового состояния; Redis cache/queue не заменяет ledger. Tenant соответствует пользователю; организация/несколько членов — возможное расширение с отдельным ADR.
 
 ## Сущности и владение
 

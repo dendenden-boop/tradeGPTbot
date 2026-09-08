@@ -2,7 +2,7 @@
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
-Текущий этап: **PHASE 2 — Database, локальные проверки пройдены, ожидается CI**. Реализованы 59 Prisma-моделей, SQL migrations, ограничения денежных значений, tenant RLS, неизменяемость evidence, балансировка ledger на commit, partitioning свечей и development seed. [Отчёт и файлы](docs/phase-2/verification.md), [команды и роли](docs/phase-2/operations.md), [требования этапа](docs/phase-2/requirements.md), [зависимости](docs/phase-2/dependencies.md). Базовый bootstrap завершён и проверен в [PHASE 1](docs/phase-1/verification.md). Исходники проекта публикуются в [tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot).
+Текущий этап: **PHASE 2 — Database завершена**. Реализованы 59 Prisma-моделей, SQL migrations, ограничения денежных значений, tenant RLS, неизменяемость evidence, балансировка ledger на commit, partitioning свечей и development seed. Все локальные проверки и три job [GitHub CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34228676860) прошли. [Отчёт и файлы](docs/phase-2/verification.md), [команды и роли](docs/phase-2/operations.md), [требования этапа](docs/phase-2/requirements.md), [зависимости](docs/phase-2/dependencies.md). Исходники опубликованы в [tradeGPTbot](https://github.com/dendenden-boop/tradeGPTbot). Следующий этап — PHASE 3, Auth & Users.
 
 В этой фазе доступны только health endpoints. Авторизация, прикладные финансовые writers, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 
