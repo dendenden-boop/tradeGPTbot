@@ -1,9 +1,26 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool, type PoolClient } from 'pg';
 import { PrismaClient, Prisma } from './generated/client.js';
+import { DecimalInputError, validateDecimalArguments } from './decimal-guard.js';
 
 export { decimalText, type DecimalKind } from './decimal.js';
-export type TenantTransaction = Prisma.TransactionClient;
+export type TenantTransaction = Parameters<
+  Parameters<ReturnType<typeof withDecimalGuard>['$transaction']>[0]
+>[0];
+
+function withDecimalGuard(client: PrismaClient) {
+  return client.$extends({
+    name: 'canonical-decimal-input',
+    query: {
+      $allModels: {
+        $allOperations({ model, args, query }) {
+          validateDecimalArguments(model, args);
+          return query(args);
+        },
+      },
+    },
+  });
+}
 
 export class DatabaseError extends Error {
   constructor(readonly code: string) {
@@ -13,6 +30,7 @@ export class DatabaseError extends Error {
 }
 
 function safeCode(error: unknown): string {
+  if (error instanceof DecimalInputError) return 'DATABASE_DECIMAL_INVALID';
   if (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     ['P2002', 'P2003', 'P2004', 'P2025', 'P2034'].includes(error.code)
@@ -31,7 +49,14 @@ export async function createDatabase(options: {
   }
   let url: URL;
   try {
-    if (options.connectionString.length > 4096) throw new Error();
+    if (
+      options.connectionString.length > 4096 ||
+      /\s/u.test(options.connectionString) ||
+      [...options.connectionString].some(
+        (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+      )
+    )
+      throw new Error();
     url = new URL(options.connectionString);
     for (const part of [url.username, url.password, url.pathname]) {
       if (
@@ -62,7 +87,9 @@ export async function createDatabase(options: {
     !url.hostname ||
     !url.username ||
     !url.password ||
-    !url.pathname.slice(1)
+    !url.pathname.slice(1) ||
+    url.pathname.slice(1).includes('/') ||
+    (url.port !== '' && Number(url.port) < 1)
   ) {
     throw new DatabaseError('DATABASE_URL_INVALID');
   }
@@ -70,6 +97,11 @@ export async function createDatabase(options: {
     ['staging', 'production'].includes(options.environment) &&
     (url.searchParams.get('sslmode') !== 'verify-full' ||
       decodeURIComponent(url.password).length < 16 ||
+      decodeURIComponent(url.password).toLowerCase() ===
+        decodeURIComponent(url.username).toLowerCase() ||
+      /(?:password|change[-_ ]?me|replace[-_ ]?me|example|development|local[-_ ]only|dev[-_ ]only)/iu.test(
+        decodeURIComponent(url.password),
+      ) ||
       process.env['NODE_TLS_REJECT_UNAUTHORIZED'] === '0')
   ) {
     throw new DatabaseError('DATABASE_TLS_REQUIRED');
@@ -143,6 +175,7 @@ export async function createDatabase(options: {
     throw new DatabaseError(safeCode(error));
   }
   let closing: Promise<void> | undefined;
+  const guardedClient = withDecimalGuard(client);
   return Object.freeze({
     async withTenant<T>(
       tenantId: string,
@@ -158,7 +191,7 @@ export async function createDatabase(options: {
       }
       if (closing) throw new DatabaseError('DATABASE_CLOSED');
       try {
-        return await client.$transaction(
+        return await guardedClient.$transaction(
           async (transaction) => {
             await transaction.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
             return operation(transaction);

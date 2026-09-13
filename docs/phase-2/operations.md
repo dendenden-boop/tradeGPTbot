@@ -1,6 +1,6 @@
 # PHASE 2 — работа с базой данных
 
-Схема находится в [schema.prisma](../../packages/database/prisma/schema.prisma), SQL-история — в [initial](../../packages/database/prisma/migrations/202609070001_initial/migration.sql) и [integrity](../../packages/database/prisma/migrations/202609070002_integrity/migration.sql). Прикладные auth, ledger и trading writers вводятся в последующих фазах. Наличие таблиц не включает торговлю.
+Схема находится в [schema.prisma](../../packages/database/prisma/schema.prisma), SQL-история — в [initial](../../packages/database/prisma/migrations/202609070001_initial/migration.sql), [integrity](../../packages/database/prisma/migrations/202609070002_integrity/migration.sql) и [audit integrity](../../packages/database/prisma/migrations/202609090001_audit_integrity/migration.sql). Прикладные auth, ledger и trading writers вводятся в последующих фазах. Наличие таблиц не включает торговлю.
 
 ## Сборка и миграции
 
@@ -51,6 +51,8 @@ try {
 
 `authenticatedUserId` поступает из доверенного principal будущего auth service. Это не tenant ID из тела HTTP-запроса: RLS не заменяет аутентификацию. Helper устанавливает transaction-local context, применяет Serializable isolation и не повторяет операции автоматически. Внешний HTTP/WS внутри callback не выполняется. Ошибки возвращаются без SQL/DSN; известные constraint/serialization codes сохраняются. В staging/production обязательны `sslmode=verify-full` и пароль минимум 16 символов.
 
+Ограничение typed Decimal predicates: Prisma `FieldRef` для сравнения двух денежных столбцов пока не поддержан guard. Таких вызовов в текущем коде нет. Для сравнения столбцов используйте проверенный параметризованный SQL; поддержка FieldRef потребует отдельного расширения и тестов.
+
 ## Development seed
 
 `pnpm db:seed` загружает `.env` и требует явно заданные `NODE_ENV=development` и `DATABASE_MIGRATION_URL`. Допустим только loopback PostgreSQL с именем БД `ctp`, без параметров URL. Неизвестное имя, удалённый адрес, staging/production или отсутствующий URL приводят к отказу до записи.
@@ -59,9 +61,17 @@ Seed создаёт suspended user без пароля, disabled PAPER account �
 
 ## Проверки и дальнейшие миграции
 
+Аудит PHASE 0–2 добавляет forward migration `202609090001_audit_integrity`; опубликованные migrations 001/002 не изменяются. Fee хранит общий account/mode для Fill и LedgerTransaction. SubmissionAttempt ссылается на собственный command intent и целевой Order с согласованными account/mode/instrument; AMEND/CANCEL используют отдельный intent с явным `targetOrderId`. SQL сверяет operation и command hash. PLACE остаётся связанным с первоначальным intent ордера; CANCEL может не иметь reservation. Эти связи не заменяют будущую проверку риска и dispatch gate.
+
+Миграция проверяет старые связи до backfill. Несовместимые Fee/Attempt, неоднозначные старые AMEND/CANCEL без target evidence и несовпадающие command hashes блокируют upgrade. Она не исправляет финансовые факты предположениями. Для backfill владелец таблиц временно снимает FORCE у семи таблиц под ACCESS EXCLUSIVE lock в одной транзакции и восстанавливает FORCE перед commit; RLS остаётся включённым для runtime. Проверяются rollback и запуск под владельцем без superuser/BYPASSRLS. Применение на рабочей БД потребует согласованного maintenance window и лимитов ожидания DDL.
+
+Order/client identity, command evidence SubmissionAttempt, payload/identity OutboxEvent и receipt ConsumerInbox защищены от изменения и удаления. Для Order разрешены изменения текущей quantity/price projection; исходная команда остаётся в immutable Intent/Attempt. Exchange ID и parent/trade bindings присваиваются один раз. Delivery/response lifecycle updates разрешены; inbox retention можно только продлить. Контролируемая архивация и state-machine writers относятся к следующим фазам.
+
+`withTenant` проверяет Decimal inputs всех model operations по metadata, генерируемой из Prisma schema: JS `number`, exponent strings, выход за range/scale и неподдерживаемые Decimal-like objects отклоняются с `DATABASE_DECIMAL_INVALID`. Проверяются вложенные writes, bulk, atomic updates, filters и aggregate predicates; JSON data и integer counters не считаются денежными полями. Обход ограничен по глубине и числу узлов. Generated Prisma types допускают `number`, поэтому запрет обеспечен в runtime. Передавайте canonical strings или `Prisma.Decimal`, созданный из строки: происхождение уже созданного Decimal восстановить нельзя. Raw SQL — доверенная граница без model metadata, где обязательны параметризованные запросы, `decimalText` для денежных параметров и review; SQL CHECK сохраняются независимо от клиента.
+
 Ledger header и все его entries записываются одной транзакцией. Deferred constraints при commit требуют минимум две записи для каждого актива и точную сумму 0. Внутренняя SQL-таблица `ctp_internal.ledger_seal` фиксирует закрытие posting; поздние INSERT в него запрещены. Это служебная таблица enforcement, отдельно от 59 domain models Prisma. Она и trigger functions недоступны runtime; служебные функции имеют фиксированный search_path и явно сверяют tenant context. При `SET CONSTRAINTS ALL IMMEDIATE` posting закрывается сразу, последующее добавление entries также отклоняется. Исправления — новая ledger transaction с correction reference, без изменения старых записей. Миграция проверяет и закрывает существующие postings; несбалансированные старые данные блокируют upgrade.
 
-`pnpm test:database` создаёт уникальный Docker project и две отдельные test DB: fresh и upgrade. Применяется вся история, повторный deploy, upgrade с первой миграции с данными, реальные SQL-тесты с непривилегированной ролью и reset только созданной runner БД. Имя project и опубликованный loopback port проверяются до создания/удаления test DB. Пользовательские volumes не сбрасываются. `pnpm test:integration` включает эти проверки вместе с PostgreSQL/Redis failure/recovery.
+`pnpm test:database` создаёт уникальный Docker project и три отдельные test DB: fresh, upgrade и upgrade под non-BYPASSRLS владельцем. Применяется вся история, повторный deploy, upgrade с первой миграции с данными, реальные SQL-тесты с непривилегированной ролью и reset только созданной runner БД. Имя project и опубликованный loopback port проверяются до создания/удаления test DB. Пользовательские volumes не сбрасываются. `pnpm test:integration` включает эти проверки вместе с PostgreSQL/Redis failure/recovery.
 
 Prisma schema не выражает RLS, SQL CHECK, partial indexes, triggers и partition layout. Следующую миграцию нужно проверять по SQL и PostgreSQL catalog, сохраняя эти объекты. `db push` и автоматический destructive downgrade не являются рабочим процессом. Используйте expand/contract и отдельный forward fix; после опубликования migration её содержимое не переписывается.
 

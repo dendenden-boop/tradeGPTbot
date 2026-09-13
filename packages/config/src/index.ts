@@ -44,16 +44,27 @@ function integerSetting(defaultValue: number, maximum: number, minimum = 1) {
 }
 
 function parseUrl(value: string): URL | undefined {
-  if (value.length > 4096 || /\s/u.test(value)) {
+  if (
+    value.length > 4096 ||
+    /\s/u.test(value) ||
+    [...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+  ) {
     return undefined;
   }
 
   try {
     const url = new URL(value);
-    // Decode once here so malformed percent escapes cannot reach a driver.
-    decodeURIComponent(url.username);
-    decodeURIComponent(url.password);
-    decodeURIComponent(url.pathname);
+    // Match the database package boundary: neither malformed escapes nor decoded
+    // control/whitespace characters may reach a driver with different URL parsing.
+    for (const part of [url.username, url.password, url.pathname]) {
+      if (
+        [...decodeURIComponent(part)].some(
+          (char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127,
+        )
+      ) {
+        return undefined;
+      }
+    }
     if (!url.hostname || url.hash || (url.port !== '' && Number(url.port) < 1)) {
       return undefined;
     }
@@ -65,8 +76,19 @@ function parseUrl(value: string): URL | undefined {
 
 const databaseUrl = z.string().refine((value) => {
   const url = parseUrl(value);
+  if (url === undefined) return false;
+  const seen = new Set<string>();
+  for (const [key, parameter] of url.searchParams) {
+    if (
+      seen.has(key) ||
+      !['sslmode', 'application_name'].includes(key) ||
+      parameter.length > 64 ||
+      /^[a-zA-Z0-9_-]+$/u.exec(parameter)?.[0] !== parameter
+    )
+      return false;
+    seen.add(key);
+  }
   return (
-    url !== undefined &&
     (url.protocol === 'postgres:' || url.protocol === 'postgresql:') &&
     url.pathname.length > 1 &&
     !url.pathname.slice(1).includes('/')

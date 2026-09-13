@@ -8,7 +8,11 @@ RUN npm install --global pnpm@11.25.0 --ignore-scripts
 COPY . .
 RUN pnpm install --frozen-lockfile --store-dir=/pnpm/store
 RUN pnpm -r build
-RUN pnpm --filter @ctp/api --offline --store-dir=/pnpm/store deploy --prod /opt/api
+# pnpm 11 may verify release age via online attestations without caching full metadata.
+# Verify the derived deployment lockfile first; materialize that exact graph offline.
+RUN pnpm --filter @ctp/api --store-dir=/pnpm/store deploy --prod --lockfile-only /opt/api-policy
+RUN --network=none pnpm --filter @ctp/api --offline --store-dir=/pnpm/store deploy --prod /opt/api \
+    && cmp /opt/api-policy/pnpm-lock.yaml /opt/api/pnpm-lock.yaml
 
 FROM node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime
 

@@ -5,6 +5,13 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { run, report, workspace } from './docker-test-utils.mjs';
+import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
+
+const expectedMigrations = [
+  '202609070001_initial',
+  '202609070002_integrity',
+  '202609090001_audit_integrity',
+];
 
 const project = process.env.CTP_TEST_PROJECT;
 if (
@@ -39,10 +46,12 @@ const databaseRequire = createRequire(
 );
 const { Pool } = databaseRequire('pg');
 const password = randomBytes(24).toString('hex');
-const secrets = [decodeURIComponent(adminUrl.password), password];
+const ownerPassword = randomBytes(24).toString('hex');
+const secrets = [decodeURIComponent(adminUrl.password), password, ownerPassword];
 const suffix = randomBytes(6).toString('hex');
-const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`];
+const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
+const ownerRole = `ctp_p2_owner_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -64,19 +73,23 @@ const connect = (url) => {
   return pool;
 };
 const admin = connect(adminUrl.href);
-const dbUrl = (name, runtime = false) => {
+const dbUrl = (name, runtime = false, owner = false) => {
   const url = new URL(adminUrl);
   url.pathname = '/' + name;
   if (runtime) {
     url.username = runtimeRole;
     url.password = password;
   }
+  if (owner) {
+    url.username = ownerRole;
+    url.password = ownerPassword;
+  }
   return url.href;
 };
-const migrate = async (name, selectedConfig = config) => {
+const migrate = async (name, selectedConfig = config, owner = false) => {
   try {
     return await run(process.execPath, [prisma, 'migrate', 'deploy', '--config', selectedConfig], {
-      env: { ...process.env, DATABASE_MIGRATION_URL: dbUrl(name) },
+      env: { ...process.env, DATABASE_MIGRATION_URL: dbUrl(name, false, owner) },
       secrets,
       echo: true,
     });
@@ -89,7 +102,7 @@ const migrate = async (name, selectedConfig = config) => {
         'SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL ORDER BY started_at DESC LIMIT 1',
       );
       const migration = failed.rows[0]?.migration_name;
-      if (!['202609070001_initial', '202609070002_integrity'].includes(migration)) throw error;
+      if (!expectedMigrations.includes(migration)) throw error;
       const script = (
         await readFile(
           path.join(workspace, 'packages/database/prisma/migrations', migration, 'migration.sql'),
@@ -138,7 +151,14 @@ try {
     { secrets },
   );
   assert.equal(port.trim(), `127.0.0.1:${adminUrl.port}`);
-  for (const name of databases) await admin.query(`CREATE DATABASE ${identifier(name)}`);
+  await admin.query(
+    `CREATE ROLE ${identifier(ownerRole)} LOGIN NOSUPERUSER NOCREATEDB CREATEROLE NOBYPASSRLS PASSWORD '${ownerPassword}'`,
+  );
+  for (const name of databases) {
+    await admin.query(
+      `CREATE DATABASE ${identifier(name)}${name === databases[2] ? ` OWNER ${identifier(ownerRole)}` : ''}`,
+    );
+  }
   await migrate(databases[0]);
   await migrate(databases[0]);
   const fresh = connect(dbUrl(databases[0]));
@@ -148,7 +168,7 @@ try {
         'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
       )
     ).rows[0].n,
-    2,
+    expectedMigrations.length,
   );
 
   await mkdir(path.join(workspace, '.cache'), { recursive: true });
@@ -208,6 +228,23 @@ try {
     await upgrade.query('ROLLBACK');
     throw error;
   }
+  // First upgrade the original data with the exact published migration 002.
+  // Then exercise 002 -> 003 using both valid and deliberately invalid old links.
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/202609070002_integrity'),
+    path.join(previousMigrations, '202609070002_integrity'),
+    { recursive: true },
+  );
+  await migrate(databases[1], previousConfig);
+  const auditUpgradeIds = await prepareAuditUpgrade(
+    upgrade,
+    path.join(
+      workspace,
+      'packages/database/prisma/migrations/202609090001_audit_integrity/migration.sql',
+    ),
+  );
+  await migrate(databases[1]);
+  await verifyAuditUpgrade(upgrade, auditUpgradeIds);
   await migrate(databases[1]);
   assert.equal(
     (await upgrade.query('SELECT "emailNormalized" FROM "user" WHERE id=$1', [marker])).rows[0]
@@ -220,7 +257,7 @@ try {
         'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
       )
     ).rows[0].n,
-    2,
+    expectedMigrations.length,
   );
   assert.deepEqual(
     (
@@ -259,6 +296,32 @@ try {
   } finally {
     await upgrade.query('ROLLBACK');
   }
+
+  // Reproduce the documented migration contract with a DDL owner that cannot bypass RLS.
+  await migrate(databases[2], previousConfig, true);
+  const ownerDatabase = connect(dbUrl(databases[2]));
+  const ownerLegacy = await prepareAuditUpgrade(
+    ownerDatabase,
+    path.join(
+      workspace,
+      'packages/database/prisma/migrations/202609090001_audit_integrity/migration.sql',
+    ),
+  );
+  await migrate(databases[2], config, true);
+  await verifyAuditUpgrade(ownerDatabase, ownerLegacy);
+  assert.deepEqual(
+    (await admin.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1', [ownerRole]))
+      .rows,
+    [{ rolsuper: false, rolbypassrls: false }],
+  );
+  assert.equal(
+    (
+      await ownerDatabase.query(`SELECT count(*)::int n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE n.nspname='public' AND c.relname IN ('fee','submission_attempt','order','risk_reservation','fill','ledger_transaction','order_intent')
+      AND c.relrowsecurity AND c.relforcerowsecurity`)
+    ).rows[0].n,
+    7,
+  );
 
   await admin.query(
     `CREATE ROLE ${identifier(runtimeRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}'`,
@@ -304,6 +367,9 @@ try {
     fresh: 'PASS',
     upgradePreservesData: 'PASS',
     upgradeSealsExistingLedger: 'PASS',
+    upgradeBackfillsEvidenceScope: 'PASS',
+    upgradeRejectsInvalidLegacyLinks: 'PASS',
+    nonBypassMigrationOwner: 'PASS',
     repeatedDeploy: 'PASS',
     isolatedReset: 'PASS',
     tests: tests.numPassedTests,

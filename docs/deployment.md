@@ -1,6 +1,6 @@
-# Deployment и восстановление — проект PHASE 0
+# Deployment и восстановление — проект эксплуатации
 
-Дата: **2026-09-05**. Это проект эксплуатации [архитектуры](architecture.md). Инфраструктура не развёрнута; benchmark, migrations, restore drill и security tests ещё не выполнялись. Провайдер и бюджет не выбраны.
+Проект принят **2026-09-05**, согласование с PHASE 1–2: **2026-09-09**. Это целевая эксплуатация [архитектуры](architecture.md). Реализованы локальные/CI Docker Compose с API, PostgreSQL и Redis, readiness/failure/recovery/shutdown проверки, а также fresh/upgrade/reset migration tests: [PHASE 1](phase-1/verification.md), [PHASE 2](phase-2/verification.md). Production инфраструктура, restore drill, торговый load/soak benchmark и disaster recovery ещё не проверены. Production провайдер и бюджет не выбраны; следующие разделы не являются свидетельством production deployment.
 
 ## Процессы и инфраструктура
 
@@ -15,6 +15,8 @@ PostgreSQL хранит ledger, intent, submission attempt, inbox, reservations 
 Начальные budgets — гипотезы: CPU backtest ≤25% пула, DB connections с резервом 20% для reconciliation/control, queue memory alert 70%/85%, bounded payload/page sizes. Общие rate buckets учитывают exchange UID и egress IP; отдельный резерв cancel/reconciliation не обходит биржевой лимит. Capacity подтверждать профилями 300/600/1200 инструментов и реальным числом private accounts.
 
 ## Доставка и наблюдаемость
+
+Текущий [Dockerfile](../infra/Dockerfile) устанавливает зависимости по frozen lockfile и собирает workspace, затем выполняет `deploy --prod --lockfile-only` с включённой supply-chain проверкой. Это необходимо для pnpm 11: online-проверка возраста пакета может использовать attestation без сохранения полной registry metadata, а отдельный deployment lockfile требует собственного результата проверки. Следующий `deploy --offline` выполняется с `RUN --network=none`; его lockfile побайтово сравнивается с проверенным. Версии, integrity и правила `minimumReleaseAge`/strict peers сохраняются. [Clean runner](../scripts/test-clean-install.mjs) проверяет такой же порядок для API и БД; его policy-подготовка требует registry, установка пакетов и итоговый deploy используют offline store. Механизм отдельного lockfile описан в [pnpm deploy](https://pnpm.io/cli/deploy); поведение зафиксированной 11.25.0 дополнительно проверено по её установленному исходному коду и реальным сборкам.
 
 CI: pinned runtime/lockfile, lint/typecheck/unit/integration, dependency advisories, secret scan, SBOM, immutable image digest. Promotion одного проверенного image между средами. Production deploy требует совместимых schema/events; миграции выполняет отдельная временная роль.
 

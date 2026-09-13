@@ -1,6 +1,6 @@
-# Security — проект PHASE 0
+# Security — threat model и состояние контролей
 
-Дата: **2026-09-05**. Основа: [архитектура](architecture.md), [требования](phase-0/requirements.md). Ни один контроль или тест ниже пока не реализован и не проверен; это условия будущей приёмки.
+Threat model принят **2026-09-05**, согласование с PHASE 1–2: **2026-09-09**. Основа: [архитектура](architecture.md), [требования](phase-0/requirements.md). В PHASE 1 проверены config validation, ограничение HTTP input, безопасные error/log boundaries и lifecycle; в PHASE 2 — RLS, tenant-scoped FK, runtime grants, decimal и evidence constraints. Объём и результаты: [PHASE 1](phase-1/verification.md), [PHASE 2](phase-2/verification.md). Auth/REST/WS ownership flows, envelope encryption, KMS/signer, LIVE gates и production security review остаются будущими проверками. Таблица угроз ниже описывает целевой полный контроль, а не утверждает, что все его части реализованы.
 
 ## Границы доверия и угрозы
 
@@ -32,6 +32,8 @@ KMS-ротация создаёт новый KEK version и отдельный �
 ## Tenant isolation, auth и LIVE
 
 REST ownership проверяется по principal сессии, включая parent-child связи. WS проверяет Origin, сессию, tenant и connection каждой подписки; истечение/отзыв закрывает private streams. Job tenant — недоверенная подсказка; consumer повторно разрешает владельца из БД. RLS использует `USING`/`WITH CHECK`, tenant context только внутри транзакции; отсутствующий context запрещает доступ. Runtime-роли не owner/superuser/BYPASSRLS; migrations, API, signer и analytics имеют разные grants. RLS не защищает от superuser; owner требует FORCE, отдельные table-wide операции обходят RLS. [PostgreSQL RLS](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+
+Контракт PHASE 2 → PHASE 3: tenant сейчас равен `User.id`; `withTenant` получает идентификатор только из доверенного server principal. PostgreSQL session setting сам по себе не аутентифицирует пользователя: код, имеющий SQL connection, способен задать другой context. Поэтому нельзя принимать tenant из request body/header или отдавать клиенту произвольный SQL. Текущий `ctp_api` читает только разрешённые колонки User и не имеет доступа к password/session/token/2FA данным. PHASE 3 должна определить отдельную auth boundary и её минимальные grants, включая безопасный lookup до появления tenant principal, с новой migration и отрицательными тестами. Product-роли USER/ADMIN не равны PostgreSQL-ролям `ctp_api`/`ctp_signer`/`ctp_ingest`; ADMIN не получает decrypt или обход tenant ownership. Подробности текущих grants: [операции PHASE 2](phase-2/operations.md).
 
 Пароли: Argon2id с индивидуальной солью; стартовый минимум OWASP — 19 MiB, t=2, p=1; реальный cost фиксировать после benchmark с ограничением параллельных login. [Password storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
 

@@ -801,6 +801,8 @@ model OrderIntent {
   instrumentId       String                @db.Uuid
   ruleVersionId      String                @db.Uuid
   signalId           String?               @db.Uuid
+  /// Existing order addressed by an immutable AMEND or CANCEL command.
+  targetOrderId      String?               @db.Uuid
   origin             IntentOrigin
   destination        Destination
   operation          String                @db.VarChar(64)
@@ -829,6 +831,8 @@ model OrderIntent {
   signal             Signal?               @relation("OrderIntent_signal", fields: [tenantId, signalId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   idempotencyRecords IdempotencyRecord[]   @relation("IdempotencyRecord_intent")
   order              Order?                @relation("Order_intent")
+  targetOrder        Order?                @relation("OrderIntent_targetOrder", fields: [tenantId, targetOrderId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict, map: "intent_target_order_scope")
+  submissionAttempts SubmissionAttempt[]   @relation("SubmissionAttempt_intent")
   riskDecisions      RiskDecision[]        @relation("RiskDecision_intent")
   reservations       RiskReservation[]     @relation("RiskReservation_intent")
 
@@ -910,6 +914,7 @@ model Order {
   parentAlgoOrder     AlgoOrder?            @relation("Order_parentAlgoOrder", fields: [tenantId, parentAlgoOrderId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
   trade               Trade?                @relation("Order_trade", fields: [tenantId, tradeId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict)
   submissionAttempts  SubmissionAttempt[]   @relation("SubmissionAttempt_order")
+  operationIntents    OrderIntent[]         @relation("OrderIntent_targetOrder")
   events              OrderEvent[]          @relation("OrderEvent_order")
   paper               PaperOrder?           @relation("PaperOrder_order")
 
@@ -959,6 +964,11 @@ model SubmissionAttempt {
   id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId           String              @db.Uuid
   orderId            String              @db.Uuid
+  /// The immutable operation command; AMEND/CANCEL differ from the order's placement intent.
+  intentId           String              @db.Uuid
+  accountId          String              @db.Uuid
+  mode               TradingMode
+  instrumentId       String              @db.Uuid
   operationVersion   Int
   operation          SubmissionOperation
   status             SubmissionStatus    @default(DISPATCHING)
@@ -975,8 +985,9 @@ model SubmissionAttempt {
   evidenceHash       Bytes?
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   tenant             User                @relation("SubmissionAttempt_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  order              Order               @relation("SubmissionAttempt_order", fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
-  reservation        RiskReservation?    @relation("SubmissionAttempt_reservation", fields: [tenantId, reservationId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  order              Order               @relation("SubmissionAttempt_order", fields: [tenantId, orderId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict, map: "attempt_parent_scope")
+  intent             OrderIntent         @relation("SubmissionAttempt_intent", fields: [tenantId, intentId, accountId, mode, instrumentId], references: [tenantId, id, accountId, mode, instrumentId], onDelete: Restrict, onUpdate: Restrict, map: "attempt_intent_scope")
+  reservation        RiskReservation?    @relation("SubmissionAttempt_reservation", fields: [tenantId, reservationId, intentId, accountId, mode], references: [tenantId, id, intentId, accountId, mode], onDelete: Restrict, onUpdate: Restrict, map: "attempt_reservation_scope")
   events             OrderEvent[]        @relation("OrderEvent_attempt")
 
   @@unique([tenantId, id])
@@ -1086,6 +1097,9 @@ model Fee {
   id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId            String             @db.Uuid
   fillId              String             @db.Uuid
+  /// A fee and its optional ledger posting share the fill's account and mode.
+  accountId           String             @db.Uuid
+  mode                TradingMode
   ledgerTransactionId String?            @db.Uuid
   feeIdentity         String             @db.VarChar(128)
   asset               String             @db.VarChar(32)
@@ -1097,8 +1111,8 @@ model Fee {
   timestamp           DateTime           @db.Timestamptz(3)
   createdAt           DateTime           @default(now()) @db.Timestamptz(3)
   tenant              User               @relation("Fee_tenant", fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  fill                Fill               @relation("Fee_fill", fields: [tenantId, fillId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
-  ledgerTransaction   LedgerTransaction? @relation("Fee_ledgerTransaction", fields: [tenantId, ledgerTransactionId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  fill                Fill               @relation("Fee_fill", fields: [tenantId, fillId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict, map: "fee_fill_scope")
+  ledgerTransaction   LedgerTransaction? @relation("Fee_ledgerTransaction", fields: [tenantId, ledgerTransactionId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict, map: "fee_ledger_scope")
 
   @@unique([tenantId, id])
   @@unique([tenantId, fillId, feeIdentity])
@@ -1398,6 +1412,7 @@ model RiskReservation {
   @@unique([tenantId, id])
   @@unique([tenantId, decisionId])
   @@unique([tenantId, decisionId, intentId, accountId, mode], map: "reservation_decision_scope")
+  @@unique([tenantId, id, intentId, accountId, mode], map: "reservation_attempt_scope")
   @@index([tenantId, accountId, status, expiresAt])
   @@map("risk_reservation")
 }

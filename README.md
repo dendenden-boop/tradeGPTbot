@@ -6,6 +6,8 @@
 
 В этой фазе доступны только health endpoints. Авторизация, прикладные финансовые writers, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 
+Перед PHASE 3 выполняется [аудит PHASE 0–2 и согласованности этапов](docs/audit-phases-0-2.md): constraints и durable identities, Decimal boundary, роли при upgrade, совместимость AMEND/CANCEL, config, build/CI и документация. Итоговый статус проверок приведён в отчёте аудита.
+
 ## Подготовка
 
 Нужны Node.js **24.20.0**, pnpm **11.25.0** и Docker Engine для Linux-контейнеров с командой `docker compose`. Для Windows подойдёт настроенный Docker Desktop в режиме Linux-контейнеров либо доступный Linux Docker Engine. Версии зависимостей и причины выбора описаны в [оценке зависимостей](docs/phase-1/dependencies.md).

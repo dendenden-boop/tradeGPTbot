@@ -97,6 +97,24 @@ try {
   assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
   await run(process.execPath, [pnpm, 'build'], options);
   for (const name of ['api', 'database']) {
+    // Frozen install can verify release age via online attestation without caching
+    // full registry metadata. Verify the exact derived graph before offline deploy.
+    const policyDirectory = path.join(directory, `deployment-${name}-policy`);
+    await run(
+      process.execPath,
+      [
+        pnpm,
+        '--filter',
+        `@ctp/${name}`,
+        '--store-dir',
+        path.join(workspace, '.pnpm-store'),
+        'deploy',
+        '--prod',
+        '--lockfile-only',
+        policyDirectory,
+      ],
+      options,
+    );
     await run(
       process.execPath,
       [
@@ -111,6 +129,11 @@ try {
         path.join(directory, `deployment-${name}`),
       ],
       options,
+    );
+    assert.deepEqual(
+      await readFile(path.join(directory, `deployment-${name}`, 'pnpm-lock.yaml')),
+      await readFile(path.join(policyDirectory, 'pnpm-lock.yaml')),
+      'Offline deployment must use the exact graph verified by the online policy check',
     );
   }
   await verifyDeployment(
@@ -130,6 +153,8 @@ try {
     `,
     options,
   );
+  assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
+  assert.equal(digest(await readFile(path.join(workspace, 'pnpm-lock.yaml'))), lockfileSha256);
   await report('clean-install', {
     status: 'PASS',
     startedAt,
@@ -139,7 +164,7 @@ try {
     node: process.version,
     deployments: ['@ctp/api', '@ctp/database'],
     scope:
-      'Fresh source copy without generated code, offline store, frozen install, workspace build, isolated API/database production imports and PostgreSQL WASM without dev tools or database connections',
+      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database production imports and PostgreSQL WASM without dev tools or database connections',
   });
   console.log('Clean install/build/deploy PASS; original source and lockfile left unchanged.');
 } catch (error) {

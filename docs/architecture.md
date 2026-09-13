@@ -2,6 +2,8 @@
 
 Дата исследования: **2026-09-05**. Статус: проект архитектуры для реализации по этапам. Утверждения о биржах подтверждаются ссылками в [исследовании адаптеров](exchange-adapters.md); архитектурные числа ниже являются нашими исходными гипотезами. Проверки счетов и торговые операции не выполнялись.
 
+Состояние после PHASE 2: реализованы backend bootstrap и database package; фактические проверки зафиксированы в [отчёте PHASE 1](phase-1/verification.md) и [отчёте PHASE 2](phase-2/verification.md). Остальные компоненты схемы ниже остаются проектом. Наличие таблиц не означает готовность auth, exchange adapters, financial writers или production deployment. Дата согласования документа с PHASE 1–2: **2026-09-09**.
+
 ## Цель и граница первого результата
 
 Платформа объединяет Spot и деривативы Binance, Bybit, OKX и HTX, ручные заявки, стратегии, PAPER, биржевые Demo/Testnet и LIVE. Приоритеты: корректность учёта, отсутствие повторной отправки заявки, защита ключей, восстановление после сбоев. Никаких функций вывода средств. PHASE 0 завершается документацией; bootstrap относится к PHASE 1.
@@ -72,7 +74,7 @@ packages/
 infra/ docs/ scripts/ tests/
 ```
 
-Это план; каталоги приложений сейчас не создаются. Domain modules: Users, Authentication, Authorization, Exchange Connections, Market Data, Instrument Registry, Portfolio, Balances, Orders, Trades, Positions, Execution, Risk, Strategies, Backtesting, Paper, Notifications, Audit, Admin, Monitoring, Reporting. Владение таблицами и правила импорта фиксируются в PHASE 1–2; один модуль не меняет финансовые таблицы другого напрямую. Dependency graph направлен от transports к application services, затем к domain и ports; реализации exchange/storage подключаются в composition root.
+Это целевое дерево: к PHASE 2 существуют `apps/api`, `packages/config`, `packages/logger` и `packages/database`; web и workers создаются в своих фазах. Domain modules: Users, Authentication, Authorization, Exchange Connections, Market Data, Instrument Registry, Portfolio, Balances, Orders, Trades, Positions, Execution, Risk, Strategies, Backtesting, Paper, Notifications, Audit, Admin, Monitoring, Reporting. Владение таблицами описано в [database](database.md), текущие package import boundaries закреплены tooling. Прикладные границы финансовых writers вводятся вместе с соответствующими модулями: один модуль не меняет финансовые таблицы другого напрямую. Dependency graph направлен от transports к application services, затем к domain и ports; реализации exchange/storage подключаются в composition root.
 
 ## Инварианты системы
 
@@ -119,4 +121,4 @@ Onboarding, glossary, tooltips, объяснение base/quote/contracts, ош�
 
 Bounded queues, rate budgets по общему egress IP и exchange UID, резерв ёмкости для cancel, stop новых сделок при неполноте данных. Тяжёлые backtests не работают в API/market-data loop. План нагрузки содержит 300/600/1200 инструментов, 100 стратегий, reconnect storm и soak; результаты пока отсутствуют.
 
-Подробности: [execution](execution.md), [risk](risk-engine.md), [database](database.md), [security](security.md), [deployment](deployment.md), [ADR](adr/README.md). [План](phase-0/implementation-plan.md) сохраняет PHASE 0–22 и закрывает конфликт ранних live-адаптеров с поздним risk engine. На PHASE 0 остановка после проверки документации; переход к PHASE 1 здесь не выполняется.
+Подробности: [execution](execution.md), [risk](risk-engine.md), [database](database.md), [security](security.md), [deployment](deployment.md), [ADR](adr/README.md). [План](phase-0/implementation-plan.md) сохраняет PHASE 0–22 и закрывает конфликт ранних live-адаптеров с поздним risk engine. PHASE 0 завершилась документацией; PHASE 1–2 реализовали инфраструктурную основу. Переход к следующей фазе требует закрытия применимых проверок и найденных при аудите дефектов.

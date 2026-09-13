@@ -1,6 +1,17 @@
-# Architecture Decision Records — PHASE 0
+# Architecture Decision Records
 
-Дата: **2026-09-05**. Статус ADR-001–007: **принято как проектное решение PHASE 0; не реализовано и не проверено runtime-тестами**. Основание: [архитектура](../architecture.md) и [требования и противоречия](../phase-0/requirements.md). Изменение решения оформляется новым ADR со ссылкой на заменённый; история причин сохраняется.
+Дата принятия ADR-001–007: **2026-09-05**; согласование состояния реализации: **2026-09-09**. Решения приняты в PHASE 0 и реализуются по этапам. Основание: [архитектура](../architecture.md) и [требования и противоречия](../phase-0/requirements.md). Изменение решения оформляется новым ADR со ссылкой на заменённый; история причин сохраняется.
+
+| ADR     | Реализованная часть PHASE 1–2                                                                            | Остаётся в следующих фазах                                               |
+| ------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 001     | pnpm monorepo, strict TypeScript, Fastify bootstrap, config/logger/database packages и import boundaries | Web, workers, application services и CPU isolation                       |
+| 002–003 | Durable таблицы, scoped identities, unique/CAS/rollback проверки и deferred ledger constraints           | Financial writers, queue relay, dispatch и exchange reconciliation       |
+| 004     | Раздельные PAPER/TESTNET/DEMO/LIVE scopes, instrument/rule/capability storage                            | Typed adapter profiles, capabilities и contract tests                    |
+| 005     | NUMERIC без typmod, SQL CHECK, строгие decimal strings и проверка exact round-trip                       | Размерные DTO, financial arithmetic, rounding и valuation                |
+| 006     | Candle schema/partitions, checkpoints/gaps/assignments storage                                           | Ingest, aggregation, backpressure, replay и load/soak                    |
+| 007     | PAPER defaults, tenant RLS/FK, раздельные DB grants, encrypted representation без plaintext columns      | Auth, encryption/KMS/signer, LIVE admission и production security review |
+
+Фактические gates и ограничения находятся в [PHASE 1 verification](../phase-1/verification.md) и [PHASE 2 verification](../phase-2/verification.md). Схема хранения не подтверждает работу будущего прикладного механизма.
 
 ## ADR-001 — Modular monolith с отдельными worker-процессами
 

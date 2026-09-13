@@ -36,6 +36,7 @@ jobs:
       - run: pnpm db:validate
       - run: pnpm build
       - run: pnpm format:check
+      - run: pnpm docs:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:unit

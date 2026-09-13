@@ -46,46 +46,46 @@ erDiagram
 
 Internal IDs — UUID; внешние IDs — bounded string даже если состоят из цифр. UTC `timestamptz(3)`; cursor содержит timestamp+ID. PHASE 2 хранит деньги как `NUMERIC` без typmod: явные SQL CHECK отклоняют over-scale, overflow и специальные значения до возможного округления. Для price/quantity/amount допустимы 20 целых и 18 дробных цифр, для aggregate — 30 и 18, для rate — 2 и 18. Категория и знак указаны у каждого поля в Prisma schema. `decimalText` проверяет и нормализует строки без арифметики JavaScript number. Промежуточная Decimal precision минимум 80 значащих цифр остаётся требованием будущих расчётных writers; PHASE 2 не выполняет PnL/valuation arithmetic. Contract count — отдельный integer/decimal по подтверждённым instrument rules. Все денежные сущности несут asset/unit, нельзя складывать BTC и USDT без valuation.
 
-| Ограничение                                                                               | Цель                                                                   |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `UNIQUE(tenantId, operation, idempotencyKey)` + requestHash                               | Один API intent; conflicting reuse → 409                               |
-| `UNIQUE(runId, instrumentId, inputIdentity, ruleVersion, signalKind)`                     | Повтор CandleClosed не создаёт второй signal                           |
-| `UNIQUE(intentId)` для Order; `UNIQUE(orderId, operationVersion)` для dispatch attempt    | Один order/одно разрешение на конкретную внешнюю mutation              |
-| `UNIQUE(exchangeAccountId, environment, clientIdNamespace, clientId)`                     | Не переиспользовать client IDs, учитывать algo namespace               |
-| Partial UNIQUE exchange order ID в его документированном account/product/instrument scope | Дедуп внешнего ордера, null ещё не присвоенного ID не конфликтует      |
-| `UNIQUE(accountId, market, instrumentId, executionIdentity)` для Fill                     | Повтор private/reconciliation payload не начисляет fill дважды         |
-| `UNIQUE(consumer, eventId)` в ConsumerInbox                                               | At-least-once delivery, ровно один local effect                        |
-| `UNIQUE(accountId, mode, instrumentId, positionSide, positionBucket)`                     | Раздельный NET/LONG/SHORT и margin bucket                              |
-| Composite FK `(tenantId, connectionId)` и аналогичные parent-child FK                     | Нельзя связать order пользователя A с connection B                     |
-| `CHECK(quantity>0)`, nonnegative cumulative fill, allowed mode/destination                | Базовая целостность; часть связных инвариантов — transactional service |
-| Unique current credential version / instrument rule version                               | Атомарная смена версии без двух active records                         |
+| Ограничение                                                                            | Цель                                                                   |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `UNIQUE(tenantId, operation, idempotencyKey)` + requestHash                            | Один API intent; conflicting reuse → 409                               |
+| `UNIQUE(runId, instrumentId, inputIdentity, ruleVersion, signalKind)`                  | Повтор CandleClosed не создаёт второй signal                           |
+| `UNIQUE(intentId)` для Order; `UNIQUE(orderId, operationVersion)` для dispatch attempt | Один order/одно разрешение на конкретную внешнюю mutation              |
+| `UNIQUE(exchangeAccountId, environment, clientIdNamespace, clientId)`                  | Не переиспользовать client IDs, учитывать algo namespace               |
+| Scoped UNIQUE nullable exchange order ID по account/mode/market/instrument             | Дедуп внешнего ордера, null ещё не присвоенного ID не конфликтует      |
+| `UNIQUE(accountId, market, instrumentId, executionIdentity)` для Fill                  | Повтор private/reconciliation payload не начисляет fill дважды         |
+| `UNIQUE(consumer, eventId)` в ConsumerInbox                                            | At-least-once delivery, ровно один local effect                        |
+| `UNIQUE(accountId, mode, instrumentId, positionSide, positionBucket)`                  | Раздельный NET/LONG/SHORT и margin bucket                              |
+| Composite FK `(tenantId, connectionId)` и аналогичные parent-child FK                  | Нельзя связать order пользователя A с connection B                     |
+| `CHECK(quantity>0)`, nonnegative cumulative fill, allowed mode/destination             | Базовая целостность; часть связных инвариантов — transactional service |
+| Unique current credential version / instrument rule version                            | Атомарная смена версии без двух active records                         |
 
 Размер identity scope Fill определяется отдельно по бирже; нельзя предполагать глобальную уникальность trade/exec ID. Если биржа не даёт стабильный ID, adapter обязан разработать проверяемый composition key; совпадение price/quantity/time само по себе недостаточно.
 
 После PITR нельзя повторно выделять потерянные client IDs из восстановленной sequence. Перед rearm нужен новый непересекающийся namespace/epoch в пределах exchange charset/range и подтверждённая верхняя граница allocation из независимого durable audit/high-watermark. Если это невозможно доказать (особенно numeric HTX IDs), профиль остаётся заблокированным. UUID collisions и numeric rollover также проверяются constraints; смена namespace не разрешает повтор UNKNOWN intent.
 
-Ledger entries группируются транзакцией и активом; postings balanced per asset с явными fee/funding/external counteraccounts. Rebate — отдельная отрицательная fee запись с допустимым знаком. Совокупная сумма не обеспечивается простым row CHECK: transactional writer и deferred constraint trigger либо эквивалентный проверенный SQL механизм в PHASE 2/10. Corrections append-only, derived balances сверяются с биржей. Удаление User не каскадно удаляет unresolved orders и ledger: workflow pseudonymization/retention policy отдельно.
+Ledger entries группируются транзакцией и активом. В PHASE 2 deferred SQL triggers требуют минимум две entries и точный нулевой итог по каждому активу; header без entries также отклоняется. При commit posting получает внутреннюю seal, позднее добавление entries запрещено, включая конкурентные транзакции и stale snapshots. Прикладной writer с fee/funding/external counteraccounts и correction операциями относится к PHASE 10. Rebate имеет отдельный допустимый отрицательный знак. Corrections append-only, будущие derived balances сверяются с биржей. Удаление User не каскадно удаляет unresolved orders и ledger: workflow pseudonymization/retention policy отдельно.
 
 ## Транзакции и конкурентность
 
-Intent+idempotency+outbox; signal+strategy state+cursor+outbox; fill+ledger+position+inbox+outbox; risk decision+reservation+budget — отдельные атомарные операции. CAS version и locks берутся в стабильном порядке. SELECT SKIP LOCKED допустим для распределения outbox/queue work, но не как обход account risk lock. Не держать SQL transaction во время exchange HTTP/WS.
+Контракт будущих writers: intent+idempotency+outbox; signal+strategy state+cursor+outbox; fill+ledger+position+inbox+outbox; risk decision+reservation+budget — отдельные атомарные операции. PHASE 2 проверяет DB constraints, CAS и rollback primitives; эти бизнес-операции целиком ещё не реализованы. CAS version и locks берутся в стабильном порядке. SELECT SKIP LOCKED допустим для распределения outbox/queue work, но не как обход account risk lock. Не держать SQL transaction во время exchange HTTP/WS.
 
 Не полагаться на read replica для dispatch, balances или pause: replication lag нарушает safety. Read-only history/analytics допускает replica с указанным lag. Pool на каждый процесс ограничен, сумма оставляет headroom для control/reconciliation. Tenant RLS и раздельные роли описаны в [security](security.md). Все schema changes — migrations, не production schema push.
 
 ## Индексы и запросы
 
-| Запрос                        | Планируемый индекс                                                                              |
-| ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| История пользователя          | Order `(tenantId, createdAt DESC, id DESC)`                                                     |
-| Active orders по счёту        | Order `(tenantId, connectionId, status, instrumentId)`; partial index на активные статусы       |
-| Trades/fills                  | Fill `(tenantId, orderId, timestamp, id)` и `(tenantId, instrumentId, timestamp DESC, id DESC)` |
-| Strategies                    | StrategyInstance `(tenantId, status, id)`                                                       |
-| Candle range                  | `(instrumentId, timeframe, openTime)` и partition pruning по openTime                           |
-| Ready outbox                  | Partial `(availableAt, id)` для undelivered/claimable; old-age index для monitoring             |
-| Reconciliation                | Order `(connectionId, reconciliationState, updatedAt)`; SubmissionAttempt unresolved partial    |
-| Audit/backtests/notifications | `(tenantId, createdAt DESC, id DESC)`; фильтры с bounded page size                              |
+| Запрос                        | Индекс, реализованный в PHASE 2                                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| История пользователя          | Order `(tenantId, createdAt DESC, id DESC)`                                                                     |
+| Active orders по счёту        | `order_active_account (tenantId, accountId, instrumentId, id) WHERE isActive`; connection/status index сохранён |
+| Trades/fills                  | Fill `(tenantId, orderId, timestamp, id)` и `(tenantId, instrumentId, timestamp DESC, id DESC)`                 |
+| Strategies                    | `strategy_running_tenant (tenantId, id) WHERE isRunning`; общий `(tenantId, status, id)`                        |
+| Candle range                  | `(instrumentId, timeframeSeconds, openTime)` и partition pruning по openTime                                    |
+| Ready outbox                  | `outbox_ready (availableAt, id) WHERE deliveredAt IS NULL`; tenant/delivery/availableAt index                   |
+| Reconciliation                | Order `(connectionId, reconciliationState, updatedAt)`; SubmissionAttempt unresolved partial                    |
+| Audit/backtests/notifications | `(tenantId, createdAt DESC, id DESC)`; фильтры с bounded page size                                              |
 
-Cursor подписан/проверен, связан с tenant и filter; лимит страницы по умолчанию 50, максимум 200 как policy. EXPLAIN ANALYZE на representative fixture, проверка pagination stability при concurrent inserts и отсутствия full scan там, где он мешает SLO, выполняются в PHASE 2/20. Индекс не добавляется только ради каждой колонки.
+В PHASE 2 выполнены EXPLAIN ANALYZE/BUFFERS для шести representative запросов, проверка timestamp+UUID keyset при concurrent inserts и partition pruning. `isActive`/`isRunning` — SQL-owned generated columns: параметризованные запросы используют эти predicates для partial indexes под RLS; Prisma enum filter не является эквивалентным планом. Результаты находятся в [отчёте](phase-2/verification.md). Подпись cursor, привязка к tenant/filter, default page size 50 и maximum 200 — контракт будущего HTTP API. Production SLO и расширенные объёмы проверяются в PHASE 20; индексы не добавляются только ради каждой колонки.
 
 ## Retention и архив
 
@@ -95,6 +95,8 @@ Candles partition по UTC времени; уникальность включа
 
 Outbox delivered events/inbox можно архивировать только после согласованного replay horizon; удаление inbox раньше возможной redelivery запрещено. Unresolved intent/attempt/reservation/evidence не удаляются TTL. Diagnostic logs проектно 30 дней; audit/ledger срок задаётся commercial/privacy policy до production, с encrypted archive и legal review. Backup retention и restore описаны в [deployment](deployment.md).
 
-## Приёмка PHASE 2/10
+## Проверенные и будущие gates
 
-Migrations на fresh DB и upgrade, rollback compatibility, повтор migration invocation; только disposable test DB reset. Constraint violations для cross-tenant FK, duplicate intent/fill, forbidden mode и overflow; concurrent risk/ledger transactions; crash/lost commit response; pagination/query plans и retention boundary. RLS tests выполняются именно runtime role, не superuser. Backup restore и повтор outbox не удваивают order/fill. Пока это перечень будущих проверок.
+PHASE 2 проверила fresh/upgrade/repeat migrations, reset только созданной runner disposable DB, cross-tenant FK/RLS под непривилегированной runtime role, duplicate identities, mode/decimal/evidence constraints, конкурентные INSERT/CAS/ledger transactions, rollback, seed и query plans. Точный состав и результаты — в [PHASE 2 verification](phase-2/verification.md); критерии — в [requirements](phase-2/requirements.md).
+
+PHASE 10–14 и 22 должны проверить бизнес-транзакции ledger/risk/execution, crash/lost exchange или commit response, replay outbox без повторного order/fill, retention/replay horizon, backup restore и совместимость rolling upgrades. Production rollback не означает destructive downgrade: migration history сохраняется, изменения идут через expand/contract и проверенный forward fix. SQL primitives текущей фазы не заменяют эти будущие сценарии.
