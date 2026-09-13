@@ -6,6 +6,7 @@ import {
   report,
   requireDocker,
   run,
+  sanitize,
   testEnvironment,
 } from './docker-test-utils.mjs';
 
@@ -96,6 +97,26 @@ try {
   const message = error instanceof Error ? error.message : 'Integration runner failed';
   console.error(message);
   outcome = { ...outcome, status: 'FAIL', reason: message };
+  if (resourcesMayExist) {
+    const diagnostics = {};
+    for (const [name, args] of [
+      ['services', ['ps', '--all', '--format', 'json']],
+      ['logs', ['logs', '--no-color', '--tail', '120']],
+    ]) {
+      try {
+        diagnostics[name] = sanitize(
+          await run('docker', composeArgs(file, test.project, args), {
+            ...options,
+            timeoutMs: 10_000,
+          }),
+          test.secrets,
+        );
+      } catch {
+        diagnostics[name] = 'Unavailable';
+      }
+    }
+    outcome.diagnostics = diagnostics;
+  }
   process.exitCode = 1;
 } finally {
   if (resourcesMayExist) {

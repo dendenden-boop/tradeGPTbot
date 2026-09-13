@@ -22,8 +22,8 @@ const app = buildApp({
   logger: createLogger({ level: 'silent', environment: 'test' }),
 });
 
-async function compose(args: string[]): Promise<void> {
-  await execute(
+async function compose(args: string[]): Promise<string> {
+  const { stdout } = await execute(
     'docker',
     [
       'compose',
@@ -37,6 +37,23 @@ async function compose(args: string[]): Promise<void> {
     ],
     { timeout: 60_000, windowsHide: true },
   );
+  return stdout.trim();
+}
+
+async function postgresQuery(sql: string): Promise<string> {
+  return compose([
+    'exec',
+    '-T',
+    'postgres',
+    'psql',
+    '--username=ctp_test',
+    '--dbname=ctp_test',
+    '--no-password',
+    '--tuples-only',
+    '--no-align',
+    '--command',
+    sql,
+  ]);
 }
 
 async function waitForStatus(code: number): Promise<void> {
@@ -68,6 +85,9 @@ describe('real PostgreSQL and Redis lifecycle', () => {
       status: 'ready',
       dependencies: { postgres: 'up', redis: 'up' },
     });
+    await postgresQuery(
+      "CREATE TABLE ctp_restart_probe (value text PRIMARY KEY); INSERT INTO ctp_restart_probe VALUES ('preserved');",
+    );
   });
 
   for (const dependency of ['postgres', 'redis']) {
@@ -108,6 +128,10 @@ describe('real PostgreSQL and Redis lifecycle', () => {
         `127.0.0.1:${expectedPort}`,
       );
       await waitForStatus(200);
+      expect(
+        await postgresQuery('SELECT value FROM ctp_restart_probe'),
+        'A dependency restart must preserve the existing PostgreSQL cluster',
+      ).toBe('preserved');
     }, 60_000);
   }
 });

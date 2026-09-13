@@ -1,5 +1,5 @@
 # The test runner MUST supply a unique --project-name for every run.
-# No named volumes or shared host ports: bindings are selected separately for each run.
+# Data volume and host ports belong to one run; the runner removes its volume on exit.
 services:
   postgres:
     image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
@@ -18,8 +18,9 @@ services:
       timeout: 2s
       start_period: 5s
       retries: 40
-    tmpfs:
-      - /var/lib/postgresql/data:size=256m,mode=0700
+    volumes:
+      # Preserve the cluster across stop/start; tmpfs would run initdb again.
+      - postgres-data:/var/lib/postgresql/data
     mem_limit: 512m
     pids_limit: 128
     stop_grace_period: 10s
@@ -60,3 +61,6 @@ services:
     mem_limit: 128m
     pids_limit: 64
     stop_grace_period: 10s
+
+volumes:
+  postgres-data:

@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: { alias: aliases },
   test: {
     ...testDefaults,
-    include: ['packages/**/*.unit.test.ts', 'apps/**/*.unit.test.ts'],
+    include: ['packages/**/*.unit.test.ts', 'apps/**/*.unit.test.ts', 'scripts/**/*.unit.test.mjs'],
     reporters: ['default', 'json'],
     outputFile: { json: 'test-results/unit.json' },
   },

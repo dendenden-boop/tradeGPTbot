@@ -24,7 +24,11 @@ export function testEnvironment(kind) {
 }
 
 export function sanitize(text, secrets) {
-  return secrets.reduce((result, secret) => result.replaceAll(secret, '[REDACTED]'), text);
+  // Parent and child DB runners generate passwords with randomBytes(24). Child role
+  // credentials may appear in PostgreSQL diagnostics even though the parent lacks them.
+  return secrets
+    .reduce((result, secret) => result.replaceAll(secret, '[REDACTED]'), text)
+    .replace(/(?<![a-f0-9])[a-f0-9]{48}(?![a-f0-9])/gi, '[REDACTED]');
 }
 
 export function run(

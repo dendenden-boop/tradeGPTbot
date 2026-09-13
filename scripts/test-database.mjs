@@ -61,18 +61,21 @@ const config = 'packages/database/prisma.config.ts';
 const startedAt = new Date().toISOString();
 let outcome = { status: 'FAIL', startedAt, project };
 const pools = new Set();
-const connect = (url) => {
+const connect = (url, maintenance = false) => {
   const pool = new Pool({
     connectionString: url,
     max: 1,
     connectionTimeoutMillis: 1000,
-    query_timeout: 5000,
+    // CREATE/DROP DATABASE can wait for a physical checkpoint on persistent storage.
+    // Bound maintenance on the server as well; runtime/query acceptance budgets stay separate.
+    query_timeout: maintenance ? 31_000 : 5000,
+    ...(maintenance ? { statement_timeout: 30_000 } : {}),
   });
   pool.on('error', () => {});
   pools.add(pool);
   return pool;
 };
-const admin = connect(adminUrl.href);
+const admin = connect(adminUrl.href, true);
 const dbUrl = (name, runtime = false, owner = false) => {
   const url = new URL(adminUrl);
   url.pathname = '/' + name;
@@ -356,8 +359,10 @@ try {
   // Reset ONLY the DB name created above, then reapply the same versioned migrations.
   await fresh.end();
   pools.delete(fresh);
+  const resetStorageStarted = Date.now();
   await admin.query(`DROP DATABASE ${identifier(databases[0])} WITH (FORCE)`);
   await admin.query(`CREATE DATABASE ${identifier(databases[0])}`);
+  const resetStorageMs = Date.now() - resetStorageStarted;
   await migrate(databases[0]);
   const reset = connect(dbUrl(databases[0]));
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
@@ -372,6 +377,8 @@ try {
     nonBypassMigrationOwner: 'PASS',
     repeatedDeploy: 'PASS',
     isolatedReset: 'PASS',
+    resetStorageMs,
+    maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
   };
 } catch (error) {
