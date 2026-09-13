@@ -6,7 +6,7 @@
 
 В этой фазе доступны только health endpoints. Авторизация, прикладные финансовые writers, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 
-Перед PHASE 3 выполняется [аудит PHASE 0–2 и согласованности этапов](docs/audit-phases-0-2.md): constraints и durable identities, Decimal boundary, роли при upgrade, совместимость AMEND/CANCEL, config, build/CI и документация. Итоговый статус проверок приведён в отчёте аудита.
+Завершён [аудит PHASE 0–2 и согласованности этапов](docs/audit-phases-0-2.md): исправлены 9 находок в constraints, durable identities, Decimal boundary, config, упаковке и тестах восстановления; согласованы роли, AMEND/CANCEL и документация. Прошли 344 теста и все три job [CI исправлений](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34765371140). PHASE 3 ещё не начата.
 
 ## Подготовка
 
