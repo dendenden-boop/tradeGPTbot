@@ -2,7 +2,7 @@
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
-Текущий этап: **PHASE 3 — Authentication, проверка реализации**. Добавлены регистрация, подтверждение почты, вход, сессии, сброс и смена пароля, разграничение ролей БД и архитектура 2FA. [Отчёт проверок](docs/phase-3/verification.md), [требования этапа](docs/phase-3/requirements.md), [HTTP API](docs/phase-3/auth-api.md), [роли и миграция](docs/phase-3/database-security.md), [запуск](docs/phase-3/operations.md). Этап не считается завершённым до успешного полного прогона проверок и CI.
+Текущий этап: **PHASE 3 — Authentication завершена**. Добавлены регистрация, подтверждение почты, вход, сессии, сброс и смена пароля, разграничение ролей БД и архитектура 2FA. [Отчёт проверок](docs/phase-3/verification.md), [требования этапа](docs/phase-3/requirements.md), [HTTP API](docs/phase-3/auth-api.md), [роли и миграция](docs/phase-3/database-security.md), [запуск](docs/phase-3/operations.md). Прошли 461 тест, clean deployment, Docker и все три job [CI реализации](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/35514994833).
 
 Доступны health endpoints и API авторизации. Прикладные финансовые writers, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 

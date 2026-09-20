@@ -1,6 +1,6 @@
 # PHASE 3 — реализация и проверка Authentication
 
-Состояние на 20 сентября 2026: backend реализован; локальные unit/HTTP, integration, clean deployment и Linux Docker smoke прошли. Ожидается GitHub CI для этого изменения. Основание: [требования](requirements.md), [план этапов](../phase-0/implementation-plan.md), завершённый [аудит PHASE 0–2](../audit-phases-0-2.md).
+Состояние на 20 сентября 2026: **PASS — PHASE 3 завершена в объёме backend Authentication и архитектуры 2FA.** Реализация опубликована в commit [d643b10](https://github.com/dendenden-boop/tradeGPTbot/commit/d643b10b7b426525e618019d10c5ff86ea476866). Локальные проверки и все три job [CI реализации](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/35514994833) прошли. Основание: [требования](requirements.md), [план этапов](../phase-0/implementation-plan.md), завершённый [аудит PHASE 0–2](../audit-phases-0-2.md).
 
 ## Реализовано
 
@@ -14,18 +14,18 @@ Redis выполняет атомарное ограничение попыто�
 
 ## Проверки и границы доказательств
 
-| Команда / сценарий                         | Последний подтверждённый результат                                                                                                                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm check`, повторные lint/format/unit   | PASS 20 сентября: formatter, ESLint, TypeScript, 306 unit + 30 HTTP, workspace build; с 122 DB/Redis и 3 service tests всего 461 тест                                                             |
-| Mail-sink Host/Origin regression           | PASS: один тест с настоящим HTTP; отклоняет DNS rebinding Host и cross-site запросы                                                                                                               |
-| `pnpm test:database`                       | PASS 20 сентября в составе integration: 110 PostgreSQL (19 auth) + 12 Redis, fresh/repeat/upgrade/non-BYPASS owner/reset; full compiled auth runtime                                              |
-| Compiled auth runtime                      | PASS 20 сентября: 46 HTTP requests с реальными PostgreSQL/Redis/SMTP/Argon2id, no secret canaries in logs; shutdown 36 мс                                                                         |
-| `pnpm test:runtime`                        | PASS 20 сентября: скомпилированный health/lifecycle fixture, blackhole sockets, 64 concurrent readiness, logs/shutdown; full auth entrypoint проверяется отдельно                                 |
-| `pnpm audit --json`                        | PASS 20 сентября: 0 известных уязвимостей / 404 зависимости                                                                                                                                       |
-| Независимый обзор auth-кода                | Конкретных эксплуатируемых находок не выявлено; это ограниченный review, не замена security tests                                                                                                 |
-| `pnpm test:clean`                          | PASS 20 сентября: fresh source, frozen offline install/build, exact offline deploy после policy verification; изолированные API/database imports, native Argon2id, PostgreSQL WASM, без dev tools |
-| `pnpm test:integration`, `pnpm test:smoke` | PASS 20 сентября: ещё 3 real-service tests; Linux runtime image, 46 auth HTTP requests, PostgreSQL/Redis outage/recovery, non-root, secret-free logs и SIGTERM за 2308 мс                         |
-| GitHub CI                                  | Ещё не запущен для PHASE 3                                                                                                                                                                        |
+| Команда / сценарий                         | Последний подтверждённый результат                                                                                                                                                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm check`, повторные lint/format/unit   | PASS 20 сентября: formatter, ESLint, TypeScript, 306 unit + 30 HTTP, workspace build; с 122 DB/Redis и 3 service tests всего 461 тест                                                                              |
+| Mail-sink Host/Origin regression           | PASS: один тест с настоящим HTTP; отклоняет DNS rebinding Host и cross-site запросы                                                                                                                                |
+| `pnpm test:database`                       | PASS 20 сентября в составе integration: 110 PostgreSQL (19 auth) + 12 Redis, fresh/repeat/upgrade/non-BYPASS owner/reset; full compiled auth runtime                                                               |
+| Compiled auth runtime                      | PASS 20 сентября: 46 HTTP requests с реальными PostgreSQL/Redis/SMTP/Argon2id, no secret canaries in logs; shutdown 36 мс                                                                                          |
+| `pnpm test:runtime`                        | PASS 20 сентября: скомпилированный health/lifecycle fixture, blackhole sockets, 64 concurrent readiness, logs/shutdown; full auth entrypoint проверяется отдельно                                                  |
+| `pnpm audit --json`                        | PASS 20 сентября: 0 известных уязвимостей / 404 зависимости                                                                                                                                                        |
+| Независимый обзор auth-кода                | Конкретных эксплуатируемых находок не выявлено; это ограниченный review, не замена security tests                                                                                                                  |
+| `pnpm test:clean`                          | PASS 20 сентября: fresh source, frozen offline install/build, exact offline deploy после policy verification; изолированные API/database imports, native Argon2id, PostgreSQL WASM, без dev tools                  |
+| `pnpm test:integration`, `pnpm test:smoke` | PASS 20 сентября: ещё 3 real-service tests; Linux runtime image, 46 auth HTTP requests, PostgreSQL/Redis outage/recovery, non-root, secret-free logs и SIGTERM за 2308 мс                                          |
+| GitHub CI                                  | PASS [35514994833](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/35514994833): Windows 2025, Ubuntu 24.04, real services/Docker; в Linux CI full auth runtime завершился за 29 мс, Docker — за 313 мс |
 
 Машинные отчёты и логи находятся в игнорируемом `test-results/`. Отчёт PHASE 0–2 и старые CI ссылки не используются как доказательство прохождения новых auth-проверок. Security tests проверяют реальные конкурирующие транзакции, single-use/replay, idle/absolute expiry, чужую сессию, reset-vs-login и включение MFA во время ожидания User lock. HTTP suite дополнительно проверяет duplicate raw headers/cookies, Unicode/body bounds, origin, CSRF identity transitions и безопасные ошибки.
 

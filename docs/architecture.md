@@ -2,7 +2,7 @@
 
 Дата исследования: **2026-09-05**. Статус: проект архитектуры для реализации по этапам. Утверждения о биржах подтверждаются ссылками в [исследовании адаптеров](exchange-adapters.md); архитектурные числа ниже являются нашими исходными гипотезами. Проверки счетов и торговые операции не выполнялись.
 
-Состояние на **2026-09-20**: реализованы backend bootstrap, database package и backend авторизации PHASE 3. Исторические проверки основы зафиксированы в [отчёте PHASE 1](phase-1/verification.md) и [отчёте PHASE 2](phase-2/verification.md). Текущий auth scope: [требования PHASE 3](phase-3/requirements.md), [HTTP-контракт](phase-3/auth-api.md), [граница БД](phase-3/database-security.md); итоговая проверка фазы, включая CI, продолжается. Web UI, полный MFA verifier, exchange adapters, financial writers и production deployment остаются последующими этапами. Схема ниже сохраняет целевую архитектуру всей платформы.
+Состояние на **2026-09-20**: реализованы backend bootstrap, database package и backend авторизации PHASE 3. Исторические проверки основы зафиксированы в [отчёте PHASE 1](phase-1/verification.md) и [отчёте PHASE 2](phase-2/verification.md). Текущий auth scope: [требования PHASE 3](phase-3/requirements.md), [HTTP-контракт](phase-3/auth-api.md), [граница БД](phase-3/database-security.md); фаза прошла локальные проверки и CI: [отчёт PHASE 3](phase-3/verification.md). Web UI, полный MFA verifier, exchange adapters, financial writers и production deployment остаются последующими этапами. Схема ниже сохраняет целевую архитектуру всей платформы.
 
 ## Цель и граница первого результата
 
