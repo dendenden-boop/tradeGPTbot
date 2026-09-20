@@ -12,7 +12,7 @@ async function verifyDeployment(deployment, entrypoints, options) {
     ...(await readdir(path.join(deployment, 'node_modules'))),
     ...(await readdir(path.join(deployment, 'node_modules', '.pnpm'))),
   ];
-  for (const tool of ['prisma', 'typescript', 'vitest', 'eslint', 'prettier']) {
+  for (const tool of ['prisma', 'typescript', 'vitest', 'eslint', 'prettier', 'smtp-server']) {
     assert.ok(
       !moduleDirectories.some((entry) => entry === tool || entry.startsWith(`${tool}@`)),
       `Development tool ${tool} must not be included in the production deployment`,
@@ -138,7 +138,18 @@ try {
   }
   await verifyDeployment(
     path.join(directory, 'deployment-api'),
-    "await import('./dist/app.js'); await import('./dist/health.js'); await import('./dist/lifecycle.js');",
+    String.raw`
+      await import('./dist/app.js'); await import('./dist/health.js'); await import('./dist/lifecycle.js');
+      const { createPasswordHasher } = await import('@ctp/auth');
+      const hasher = await createPasswordHasher();
+      try {
+        const encoded = await hasher.hash('Production deployment verification');
+        assert.ok(encoded.startsWith('$argon2id$v=19$'));
+        assert.deepEqual(encoded.split('$')[3].split(',').sort(), ['m=65536', 'p=1', 't=3']);
+        assert.equal(await hasher.verify(encoded, 'Production deployment verification'), true);
+        assert.equal(await hasher.verify(encoded, 'A different verification value'), false);
+      } finally { await hasher.close(); }
+    `,
     options,
   );
   await verifyDeployment(
@@ -164,7 +175,7 @@ try {
     node: process.version,
     deployments: ['@ctp/api', '@ctp/database'],
     scope:
-      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database production imports and PostgreSQL WASM without dev tools or database connections',
+      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections',
   });
   console.log('Clean install/build/deploy PASS; original source and lockfile left unchanged.');
 } catch (error) {

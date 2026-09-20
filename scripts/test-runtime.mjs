@@ -96,11 +96,7 @@ try {
   assert.ok(!invalid.output().includes(secret), 'Startup log leaked credential');
 
   const windows = process.platform === 'win32';
-  const api = launch(
-    windows ? 'scripts/runtime-child.mjs' : 'apps/api/dist/server.js',
-    env,
-    windows,
-  );
+  const api = launch('scripts/runtime-child.mjs', env, windows);
   const base = `http://127.0.0.1:${apiPort}`;
   const listenDeadline = Date.now() + 5000;
   let live = false;
@@ -146,11 +142,7 @@ try {
 
   // Exercise the real stdout pipe, not a synthetic stream error. Pino's default
   // destination stops writing after EPIPE; health and shutdown must stay usable.
-  const closedSink = launch(
-    windows ? 'scripts/runtime-child.mjs' : 'apps/api/dist/server.js',
-    env,
-    windows,
-  );
+  const closedSink = launch('scripts/runtime-child.mjs', env, windows);
   const sinkStartupDeadline = Date.now() + 5000;
   let sinkLive = false;
   while (Date.now() < sinkStartupDeadline) {
@@ -213,7 +205,7 @@ try {
       ? 'test-only IPC emits registered SIGTERM event; OS signal requires Linux smoke'
       : 'OS SIGTERM',
     dependencies:
-      'Real pg/ioredis clients against non-responsive TCP sockets; healthy services require Docker integration',
+      'Compiled health/lifecycle fixture with real pg/ioredis clients against non-responsive TCP sockets; authenticated production entrypoint requires auth runtime integration and Docker smoke',
   });
   console.log(
     'Compiled runtime PASS: fail-fast config, independent liveness, bounded real driver timeouts, concurrency, shutdown and logs.',

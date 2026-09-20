@@ -14,6 +14,12 @@ RUN pnpm --filter @ctp/api --store-dir=/pnpm/store deploy --prod --lockfile-only
 RUN --network=none pnpm --filter @ctp/api --offline --store-dir=/pnpm/store deploy --prod /opt/api \
     && cmp /opt/api-policy/pnpm-lock.yaml /opt/api/pnpm-lock.yaml
 
+# Development-only helpers retain build tooling; neither is copied into runtime.
+FROM build AS local-tools
+ENV NODE_ENV=development
+USER node
+CMD ["node", "scripts/provision-development.mjs"]
+
 FROM node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime
 
 ENV NODE_ENV=production \

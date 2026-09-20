@@ -28,9 +28,13 @@
     "db:migrate": "pnpm --filter @ctp/database migrate",
     "db:seed": "node --env-file-if-exists=.env scripts/seed-development.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "start": "node --env-file-if-exists=.env apps/api/dist/server.js",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.auth apps/api/dist/server.js",
     "dev": "pnpm build && pnpm start",
     "env:init": "node scripts/init-env.mjs",
+    "auth:env:init": "node scripts/init-auth-env.mjs",
+    "auth:setup": "node --env-file-if-exists=.env --env-file-if-exists=.env.auth scripts/provision-development.mjs",
+    "mail:sink": "node --env-file-if-exists=.env scripts/mail-sink.mjs",
+    "benchmark:auth": "node scripts/benchmark-auth.mjs",
     "docs:check": "node -e \"import('./scripts/check-docs.mjs').then(m => m.checkDocs()).then(console.log)\"",
     "audit:dependencies": "pnpm audit --audit-level=high"
   },
@@ -43,6 +47,7 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.69.0",
     "vitest": "4.1.11",
-    "vite": "7.3.6"
+    "vite": "7.3.6",
+    "smtp-server": "3.19.12"
   }
 }

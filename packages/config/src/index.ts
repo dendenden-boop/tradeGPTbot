@@ -18,6 +18,16 @@ const fields = [
   'POSTGRES_POOL_MAX',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'PGSSLMODE',
+  'DATABASE_AUTH_URL',
+  'AUTH_ORIGIN',
+  'AUTH_CSRF_SECRET',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_SECURE',
+  'SMTP_REQUIRE_TLS',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'SMTP_FROM',
 ] as const;
 
 type ConfigField = (typeof fields)[number];
@@ -232,5 +242,127 @@ export function loadConfig(raw: Readonly<Record<string, string | undefined>>): A
     requestTimeoutMs: value.REQUEST_TIMEOUT_MS,
     connectionTimeoutMs: value.CONNECTION_TIMEOUT_MS,
     postgresPoolMax: value.POSTGRES_POOL_MAX,
+  });
+}
+
+export interface AuthConfig {
+  readonly databaseAuthUrl: string;
+  readonly origin: string;
+  readonly cookieSecure: boolean;
+  readonly csrfSecret: string;
+  readonly smtp: {
+    readonly host: string;
+    readonly port: number;
+    readonly secure: boolean;
+    readonly requireTls: boolean;
+    readonly user?: string;
+    readonly password?: string;
+    readonly from: string;
+  };
+}
+
+const booleanSetting = z.enum(['true', 'false']).transform((value) => value === 'true');
+const headerSafe = (value: string): boolean =>
+  ![...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+const authFields = fields.slice(fields.indexOf('DATABASE_AUTH_URL'));
+const authSchema = z.object({
+  DATABASE_AUTH_URL: databaseUrl,
+  AUTH_ORIGIN: z.string().max(2048),
+  AUTH_CSRF_SECRET: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/u)
+    .refine((value) => new Set(value).size >= 8),
+  SMTP_HOST: z
+    .string()
+    .min(1)
+    .max(253)
+    .refine(
+      (value) =>
+        isIP(value) !== 0 ||
+        value.split('.').every((label) => /^[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?$/iu.test(label)),
+    ),
+  SMTP_PORT: integerSetting(587, 65_535),
+  SMTP_SECURE: booleanSetting.default(false),
+  SMTP_REQUIRE_TLS: booleanSetting.default(true),
+  SMTP_USER: z.string().min(1).max(320).refine(headerSafe).optional(),
+  SMTP_PASSWORD: z.string().min(1).max(1024).refine(headerSafe).optional(),
+  SMTP_FROM: z
+    .string()
+    .max(254)
+    .regex(/^[a-z\d.!#$%&'*+/=?^_`{|}~-]+@[a-z\d](?:[a-z\d.-]*[a-z\d])?$/iu),
+});
+
+/** Required by the real server; health-only unit fixtures use loadConfig separately. */
+export function loadAuthConfig(
+  raw: Readonly<Record<string, string | undefined>>,
+  app: AppConfig,
+): AuthConfig {
+  const input: Partial<Record<ConfigField, unknown>> = {};
+  for (const field of authFields) {
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(raw, field);
+      if (descriptor !== undefined && !('value' in descriptor)) throw new ConfigError([field]);
+      input[field] = descriptor?.value as unknown;
+    } catch {
+      throw new ConfigError([field]);
+    }
+  }
+  const parsed = authSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ConfigError(
+      authFields.filter((field) => parsed.error.issues.some((issue) => issue.path[0] === field)),
+    );
+  }
+  const value = parsed.data;
+  const deployed = app.environment === 'production' || app.environment === 'staging';
+  const invalid: ConfigField[] = [];
+  const origin = parseUrl(value.AUTH_ORIGIN);
+  const loopback =
+    origin !== undefined && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
+  if (
+    origin === undefined ||
+    origin.username ||
+    origin.password ||
+    origin.search ||
+    origin.pathname !== '/' ||
+    value.AUTH_ORIGIN !== origin.origin ||
+    (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && loopback && !deployed))
+  ) {
+    invalid.push('AUTH_ORIGIN');
+  }
+  const database = new URL(value.DATABASE_AUTH_URL);
+  const runtime = new URL(app.databaseUrl);
+  if (
+    !database.username ||
+    !database.password ||
+    database.username === runtime.username ||
+    database.host !== runtime.host ||
+    database.pathname !== runtime.pathname ||
+    (deployed &&
+      (!hasDeploymentPassword(database) || database.searchParams.get('sslmode') !== 'verify-full'))
+  ) {
+    invalid.push('DATABASE_AUTH_URL');
+  }
+  if ((value.SMTP_USER === undefined) !== (value.SMTP_PASSWORD === undefined)) {
+    invalid.push('SMTP_USER', 'SMTP_PASSWORD');
+  }
+  if (deployed && !value.SMTP_SECURE && !value.SMTP_REQUIRE_TLS) {
+    invalid.push('SMTP_REQUIRE_TLS');
+  }
+  if (invalid.length > 0) throw new ConfigError(invalid);
+  return Object.freeze({
+    databaseAuthUrl: value.DATABASE_AUTH_URL,
+    origin: value.AUTH_ORIGIN,
+    cookieSecure: origin?.protocol === 'https:',
+    csrfSecret: value.AUTH_CSRF_SECRET,
+    smtp: Object.freeze({
+      host: value.SMTP_HOST,
+      port: value.SMTP_PORT,
+      secure: value.SMTP_SECURE,
+      requireTls: value.SMTP_REQUIRE_TLS,
+      ...(value.SMTP_USER === undefined ? {} : { user: value.SMTP_USER }),
+      ...(value.SMTP_PASSWORD === undefined ? {} : { password: value.SMTP_PASSWORD }),
+      from: value.SMTP_FROM,
+    }),
   });
 }

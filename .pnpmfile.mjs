@@ -6,6 +6,13 @@ export const hooks = {
   readPackage(manifest) {
     if (manifest.name === '@prisma/client' && manifest.version === '7.10.0') {
       for (const name of ['prisma', 'typescript']) {
+        // pnpm can revisit a manifest already normalized by this hook during
+        // an incremental workspace install. Only the fully absent edge is a no-op.
+        if (
+          !(name in (manifest.peerDependencies ?? {})) &&
+          !(name in (manifest.peerDependenciesMeta ?? {}))
+        )
+          continue;
         if (manifest.peerDependenciesMeta?.[name]?.optional !== true) {
           throw new Error('Expected an optional Prisma development peer');
         }

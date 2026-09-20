@@ -1,4 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
+import { createServer } from 'node:net';
+import { exerciseAuthFlow } from './auth-test-flow.mjs';
 import {
   composeArgs,
   localPort,
@@ -40,21 +42,45 @@ async function waitStatus(base, expected, path = '/health/ready') {
 }
 
 try {
+  await report('smoke', { ...outcome, status: 'RUNNING' });
   await requireDocker(options);
+  // The public origin must match the actual browser URL, including its port.
+  const reservation = createServer();
+  await new Promise((resolve) => reservation.listen(0, '127.0.0.1', resolve));
+  test.env.API_PORT = String(reservation.address().port);
+  test.env.AUTH_ORIGIN = `http://127.0.0.1:${test.env.API_PORT}`;
+  await new Promise((resolve) => reservation.close(resolve));
   await compose(['config', '--quiet']);
+  console.log('Docker smoke: checking images and building API/local tools.');
   await compose(['pull', 'postgres', 'redis'], { timeoutMs: 600_000 });
   await compose(['build', '--pull'], { timeoutMs: 600_000 });
   resourcesMayExist = true;
+  console.log('Docker smoke: starting migrations, limited roles and services.');
   await compose(['up', '-d', '--wait', '--wait-timeout', '60']);
   const port = localPort(await compose(['port', 'api', '3000']));
   const base = `http://127.0.0.1:${port}`;
   await waitStatus(base, 200);
   await waitStatus(base, 200, '/health/live');
   await waitStatus(base, 404, '/api/v1/orders');
+  const mailPort = localPort(await compose(['port', 'mail-sink', '8025']));
+  console.log('Docker smoke: exercising authentication through HTTP and local SMTP.');
+  const authentication = await exerciseAuthFlow({
+    base,
+    origin: test.env.AUTH_ORIGIN,
+    canaries: test.secrets,
+    readMessages: async () => {
+      const response = await fetch(`http://127.0.0.1:${mailPort}/messages`, {
+        signal: AbortSignal.timeout(1000),
+      });
+      if (response.status !== 200) throw new Error('Local SMTP sink inspection unavailable');
+      return response.json();
+    },
+  });
   if ((await compose(['exec', '-T', 'api', 'id', '-u'])).trim() === '0')
     throw new Error('API container runs as root');
 
   for (const dependency of ['postgres', 'redis']) {
+    console.log(`Docker smoke: checking ${dependency} outage and recovery.`);
     await compose(['stop', '--timeout', '1', dependency]);
     await waitStatus(base, 503);
     await waitStatus(base, 200, '/health/live');
@@ -93,9 +119,19 @@ try {
   );
   if (test.secrets.some((secret) => image.includes(secret)))
     throw new Error('Image config contains runtime secrets');
-  outcome = { ...outcome, status: 'PASS', imageId, shutdownMs, log: sanitize(logs, test.secrets) };
+  outcome = {
+    ...outcome,
+    status: 'PASS',
+    imageId,
+    shutdownMs,
+    authentication,
+    log: sanitize(logs, test.secrets),
+  };
 } catch (error) {
-  const message = error instanceof Error ? error.message : 'Smoke runner failed';
+  const message = sanitize(
+    error instanceof Error ? error.message : 'Smoke runner failed',
+    test.secrets,
+  );
   console.error(message);
   outcome = { ...outcome, status: 'FAIL', reason: message };
   process.exitCode = 1;

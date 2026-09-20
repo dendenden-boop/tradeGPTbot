@@ -10,13 +10,22 @@ export function testEnvironment(kind) {
   const project = `ctp-${kind}-${process.pid}-${randomBytes(6).toString('hex')}`;
   const postgresPassword = randomBytes(24).toString('hex');
   const redisPassword = randomBytes(24).toString('hex');
+  const apiPassword = randomBytes(24).toString('hex');
+  const authPassword = randomBytes(24).toString('hex');
+  const csrfSecret = randomBytes(32).toString('hex');
   return {
     project,
-    secrets: [postgresPassword, redisPassword],
+    secrets: [postgresPassword, redisPassword, apiPassword, authPassword, csrfSecret],
     env: {
       ...process.env,
       POSTGRES_PASSWORD: postgresPassword,
       REDIS_PASSWORD: redisPassword,
+      POSTGRES_API_PASSWORD: apiPassword,
+      POSTGRES_AUTH_PASSWORD: authPassword,
+      AUTH_CSRF_SECRET: csrfSecret,
+      AUTH_ORIGIN: 'http://127.0.0.1:3000',
+      MAIL_SINK_SMTP_PORT: '0',
+      MAIL_SINK_HTTP_PORT: '0',
       API_PORT: '0',
       LOG_LEVEL: 'info',
     },

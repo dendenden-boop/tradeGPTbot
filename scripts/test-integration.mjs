@@ -90,6 +90,7 @@ try {
       NODE_ENV: 'test',
       CTP_TEST_PROJECT: test.project,
       DATABASE_MIGRATION_URL: `postgresql://ctp_test:${test.env.POSTGRES_PASSWORD}@127.0.0.1:${postgresPort}/ctp_test`,
+      REDIS_URL: `redis://:${test.env.REDIS_PASSWORD}@127.0.0.1:${redisPort}/0`,
     },
   });
   outcome.status = 'PASS';

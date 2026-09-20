@@ -11,6 +11,7 @@ const expectedMigrations = [
   '202609070001_initial',
   '202609070002_integrity',
   '202609090001_audit_integrity',
+  '202609140001_authentication',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -47,11 +48,13 @@ const databaseRequire = createRequire(
 const { Pool } = databaseRequire('pg');
 const password = randomBytes(24).toString('hex');
 const ownerPassword = randomBytes(24).toString('hex');
-const secrets = [decodeURIComponent(adminUrl.password), password, ownerPassword];
+const authPassword = randomBytes(24).toString('hex');
+const secrets = [decodeURIComponent(adminUrl.password), password, ownerPassword, authPassword];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
+const authRole = `ctp_p2_auth_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -76,7 +79,7 @@ const connect = (url, maintenance = false) => {
   return pool;
 };
 const admin = connect(adminUrl.href, true);
-const dbUrl = (name, runtime = false, owner = false) => {
+const dbUrl = (name, runtime = false, owner = false, auth = false) => {
   const url = new URL(adminUrl);
   url.pathname = '/' + name;
   if (runtime) {
@@ -86,6 +89,10 @@ const dbUrl = (name, runtime = false, owner = false) => {
   if (owner) {
     url.username = ownerRole;
     url.password = ownerPassword;
+  }
+  if (auth) {
+    url.username = authRole;
+    url.password = authPassword;
   }
   return url.href;
 };
@@ -164,6 +171,9 @@ try {
   }
   await migrate(databases[0]);
   await migrate(databases[0]);
+  // Cluster roles outlive databases. PostgreSQL 17 requires existing role SET
+  // membership before a different non-super DDL owner can transfer functions.
+  await admin.query(`GRANT ctp_auth_owner TO ${identifier(ownerRole)}`);
   const fresh = connect(dbUrl(databases[0]));
   assert.equal(
     (
@@ -330,6 +340,10 @@ try {
     `CREATE ROLE ${identifier(runtimeRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}'`,
   );
   await admin.query(`GRANT ctp_api TO ${identifier(runtimeRole)}`);
+  await admin.query(
+    `CREATE ROLE ${identifier(authRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${authPassword}'`,
+  );
+  await admin.query(`GRANT ctp_auth TO ${identifier(authRole)}`);
   await run(
     process.execPath,
     [
@@ -344,6 +358,7 @@ try {
         NODE_ENV: 'test',
         DATABASE_MIGRATION_URL: dbUrl(databases[0]),
         DATABASE_RUNTIME_URL: dbUrl(databases[0], true),
+        DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
       echo: true,
@@ -355,6 +370,25 @@ try {
   );
   assert.equal(tests.success, true);
   assert.ok(tests.numPassedTests > 0);
+
+  // Exercise the actual compiled entrypoint with separate login roles before this
+  // owned database is reset. The child owns its loopback SMTP sink and API listener.
+  await run(process.execPath, ['scripts/test-auth-runtime.mjs'], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_MIGRATION_URL: dbUrl(databases[0]),
+      DATABASE_URL: dbUrl(databases[0], true),
+      DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
+    },
+    secrets,
+    echo: true,
+    timeoutMs: 120000,
+  });
+  const authRuntime = JSON.parse(
+    await readFile(new URL('../test-results/auth-runtime.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(authRuntime.status, 'PASS');
 
   // Reset ONLY the DB name created above, then reapply the same versioned migrations.
   await fresh.end();
@@ -377,6 +411,7 @@ try {
     nonBypassMigrationOwner: 'PASS',
     repeatedDeploy: 'PASS',
     isolatedReset: 'PASS',
+    authenticatedRuntime: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

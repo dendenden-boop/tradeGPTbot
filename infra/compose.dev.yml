@@ -13,11 +13,23 @@ services:
       PORT: '3000'
       LOG_LEVEL: ${LOG_LEVEL:-info}
       # env:init supplies hexadecimal passwords, safe in these URL components.
-      DATABASE_URL: postgresql://ctp:${POSTGRES_PASSWORD:?Run pnpm env:init first}@postgres:5432/ctp
+      DATABASE_URL: postgresql://ctp_api_login:${POSTGRES_API_PASSWORD:?Run pnpm auth:env:init first}@postgres:5432/ctp
+      DATABASE_AUTH_URL: postgresql://ctp_auth_login:${POSTGRES_AUTH_PASSWORD:?Run pnpm auth:env:init first}@postgres:5432/ctp
       REDIS_URL: redis://:${REDIS_PASSWORD:?Run pnpm env:init first}@redis:6379/0
+      AUTH_ORIGIN: ${AUTH_ORIGIN:?Run pnpm auth:env:init first}
+      AUTH_CSRF_SECRET: ${AUTH_CSRF_SECRET:?Run pnpm auth:env:init first}
+      SMTP_HOST: mail-sink
+      SMTP_PORT: '1025'
+      SMTP_SECURE: 'false'
+      SMTP_REQUIRE_TLS: 'false'
+      SMTP_FROM: accounts@ctp.invalid
     ports:
       - '127.0.0.1:${API_PORT:-3000}:3000'
     depends_on:
+      provision:
+        condition: service_completed_successfully
+      mail-sink:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -39,9 +51,60 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    mem_limit: 256m
+    mem_limit: 512m
     pids_limit: 128
     stop_grace_period: 12s
+
+  provision:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: local-tools
+    init: true
+    environment:
+      NODE_ENV: development
+      CTP_LOCAL_POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run pnpm env:init first}
+      POSTGRES_API_PASSWORD: ${POSTGRES_API_PASSWORD:?Run pnpm auth:env:init first}
+      POSTGRES_AUTH_PASSWORD: ${POSTGRES_AUTH_PASSWORD:?Run pnpm auth:env:init first}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 512m
+    pids_limit: 128
+
+  mail-sink:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: local-tools
+    command: ['node', 'scripts/mail-sink.mjs']
+    init: true
+    environment:
+      NODE_ENV: development
+      MAIL_SINK_HOST: 0.0.0.0
+    ports:
+      - '127.0.0.1:${MAIL_SINK_SMTP_PORT:-1025}:1025'
+      - '127.0.0.1:${MAIL_SINK_HTTP_PORT:-8025}:8025'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8025/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 25
+    read_only: true
+    tmpfs: ['/tmp:size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 128m
+    pids_limit: 64
 
   postgres:
     image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0

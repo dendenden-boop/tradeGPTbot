@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 export const aliases = {
+  '@ctp/auth': fileURLToPath(new URL('./packages/auth/src/index.ts', import.meta.url)),
   '@ctp/config': fileURLToPath(new URL('./packages/config/src/index.ts', import.meta.url)),
   '@ctp/logger': fileURLToPath(new URL('./packages/logger/src/index.ts', import.meta.url)),
   '@ctp/database': fileURLToPath(new URL('./packages/database/src/index.ts', import.meta.url)),

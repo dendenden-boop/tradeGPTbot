@@ -51,6 +51,11 @@ enum UserStatus {
   PSEUDONYMIZED
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 enum CredentialStatus {
   PENDING
   ACTIVE
@@ -238,6 +243,7 @@ model User {
   emailNormalized               String?                  @unique @db.VarChar(320)
   passwordHash                  String?                  @db.VarChar(512)
   status                        UserStatus               @default(PENDING_VERIFICATION)
+  role                          UserRole                 @default(USER)
   emailVerifiedAt               DateTime?                @db.Timestamptz(3)
   passwordChangedAt             DateTime?                @db.Timestamptz(3)
   sessionEpoch                  Int                      @default(0)

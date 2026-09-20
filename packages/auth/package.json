@@ -1,0 +1,24 @@
+{
+  "name": "@ctp/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@ctp/database": "workspace:*",
+    "argon2": "0.45.1",
+    "ioredis": "6.0.0",
+    "nodemailer": "10.0.9"
+  }
+}

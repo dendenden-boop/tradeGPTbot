@@ -1,0 +1,22 @@
+# PHASE 3 — требования авторизации
+
+Основание: раздел 10 и PHASE 3 исходного задания, [план этапов](../phase-0/implementation-plan.md), завершённый [аудит PHASE 0–2](../audit-phases-0-2.md). Фаза включает backend/API; продуктовый веб-интерфейс остаётся PHASE 17. Полная эксплуатационная готовность подтверждается в PHASE 19–22.
+
+| Область              | Контракт                                                                                                                              | Проверки                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Регистрация          | Email нормализуется; пароль 15–128 Unicode code points, до 512 UTF-8 bytes, без trim; Argon2id; публичная роль только USER            | Дубликаты, неверный ввод, role injection, SQL injection, Unicode, лимиты до хеширования                         |
+| Подтверждение почты  | Случайный 32-byte token; в БД только SHA-256; TTL 30 минут; одноразовое атомарное consume                                             | Повтор, expiry, конкурентное consume, resend инвалидирует предыдущий token                                      |
+| Вход                 | Только ACTIVE и verified; dummy Argon2 для неизвестного пользователя; текущие hash/epoch перепроверяются после дорогой проверки       | Неверный пароль, неподтверждённый/заблокированный пользователь, гонка с reset/logout-all/MFA                    |
+| Сессии               | Непрозрачный 32-byte cookie token, HttpOnly/SameSite=Lax; Secure/host-only prefix при HTTPS; idle 30 минут, absolute 12 часов         | Фиксация, rotation/replay, expiry, logout, logout-all, список и отзыв только своих сессий                       |
+| Восстановление       | Единый ответ 202 на запрос письма; reset token одноразовый, TTL 15 минут; reset/change повышают epoch и отзывают сессии и LIVE grants | Повторный reset, чужой grant сохраняется, пароль старой версии не создаёт новую сессию                          |
+| HTTP                 | Строгие JSON schemas; mutation требует точный Origin и header-only CSRF, связанный с preauth/session identity                         | Missing/foreign/repeated Origin, поддельный/устаревший CSRF, cookie overflow/duplicates, безопасные ошибки/логи |
+| БД                   | API tenant RLS и auth function-only роли раздельны; migration owner не используется runtime                                           | Свежая БД, upgrade, non-BYPASS owner, ownership, запрет прямых чтений secrets, grant audit                      |
+| Ограничения нагрузки | Redis atomic counters; псевдонимные HMAC keys; ограниченные Argon/SMTP/Redis очереди; backend failure закрывает доступ                | Конкурентные запросы, TTL, лимит числа ключей, повреждённый Redis state, timeout/shutdown                       |
+| SMTP                 | Настоящий transport; TLS с проверкой сертификата в deployment; одноразовые токены только в письме                                     | Локальный sink без пересылки, transport outage/timeout, отсутствие токенов в HTTP/логах                         |
+| 2FA                  | Архитектура assurance и хранения; ADMIN и включённая MFA закрывают password-only вход до готовности verifier                          | Политика fail closed в credentials/create/authenticate/rotation и после reset                                   |
+
+Письмо отправляется после commit через ограниченный асинхронный transport. Ответ не раскрывает существование получателя или конкретный SMTP отказ. При аварии процесса между commit и отправкой пользователь повторяет resend/reset; plaintext token не сохраняется в durable outbox. Это явный компромисс текущей доставки, а не гарантия exactly-once email.
+
+Обязательны formatter, lint, typecheck, unit/HTTP security tests, реальные PostgreSQL/Redis/SMTP flows, сборка, clean production deployment, Docker startup/outage/recovery/shutdown и CI. Добавление файла теста не означает PASS.
+
+Полное TOTP enrollment/recovery, управление зашифрованным TOTP secret через KMS, account deletion workflow, блок-лист скомпрометированных паролей и UI не объявляются реализованными в PHASE 3. Их contracts остаются в [security design](../security.md) и последующих gates; парольный вход не обходит уже активную MFA.

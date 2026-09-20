@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@ctp/auth": ["./packages/auth/src/index.ts"],
       "@ctp/config": ["./packages/config/src/index.ts"],
       "@ctp/logger": ["./packages/logger/src/index.ts"],
       "@ctp/database": ["./packages/database/src/index.ts"]

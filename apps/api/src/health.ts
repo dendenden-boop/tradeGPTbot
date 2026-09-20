@@ -206,9 +206,9 @@ function redisProbe(config: AppConfig): DependencyProbe {
   };
 }
 
-export function createHealthService(config: AppConfig): HealthService {
+export function createHealthService(config: AppConfig, postgres?: DependencyProbe): HealthService {
   return createHealthMonitor({
-    postgres: postgresProbe(config),
+    postgres: postgres ?? postgresProbe(config),
     redis: redisProbe(config),
     timeoutMs: config.dependencyTimeoutMs,
     cacheMs: config.healthCacheMs,

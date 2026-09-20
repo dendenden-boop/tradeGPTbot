@@ -2,7 +2,7 @@
 
 Дата исследования: **2026-09-05**. Статус: проект архитектуры для реализации по этапам. Утверждения о биржах подтверждаются ссылками в [исследовании адаптеров](exchange-adapters.md); архитектурные числа ниже являются нашими исходными гипотезами. Проверки счетов и торговые операции не выполнялись.
 
-Состояние после PHASE 2: реализованы backend bootstrap и database package; фактические проверки зафиксированы в [отчёте PHASE 1](phase-1/verification.md) и [отчёте PHASE 2](phase-2/verification.md). Остальные компоненты схемы ниже остаются проектом. Наличие таблиц не означает готовность auth, exchange adapters, financial writers или production deployment. Дата согласования документа с PHASE 1–2: **2026-09-09**.
+Состояние на **2026-09-20**: реализованы backend bootstrap, database package и backend авторизации PHASE 3. Исторические проверки основы зафиксированы в [отчёте PHASE 1](phase-1/verification.md) и [отчёте PHASE 2](phase-2/verification.md). Текущий auth scope: [требования PHASE 3](phase-3/requirements.md), [HTTP-контракт](phase-3/auth-api.md), [граница БД](phase-3/database-security.md); итоговая проверка фазы, включая CI, продолжается. Web UI, полный MFA verifier, exchange adapters, financial writers и production deployment остаются последующими этапами. Схема ниже сохраняет целевую архитектуру всей платформы.
 
 ## Цель и граница первого результата
 
@@ -68,13 +68,13 @@ apps/
   api/ web/ market-data-worker/ strategy-worker/
   execution-worker/ background-worker/
 packages/
-  config/ database/ shared-types/ logger/ ui/
+  config/ database/ auth/ shared-types/ logger/ ui/
   exchange-core/ exchange-binance/ exchange-bybit/ exchange-okx/ exchange-htx/
   trading-engine/ risk-engine/ strategy-engine/ paper-engine/ backtest-engine/
 infra/ docs/ scripts/ tests/
 ```
 
-Это целевое дерево: к PHASE 2 существуют `apps/api`, `packages/config`, `packages/logger` и `packages/database`; web и workers создаются в своих фазах. Domain modules: Users, Authentication, Authorization, Exchange Connections, Market Data, Instrument Registry, Portfolio, Balances, Orders, Trades, Positions, Execution, Risk, Strategies, Backtesting, Paper, Notifications, Audit, Admin, Monitoring, Reporting. Владение таблицами описано в [database](database.md), текущие package import boundaries закреплены tooling. Прикладные границы финансовых writers вводятся вместе с соответствующими модулями: один модуль не меняет финансовые таблицы другого напрямую. Dependency graph направлен от transports к application services, затем к domain и ports; реализации exchange/storage подключаются в composition root.
+Это целевое дерево: в PHASE 3 существуют `apps/api`, `packages/config`, `packages/logger`, `packages/database` и `packages/auth`; web и workers создаются в своих фазах. Domain modules: Users, Authentication, Authorization, Exchange Connections, Market Data, Instrument Registry, Portfolio, Balances, Orders, Trades, Positions, Execution, Risk, Strategies, Backtesting, Paper, Notifications, Audit, Admin, Monitoring, Reporting. Владение таблицами описано в [database](database.md), текущие package import boundaries закреплены tooling. Прикладные границы финансовых writers вводятся вместе с соответствующими модулями: один модуль не меняет финансовые таблицы другого напрямую. Dependency graph направлен от transports к application services, затем к domain и ports; реализации exchange/storage подключаются в composition root.
 
 ## Инварианты системы
 
@@ -107,7 +107,9 @@ Paper использует отдельный ledger и реальные public 
 
 ## Web и API
 
-Versioned REST groups: `/auth`, `/users`, `/exchanges`, `/instruments`, `/market`, `/orders`, `/positions`, `/portfolio`, `/strategies`, `/backtests`, `/paper`, `/risk`, `/notifications`, `/audit`, `/admin`. Mutating endpoints принимают runtime schemas, проверяют ownership и idempotency. История использует cursor `(timestamp,id)` и ограниченный page size. Decimal — строка, UTC timestamps — однозначный формат. Ошибка: `{error:{code,message,requestId}}`; stack и raw exchange body не выдаются.
+В PHASE 3 реализованы `/api/v1/auth/*` и `/api/v1/users/me`: [точный HTTP-контракт](phase-3/auth-api.md). Маршруты используют строгие schemas, CSRF/Origin и проверенную сессию; чтение пользователя передаёт principal.userId в tenant transaction. Запуск с отдельными API/auth credentials описан в [операциях PHASE 3](phase-3/operations.md).
+
+Остальные целевые REST groups: `/exchanges`, `/instruments`, `/market`, `/orders`, `/positions`, `/portfolio`, `/strategies`, `/backtests`, `/paper`, `/risk`, `/notifications`, `/audit`, `/admin`. Их mutating endpoints должны принимать runtime schemas, проверять ownership и idempotency. История использует cursor `(timestamp,id)` и ограниченный page size. Decimal — строка, UTC timestamps — однозначный формат. Общая ошибка: `{error:{code,message,requestId}}`; stack и raw exchange body не выдаются.
 
 Экраны: Dashboard, Exchange wizard, Terminal, Strategies/Builder, Backtests, Orders/Fills, Positions, Portfolio, Activity, Settings и ограниченный Admin. RU-first strings в ресурсах перевода, доступные подтверждения и подписи режимов; LIVE обозначен текстом «реальные средства», а не только цветом. Search/watchlist/фильтры биржи, рынка, объёма, изменения цены и активных стратегий; тяжёлые списки виртуализируются.
 
@@ -121,4 +123,4 @@ Onboarding, glossary, tooltips, объяснение base/quote/contracts, ош�
 
 Bounded queues, rate budgets по общему egress IP и exchange UID, резерв ёмкости для cancel, stop новых сделок при неполноте данных. Тяжёлые backtests не работают в API/market-data loop. План нагрузки содержит 300/600/1200 инструментов, 100 стратегий, reconnect storm и soak; результаты пока отсутствуют.
 
-Подробности: [execution](execution.md), [risk](risk-engine.md), [database](database.md), [security](security.md), [deployment](deployment.md), [ADR](adr/README.md). [План](phase-0/implementation-plan.md) сохраняет PHASE 0–22 и закрывает конфликт ранних live-адаптеров с поздним risk engine. PHASE 0 завершилась документацией; PHASE 1–2 реализовали инфраструктурную основу. Переход к следующей фазе требует закрытия применимых проверок и найденных при аудите дефектов.
+Подробности: [execution](execution.md), [risk](risk-engine.md), [database](database.md), [security](security.md), [deployment](deployment.md), [ADR](adr/README.md). [План](phase-0/implementation-plan.md) сохраняет PHASE 0–22 и закрывает конфликт ранних live-адаптеров с поздним risk engine. PHASE 0 завершилась документацией; PHASE 1–2 реализовали инфраструктурную основу, PHASE 3 добавила backend авторизации и проходит итоговую проверку. Переход к следующей фазе требует закрытия применимых проверок и найденных при аудите дефектов.

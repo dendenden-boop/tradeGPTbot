@@ -1,3 +1,12 @@
+import { DatabaseError, validateDatabaseOptions } from './connection-options.js';
+export { DatabaseError } from './connection-options.js';
+export {
+  createAuthDatabase,
+  type AuthRepository,
+  type AuthPrincipal,
+  type AuthCredentials,
+  type SessionSummary,
+} from './auth-database.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool, type PoolClient } from 'pg';
 import { PrismaClient, Prisma } from './generated/client.js';
@@ -22,13 +31,6 @@ function withDecimalGuard(client: PrismaClient) {
   });
 }
 
-export class DatabaseError extends Error {
-  constructor(readonly code: string) {
-    super('Database operation failed');
-    this.name = 'DatabaseError';
-  }
-}
-
 function safeCode(error: unknown): string {
   if (error instanceof DecimalInputError) return 'DATABASE_DECIMAL_INVALID';
   if (
@@ -44,68 +46,7 @@ export async function createDatabase(options: {
   connectionString: string;
   environment: 'development' | 'test' | 'staging' | 'production';
 }) {
-  if (!['development', 'test', 'staging', 'production'].includes(options.environment)) {
-    throw new DatabaseError('DATABASE_ENVIRONMENT_INVALID');
-  }
-  let url: URL;
-  try {
-    if (
-      options.connectionString.length > 4096 ||
-      /\s/u.test(options.connectionString) ||
-      [...options.connectionString].some(
-        (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
-      )
-    )
-      throw new Error();
-    url = new URL(options.connectionString);
-    for (const part of [url.username, url.password, url.pathname]) {
-      if (
-        [...decodeURIComponent(part)].some(
-          (char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127,
-        )
-      )
-        throw new Error();
-    }
-  } catch {
-    throw new DatabaseError('DATABASE_URL_INVALID');
-  }
-  const seen = new Set<string>();
-  for (const [key, value] of url.searchParams) {
-    if (
-      seen.has(key) ||
-      !['sslmode', 'application_name'].includes(key) ||
-      value.length > 64 ||
-      /^[a-zA-Z0-9_-]+$/u.exec(value)?.[0] !== value
-    ) {
-      throw new DatabaseError('DATABASE_URL_INVALID');
-    }
-    seen.add(key);
-  }
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    url.hash ||
-    !url.hostname ||
-    !url.username ||
-    !url.password ||
-    !url.pathname.slice(1) ||
-    url.pathname.slice(1).includes('/') ||
-    (url.port !== '' && Number(url.port) < 1)
-  ) {
-    throw new DatabaseError('DATABASE_URL_INVALID');
-  }
-  if (
-    ['staging', 'production'].includes(options.environment) &&
-    (url.searchParams.get('sslmode') !== 'verify-full' ||
-      decodeURIComponent(url.password).length < 16 ||
-      decodeURIComponent(url.password).toLowerCase() ===
-        decodeURIComponent(url.username).toLowerCase() ||
-      /(?:password|change[-_ ]?me|replace[-_ ]?me|example|development|local[-_ ]only|dev[-_ ]only)/iu.test(
-        decodeURIComponent(url.password),
-      ) ||
-      process.env['NODE_TLS_REJECT_UNAUTHORIZED'] === '0')
-  ) {
-    throw new DatabaseError('DATABASE_TLS_REQUIRED');
-  }
+  validateDatabaseOptions(options);
   let pool: Pool;
   let client: PrismaClient;
   const connections = new Set<PoolClient>();
@@ -156,12 +97,15 @@ export async function createDatabase(options: {
       clearTimeout(timer);
     }
   };
-  try {
+  const checkRole = async () => {
     const roles = await client.$queryRaw<{ privileged: boolean }[]>`
-      SELECT current_user <> session_user OR r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb
+      SELECT current_user <> session_user OR r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb OR r.rolreplication
+        OR NOT pg_has_role(current_user, 'ctp_api', 'MEMBER')
+        OR EXISTS (SELECT 1 FROM pg_roles boundary WHERE boundary.rolname IN ('ctp_auth','ctp_auth_owner')
+          AND pg_has_role(current_user,boundary.oid,'MEMBER'))
         OR has_schema_privilege(current_user, 'public', 'CREATE')
         OR EXISTS (SELECT 1 FROM pg_roles inherited
-          WHERE (inherited.rolsuper OR inherited.rolbypassrls OR inherited.rolcreaterole OR inherited.rolcreatedb)
+          WHERE (inherited.rolsuper OR inherited.rolbypassrls OR inherited.rolcreaterole OR inherited.rolcreatedb OR inherited.rolreplication)
             AND pg_has_role(current_user, inherited.oid, 'MEMBER'))
         OR EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='public' AND c.relkind IN ('r','p')
@@ -169,6 +113,9 @@ export async function createDatabase(options: {
       FROM pg_roles r WHERE r.rolname=current_user`;
     if (roles.length !== 1 || roles[0]?.privileged !== false)
       throw new DatabaseError('DATABASE_ROLE_UNSAFE');
+  };
+  try {
+    await checkRole();
   } catch (error) {
     await disconnect().catch(() => {});
     if (error instanceof DatabaseError) throw error;
@@ -177,6 +124,17 @@ export async function createDatabase(options: {
   let closing: Promise<void> | undefined;
   const guardedClient = withDecimalGuard(client);
   return Object.freeze({
+    async ready(): Promise<void> {
+      if (closing) throw new DatabaseError('DATABASE_CLOSED');
+      try {
+        await checkRole();
+        // Parsing verifies migration 004 and the safe User column grants without reading tenant data.
+        await client.$queryRaw`SELECT id,"emailNormalized",status,role,"emailVerifiedAt" FROM public."user" LIMIT 0`;
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error;
+        throw new DatabaseError(safeCode(error));
+      }
+    },
     async withTenant<T>(
       tenantId: string,
       operation: (transaction: TenantTransaction) => Promise<T>,

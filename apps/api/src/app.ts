@@ -9,6 +9,7 @@ import fastify, {
 } from 'fastify';
 import type { Logger } from 'pino';
 import type { DependencyHealth, HealthService } from './health.js';
+import { registerAuthRoutes, type AuthRoutesOptions } from './auth-routes.js';
 
 interface ApplicationState {
   started: boolean;
@@ -68,9 +69,17 @@ export interface BuildAppOptions {
   config: AppConfig;
   logger: Logger;
   health: HealthService;
+  auth?: AuthRoutesOptions;
+  closeRuntime?: () => Promise<void>;
 }
 
-export function buildApp({ config, logger, health }: BuildAppOptions): FastifyInstance {
+export function buildApp({
+  config,
+  logger,
+  health,
+  auth,
+  closeRuntime,
+}: BuildAppOptions): FastifyInstance {
   const state: ApplicationState = { started: false, draining: false };
   const app = fastify<RawServerDefault>({
     loggerInstance: logger,
@@ -126,6 +135,7 @@ export function buildApp({ config, logger, health }: BuildAppOptions): FastifyIn
     onConstructorPoisoning: 'error',
     trustProxy: false,
     exposeHeadRoutes: false,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false, useDefaults: false } },
     http: { maxHeaderSize: 16_384 },
   });
   states.set(app, state);
@@ -139,7 +149,12 @@ export function buildApp({ config, logger, health }: BuildAppOptions): FastifyIn
     done();
   });
   app.addHook('onClose', async () => {
-    await health.close();
+    const results = await Promise.allSettled([
+      Promise.resolve().then(() => health.close()),
+      Promise.resolve().then(() => auth?.service.close()),
+      Promise.resolve().then(() => closeRuntime?.()),
+    ]);
+    if (results.some((result) => result.status === 'rejected')) throw new Error('APP_CLOSE_FAILED');
   });
 
   app.addHook('onRequest', async (request, reply) => {
@@ -252,5 +267,8 @@ export function buildApp({ config, logger, health }: BuildAppOptions): FastifyIn
     },
   );
 
+  if (auth !== undefined) {
+    app.register(async (scope) => registerAuthRoutes(scope, auth));
+  }
   return app;
 }

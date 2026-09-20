@@ -2,6 +2,8 @@
 
 PHASE 2 завершена: логическая схема реализована в [Prisma schema](../packages/database/prisma/schema.prisma) и SQL migrations; [команды и роли](phase-2/operations.md), [критерии проверки](phase-2/requirements.md), [результаты локальных проверок и CI](phase-2/verification.md). PostgreSQL — источник истины финансового состояния; Redis cache/queue не заменяет ledger. Tenant соответствует пользователю; организация/несколько членов — возможное расширение с отдельным ADR.
 
+Состояние PHASE 3 на **2026-09-20**: миграция 004 добавляет product-роли USER/ADMIN и ограниченные auth-функции, не меняя опубликованные 001–003. Раздельные `ctp_api` и `ctp_auth` обслуживают tenant-запросы и операции авторизации; password reset/change атомарно отзывают сессии и LIVE grants. Подробности: [граница БД](phase-3/database-security.md), [HTTP-контракт](phase-3/auth-api.md), [запуск и credentials](phase-3/operations.md). Итоговая проверка фазы, включая CI, продолжается; полноценный MFA verifier и account deletion workflow остаются будущими этапами.
+
 ## Сущности и владение
 
 | Модуль        | Сущности                                                                                      | Ключевые связи / данные                                                                                                                               |
@@ -98,5 +100,7 @@ Outbox delivered events/inbox можно архивировать только �
 ## Проверенные и будущие gates
 
 PHASE 2 проверила fresh/upgrade/repeat migrations, reset только созданной runner disposable DB, cross-tenant FK/RLS под непривилегированной runtime role, duplicate identities, mode/decimal/evidence constraints, конкурентные INSERT/CAS/ledger transactions, rollback, seed и query plans. Точный состав и результаты — в [PHASE 2 verification](phase-2/verification.md); критерии — в [requirements](phase-2/requirements.md).
+
+PHASE 3 дополняет этот набор проверками function grants, CSRF/session ownership, token replay/expiry, hash/epoch CAS, ADMIN/MFA fail-closed и отзыва LIVE grants. Проверки связывают HTTP, auth service и существующую tenant-модель; их обязательный объём закреплён в [требованиях PHASE 3](phase-3/requirements.md), подтверждённые локальные результаты — в [database security](phase-3/database-security.md). Наличие реализации и локальных результатов не закрывает оставшуюся итоговую проверку фазы.
 
 PHASE 10–14 и 22 должны проверить бизнес-транзакции ledger/risk/execution, crash/lost exchange или commit response, replay outbox без повторного order/fill, retention/replay horizon, backup restore и совместимость rolling upgrades. Production rollback не означает destructive downgrade: migration history сохраняется, изменения идут через expand/contract и проверенный forward fix. SQL primitives текущей фазы не заменяют эти будущие сценарии.

@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import type * as Pg from 'pg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '@ctp/config';
-import { createDatabase } from '../src/index.js';
+import { createAuthDatabase, createDatabase } from '../src/index.js';
 
 vi.mock('pg', async (importOriginal) => {
   const actual = await importOriginal<typeof Pg>();
@@ -30,8 +30,8 @@ const cases = [
   },
 ];
 
-describe('phase 1 config and phase 2 database DSN contract', () => {
-  it.each(cases)('both reject $name before network access', async ({ name, url }) => {
+describe('phase 1 config and phase 2/3 database DSN contract', () => {
+  it.each(cases)('all reject $name before network access', async ({ name, url }) => {
     expect(() =>
       loadConfig({
         NODE_ENV: 'production',
@@ -39,16 +39,18 @@ describe('phase 1 config and phase 2 database DSN contract', () => {
         REDIS_URL: 'rediss://runtime:v8RmN4qZ7sP2kL6x@127.0.0.1:6379/0',
       }),
     ).toThrow('Invalid configuration: DATABASE_URL');
-    await expect(
-      createDatabase({ connectionString: url, environment: 'production' }),
-    ).rejects.toMatchObject({
-      name: 'DatabaseError',
-      message: 'Database operation failed',
-      code:
-        name === 'placeholder deployment password'
-          ? 'DATABASE_TLS_REQUIRED'
-          : 'DATABASE_URL_INVALID',
-    });
+    for (const create of [createDatabase, createAuthDatabase]) {
+      await expect(
+        create({ connectionString: url, environment: 'production' }),
+      ).rejects.toMatchObject({
+        name: 'DatabaseError',
+        message: 'Database operation failed',
+        code:
+          name === 'placeholder deployment password'
+            ? 'DATABASE_TLS_REQUIRED'
+            : 'DATABASE_URL_INVALID',
+      });
+    }
     expect(Pool).not.toHaveBeenCalled();
   });
 });

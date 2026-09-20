@@ -1,4 +1,11 @@
-import { ConfigError, loadConfig } from '@ctp/config';
+import { ConfigError, loadConfig, loadAuthConfig } from '@ctp/config';
+import {
+  createAuthService,
+  createAuthMailer,
+  createAuthLimiter,
+  createPasswordHasher,
+} from '@ctp/auth';
+import { createAuthDatabase, createDatabase } from '@ctp/database';
 import { createLogger, safeError } from '@ctp/logger';
 import { buildApp } from './app.js';
 import { createHealthService } from './health.js';
@@ -10,9 +17,82 @@ let logger = createLogger({ level: 'info', environment: 'production' });
 async function main(): Promise<void> {
   // No clients, sockets, or pools are constructed until all configuration is valid.
   const config = loadConfig(process.env);
+  const authConfig = loadAuthConfig(process.env, config);
   logger = createLogger({ level: config.logLevel, environment: config.environment });
-  const health = createHealthService(config);
-  const app = buildApp({ config, logger, health });
+  const resources: Array<{ close(): Promise<void> }> = [];
+  const composition = await (async () => {
+    try {
+      const runtime = await createDatabase({
+        connectionString: config.databaseUrl,
+        environment: config.environment,
+      });
+      resources.push(runtime);
+      const repository = await createAuthDatabase({
+        connectionString: authConfig.databaseAuthUrl,
+        environment: config.environment,
+      });
+      resources.push(repository);
+      const hasher = await createPasswordHasher();
+      resources.push(hasher);
+      const mailer = createAuthMailer({ origin: authConfig.origin, smtp: authConfig.smtp });
+      resources.push(mailer);
+      const limiter = createAuthLimiter(config.redisUrl);
+      resources.push(limiter);
+      await Promise.all([runtime.ready(), repository.ready(), mailer.ready(), limiter.ready()]);
+      const service = createAuthService({
+        repository,
+        hasher,
+        mailer,
+        limiter,
+        csrfSecret: authConfig.csrfSecret,
+        onMailFailure: () =>
+          logger.error(
+            { event: 'auth_mail_delivery_failed' },
+            'Authentication email delivery failed',
+          ),
+      });
+      const health = createHealthService(config, {
+        async check(signal) {
+          signal.throwIfAborted();
+          await Promise.all([runtime.ready(), repository.ready()]);
+          signal.throwIfAborted();
+        },
+        // Application ownership closes these pools after health polling stops.
+        close: () => Promise.resolve(),
+      });
+      resources.push(health);
+      const app = buildApp({
+        config,
+        logger,
+        health,
+        closeRuntime: () => runtime.close(),
+        auth: {
+          config: authConfig,
+          service,
+          readUser: (principal) =>
+            runtime.withTenant(principal.userId, (transaction) =>
+              transaction.user.findUniqueOrThrow({
+                where: { id: principal.userId },
+                select: {
+                  id: true,
+                  emailNormalized: true,
+                  status: true,
+                  role: true,
+                  emailVerifiedAt: true,
+                },
+              }),
+            ),
+        },
+      });
+      return { app };
+    } catch {
+      await Promise.allSettled(
+        resources.map((resource) => Promise.resolve().then(() => resource.close())),
+      );
+      throw new Error('AUTH_STARTUP_FAILED');
+    }
+  })();
+  const { app } = composition;
   const lifecycle = createLifecycle({
     app,
     config,

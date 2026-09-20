@@ -1,4 +1,4 @@
-name: Bootstrap checks
+name: Platform checks
 
 on:
   push:
@@ -35,6 +35,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:validate
       - run: pnpm build
+      - run: pnpm benchmark:auth
       - run: pnpm format:check
       - run: pnpm docs:check
       - run: pnpm lint
@@ -80,9 +81,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:validate
       - run: pnpm build
-      - name: Verify database migrations, constraints and service failure recovery
+      - name: Verify migrations, authorization, SMTP flows and service recovery
         run: pnpm test:integration
-      - name: Exercise the built API container and shutdown
+      - name: Exercise authentication in the built API container and shutdown
         run: pnpm test:smoke
       - name: Upload sanitized integration reports
         if: always()
