@@ -1,10 +1,10 @@
 # PHASE 3 Hardening — verification
 
-Состояние: **RUNNING / NOT READY FOR PHASE 4**. Финальный integration запуск 27 сентября завершился exit 0: 175 PostgreSQL/Redis tests, три service tests, before/after SQL benchmark, compiled auth и 100-user load с пятью циклическими enumeration rounds. Финальные format/lint/typecheck/unit/HTTP/runtime/docs/Argon benchmark также PASS. Dependency audit чистый; опубликованные migrations 001–004 и lockfile неизменны. Clean deploy также PASS; остаётся итоговый Docker smoke в Linux CI после двух локальных сбоев Docker VM из-за исчерпания Windows commit memory. Прежний [отчёт PHASE 3](../phase-3/verification.md) — история commit `fac5c07`, а не свидетельство новых изменений. Требования — [requirements](requirements.md), разбор находок — [findings](findings.md).
+Состояние: **READY FOR PHASE 4**. Hardening проверен локально и в [CI run 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471) для commit [20f25872394c9d71fefa98edffe2aa5b50a316d5](https://github.com/dendenden-boop/tradeGPTbot/commit/20f25872394c9d71fefa98edffe2aa5b50a316d5): все три jobs PASS, включая Linux Docker smoke с запуском без SMTP и восстановлением без restart. Локальный integration подтвердил 175 PostgreSQL/Redis tests, три service tests, before/after SQL benchmark, compiled auth и 100-user load с пятью циклическими enumeration rounds; CI повторил integration и load. Format/lint/typecheck/unit/HTTP/runtime/docs/Argon benchmark и clean deploy PASS. Dependency audit 28 сентября: 0 vulnerabilities / 404 dependencies; migrations 001–004 и lockfile неизменны. Прежний [отчёт PHASE 3](../phase-3/verification.md) — история commit `fac5c07`. Требования — [requirements](requirements.md), разбор находок — [findings](findings.md).
 
 ## Исходное состояние и сохранность migrations
 
-Исходный commit: `fac5c07065dc9980a970a28e30a9c9530ce1b09b`. До изменений `git status --short` был пуст. Baseline запуск выполнен 20–21 сентября 2026; аудит продолжен 26–27 сентября. Exchange Core и биржевые адаптеры не реализуются в этой задаче.
+Исходный commit: `fac5c07065dc9980a970a28e30a9c9530ce1b09b`. До изменений `git status --short` был пуст. Baseline запуск выполнен 20–21 сентября 2026; аудит продолжен 26–28 сентября. Exchange Core и биржевые адаптеры не реализуются в этой задаче.
 
 До изменений зафиксированы SHA-256 опубликованных migrations в `test-results/phase-3-hardening-baseline/migration-hashes.json`:
 
@@ -83,13 +83,13 @@ Clean install первый раз исчерпал Windows commit memory; ост
 
 Первый полный DB suite выявил две ошибки error classification и одно устаревшее ожидание test contract. Тесты `separates function-only auth, tenant runtime and migration roles` и `rejects a non-inheriting runtime role that can assume a privileged role` получили безопасный, но неверно классифицированный `DATABASE_FAILED` вместо `DATABASE_ROLE_UNSAFE`: новый string/regclass privilege lookup требовал schema USAGE у заведомо недопустимой роли. Lookup переведён на catalog OIDs. Тест `resend reset invalidates its predecessor and rejects expired reset tokens` ожидал прежнюю инвалидацию; новая модель правильно сохраняет первую ссылку. Тест обновлён на cooldown, сохранность predecessor, TTL 15 минут и отдельный expired-link rejection. Повтор 27 сентября, начатый `2026-09-27T07:29:57.098Z`, подтвердил 175/175 PASS, включая 58 auth SQL cases; три прежних failures остаются частью истории validation.
 
-Дополнительно `pnpm docs:check` 27 сентября завершился exit 0 для текущего audit draft: 33 documents, 300 local links, 65 tables, 21 fenced blocks. Это DOC LINT, не remote-link/diagram/runtime validation; после обновления результатов требуется ещё один итоговый проход.
+Ранний audit draft прошёл `pnpm docs:check` 27 сентября: 33 documents, 300 local links, 65 tables, 21 fenced blocks. Финальный отчёт проверен 28 сентября: exit 0, 33 documents, 305 local links, 69 tables, 21 fenced blocks. Это DOC LINT, не remote-link/diagram/runtime validation.
 
 Outer runner после успешных SQL/compiled checks сначала остановился на `SMTP degraded` load stage: fixture ожидал немедленный 503 от email health, хотя предыдущий probe ещё находился в документированном one-second cache. Исправлен именно test expectation: сначала проверяются controlled 503 email operations с fresh SMTP probe, затем down health. Это не новый application defect; повтор полного `pnpm test:database` завершился PASS. Compiled flow отдельно подтвердил запуск при SMTP down, existing login/me/logout и recovery без restart; его status/response checks не доказывают идеальную timing indistinguishability.
 
 ## Performance и targeted load
 
-Все следующие SQL/load показатели взяты из одного финального integration run 27 сентября. SQL artifact completed `2026-09-27T15:02:12.529Z`; load artifact completed `2026-09-27T15:03:35.731Z`. Это controlled loopback acceptance на Windows/Node 24.20.0/PostgreSQL 17.11, а не production throughput/SLO. Условия разных дней и host load различаются; нельзя выбирать лучшие percentiles из разных запусков.
+Все следующие SQL/load показатели взяты из одного финального локального integration run 27 сентября. Отдельный CI run 28 сентября также PASS; его показатели не смешиваются с этой локальной выборкой. SQL artifact completed `2026-09-27T15:02:12.529Z`; load artifact completed `2026-09-27T15:03:35.731Z`. Это controlled loopback acceptance на Windows/Node 24.20.0/PostgreSQL 17.11, а не production throughput/SLO. Условия разных дней и host load различаются; нельзя выбирать лучшие percentiles из разных запусков.
 
 ### Redis cardinality
 
@@ -156,24 +156,43 @@ Reproduction использует 10 020 attempts, параллельные па
 
 Для каждого state login с неправильным паролем вернул 401 и 123 response bytes; resend/forgot/signup — 202 и 21 bytes. После interleaving крупное устойчивое timing separation unknown/existing не воспроизвелось: raw ranges пересекаются, unknown signup median близка к active. Этот малый sample не доказывает network constant time и не исключает слабые статистические различия при большем количестве наблюдений. Вывод ограничен наблюдаемыми status/length, общей Argon/SMTP admission логикой и этими timings. Внешняя доставка SMTP и production network в measurement не входят.
 
-## Security invariants и оставшаяся проверка
+## Security invariants и границы проверки
 
-| Invariant                                                          | Доказательство сейчас                                               | Что ещё требуется                                                                                   |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Tokens/passwords/SQL/DSN не раскрываются в HTTP/logs               | Unit/HTTP/compiled/load canaries PASS                               | Docker canaries на итоговой сборке                                                                  |
-| Origin/CSRF, host-only Secure cookies, rotation, duplicate headers | 40 HTTP PASS                                                        | Compiled auth composition PASS; Docker без SMTP ещё pending                                         |
-| Proxy trust explicit, direct spoof ignored                         | Real-socket HTTP/config PASS                                        | Финальный Docker/deployment validation                                                              |
-| Redis fail closed, bounded state, no one-IP global cardinality DoS | 26 real-Redis PASS                                                  | Mixed load, injected Redis latency и fail-closed timeout PASS; Docker pending                       |
-| Reset/password change revoke sessions/epoch/LIVE                   | 005 SQL regression и compiled flow PASS                             | Итоговый Docker/failure validation                                                                  |
-| ADMIN/MFA, stale snapshot, concurrent transitions                  | SQL concurrency и 004→005 fixtures PASS                             | Final compiled/load integration PASS; Docker ещё pending; clean PASS                                |
-| ctp_api/ctp_auth/owner, FORCE RLS, safe SECURITY DEFINER           | Negative grant/temp-hijack tests PASS в повторе 175 cases           | Outer runner и final integration PASS; итоговый Docker ещё pending; clean PASS                      |
-| Account enumeration и email normalization                          | Service/Node-SMTP/SQL corpus PASS; compiled status/body checks PASS | Пять cyclic samples/state reviewed: gross oracle не воспроизвёлся; small-sample limitation остаётся |
-| Argon concurrency/queue/shutdown                                   | Unit capacity tests PASS                                            | Load измерен: 2 active/8 queued, RSS ≈383,6 MiB; production sizing не подтверждён                   |
-| Session/token retention                                            | Policy определена в findings                                        | Production cleanup job не реализован; до production обязательный gate                               |
+| Invariant                                                          | Подтверждённое evidence                                                        | Ограничение / последующая задача                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Tokens/passwords/SQL/DSN не раскрываются в HTTP/logs               | Unit/HTTP/compiled/load и Docker canaries PASS                                 | Canary tests проверяют заданные secret fixtures                                                     |
+| Origin/CSRF, host-only Secure cookies, rotation, duplicate headers | 40 HTTP PASS; compiled auth и Docker flow PASS                                 | Production TLS/ingress configuration проверяется при deployment                                     |
+| Proxy trust explicit, direct spoof ignored                         | Real-socket HTTP/config PASS; Docker/deployment validation PASS                | Фактический production proxy должен соответствовать documented allowlist                            |
+| Redis fail closed, bounded state, no one-IP global cardinality DoS | 26 real-Redis PASS; mixed load/delay/timeout и Docker recovery PASS            | Распределённый abuse и capacity требуют production policy                                           |
+| Reset/password change revoke sessions/epoch/LIVE                   | 005 SQL regression, compiled и Docker auth flow PASS                           | Будущие protected writes сохраняют transaction authorization contract                               |
+| ADMIN/MFA, stale snapshot, concurrent transitions                  | SQL concurrency, 004→005 fixtures, compiled/load/Docker и clean PASS           | Полный TOTP verifier остаётся последующей фазой                                                     |
+| ctp_api/ctp_auth/owner, FORCE RLS, safe SECURITY DEFINER           | Negative grant/temp-hijack, 175 SQL/Redis cases, integration/Docker/clean PASS | Privileged provisioning и IAM остаются deployment boundary                                          |
+| Account enumeration и email normalization                          | Service/Node-SMTP/SQL corpus, compiled status/body checks PASS                 | Пять cyclic samples/state reviewed: gross oracle не воспроизвёлся; small-sample limitation остаётся |
+| Argon concurrency/queue/shutdown                                   | Unit capacity, runtime, load и Docker shutdown PASS                            | Локально 2 active/8 queued, RSS ≈383,6 MiB; production sizing не подтверждён                        |
+| Session/token retention                                            | Policy определена в findings                                                   | Production cleanup job не реализован; до production обязательный gate                               |
 
-## Финальный validation — Docker gate ещё не закрыт
+## GitHub CI — проверенный commit
 
-| Команда                    | Последний результат финального полного запуска                                                                                                         |
+[Run 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471) проверил именно `20f25872394c9d71fefa98edffe2aa5b50a316d5`. Все три jobs завершились success: `Checks (ubuntu-24.04)`, `Checks (windows-2025)`, `Real services and Docker smoke`. Результаты ниже относятся к этому SHA реализации; отчёт о них добавлен отдельным документационным изменением.
+
+На Ubuntu и Windows выполнены pinned/frozen install, `db:validate`, build, `benchmark:auth`, `format:check`, `docs:check`, lint, typecheck, unit, HTTP, runtime, clean и `audit:dependencies`; проверена неизменность lockfile. Linux Docker job повторил `test:integration` и `test:smoke`. Workflow не запускает отдельный alias `test:database`: полный database runner входит в integration; отдельный `test:auth-hardening` alias также не заявляется. Полный JSON vulnerability audit выполнен отдельно локально 28 сентября; CI `audit:dependencies` запускает `pnpm audit --audit-level=high` и также завершился успешно.
+
+Downloaded artifacts: `test-results/ci-hardening-36392668471/bootstrap-ubuntu-24.04`, `bootstrap-windows-2025`, `bootstrap-docker`. В Docker artifact `database.json` — 175 tests PASS, fresh/upgrade/non-BYPASS/repeat/reset/runtime/hardening PASS; `integration.json` completed `2026-09-28T07:42:34.897Z`. `auth-hardening-load.json` PASS: 100 users и 100 active sessions, completed `2026-09-28T07:42:32.562Z`, secret canaries PASS. Результаты разных платформ не суммируются как разные tests.
+
+| Docker smoke evidence   | Результат Linux CI                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `smoke.json`            | PASS, completed `2026-09-28T07:44:03.306Z`                                                                          |
+| Core boot при SMTP down | `smtpBootDownCoreAvailable: true`; core ready, email health 503                                                     |
+| SMTP recovery           | `smtpRecoveryWithoutRestart: true`                                                                                  |
+| Auth flow               | 46 requests; signup/verify, CSRF/origin, ownership, rotation/revocation, reset/change, enumeration, rate limit PASS |
+| PostgreSQL recovery     | Сама dependency ready за 5692 ms, затем API ready за 2 ms                                                           |
+| Redis recovery          | Сама dependency ready за 5696 ms, затем API ready за 1 ms                                                           |
+| SIGTERM                 | Shutdown 301 ms, completed shutdown log                                                                             |
+| Container boundaries    | Non-root image, runtime secret canaries и image configuration checks PASS                                           |
+
+## Финальный validation — PASS
+
+| Команда                    | Локальный результат; для smoke — Linux CI                                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pnpm format`              | 0, `format-final.log`; обновления отчёта проверяются отдельно перед публикацией                                                                        |
 | `pnpm lint`                | 0, `lint-final.log`                                                                                                                                    |
@@ -183,16 +202,16 @@ Reproduction использует 10 020 attempts, параллельные па
 | `pnpm test:database`       | 0: 175 SQL/Redis, compiled flow, load, fresh/upgrade/non-BYPASS/repeat/reset PASS; последующий integration rerun также 0                               |
 | `pnpm test:runtime`        | 0, `test-runtime-final.log`                                                                                                                            |
 | `pnpm test:integration`    | 0, final retry `2026-09-27T15:01:06.266Z`–`15:03:45.701Z`: 175 SQL/Redis + 3 services + compiled/load PASS                                             |
-| `pnpm test:smoke`          | Два локальных запуска не завершились: BuildKit RPC EOF при остановке Docker VM, подтверждённое Windows commit-memory exhaustion. Linux CI PENDING      |
+| `pnpm test:smoke`          | Локально два host failures; Linux CI exit 0, `smoke.json` PASS `2026-09-28T07:44:03.306Z`; SMTP-down boot/recovery проверены                           |
 | `pnpm test:clean`          | 0, completed `2026-09-27T15:12:13Z`: fresh offline install, build, production API/database deploy; native Argon/WASM и неизменность lockfile проверены |
 | `pnpm docs:check`          | 0, `docs-check-final.log`; повторить после последнего обновления отчёта                                                                                |
-| `pnpm audit --json`        | 0, `phase-3-hardening-validation/audit-final.json`: 0 vulnerabilities / 404 dependencies, 27 сентября                                                  |
+| `pnpm audit --json`        | 0, `phase-3-hardening-validation/audit-20260928.json`: 0 vulnerabilities / 404 dependencies, 28 сентября                                               |
 | `pnpm test:auth-hardening` | SQL benchmark и targeted load PASS внутри final integration; отдельный alias не запускался и не заявлен                                                |
 | `pnpm benchmark:auth`      | 0, `benchmark-auth-final.log`: hash p50/p95 148/181 ms; verify 156/164 ms; две parallel operations 169 ms                                              |
 
 Итоговые локальные tests: **556** = 338 unit + 40 HTTP + 175 PostgreSQL/Redis + 3 service tests. Другие acceptance сценарии и повторные запуски не увеличивают этот счётчик.
 
-Оба локальных Docker smoke остановились во время image build с BuildKit RPC EOF. Windows System Event 2004 (`Resource-Exhaustion-Detector`) 27 сентября в 18:06:55 и 18:08:48 по местному времени зафиксировал исчерпание commit memory; `vmmemWSL` занимал приблизительно 4,37/4,77 GB перед остановкой VM. Это подтверждённый host prerequisite failure, а не успешный smoke и не доказанный application defect. Остановлен только task-owned Docker после проверки отсутствия работающих контейнеров, затем локальный clean PASS. Изменения pagefile/WSL/system limits и остановка чужих приложений не выполнялись. Финальный canonical Docker smoke переносится в разрешённый GitHub Linux CI; его PASS ещё не получен. Особое требование нового smoke — core boot без mail-sink, email health 503, затем recovery после запуска SMTP.
+Оба локальных Docker smoke остановились во время image build с BuildKit RPC EOF. Windows System Event 2004 (`Resource-Exhaustion-Detector`) 27 сентября в 18:06:55 и 18:08:48 по местному времени зафиксировал исчерпание commit memory; `vmmemWSL` занимал приблизительно 4,37/4,77 GB перед остановкой VM. Это подтверждённый host prerequisite failure, а не успешный smoke и не доказанный application defect. Остановлен только task-owned Docker после проверки отсутствия работающих контейнеров, затем локальный clean PASS. Изменения pagefile/WSL/system limits и остановка чужих приложений не выполнялись. Финальный canonical Docker smoke выполнен в разрешённом GitHub Linux CI и завершился PASS. Проверены core boot без mail-sink, email health 503 и recovery после запуска SMTP. Два локальных host failures остаются частью истории validation.
 
 ## Изменённые файлы
 
@@ -256,6 +275,6 @@ Reproduction использует 10 020 attempts, параллельные па
 
 Реальные остаточные production задачи: seven-day token/30-day session retention job и отдельная durable audit policy; надёжная доставка email после crash; проверенный внешний SMTP и deployment proxy ingress; capacity/abuse policy для распределённых IP и scoped Redis saturation. Полный TOTP/KMS verifier и frontend остаются ранее оговорёнными последующими фазами; ADMIN/MFA password-only fallback не добавлен.
 
-Закрытие текущего hardening gate блокирует итоговый Docker smoke с запуском API без mail-sink и последующим recovery. Два локальных запуска прерваны подтверждённым host memory exhaustion; ожидается Linux CI. Остальные локальные проверки, включая clean deploy, завершились PASS. Integration/load с усиленным enumeration measurement и review завершён, dependency audit чистый, hashes 001–004 и lockfile неизменны. Неполный Docker gate не покрывается прежним PASS фазы 3.
+Проверка hardening завершена для tested commit `20f25872394c9d71fefa98edffe2aa5b50a316d5`: локальные проверки и все три CI jobs PASS. Docker smoke подтвердил запуск API без mail-sink и последующий recovery; local host failures сохранены в отчёте. Integration/load и enumeration review завершены, dependency audit чистый, hashes 001–004 и lockfile неизменны. Gate для перехода к PHASE 4 открыт; перечисленные production prerequisites сохраняются и не объявляются реализованными.
 
-**NOT READY FOR PHASE 4**
+**READY FOR PHASE 4**

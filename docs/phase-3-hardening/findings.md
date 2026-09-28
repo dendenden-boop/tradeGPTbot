@@ -1,13 +1,13 @@
 # PHASE 3 Hardening — findings
 
-Аудит начат с `fac5c07065dc9980a970a28e30a9c9530ce1b09b`. Первоначальный список рисков проверен по коду и отдельным воспроизведениям. Ниже различаются исправление в исходниках и завершённая проверка исправления. Integration после migration 005 и финальные локальные проверки кода завершились PASS; clean deploy также PASS; итоговый Docker smoke ожидает Linux CI после подтверждённого локального host memory exhaustion. Текущий gate и артефакты — в [verification](verification.md), область задачи — в [requirements](requirements.md).
+Аудит начат с `fac5c07065dc9980a970a28e30a9c9530ce1b09b`. Первоначальный список рисков проверен по коду и отдельным воспроизведениям. Ниже различаются исправление в исходниках и завершённая проверка исправления. Integration после migration 005 и финальные локальные проверки кода завершились PASS; clean deploy также PASS; Docker smoke также PASS в [CI 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471) для commit `20f25872394c9d71fefa98edffe2aa5b50a316d5`. Подтверждённые локальные host failures сохранены в истории; итог — **READY FOR PHASE 4**. Текущий gate и артефакты — в [verification](verification.md), область задачи — в [requirements](requirements.md).
 
 | ID     | Severity | Finding                                                                | Reproduced                                     | Status                                          |
 | ------ | -------- | ---------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
 | H3-001 | P1       | Запрещённые запросы одного IP исчерпывают общий Redis index            | Да, настоящий Redis                            | Исправлено; 26 Redis tests PASS                 |
 | H3-002 | P1       | Reverse proxy объединяет client IP и auth budgets                      | Да, реальные HTTP sockets                      | Исправлено; HTTP regression PASS                |
 | H3-003 | P2       | Каждый authenticate блокирует User и обновляет session                 | Да, реальный benchmark 004→005                 | Before/after и полный DB runner PASS            |
-| H3-004 | P2       | SMTP outage блокирует запуск core API                                  | Да, composition и Compose review               | Application PASS; Docker smoke pending          |
+| H3-004 | P2       | SMTP outage блокирует запуск core API                                  | Да, composition и Compose review               | Исправлено; application и Docker smoke PASS     |
 | H3-005 | P2       | Неаутентифицированный resend уничтожает действующую ссылку             | Да, реальный 004→005 fixture                   | Before/after и полный DB runner PASS            |
 | H3-006 | P3       | Retry-After не соответствует blocking bucket                           | Да, константа в handler; Redis TTL regressions | Исправлено; Redis/HTTP PASS                     |
 | H3-007 | P2       | Malformed session cookie блокирует новый login flow                    | Да, baseline GET csrf → 401                    | Исправлено; HTTP regression PASS                |
@@ -49,7 +49,7 @@
 
 - **ID:** H3-003.
 - **Severity:** P2.
-- **Status:** before/after measurement и полный DB runner PASS 27 сентября; финальный integration run с пятью циклическими enumeration rounds также PASS. Clean deploy PASS; итоговый Docker smoke ожидает Linux CI.
+- **Status:** before/after measurement и полный DB runner PASS 27 сентября; финальный integration run с пятью циклическими enumeration rounds также PASS. Clean deploy и итоговый Linux Docker smoke PASS; CI повторил полный integration 28 сентября.
 - **Affected code:** `_resolve_session`, `authenticate`, `list_sessions` в опубликованной [004](../../packages/database/prisma/migrations/202609140001_authentication/migration.sql) и новой [005](../../packages/database/prisma/migrations/202609200001_auth_hardening/migration.sql).
 - **Reproduction:** 004 вызывает User/session `FOR UPDATE` и touch при каждом authenticate, включая обычный `/users/me`; `listSessions` сначала выполняет authenticate. [Изолированный measurement fixture](../../scripts/test-auth-database-hardening.mjs) удерживает User lock и сравнивает 10/50/100 concurrent authenticate с pool=3 на 004 и 005. `test-results/auth-database-hardening.json` повторно завершился PASS 27 сентября: deterministic lock wait true→false; UPDATE 10/50/100→0; для 100 concurrent p95 476,564→70,606 ms в выбранном финальном integration запуске 15:02 UTC. Полные metrics и ограничения измерения — в verification.
 - **Impact:** read-heavy dashboard сериализует запросы одного пользователя и создаёт лишние UPDATE/WAL/dead tuples.
@@ -62,13 +62,13 @@
 
 - **ID:** H3-004.
 - **Severity:** P2.
-- **Status:** application composition исправлена и проверена unit/HTTP/compiled flows; дополнительно устранена deployment dependency Compose, новый Docker smoke ещё pending.
+- **Status:** исправлено на application и Compose уровнях; unit/HTTP/compiled flows и Linux Docker smoke PASS 28 сентября.
 - **Affected code:** [server.ts](../../apps/api/src/server.ts), [service.ts](../../packages/auth/src/service.ts), [mail.ts](../../packages/auth/src/mail.ts), [app.ts](../../apps/api/src/app.ts), [Compose](../../infra/compose.dev.yml).
 - **Reproduction:** `test-results/phase-3-hardening-baseline/composition-reproduction.json` фиксирует `smtpDownCoreReady: SERVICE_UNAVAILABLE`. Startup вызывал общий `service.ready()`, включавший SMTP, до listen. Независимый финальный deployment review также обнаружил `api.depends_on.mail-sink.condition: service_healthy`: даже исправленный Node entrypoint не запускался бы через Compose без готового SMTP.
 - **Impact:** отказ почты блокирует verified login, существующие sessions и весь будущий core API.
 - **Root cause:** email capability включена в обязательные core startup dependencies на двух уровнях: приложение и orchestrator dependency graph.
 - **Fix:** core readiness проверяет DB/Redis; `emailReady()` и `/health/auth-email` показывают email capability отдельно. Email-dependent admission делает свежую SMTP проверку до account lookup и возвращает controlled 503 при outage. Email health probe coalesced/cached; transport failure не раскрывает адрес и credentials. API больше не зависит от healthy mail-sink в Compose; SMTP может подняться позже. Recovery не требует рестарта.
-- **Regression test:** [service unit](../../packages/auth/test/service.unit.test.ts), [HTTP tests](../../apps/api/test/auth.http.integration.test.ts), [mail tests](../../packages/auth/test/mail.unit.test.ts), compiled boot и [100-user mixed/fault runner](../../scripts/test-auth-hardening.mjs) PASS. Дополнительный [Docker smoke](../../scripts/test-smoke.mjs) должен сначала поднять API без mail-sink, проверить core ready/email 503, затем запустить SMTP и подтвердить recovery; этот запуск ещё pending.
+- **Regression test:** [service unit](../../packages/auth/test/service.unit.test.ts), [HTTP tests](../../apps/api/test/auth.http.integration.test.ts), [mail tests](../../packages/auth/test/mail.unit.test.ts), compiled boot и [100-user mixed/fault runner](../../scripts/test-auth-hardening.mjs) PASS. Дополнительный [Docker smoke](../../scripts/test-smoke.mjs) в CI поднял API без mail-sink, подтвердил core ready/email 503, затем запуск SMTP и recovery без restart. `bootstrap-docker/smoke.json` PASS, completed `2026-09-28T07:44:03.306Z`; 46 auth requests также PASS.
 - **Residual risk:** успешный probe не гарантирует последующую доставку. Асинхронная отправка после commit остаётся bounded, но недолговечной; crash может потерять письмо. External production SMTP в этом аудите не подключается.
 
 ## H3-005 — invalidation ранее отправленного recovery token

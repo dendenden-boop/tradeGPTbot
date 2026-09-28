@@ -6,7 +6,7 @@
 
 Доступны health endpoints и API авторизации. Прикладные финансовые writers, биржевые адаптеры, торговля, фоновые задания и веб-интерфейс относятся к следующим этапам. Production readiness и нагрузка 300+ инструментов пока не подтверждены.
 
-Перед PHASE 4 проводится отдельный [PHASE 3 Hardening Audit](docs/phase-3-hardening/verification.md): proxy/IP, Redis admission, session concurrency, recovery links, SMTP isolation и database grants. Его текущий gate и результаты отделены от исторического отчёта реализации.
+Завершён отдельный [PHASE 3 Hardening Audit](docs/phase-3-hardening/verification.md): proxy/IP, Redis admission, session concurrency, recovery links, SMTP isolation и database grants. Прошли 556 тестов, clean deployment и все три job [CI аудита](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471), включая Docker boot без SMTP и recovery. Gate: **READY FOR PHASE 4**. Результаты аудита отделены от исторического отчёта реализации; Exchange Core ещё не реализован.
 
 Завершён [аудит PHASE 0–2 и согласованности этапов](docs/audit-phases-0-2.md): исправлены 9 находок в constraints, durable identities, Decimal boundary, config, упаковке и тестах восстановления; согласованы роли, AMEND/CANCEL и документация. На границе аудита прошли 344 теста и все три job [CI исправлений](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/34765371140). Эти результаты относятся к завершённой базе PHASE 0–2; авторизация проверяется дополнительно.
 
