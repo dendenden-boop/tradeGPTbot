@@ -1,5 +1,7 @@
 # PHASE 3 — реализация и проверка Authentication
 
+Исторический отчёт исходной реализации 004. Последующие изменения 005, независимые воспроизведения и текущий gate PHASE 4 описаны в [PHASE 3 Hardening Audit](../phase-3-hardening/verification.md).
+
 Состояние на 20 сентября 2026: **PASS — PHASE 3 завершена в объёме backend Authentication и архитектуры 2FA.** Реализация опубликована в commit [d643b10](https://github.com/dendenden-boop/tradeGPTbot/commit/d643b10b7b426525e618019d10c5ff86ea476866). Локальные проверки и все три job [CI реализации](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/35514994833) прошли. Основание: [требования](requirements.md), [план этапов](../phase-0/implementation-plan.md), завершённый [аудит PHASE 0–2](../audit-phases-0-2.md).
 
 ## Реализовано

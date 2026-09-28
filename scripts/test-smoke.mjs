@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { exerciseAuthFlow } from './auth-test-flow.mjs';
+import { authBrowser } from './auth-http-fixture.mjs';
 import {
   composeArgs,
   localPort,
@@ -17,6 +18,7 @@ const options = { env: test.env, secrets: test.secrets };
 const startedAt = new Date().toISOString();
 let resourcesMayExist = false;
 let outcome = { status: 'FAIL', startedAt, project: test.project };
+const recovery = {};
 const compose = (args, extra = {}) =>
   run('docker', composeArgs(file, test.project, args), { ...options, ...extra });
 
@@ -56,12 +58,31 @@ try {
   await compose(['build', '--pull'], { timeoutMs: 600_000 });
   resourcesMayExist = true;
   console.log('Docker smoke: starting migrations, limited roles and services.');
-  await compose(['up', '-d', '--wait', '--wait-timeout', '60']);
+  // Request only API and its core dependencies. A mail-sink depends_on gate would
+  // start the sink too and fail the email-down assertions below.
+  await compose(['up', '-d', '--wait', '--wait-timeout', '60', 'api']);
   const port = localPort(await compose(['port', 'api', '3000']));
   const base = `http://127.0.0.1:${port}`;
   await waitStatus(base, 200);
   await waitStatus(base, 200, '/health/live');
   await waitStatus(base, 404, '/api/v1/orders');
+  console.log('Docker smoke: checking SMTP-down boot and recovery without API restart.');
+  await waitStatus(base, 503, '/health/auth-email');
+  const browser = authBrowser({ base, canaries: test.secrets });
+  await browser.request('/api/v1/auth/csrf');
+  for (const operation of ['signup', 'resend-verification', 'forgot-password']) {
+    await browser.request(`/api/v1/auth/${operation}`, {
+      method: 'POST',
+      expected: 503,
+      body: {
+        email: 'smtp-outage@ctp.invalid',
+        ...(operation === 'signup' ? { password: 'SMTP outage fixture password' } : {}),
+      },
+    });
+  }
+  await waitStatus(base, 200);
+  await compose(['up', '-d', '--wait', '--wait-timeout', '60', 'mail-sink']);
+  await waitStatus(base, 200, '/health/auth-email');
   const mailPort = localPort(await compose(['port', 'mail-sink', '8025']));
   console.log('Docker smoke: exercising authentication through HTTP and local SMTP.');
   const authentication = await exerciseAuthFlow({
@@ -84,9 +105,15 @@ try {
     await compose(['stop', '--timeout', '1', dependency]);
     await waitStatus(base, 503);
     await waitStatus(base, 200, '/health/live');
-    // API recovery polling also covers startup; no version-specific start --wait flag.
-    await compose(['start', dependency]);
+    // A forced PostgreSQL stop can require crash recovery. The API must stay
+    // unavailable until the dependency itself accepts connections. Measure the
+    // application's existing 6.5s recovery budget only after that prerequisite.
+    const dependencyStarted = Date.now();
+    await compose(['up', '-d', '--no-deps', '--wait', '--wait-timeout', '60', dependency]);
+    const dependencyReadyMs = Date.now() - dependencyStarted;
+    const apiRecoveryStarted = Date.now();
     await waitStatus(base, 200);
+    recovery[dependency] = { dependencyReadyMs, apiRecoveryMs: Date.now() - apiRecoveryStarted };
   }
   const stopStarted = Date.now();
   await compose(['stop', '--timeout', '12', 'api']);
@@ -125,6 +152,9 @@ try {
     imageId,
     shutdownMs,
     authentication,
+    smtpBootDownCoreAvailable: true,
+    smtpRecoveryWithoutRestart: true,
+    recovery,
     log: sanitize(logs, test.secrets),
   };
 } catch (error) {

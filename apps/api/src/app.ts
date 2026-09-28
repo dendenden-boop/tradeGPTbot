@@ -10,6 +10,7 @@ import fastify, {
 import type { Logger } from 'pino';
 import type { DependencyHealth, HealthService } from './health.js';
 import { registerAuthRoutes, type AuthRoutesOptions } from './auth-routes.js';
+import { trustedProxyPolicy, validForwardedFor } from './client-ip.js';
 
 interface ApplicationState {
   started: boolean;
@@ -81,6 +82,7 @@ export function buildApp({
   closeRuntime,
 }: BuildAppOptions): FastifyInstance {
   const state: ApplicationState = { started: false, draining: false };
+  const trustProxy = trustedProxyPolicy(config.trustedProxyCidrs);
   const app = fastify<RawServerDefault>({
     loggerInstance: logger,
     logController: new LogController({
@@ -89,6 +91,7 @@ export function buildApp({
     }),
     requestIdHeader: false,
     genReqId(request) {
+      // Untrusted, non-unique diagnostic correlation only; never an authorization or audit key.
       const candidate = request.headers['x-request-id'];
       return typeof candidate === 'string' && requestIdPattern.test(candidate)
         ? candidate
@@ -133,7 +136,7 @@ export function buildApp({
     return503OnClosing: false,
     onProtoPoisoning: 'error',
     onConstructorPoisoning: 'error',
-    trustProxy: false,
+    trustProxy,
     exposeHeadRoutes: false,
     ajv: { customOptions: { removeAdditional: false, coerceTypes: false, useDefaults: false } },
     http: { maxHeaderSize: 16_384 },
@@ -159,9 +162,15 @@ export function buildApp({
 
   app.addHook('onRequest', async (request, reply) => {
     reply.headers(responseHeaders(request.id));
+    if (trustProxy(request.socket.remoteAddress ?? '') && !validForwardedFor(request.raw)) {
+      return reply.code(400).send(errorEnvelope('BAD_REQUEST', 'Invalid request', request.id));
+    }
     if (state.draining && request.routeOptions.url !== '/health/live') {
       if (request.routeOptions.url === '/health/ready') {
         return reply.code(503).send(unavailable());
+      }
+      if (request.routeOptions.url === '/health/auth-email') {
+        return reply.code(503).send({ status: 'not_ready' });
       }
       return reply
         .code(503)
@@ -268,6 +277,28 @@ export function buildApp({
   );
 
   if (auth !== undefined) {
+    const emailReadinessSchema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['status'],
+      properties: { status: { type: 'string', enum: ['ready', 'not_ready'] } },
+    } as const;
+    app.get(
+      '/health/auth-email',
+      {
+        schema: { response: { 200: emailReadinessSchema, 503: emailReadinessSchema } },
+      },
+      async (_request, reply) => {
+        if (!state.started || state.draining) return reply.code(503).send({ status: 'not_ready' });
+        try {
+          await auth.service.emailReady();
+          if (state.draining) return reply.code(503).send({ status: 'not_ready' });
+          return { status: 'ready' };
+        } catch {
+          return reply.code(503).send({ status: 'not_ready' });
+        }
+      },
+    );
     app.register(async (scope) => registerAuthRoutes(scope, auth));
   }
   return app;

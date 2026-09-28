@@ -76,6 +76,7 @@ describe('authentication configuration boundary', () => {
   it('requires HTTPS, TLS mail and separately authenticated TLS database in deployments', () => {
     const deployed = loadConfig({
       NODE_ENV: 'production',
+      TRUSTED_PROXY_CIDRS: '192.0.2.10/32',
       DATABASE_URL: 'postgresql://runtime:a831942ecd7f82015abd@db:5432/ctp?sslmode=verify-full',
       REDIS_URL: 'rediss://:a831942ecd7f82015abd@redis:6379/0',
     });

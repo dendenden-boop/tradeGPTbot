@@ -11,6 +11,7 @@ const deployed = {
   NODE_ENV: 'production',
   DATABASE_URL: 'postgresql://app:m9PvQ2sR6xT4nK8w@database.internal/bootstrap?sslmode=verify-full',
   REDIS_URL: 'rediss://app:v8RmN4qZ7sP2kL6x@redis.internal:6379/0',
+  TRUSTED_PROXY_CIDRS: '192.0.2.10/32',
 };
 
 describe('loadConfig', () => {
@@ -31,12 +32,55 @@ describe('loadConfig', () => {
       requestTimeoutMs: 10_000,
       connectionTimeoutMs: 5000,
       postgresPoolMax: 5,
+      trustedProxyCidrs: [],
     });
     expect(Object.isFrozen(config)).toBe(true);
     raw.DATABASE_URL = 'postgres://different.invalid/changed';
     expect(config.databaseUrl).toBe(local.DATABASE_URL);
     expect(() => Reflect.set(config, 'port', 1)).not.toThrow();
     expect(config.port).toBe(3000);
+  });
+
+  it('validates an immutable explicit proxy allowlist, requiring it in deployed environments', () => {
+    const values = ['192.0.2.10', '10.20.0.0/16', '2001:db8::/48'];
+    const config = loadConfig({ ...local, TRUSTED_PROXY_CIDRS: values.join(', ') });
+    expect(config.trustedProxyCidrs).toEqual(values);
+    expect(Object.isFrozen(config.trustedProxyCidrs)).toBe(true);
+    for (const NODE_ENV of ['production', 'staging']) {
+      for (const TRUSTED_PROXY_CIDRS of ['', undefined]) {
+        expect(() => loadConfig({ ...deployed, NODE_ENV, TRUSTED_PROXY_CIDRS })).toThrow(
+          'Invalid configuration: TRUSTED_PROXY_CIDRS',
+        );
+      }
+    }
+  });
+
+  it.each([
+    'true',
+    'false',
+    '*',
+    '1',
+    'loopback',
+    'uniquelocal',
+    'proxy.internal',
+    '0.0.0.0/0',
+    '::/0',
+    '::ffff:0:0/96',
+    '::ffff:192.0.2.1/80',
+    '127.0.0.1/33',
+    '::1/129',
+    '127.0.0.1/-1',
+    '127.0.0.1/01',
+    '127.0.0.1/32/32',
+    '127.0.0.1,',
+    ',127.0.0.1',
+    ' ',
+    'fe80::1%lo',
+    Array.from({ length: 33 }, () => '127.0.0.1').join(','),
+  ])('rejects ambiguous or unrestricted proxy policy %j', (TRUSTED_PROXY_CIDRS) => {
+    expect(() => loadConfig({ ...local, TRUSTED_PROXY_CIDRS })).toThrow(
+      'Invalid configuration: TRUSTED_PROXY_CIDRS',
+    );
   });
 
   it('applies supplied settings without string coercion surprises', () => {

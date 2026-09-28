@@ -19,6 +19,25 @@ export interface DependencyProbe {
   close(): Promise<void>;
 }
 
+/** Keep a composite probe busy until every underlying check actually settles. */
+export function databaseReadinessProbe(
+  databases: readonly { ready(): Promise<void> }[],
+): DependencyProbe {
+  return {
+    async check(signal) {
+      signal.throwIfAborted();
+      const results = await Promise.allSettled(
+        databases.map((database) => Promise.resolve().then(() => database.ready())),
+      );
+      signal.throwIfAborted();
+      if (results.some((result) => result.status === 'rejected'))
+        throw new Error('POSTGRES_PROBE_FAILED');
+    },
+    // Application composition owns these pools, including their bounded close.
+    close: () => Promise.resolve(),
+  };
+}
+
 interface MonitorOptions {
   postgres: DependencyProbe;
   redis: DependencyProbe;

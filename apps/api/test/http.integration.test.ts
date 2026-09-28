@@ -20,6 +20,7 @@ const config: AppConfig = {
   requestTimeoutMs: 2_000,
   connectionTimeoutMs: 2_000,
   postgresPoolMax: 2,
+  trustedProxyCidrs: [],
 };
 
 const ready: DependencyHealth = {

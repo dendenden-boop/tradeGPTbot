@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createMailSink } from './mail-sink.mjs';
 import { exerciseAuthFlow } from './auth-test-flow.mjs';
+import { authBrowser } from './auth-http-fixture.mjs';
+import { createAuthDatabase } from '../packages/database/dist/index.js';
+import { createPasswordHasher } from '../packages/auth/dist/index.js';
 import { report, sanitize, workspace } from './docker-test-utils.mjs';
 
 if (
@@ -77,7 +80,46 @@ async function deadline(promise, timeoutMs) {
   }
 }
 try {
-  sink = await createMailSink();
+  // Reserve, then close an owned SMTP port: startup must work while it is down.
+  const smtpReservation = createServer();
+  await new Promise((resolve) => smtpReservation.listen(0, '127.0.0.1', resolve));
+  const smtpPort = smtpReservation.address().port;
+  await new Promise((resolve) => smtpReservation.close(resolve));
+  const account = {
+    email: `degraded-${randomBytes(8).toString('hex')}@ctp.invalid`,
+    password: `Degraded password ${randomBytes(16).toString('hex')}`,
+    token: randomBytes(32).toString('base64url'),
+  };
+  canaries.push(account.email, account.password, account.token);
+  const repository = await createAuthDatabase({
+    connectionString: process.env.DATABASE_AUTH_URL,
+    environment: 'test',
+  });
+  const hasher = await createPasswordHasher();
+  try {
+    const verification = randomBytes(32);
+    const passwordHash = await hasher.hash(account.password);
+    assert.equal(
+      await repository.signup({
+        emailNormalized: account.email,
+        passwordHash,
+        verificationTokenHash: verification,
+      }),
+      true,
+    );
+    assert.equal(await repository.verifyEmail(verification), true);
+    const credentials = await repository.credentials(account.email);
+    assert.ok(
+      await repository.createSession({
+        userId: credentials.userId,
+        expectedPasswordHash: passwordHash,
+        expectedSessionEpoch: credentials.sessionEpoch,
+        tokenHash: createHash('sha256').update(account.token).digest(),
+      }),
+    );
+  } finally {
+    await Promise.allSettled([repository.close(), hasher.close()]);
+  }
   const reservation = createServer();
   await new Promise((resolve) => reservation.listen(0, '127.0.0.1', resolve));
   const port = reservation.address().port;
@@ -94,7 +136,7 @@ try {
     AUTH_CSRF_SECRET: csrfSecret,
     LOG_LEVEL: 'info',
     SMTP_HOST: '127.0.0.1',
-    SMTP_PORT: String(sink.smtpPort),
+    SMTP_PORT: String(smtpPort),
     SMTP_SECURE: 'false',
     SMTP_REQUIRE_TLS: 'false',
     SMTP_FROM: 'accounts@ctp.invalid',
@@ -124,6 +166,36 @@ try {
     await delay(50);
   }
   assert.ok(ready, `Authenticated API startup failed: ${sanitize(api.output(), canaries)}`);
+  stage = 'SMTP-down isolation';
+  const browser = authBrowser({ base, canaries, sessionToken: account.token });
+  await browser.request('/health/auth-email', { expected: 503 });
+  await browser.request('/api/v1/users/me');
+  await browser.request('/api/v1/auth/csrf');
+  await browser.request('/api/v1/auth/login', {
+    method: 'POST',
+    body: { email: account.email, password: account.password },
+  });
+  await browser.request('/api/v1/users/me');
+  for (const operation of ['signup', 'resend-verification', 'forgot-password']) {
+    await browser.request(`/api/v1/auth/${operation}`, {
+      method: 'POST',
+      expected: 503,
+      body: {
+        email: account.email,
+        ...(operation === 'signup' ? { password: account.password } : {}),
+      },
+    });
+  }
+  await browser.request('/api/v1/auth/logout', { method: 'POST' });
+  await browser.request('/health/ready');
+  stage = 'SMTP recovery without restart';
+  sink = await createMailSink({ smtpPort });
+  await browser.request('/health/auth-email');
+  await browser.request('/api/v1/auth/forgot-password', {
+    method: 'POST',
+    expected: 202,
+    body: { email: account.email },
+  });
   stage = 'HTTP and SMTP flow';
   const flow = await exerciseAuthFlow({
     base,
@@ -160,6 +232,8 @@ try {
     shutdownMs,
     unsafeMigrationRoleRejected: true,
     realDependencies: ['PostgreSQL', 'Redis', 'SMTP sink', 'Argon2id'],
+    smtpBootDownCoreAvailable: true,
+    smtpRecoveryWithoutRestart: true,
     secretFreeLogs: true,
   };
   console.log(

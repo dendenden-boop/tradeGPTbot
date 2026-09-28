@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHealthMonitor } from '../src/health.js';
+import { createHealthMonitor, databaseReadinessProbe } from '../src/health.js';
 import type { HealthService } from '../src/health.js';
 
 const services: HealthService[] = [];
@@ -12,6 +12,36 @@ function healthyProbe() {
 }
 
 describe('dependency health coordination', () => {
+  it('does not retry the slow half of a composite DB probe after its sibling fails early', async () => {
+    let finish!: () => void;
+    const slow = {
+      ready: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    };
+    const failing = { ready: vi.fn(() => Promise.reject(new Error('backend-secret'))) };
+    const service = createHealthMonitor({
+      postgres: databaseReadinessProbe([failing, slow]),
+      redis: healthyProbe(),
+      timeoutMs: 20,
+      cacheMs: 0,
+    });
+    services.push(service);
+    expect((await service.check()).dependencies.postgres).toBe('down');
+    await service.check();
+    await service.check();
+    expect(slow.ready).toHaveBeenCalledTimes(1);
+    expect(failing.ready).toHaveBeenCalledTimes(1);
+    finish();
+    await vi.waitFor(async () => {
+      await service.check();
+      expect(slow.ready).toHaveBeenCalledTimes(2);
+    });
+    finish();
+  });
   it('attempts both closes even when a driver throws synchronously', async () => {
     const postgres = healthyProbe();
     postgres.close.mockImplementation(() => {

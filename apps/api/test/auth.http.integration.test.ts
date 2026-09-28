@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { request as httpRequest } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { AuthError, type AuthService } from '@ctp/auth';
 import type { AppConfig, AuthConfig } from '@ctp/config';
 import type { AuthPrincipal } from '@ctp/database';
 import { createLogger } from '@ctp/logger';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../src/app.js';
+import { beginDrain, buildApp } from '../src/app.js';
 import type { AuthRoutesOptions } from '../src/auth-routes.js';
 
 const password = 'a test password long enough';
@@ -37,6 +37,7 @@ const baseConfig: AppConfig = {
   requestTimeoutMs: 2000,
   connectionTimeoutMs: 2000,
   postgresPoolMax: 2,
+  trustedProxyCidrs: [],
 };
 const applications: FastifyInstance[] = [];
 
@@ -108,7 +109,7 @@ async function rawRequest(
   });
 }
 
-async function fixture(secure = false) {
+async function fixture(secure = false, overrides: Partial<AppConfig> = {}) {
   const service = {
     csrf: vi.fn<AuthService['csrf']>().mockResolvedValue(undefined),
     signup: vi.fn<AuthService['signup']>().mockResolvedValue(undefined),
@@ -127,6 +128,7 @@ async function fixture(secure = false) {
     revokeSession: vi.fn<AuthService['revokeSession']>().mockResolvedValue(undefined),
     revokeAllSessions: vi.fn<AuthService['revokeAllSessions']>().mockResolvedValue(undefined),
     ready: vi.fn<AuthService['ready']>().mockResolvedValue(undefined),
+    emailReady: vi.fn<AuthService['emailReady']>().mockResolvedValue(undefined),
     close: vi.fn<AuthService['close']>().mockResolvedValue(undefined),
   };
   const readUser = vi.fn<AuthRoutesOptions['readUser']>().mockResolvedValue({
@@ -155,7 +157,7 @@ async function fixture(secure = false) {
     { write: (line: string) => logs.push(line) },
   );
   const app = buildApp({
-    config: baseConfig,
+    config: { ...baseConfig, ...overrides },
     logger,
     health: {
       check: () =>
@@ -174,6 +176,270 @@ afterEach(async () => {
 });
 
 describe('authentication HTTP security over loopback sockets', () => {
+  it('separates two forwarded clients behind a real trusted reverse proxy', async () => {
+    const { client, service } = await fixture(false, { trustedProxyCidrs: ['127.0.0.1/32'] });
+    const proxy = createServer((incoming, outgoing) => {
+      // This owned edge replaces inbound forwarding data with its known client identity.
+      const upstream = httpRequest(
+        `${client.url}/api/v1/auth/csrf`,
+        { headers: { 'x-forwarded-for': incoming.url === '/a' ? '198.51.100.1' : '198.51.100.2' } },
+        (response) => {
+          outgoing.writeHead(response.statusCode!, response.headers);
+          response.pipe(outgoing);
+        },
+      );
+      upstream.once('error', () => {
+        outgoing.writeHead(502);
+        outgoing.end();
+      });
+      upstream.end();
+    });
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = proxy.address();
+      if (!address || typeof address === 'string') throw new Error('Expected TCP proxy');
+      for (const path of ['/a', '/b']) {
+        const response = await fetch(`http://127.0.0.1:${address.port}${path}`, {
+          headers: { 'x-forwarded-for': '203.0.113.99' },
+          signal: AbortSignal.timeout(3000),
+        });
+        expect(response.status).toBe(200);
+        await response.text();
+      }
+      expect(service.csrf.mock.calls.map(([context]) => context.ip)).toEqual([
+        '198.51.100.1',
+        '198.51.100.2',
+      ]);
+    } finally {
+      proxy.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        proxy.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+  it('ignores forged forwarding from direct clients and proxies outside the allowlist', async () => {
+    for (const trustedProxyCidrs of [[], ['192.0.2.10/32']]) {
+      const { client, service } = await fixture(false, { trustedProxyCidrs });
+      for (const forwarded of ['198.51.100.24', 'malformed, unknown']) {
+        const response = await client.request('/api/v1/auth/csrf', {
+          headers: { 'x-forwarded-for': forwarded },
+        });
+        expect(response.status).toBe(200);
+        expect(service.csrf).toHaveBeenLastCalledWith({ ip: '127.0.0.1' });
+      }
+    }
+  });
+  it('walks trusted hops from the socket and stops at the first untrusted address', async () => {
+    const { client, service } = await fixture(false, {
+      trustedProxyCidrs: ['127.0.0.1/32', '10.0.0.0/8', '2001:db8:ffff::/48'],
+    });
+    for (const [chain, expected] of [
+      ['198.51.100.7, 10.2.3.4', '198.51.100.7'],
+      ['203.0.113.99, 198.51.100.8, 10.2.3.4', '198.51.100.8'],
+      ['2001:0DB8:0:0:0:0:0:1, 10.2.3.4', '2001:db8::1'],
+      ['2001:db8::1, 10.2.3.4', '2001:db8::1'],
+      ['::ffff:c000:201, 10.2.3.4', '192.0.2.1'],
+      ['::ffff:192.0.2.1, 10.2.3.4', '192.0.2.1'],
+      ['2001:db8:abcd::1, 2001:0DB8:FFFF:0:0:0:0:A', '2001:db8:abcd::1'],
+    ]) {
+      const response = await client.request('/api/v1/auth/csrf', {
+        headers: { 'x-forwarded-for': chain! },
+      });
+      expect(response.status).toBe(200);
+      expect(service.csrf).toHaveBeenLastCalledWith({ ip: expected });
+    }
+  });
+  it('rejects malformed, oversized and repeated forwarding from a trusted peer', async () => {
+    const { client, service } = await fixture(false, { trustedProxyCidrs: ['127.0.0.1'] });
+    for (const value of [
+      'unknown',
+      '198.51.100.1:3000',
+      '[2001:db8::1]',
+      'fe80::1%lo',
+      '198.51.100.1,,10.2.3.4',
+      '198.51.100.1,',
+      Array.from({ length: 17 }, () => '198.51.100.1').join(', '),
+      `198.51.100.1,${' '.repeat(1024)}10.2.3.4`,
+    ]) {
+      const response = await client.request('/api/v1/auth/csrf', {
+        headers: { 'x-forwarded-for': value },
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: 'BAD_REQUEST' } });
+    }
+    const response = await rawRequest(
+      client.url,
+      [
+        'host',
+        new URL(client.url).host,
+        'x-forwarded-for',
+        '198.51.100.1',
+        'x-forwarded-for',
+        '198.51.100.2',
+        'origin',
+        client.origin,
+      ],
+      '',
+    );
+    expect(response.status).toBe(400);
+    expect(service.csrf).not.toHaveBeenCalled();
+    expect(service.signup).not.toHaveBeenCalled();
+  });
+  it('uses the validated canonical source for login, signup and email recovery budgets', async () => {
+    const { client, service } = await fixture(false, { trustedProxyCidrs: ['127.0.0.1/32'] });
+    const headers = { 'x-forwarded-for': '2001:0DB8:0:0:0:0:0:1' };
+    const response = await client.request('/api/v1/auth/csrf', { headers });
+    expect(response.status).toBe(200);
+    const csrf = ((await response.json()) as { csrfToken: string }).csrfToken;
+    for (const route of ['signup', 'forgot-password', 'resend-verification', 'login']) {
+      const response = await client.request(`/api/v1/auth/${route}`, {
+        method: 'POST',
+        csrf,
+        headers,
+        body: route === 'login' || route === 'signup' ? { email, password } : { email },
+      });
+      expect(response.status).toBe(route === 'login' ? 200 : 202);
+    }
+    for (const operation of [
+      service.csrf,
+      service.signup,
+      service.forgotPassword,
+      service.resendVerification,
+      service.login,
+    ]) {
+      expect(operation.mock.calls[0]?.[0]).toEqual({ ip: '2001:db8::1' });
+    }
+  });
+  it('repairs malformed session cookies through a fresh preauth CSRF transition', async () => {
+    const { client, service } = await fixture();
+    const oldCsrf = await client.csrf();
+    client.cookies.set('ctp-dev-session', 'malformed');
+    expect((await client.request('/api/v1/users/me')).status).toBe(401);
+    expect(
+      (
+        await client.request('/api/v1/auth/login', {
+          method: 'POST',
+          csrf: oldCsrf,
+          body: { email, password },
+        })
+      ).status,
+    ).toBe(401);
+    expect(service.login).not.toHaveBeenCalled();
+    const blocked = await client.request('/api/v1/auth/csrf', { origin: 'https://evil.invalid' });
+    expect(blocked.status).toBe(403);
+    expect(blocked.headers.getSetCookie()).toEqual([]);
+    const csrf = await client.csrf();
+    expect(client.cookies.has('ctp-dev-session')).toBe(false);
+    expect(
+      (
+        await client.request('/api/v1/auth/login', {
+          method: 'POST',
+          csrf: oldCsrf,
+          body: { email, password },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await client.request('/api/v1/auth/login', {
+          method: 'POST',
+          csrf,
+          body: { email, password },
+        })
+      ).status,
+    ).toBe(200);
+    expect(service.login).toHaveBeenCalledWith({ ip: '127.0.0.1' }, email, password, undefined);
+  });
+  it('recovers from revoked sessions and tampered preauth without trusting a repeated request ID', async () => {
+    const { client, service } = await fixture();
+    service.authenticate.mockRejectedValue(new AuthError('UNAUTHENTICATED'));
+    client.cookies.set('ctp-dev-session', rotatedToken);
+    const headers = { 'x-request-id': 'repeatable-client-correlation' };
+    expect((await client.request('/api/v1/users/me', { headers })).status).toBe(401);
+    const csrf = await client.csrf();
+    const response = await client.request('/api/v1/auth/login', {
+      method: 'POST',
+      csrf,
+      body: { email, password },
+      headers,
+    });
+    expect(response.status).toBe(200);
+    expect(client.cookies.get('ctp-dev-session')).toBe(sessionToken);
+    expect(await response.text()).not.toContain(sessionToken);
+    expect((await client.request('/api/v1/users/me', { headers })).status).toBe(401);
+    client.cookies.delete('ctp-dev-session');
+    client.cookies.set('ctp-dev-preauth', 'tampered-signed-cookie');
+    const fresh = await client.csrf();
+    expect(
+      (
+        await client.request('/api/v1/auth/login', {
+          method: 'POST',
+          csrf: fresh,
+          body: { email, password },
+          headers,
+        })
+      ).status,
+    ).toBe(200);
+  });
+  it('reports auth-email readiness separately and recovers without altering core readiness', async () => {
+    const { app, client, service, logs } = await fixture();
+    service.emailReady.mockRejectedValue(new Error('smtp-secret-sentinel'));
+    const failure = await client.request('/health/auth-email');
+    expect(failure.status).toBe(503);
+    expect(await failure.json()).toEqual({ status: 'not_ready' });
+    expect((await client.request('/health/ready')).status).toBe(200);
+    service.emailReady.mockResolvedValue(undefined);
+    const recovered = await client.request('/health/auth-email');
+    expect(recovered.status).toBe(200);
+    expect(await recovered.json()).toEqual({ status: 'ready' });
+    beginDrain(app);
+    expect((await client.request('/health/auth-email')).status).toBe(503);
+    expect(service.emailReady).toHaveBeenCalledTimes(2);
+    expect(logs.join('')).not.toContain('smtp-secret-sentinel');
+  });
+  it('reports integer Retry-After from the actual blocking limiter window', async () => {
+    const { client, service } = await fixture();
+    const csrf = await client.csrf();
+    for (const [milliseconds, seconds] of [
+      [1, 1],
+      [1000, 1],
+      [1001, 2],
+      [59_999, 60],
+      [899_001, 900],
+    ]) {
+      service.login.mockRejectedValue(new AuthError('RATE_LIMITED', milliseconds));
+      const response = await client.request('/api/v1/auth/login', {
+        method: 'POST',
+        csrf,
+        body: { email, password },
+      });
+      expect(response.status).toBe(429);
+      expect(response.headers.get('retry-after')).toBe(String(seconds));
+      expect(await response.json()).toMatchObject({ error: { code: 'RATE_LIMITED' } });
+    }
+  });
+  it('keeps email readiness unavailable when drain begins during its probe', async () => {
+    const { app, client, service } = await fixture();
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const finished = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    service.emailReady.mockImplementation(async () => {
+      entered();
+      await finished;
+    });
+    const pending = client.request('/health/auth-email');
+    await started;
+    beginDrain(app);
+    release();
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: 'not_ready' });
+  });
   it('issues CSRF tokens to same-origin GET fetches without Origin and never enables CORS or caching', async () => {
     const { client, service } = await fixture();
     const response = await client.request('/api/v1/auth/csrf', { origin: null });
@@ -338,6 +604,14 @@ describe('authentication HTTP security over loopback sockets', () => {
     for (const extra of [
       ['origin', client.origin, 'origin', client.origin, 'x-csrf-token', csrf],
       ['origin', client.origin, 'x-csrf-token', csrf, 'x-csrf-token', csrf],
+      [
+        'origin',
+        client.origin,
+        'x-csrf-token',
+        csrf,
+        'cookie',
+        [...client.cookies].map(([key, value]) => `${key}=${value}`).join('; '),
+      ],
     ]) {
       const response = await rawRequest(client.url, [...common, ...extra], payload);
       expect(response.status).toBe(400);
@@ -353,7 +627,7 @@ describe('authentication HTTP security over loopback sockets', () => {
           headers: { cookie: `ctp-dev-session=${'a'.repeat(43)}` },
         })
       ).status,
-    ).toBe(401);
+    ).toBe(200);
     expect(
       (
         await client.request('/api/v1/auth/csrf', {
@@ -602,7 +876,9 @@ describe('authentication HTTP security over loopback sockets', () => {
       ['RATE_LIMITED', 429],
       ['SERVICE_UNAVAILABLE', 503],
     ] as const) {
-      service.login.mockRejectedValue(new AuthError(code));
+      service.login.mockRejectedValue(
+        new AuthError(code, code === 'RATE_LIMITED' ? 60_123 : undefined),
+      );
       const response = await client.request('/api/v1/auth/login', {
         method: 'POST',
         csrf,
@@ -613,7 +889,7 @@ describe('authentication HTTP security over loopback sockets', () => {
       expect(await response.json()).toMatchObject({
         error: { code, requestId: 'auth-security-test' },
       });
-      if (code === 'RATE_LIMITED') expect(response.headers.get('retry-after')).toBe('60');
+      if (code === 'RATE_LIMITED') expect(response.headers.get('retry-after')).toBe('61');
     }
     service.login.mockRejectedValue(new Error('backend-password-sentinel'));
     const failure = await client.request('/api/v1/auth/login', {

@@ -2,6 +2,7 @@ import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import { createTransport } from 'nodemailer';
 import type { SMTPTransportOptions } from 'nodemailer/lib/smtp-transport';
+import { isNormalizedMailbox } from './mailbox.js';
 
 export type AuthMailKind = 'verify-email' | 'reset-password';
 export type MailErrorCode = 'MAIL_INVALID' | 'MAIL_BUSY' | 'MAIL_CLOSED' | 'MAIL_UNAVAILABLE';
@@ -15,7 +16,7 @@ export class MailError extends Error {
 
 export interface AuthMailer {
   send(kind: AuthMailKind, email: string, token: string): Promise<void>;
-  ready(): Promise<void>;
+  ready(probe?: { fresh?: boolean }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -30,13 +31,6 @@ export interface AuthMailerOptions {
     readonly password?: string;
     readonly from: string;
   };
-}
-
-function isMailbox(value: string): boolean {
-  return (
-    value.length <= 254 &&
-    /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(value)
-  );
 }
 
 function hasControlCharacters(value: string): boolean {
@@ -60,7 +54,7 @@ function validateOptions(options: AuthMailerOptions): void {
       !Number.isInteger(options.smtp.port) ||
       options.smtp.port < 1 ||
       options.smtp.port > 65_535 ||
-      !isMailbox(options.smtp.from) ||
+      !isNormalizedMailbox(options.smtp.from.toLowerCase()) ||
       (options.smtp.user === undefined) !== (options.smtp.password === undefined) ||
       (options.smtp.user !== undefined &&
         (!options.smtp.user || hasControlCharacters(options.smtp.user))) ||
@@ -195,16 +189,18 @@ export function createAuthMailer(options: AuthMailerOptions): AuthMailer {
     async send(kind, email, token) {
       if (
         (kind !== 'verify-email' && kind !== 'reset-password') ||
-        !isMailbox(email) ||
+        !isNormalizedMailbox(email) ||
         !/^[A-Za-z0-9_-]{43}$/.test(token)
       ) {
         throw new MailError('MAIL_INVALID');
       }
       await run({ kind, email, token });
     },
-    ready() {
+    ready(probe) {
       if (closed) return Promise.reject(new MailError('MAIL_CLOSED'));
-      if (Date.now() < readyUntil) return Promise.resolve();
+      // Health polling may reuse one second of successful evidence; email
+      // operations request a fresh probe before looking up an account.
+      if (!probe?.fresh && Date.now() < readyUntil) return Promise.resolve();
       if (!readiness) {
         readiness = run()
           .then(() => {

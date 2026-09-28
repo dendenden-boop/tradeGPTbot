@@ -17,6 +17,7 @@ export async function createMailSink({ host = '127.0.0.1', smtpPort = 0, httpPor
   const smtp = new SMTPServer({
     secure: false,
     disabledCommands: ['AUTH', 'STARTTLS'],
+    disableReverseLookup: true,
     authOptional: true,
     logger: false,
     size: 65_536,

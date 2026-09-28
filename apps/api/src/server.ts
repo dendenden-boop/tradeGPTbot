@@ -8,7 +8,7 @@ import {
 import { createAuthDatabase, createDatabase } from '@ctp/database';
 import { createLogger, safeError } from '@ctp/logger';
 import { buildApp } from './app.js';
-import { createHealthService } from './health.js';
+import { createHealthService, databaseReadinessProbe } from './health.js';
 import { createLifecycle, type ShutdownReason } from './lifecycle.js';
 
 // This logger is safe even when configuration cannot be parsed.
@@ -38,7 +38,9 @@ async function main(): Promise<void> {
       resources.push(mailer);
       const limiter = createAuthLimiter(config.redisUrl);
       resources.push(limiter);
-      await Promise.all([runtime.ready(), repository.ready(), mailer.ready(), limiter.ready()]);
+      // Email delivery is a separate failure domain; verified accounts and
+      // existing sessions must remain available when SMTP cannot be reached.
+      await Promise.all([runtime.ready(), repository.ready(), limiter.ready()]);
       const service = createAuthService({
         repository,
         hasher,
@@ -51,15 +53,7 @@ async function main(): Promise<void> {
             'Authentication email delivery failed',
           ),
       });
-      const health = createHealthService(config, {
-        async check(signal) {
-          signal.throwIfAborted();
-          await Promise.all([runtime.ready(), repository.ready()]);
-          signal.throwIfAborted();
-        },
-        // Application ownership closes these pools after health polling stops.
-        close: () => Promise.resolve(),
-      });
+      const health = createHealthService(config, databaseReadinessProbe([runtime, repository]));
       resources.push(health);
       const app = buildApp({
         config,

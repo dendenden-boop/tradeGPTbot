@@ -1,7 +1,7 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createAuthLimiter } from '../src/rate-limit.js';
+import { createAuthLimiter, type RateBucket } from '../src/rate-limit.js';
 
 const project = process.env['CTP_TEST_PROJECT'];
 const redisUrl = process.env['REDIS_URL'];
@@ -22,10 +22,13 @@ admin.on('error', () => {});
 const limiter = createAuthLimiter(redisUrl);
 const prefix = `test:${randomBytes(12).toString('hex')}`;
 const ownKeys = new Set<string>();
-const index = 'ctp:auth:{rate}:index';
-const bucket = (suffix: string) => {
+const indexes = new Set<string>();
+const indexFor = (scope: RateBucket['scope'], key: string) =>
+  `ctp:auth:{rate}:v2:index:${scope}:${createHash('sha256').update(key).digest('hex')[0]}`;
+const bucket = (suffix: string, scope: RateBucket['scope'] = 'ip') => {
   const key = `${prefix}:${suffix}`;
   ownKeys.add(`ctp:auth:{rate}:bucket:${key}`);
+  indexes.add(indexFor(scope, key));
   return key;
 };
 beforeAll(async () => {
@@ -36,7 +39,7 @@ afterAll(async () => {
   await limiter.close();
   if (ownKeys.size) {
     await admin.del(...ownKeys);
-    await admin.zrem(index, ...ownKeys);
+    for (const index of indexes) await admin.zrem(index, ...ownKeys);
   }
   admin.disconnect(false);
 });
@@ -45,22 +48,27 @@ describe('real Redis authentication rate limiting', () => {
   it('admits exactly the budget across competing callers atomically', async () => {
     const key = bucket('race');
     const results = await Promise.all(
-      Array.from({ length: 20 }, () => limiter.consume([{ key, limit: 5, windowMs: 60_000 }])),
+      Array.from({ length: 20 }, () =>
+        limiter.consume([{ scope: 'ip', key, limit: 5, windowMs: 60_000 }]),
+      ),
     );
-    expect(results.filter(Boolean)).toHaveLength(5);
+    expect(results.filter(({ allowed }) => allowed)).toHaveLength(5);
+    expect(
+      results.filter(({ allowed }) => allowed).every(({ retryAfterMs }) => retryAfterMs === 0),
+    ).toBe(true);
     expect(await admin.get(`ctp:auth:{rate}:bucket:${key}`)).toBe('6');
   });
 
   it('counts every dimension when a different dimension denies the attempt', async () => {
     const ip = bucket('ip');
-    const email = bucket('email');
-    const buckets = [
-      { key: ip, limit: 3, windowMs: 60_000 },
-      { key: email, limit: 1, windowMs: 60_000 },
+    const email = bucket('operation', 'operation');
+    const buckets: RateBucket[] = [
+      { scope: 'ip', key: ip, limit: 3, windowMs: 60_000 },
+      { scope: 'operation', key: email, limit: 1, windowMs: 60_000 },
     ];
-    expect(await limiter.consume(buckets)).toBe(true);
-    expect(await limiter.consume(buckets)).toBe(false);
-    expect(await limiter.consume(buckets)).toBe(false);
+    expect(await limiter.consume(buckets)).toEqual({ allowed: true, retryAfterMs: 0 });
+    expect(await limiter.consume(buckets)).toMatchObject({ allowed: false });
+    expect(await limiter.consume(buckets)).toMatchObject({ allowed: false });
     expect(
       await admin.mget(`ctp:auth:{rate}:bucket:${ip}`, `ctp:auth:{rate}:bucket:${email}`),
     ).toEqual(['3', '2']);
@@ -69,25 +77,28 @@ describe('real Redis authentication rate limiting', () => {
   it('expires fixed windows and does not extend lockouts on denied requests', async () => {
     const key = bucket('expiry');
     const stored = `ctp:auth:{rate}:bucket:${key}`;
-    const buckets = [{ key, limit: 1, windowMs: 1_000 }];
-    expect(await limiter.consume(buckets)).toBe(true);
+    const buckets: RateBucket[] = [{ scope: 'ip', key, limit: 1, windowMs: 1_000 }];
+    expect(await limiter.consume(buckets)).toEqual({ allowed: true, retryAfterMs: 0 });
     await new Promise<void>((resolve) => setTimeout(resolve, 300));
-    expect(await limiter.consume(buckets)).toBe(false);
+    expect(await limiter.consume(buckets)).toMatchObject({ allowed: false });
     expect(await admin.pttl(stored)).toBeLessThan(850);
     await new Promise<void>((resolve) => setTimeout(resolve, 800));
-    expect(await limiter.consume(buckets)).toBe(true);
+    expect(await limiter.consume(buckets)).toEqual({ allowed: true, retryAfterMs: 0 });
   });
 
-  it('caps live key cardinality and fails closed without partially creating buckets', async () => {
+  it('caps a scope shard without partially creating an unadmitted coarse bucket', async () => {
     const now = Date.now();
+    const key = bucket('capacity-denied');
+    const index = indexFor('ip', key);
     const fillers = Array.from(
-      { length: 10_000 },
+      { length: 512 },
       (_, i) => `ctp:auth:{rate}:bucket:${bucket(`capacity${i}`)}`,
     );
     try {
       await admin.zadd(index, ...fillers.flatMap((key) => [now + 60_000, key]));
-      const key = bucket('capacity-denied');
-      expect(await limiter.consume([{ key, limit: 5, windowMs: 60_000 }])).toBe(false);
+      expect(
+        await limiter.consume([{ scope: 'ip', key, limit: 5, windowMs: 60_000 }]),
+      ).toMatchObject({ allowed: false });
       expect(await admin.exists(`ctp:auth:{rate}:bucket:${key}`)).toBe(0);
     } finally {
       await admin.zrem(index, ...fillers);
@@ -98,13 +109,13 @@ describe('real Redis authentication rate limiting', () => {
     'fails closed on corrupt counter %j before changing the other buckets',
     async (value) => {
       const first = bucket(`unchanged:${ownKeys.size}`);
-      const corrupt = bucket(`corrupt:${ownKeys.size}`);
+      const corrupt = bucket(`corrupt:${ownKeys.size}`, 'operation');
       const stored = `ctp:auth:{rate}:bucket:${corrupt}`;
       await admin.set(stored, value, 'PX', 60_000);
       await expect(
         limiter.consume([
-          { key: first, limit: 5, windowMs: 60_000 },
-          { key: corrupt, limit: 5, windowMs: 60_000 },
+          { scope: 'ip', key: first, limit: 5, windowMs: 60_000 },
+          { scope: 'operation', key: corrupt, limit: 5, windowMs: 60_000 },
         ]),
       ).rejects.toMatchObject({ code: 'RATE_LIMIT_UNAVAILABLE' });
       expect(await admin.exists(`ctp:auth:{rate}:bucket:${first}`)).toBe(0);

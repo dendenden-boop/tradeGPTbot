@@ -22,6 +22,7 @@ describe('password native work budget', () => {
     // Attach handlers before shutdown rejects queued callers.
     const settled = Promise.allSettled(work);
     await expect(hasher.hash('overflow password')).rejects.toMatchObject({ code: 'PASSWORD_BUSY' });
+    expect(hasher.capacity()).toEqual({ running: 2, queued: 8 });
     expect(library.hash).toHaveBeenCalledTimes(3); // initialization plus two active jobs
     let closed = false;
     const closing = hasher.close().then(() => {
@@ -34,6 +35,7 @@ describe('password native work budget', () => {
     expect(closed).toBe(false);
     finish[1]?.(encoded);
     await closing;
+    expect(hasher.capacity()).toEqual({ running: 0, queued: 0 });
     const results = await settled;
     expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(2);
     expect(results.filter(({ status }) => status === 'rejected')).toHaveLength(8);

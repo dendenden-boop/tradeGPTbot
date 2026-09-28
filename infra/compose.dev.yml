@@ -28,8 +28,6 @@ services:
     depends_on:
       provision:
         condition: service_completed_successfully
-      mail-sink:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:

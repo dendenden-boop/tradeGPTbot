@@ -6,12 +6,14 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { run, report, workspace } from './docker-test-utils.mjs';
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
+import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
 
 const expectedMigrations = [
   '202609070001_initial',
   '202609070002_integrity',
   '202609090001_audit_integrity',
   '202609140001_authentication',
+  '202609200001_auth_hardening',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -143,6 +145,7 @@ const migrate = async (name, selectedConfig = config, owner = false) => {
 };
 
 try {
+  await report('auth-database-hardening', { status: 'RUNNING', startedAt, project });
   // Verify the destination port against the exact owned Compose project before creating any DB.
   const port = await run(
     'docker',
@@ -171,6 +174,14 @@ try {
   }
   await migrate(databases[0]);
   await migrate(databases[0]);
+  await admin.query(
+    `CREATE ROLE ${identifier(runtimeRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}'`,
+  );
+  await admin.query(`GRANT ctp_api TO ${identifier(runtimeRole)}`);
+  await admin.query(
+    `CREATE ROLE ${identifier(authRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${authPassword}'`,
+  );
+  await admin.query(`GRANT ctp_auth TO ${identifier(authRole)}`);
   // Cluster roles outlive databases. PostgreSQL 17 requires existing role SET
   // membership before a different non-super DDL owner can transfer functions.
   await admin.query(`GRANT ctp_auth_owner TO ${identifier(ownerRole)}`);
@@ -256,7 +267,46 @@ try {
       'packages/database/prisma/migrations/202609090001_audit_integrity/migration.sql',
     ),
   );
+  // Reproduce the original auth behavior using the exact published 003/004 SQL,
+  // before deploying 005 to this independent owned upgrade database.
+  const authPrior = await mkdtemp(path.join(workspace, '.cache', 'db-auth-upgrade-'));
+  const authPreviousMigrations = path.join(authPrior, 'migrations');
+  await cp(previousMigrations, authPreviousMigrations, { recursive: true });
+  const authPreviousConfig = path.join(authPrior, 'prisma.config.mjs');
+  await writeFile(
+    authPreviousConfig,
+    `import {defineConfig} from ${JSON.stringify(pathToFileURL(databaseRequire.resolve('prisma/config')).href)};\nexport default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packages/database/prisma/schema.prisma'))},migrations:{path:${JSON.stringify(authPreviousMigrations)}},datasource:{url:process.env.DATABASE_MIGRATION_URL}});\n`,
+  );
+  for (const migration of ['202609090001_audit_integrity', '202609140001_authentication']) {
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', migration),
+      path.join(authPreviousMigrations, migration),
+      { recursive: true },
+    );
+  }
+  await migrate(databases[1], authPreviousConfig);
+  const authHardeningBefore = await exerciseAuthDatabaseHardening({
+    admin: upgrade,
+    adminUrl: dbUrl(databases[1]),
+    authUrl: dbUrl(databases[1], false, false, true),
+    stage: 'published004',
+  });
   await migrate(databases[1]);
+  const authHardeningAfter = await exerciseAuthDatabaseHardening({
+    admin: upgrade,
+    adminUrl: dbUrl(databases[1]),
+    authUrl: dbUrl(databases[1], false, false, true),
+    stage: 'hardened005',
+  });
+  await report('auth-database-hardening', {
+    status: 'PASS',
+    startedAt,
+    completedAt: new Date().toISOString(),
+    before: authHardeningBefore,
+    after: authHardeningAfter,
+    notes:
+      'One user/session, actual auth SQL and pool max3. Latencies include pool queue. WAL/dead-tuple deltas are approximate cluster statistics; sampled lock counts may miss short waits.',
+  });
   await verifyAuditUpgrade(upgrade, auditUpgradeIds);
   await migrate(databases[1]);
   assert.equal(
@@ -336,14 +386,6 @@ try {
     7,
   );
 
-  await admin.query(
-    `CREATE ROLE ${identifier(runtimeRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${password}'`,
-  );
-  await admin.query(`GRANT ctp_api TO ${identifier(runtimeRole)}`);
-  await admin.query(
-    `CREATE ROLE ${identifier(authRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${authPassword}'`,
-  );
-  await admin.query(`GRANT ctp_auth TO ${identifier(authRole)}`);
   await run(
     process.execPath,
     [
@@ -390,6 +432,19 @@ try {
   );
   assert.equal(authRuntime.status, 'PASS');
 
+  await run(process.execPath, ['scripts/test-auth-hardening.mjs'], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_MIGRATION_URL: dbUrl(databases[0]),
+      DATABASE_URL: dbUrl(databases[0], true),
+      DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
+    },
+    secrets,
+    echo: true,
+    timeoutMs: 120000,
+  });
+
   // Reset ONLY the DB name created above, then reapply the same versioned migrations.
   await fresh.end();
   pools.delete(fresh);
@@ -412,6 +467,7 @@ try {
     repeatedDeploy: 'PASS',
     isolatedReset: 'PASS',
     authenticatedRuntime: 'PASS',
+    authenticationHardening: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

@@ -4,6 +4,7 @@ import {
   validateDatabaseOptions,
   type DatabaseOptions,
 } from './connection-options.js';
+import { unsafeAuthOwnerPrivileges } from './auth-role-boundary.js';
 
 export interface AuthPrincipal {
   userId: string;
@@ -61,8 +62,17 @@ export interface AuthRepository {
   close(): Promise<void>;
 }
 
+export interface AuthDatabase extends AuthRepository {
+  /** Process-local aggregate diagnostics for controlled load tests; never an HTTP endpoint. */
+  diagnostics(): {
+    totalConnections: number;
+    idleConnections: number;
+    waitingRequests: number;
+  };
+}
+
 /** Only this pool can invoke the pre-tenant functions; it has no raw application-table access. */
-export async function createAuthDatabase(options: DatabaseOptions): Promise<AuthRepository> {
+export async function createAuthDatabase(options: DatabaseOptions): Promise<AuthDatabase> {
   validateDatabaseOptions(options);
   const connections = new Set<PoolClient>();
   const pool = new Pool({
@@ -72,7 +82,9 @@ export async function createAuthDatabase(options: DatabaseOptions): Promise<Auth
     idleTimeoutMillis: 10_000,
     statement_timeout: 3000,
     query_timeout: 3500,
-    options: '-c idle_in_transaction_session_timeout=5000',
+    options:
+      '-c idle_in_transaction_session_timeout=5000 -c default_transaction_isolation=read\\ committed',
+    application_name: 'ctp-auth',
   });
   pool.on('error', () => {});
   pool.on('connect', (connection) => {
@@ -133,6 +145,9 @@ export async function createAuthDatabase(options: DatabaseOptions): Promise<Auth
         AND NOT pg_has_role(current_user, 'ctp_auth_owner', 'MEMBER')
         AND NOT has_schema_privilege(current_user, 'public', 'CREATE')
         AND NOT has_schema_privilege(current_user, 'ctp_auth', 'CREATE')
+        AND NOT has_database_privilege(current_user,current_database(),'TEMP,CREATE')
+        AND current_setting('transaction_isolation')='read committed'
+        AND NOT (${unsafeAuthOwnerPrivileges})
         AND NOT EXISTS (SELECT 1 FROM pg_roles boundary
           WHERE boundary.rolname IN ('ctp_auth','ctp_auth_owner')
             AND (boundary.rolsuper OR boundary.rolbypassrls OR boundary.rolcreaterole
@@ -150,7 +165,7 @@ export async function createAuthDatabase(options: DatabaseOptions): Promise<Auth
     if (roles.length !== 1 || roles[0]?.safe !== true)
       throw new DatabaseError('DATABASE_ROLE_UNSAFE');
     const version = await query<{ version: number }>('SELECT ctp_auth.schema_version() AS version');
-    if (version.length !== 1 || version[0]?.version !== 4)
+    if (version.length !== 1 || version[0]?.version !== 5)
       throw new DatabaseError('DATABASE_SCHEMA_INVALID');
   };
   try {
@@ -224,5 +239,10 @@ export async function createAuthDatabase(options: DatabaseOptions): Promise<Auth
       ]),
     ready,
     close,
-  } satisfies AuthRepository);
+    diagnostics: () => ({
+      totalConnections: pool.totalCount,
+      idleConnections: pool.idleCount,
+      waitingRequests: pool.waitingCount,
+    }),
+  } satisfies AuthDatabase);
 }

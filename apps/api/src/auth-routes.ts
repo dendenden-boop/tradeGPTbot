@@ -5,6 +5,7 @@ import type { AuthPrincipal } from '@ctp/database';
 import cookie from '@fastify/cookie';
 import csrf from '@fastify/csrf-protection';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { canonicalClientIp } from './client-ip.js';
 
 export interface AuthRoutesOptions {
   service: AuthService;
@@ -96,7 +97,8 @@ export async function registerAuthRoutes(
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AuthError) {
-      if (error.code === 'RATE_LIMITED') reply.header('retry-after', '60');
+      if (error.code === 'RATE_LIMITED' && error.retryAfterMs !== undefined)
+        reply.header('retry-after', String(Math.max(1, Math.ceil(error.retryAfterMs / 1000))));
       return reply.code(error.statusCode).send({
         error: { code: error.code, message: messages[error.code], requestId: request.id },
       });
@@ -133,7 +135,13 @@ export async function registerAuthRoutes(
         }
       }
     }
-    if (request.cookies[sessionName] !== undefined && !isOpaqueToken(request.cookies[sessionName]))
+    const csrfRecovery =
+      request.method === 'GET' && request.routeOptions.url === '/api/v1/auth/csrf';
+    if (
+      !csrfRecovery &&
+      request.cookies[sessionName] !== undefined &&
+      !isOpaqueToken(request.cookies[sessionName])
+    )
       throw new AuthError('UNAUTHENTICATED');
     const mutation = request.method !== 'GET' && request.method !== 'HEAD';
     const origin = request.headers.origin;
@@ -192,7 +200,17 @@ export async function registerAuthRoutes(
   }
 
   app.get('/api/v1/auth/csrf', { schema: schema() }, async (request, reply) => {
-    await service.csrf({ ip: request.ip });
+    await service.csrf({ ip: canonicalClientIp(request.ip) });
+    if (
+      request.cookies[sessionName] !== undefined &&
+      !isOpaqueToken(request.cookies[sessionName])
+    ) {
+      // Only this origin-checked, rate-limited safe route repairs malformed browser state.
+      // Mutations and protected reads remain unauthenticated until an ordinary login succeeds.
+      delete request.cookies[sessionName];
+      reply.clearCookie(sessionName, cookieOptions);
+      return { csrfToken: freshCsrf(request, reply) };
+    }
     let userInfo: string;
     try {
       userInfo = binding(request);
@@ -206,7 +224,11 @@ export async function registerAuthRoutes(
     '/api/v1/auth/signup',
     { schema: schema({ email, password }) },
     async (request, reply) => {
-      await service.signup({ ip: request.ip }, request.body.email, request.body.password);
+      await service.signup(
+        { ip: canonicalClientIp(request.ip) },
+        request.body.email,
+        request.body.password,
+      );
       return reply.code(202).send({ status: 'accepted' });
     },
   );
@@ -214,7 +236,7 @@ export async function registerAuthRoutes(
     '/api/v1/auth/resend-verification',
     { schema: schema({ email }) },
     async (request, reply) => {
-      await service.resendVerification({ ip: request.ip }, request.body.email);
+      await service.resendVerification({ ip: canonicalClientIp(request.ip) }, request.body.email);
       return reply.code(202).send({ status: 'accepted' });
     },
   );
@@ -222,7 +244,7 @@ export async function registerAuthRoutes(
     '/api/v1/auth/verify-email',
     { schema: schema({ token }) },
     async (request) => {
-      await service.verifyEmail({ ip: request.ip }, request.body.token);
+      await service.verifyEmail({ ip: canonicalClientIp(request.ip) }, request.body.token);
       return { status: 'ok' };
     },
   );
@@ -234,7 +256,7 @@ export async function registerAuthRoutes(
         request,
         reply,
         await service.login(
-          { ip: request.ip },
+          { ip: canonicalClientIp(request.ip) },
           request.body.email,
           request.body.password,
           session(request, false),
@@ -243,14 +265,14 @@ export async function registerAuthRoutes(
     },
   );
   app.post('/api/v1/auth/logout', { schema: schema() }, async (request, reply) => {
-    await service.logout({ ip: request.ip }, session(request, false));
+    await service.logout({ ip: canonicalClientIp(request.ip) }, session(request, false));
     return clearSession(request, reply);
   });
   app.post<{ Body: { email: string } }>(
     '/api/v1/auth/forgot-password',
     { schema: schema({ email }) },
     async (request, reply) => {
-      await service.forgotPassword({ ip: request.ip }, request.body.email);
+      await service.forgotPassword({ ip: canonicalClientIp(request.ip) }, request.body.email);
       return reply.code(202).send({ status: 'accepted' });
     },
   );
@@ -258,7 +280,11 @@ export async function registerAuthRoutes(
     '/api/v1/auth/reset-password',
     { schema: schema({ token, password }) },
     async (request, reply) => {
-      await service.resetPassword({ ip: request.ip }, request.body.token, request.body.password);
+      await service.resetPassword(
+        { ip: canonicalClientIp(request.ip) },
+        request.body.token,
+        request.body.password,
+      );
       return clearSession(request, reply);
     },
   );
@@ -267,7 +293,7 @@ export async function registerAuthRoutes(
     { schema: schema({ oldPassword: password, password }) },
     async (request, reply) => {
       await service.changePassword(
-        { ip: request.ip },
+        { ip: canonicalClientIp(request.ip) },
         session(request)!,
         request.body.oldPassword,
         request.body.password,
@@ -276,7 +302,10 @@ export async function registerAuthRoutes(
     },
   );
   app.get('/api/v1/auth/sessions', { schema: schema() }, async (request) => {
-    const sessions = await service.listSessions({ ip: request.ip }, session(request)!);
+    const sessions = await service.listSessions(
+      { ip: canonicalClientIp(request.ip) },
+      session(request)!,
+    );
     return {
       sessions: sessions.map((item) => ({
         id: item.sessionId,
@@ -291,7 +320,7 @@ export async function registerAuthRoutes(
     return sessionResponse(
       request,
       reply,
-      await service.rotateSession({ ip: request.ip }, session(request)!),
+      await service.rotateSession({ ip: canonicalClientIp(request.ip) }, session(request)!),
     );
   });
   app.delete<{ Params: { id: string } }>(
@@ -309,16 +338,23 @@ export async function registerAuthRoutes(
       },
     },
     async (request) => {
-      await service.revokeSession({ ip: request.ip }, session(request)!, request.params.id);
+      await service.revokeSession(
+        { ip: canonicalClientIp(request.ip) },
+        session(request)!,
+        request.params.id,
+      );
       return { status: 'ok' };
     },
   );
   app.post('/api/v1/auth/logout-all', { schema: schema() }, async (request, reply) => {
-    await service.revokeAllSessions({ ip: request.ip }, session(request)!);
+    await service.revokeAllSessions({ ip: canonicalClientIp(request.ip) }, session(request)!);
     return clearSession(request, reply);
   });
   app.get('/api/v1/users/me', { schema: schema() }, async (request) => {
-    const principal = await service.authenticate({ ip: request.ip }, session(request)!);
+    const principal = await service.authenticate(
+      { ip: canonicalClientIp(request.ip) },
+      session(request)!,
+    );
     const user = await options.readUser(principal);
     if (
       user.id !== principal.userId ||

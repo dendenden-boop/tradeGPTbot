@@ -2,7 +2,8 @@ import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { AuthPrincipal, AuthRepository, SessionSummary } from '@ctp/database';
 import type { AuthMailer } from './mail.js';
 import type { PasswordHasher } from './password.js';
-import type { AuthLimiter } from './rate-limit.js';
+import type { AuthLimiter, RateBucket } from './rate-limit.js';
+import { isNormalizedMailbox } from './mailbox.js';
 
 export type AuthErrorCode =
   | 'BAD_REQUEST'
@@ -25,7 +26,10 @@ const statuses: Record<AuthErrorCode, number> = {
 export class AuthError extends Error {
   readonly statusCode: number;
 
-  constructor(readonly code: AuthErrorCode) {
+  constructor(
+    readonly code: AuthErrorCode,
+    readonly retryAfterMs?: number,
+  ) {
     super(code);
     this.name = 'AuthError';
     this.statusCode = statuses[code];
@@ -67,6 +71,7 @@ export interface AuthService {
   revokeSession(context: AuthContext, token: string, sessionId: string): Promise<void>;
   revokeAllSessions(context: AuthContext, token: string): Promise<void>;
   ready(): Promise<void>;
+  emailReady(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -89,13 +94,7 @@ export function normalizeEmail(value: string): string {
   )
     throw new AuthError('BAD_REQUEST');
   const email = value.trim().toLowerCase();
-  if (
-    email.length > 254 ||
-    !/^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(
-      email,
-    ) ||
-    email.slice(0, email.indexOf('@')).length > 64
-  ) {
+  if (!isNormalizedMailbox(email)) {
     throw new AuthError('BAD_REQUEST');
   }
   return email;
@@ -168,9 +167,10 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       'change-password-account',
     ].includes(operation);
     // A global IP budget prevents distributing work over many endpoint-specific buckets.
-    const buckets = [
-      { key: key('ip', context.ip), limit: 120, windowMs: 60_000 },
+    const buckets: RateBucket[] = [
+      { scope: 'ip', key: key('ip', context.ip), limit: 120, windowMs: 60_000 },
       {
+        scope: 'operation',
         key: key(`${operation}:ip`, context.ip),
         limit: sensitive ? 20 : 60,
         windowMs: sensitive ? 900_000 : 60_000,
@@ -178,11 +178,13 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     ];
     if (identity !== undefined)
       buckets.push({
+        scope: 'identity',
         key: key(`${operation}:identity`, identity),
         limit: sensitive ? 5 : 30,
         windowMs: sensitive ? 900_000 : 60_000,
       });
-    if (!(await backend(() => limiter.consume(buckets)))) throw new AuthError('RATE_LIMITED');
+    const result = await backend(() => limiter.consume(buckets));
+    if (!result.allowed) throw new AuthError('RATE_LIMITED', result.retryAfterMs);
   }
 
   async function mailOperation(
@@ -195,7 +197,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     let queued = false;
     try {
       // Check transport before knowing whether the account exists, preserving generic responses.
-      await backend(() => mailer.ready());
+      await backend(() => mailer.ready({ fresh: true }));
       const result = await operation();
       if (!result.send) return;
       const sending = Promise.resolve()
@@ -375,11 +377,13 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         const results = await Promise.allSettled([
           Promise.resolve().then(() => repository.ready()),
           Promise.resolve().then(() => limiter.ready()),
-          Promise.resolve().then(() => mailer.ready()),
         ]);
         if (results.some((result) => result.status === 'rejected'))
           throw new AuthError('SERVICE_UNAVAILABLE');
       });
+    },
+    async emailReady() {
+      await backend(() => mailer.ready());
     },
     close() {
       if (closing) return closing;

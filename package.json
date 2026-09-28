@@ -20,6 +20,8 @@
     "test:http": "vitest run --config vitest.http.config.ts",
     "test:integration": "node scripts/test-integration.mjs",
     "test:database": "node scripts/test-integration.mjs --database-only",
+    "test:auth-hardening": "node scripts/test-integration.mjs --database-only",
+    "test:auth-limiter": "node scripts/test-auth-limiter.mjs",
     "test:smoke": "node scripts/test-smoke.mjs",
     "test:runtime": "node scripts/test-runtime.mjs",
     "test:clean": "node scripts/test-clean-install.mjs",

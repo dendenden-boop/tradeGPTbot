@@ -13,6 +13,7 @@ const { SMTPServer } = createRequire(import.meta.url)('smtp-server') as {
     secure: boolean;
     authOptional: boolean;
     disabledCommands: string[];
+    disableReverseLookup: boolean;
     logger: false;
     size: number;
     onData(stream: Readable, session: unknown, callback: (error?: Error) => void): void;
@@ -66,6 +67,7 @@ async function localSink(
     secure: tlsMode === 'implicit',
     authOptional: true,
     disabledCommands: tlsMode === 'starttls' ? ['AUTH'] : ['AUTH', 'STARTTLS'],
+    disableReverseLookup: true,
     logger: false,
     size: 4_096,
     onData(stream, _session, callback) {
@@ -99,6 +101,40 @@ async function localSink(
 }
 
 describe('authentication SMTP delivery', () => {
+  it('detects a new outage immediately after readiness and recovers without a new mailer', async () => {
+    const server = createServer((socket) => {
+      socket.write('220 fixture ESMTP\r\n');
+      let input = '';
+      socket.on('data', (data: Buffer) => {
+        input += data.toString();
+        let end: number;
+        while ((end = input.indexOf('\r\n')) >= 0) {
+          const command = input.slice(0, end);
+          input = input.slice(end + 2);
+          if (command.startsWith('EHLO')) socket.write('250 fixture\r\n');
+          else if (command === 'QUIT') socket.end('221 bye\r\n');
+          else socket.write('500 unsupported\r\n');
+        }
+      });
+    });
+    const sockets = trackSockets(server);
+    cleanup.push(
+      () =>
+        new Promise<void>((resolve) => {
+          for (const socket of sockets) socket.destroy();
+          server.close(() => resolve());
+        }),
+    );
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('TEST_SMTP_ADDRESS_INVALID');
+    const mailer = ownMailer(address.port);
+    await mailer.ready();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await expect(mailer.ready({ fresh: true })).rejects.toMatchObject({ code: 'MAIL_UNAVAILABLE' });
+    await new Promise<void>((resolve) => server.listen(address.port, '127.0.0.1', resolve));
+    await expect(mailer.ready()).resolves.toBeUndefined();
+  });
   it('delivers both one-use links through a loopback SMTP sink, with tokens only in fragments', async () => {
     const sink = await localSink();
     const mailer = ownMailer(sink.port);

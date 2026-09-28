@@ -48,7 +48,11 @@ function checkPassword(password: string): void {
   }
 }
 
-export async function createPasswordHasher(): Promise<PasswordHasher> {
+export async function createPasswordHasher(): Promise<
+  PasswordHasher & {
+    capacity(): Readonly<{ running: number; queued: number }>;
+  }
+> {
   // Complete dummy initialization before accepting requests. Each unknown or
   // malformed credential then does one verification, with no nested queue work.
   let dummyHash: string;
@@ -86,6 +90,8 @@ export async function createPasswordHasher(): Promise<PasswordHasher> {
   }
 
   return {
+    // Numeric process-local diagnostics, never exposed as a public HTTP endpoint.
+    capacity: () => Object.freeze({ running, queued: queue.length }),
     async hash(password) {
       checkPassword(password);
       return run(() => hash(password, passwordHashOptions));

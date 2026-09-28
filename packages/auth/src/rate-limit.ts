@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Redis } from 'ioredis';
 
 export type RateLimitErrorCode =
@@ -11,30 +12,37 @@ export class RateLimitError extends Error {
 }
 
 export interface RateBucket {
+  readonly scope: 'ip' | 'operation' | 'identity';
   readonly key: string;
   readonly limit: number;
   readonly windowMs: number;
 }
 
+export interface RateLimitResult {
+  readonly allowed: boolean;
+  /** Remaining wait in Redis time; zero only when the attempt was admitted. */
+  readonly retryAfterMs: number;
+}
+
 export interface AuthLimiter {
-  consume(buckets: readonly RateBucket[]): Promise<boolean>;
+  consume(buckets: readonly RateBucket[]): Promise<RateLimitResult>;
   ready(): Promise<void>;
   close(): Promise<void>;
 }
 
-// One atomic operation counts every supplied dimension, including denied
-// attempts. Redis time controls fixed-window expiry. The shared index caps the
-// number of live keys, so rotating email addresses cannot grow memory forever.
+// The ordered coarse gates stop rejected IPs allocating new identity buckets.
+// Existing counters still count denied attempts, without extending their TTL.
+// Fixed scope/hash segments bound live state without one platform-wide index:
+// 3 scopes * 16 shards * 512 counters = 24,576 counters and at most 48 indexes.
+// Production keys are already HMAC-derived, so clients cannot target a shard.
 const consumeScript = `
 local nowParts = redis.call('TIME')
 local now = tonumber(nowParts[1]) * 1000 + math.floor(tonumber(nowParts[2]) / 1000)
-redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
-local values = {}
-local newKeys = 0
-for i = 2, #KEYS do
+local buckets = {}
+-- Validate every counter/index before writing any attempt. Script errors do
+-- not roll back earlier Redis commands, so validation precedes budget changes.
+for i = 1, #KEYS, 2 do
   local raw = redis.call('GET', KEYS[i])
-  -- Missing keys start at zero. Lua's raw and tonumber(raw) or 0 would also
-  -- replace corrupt, nonnumeric values with zero and silently reset a budget.
   local value = 0
   if raw then
     if #raw > 6 or not string.match(raw, '^%d+$') then
@@ -45,34 +53,78 @@ for i = 2, #KEYS do
   if not value or value < 0 or value > 100001 or value ~= math.floor(value) then
     return redis.error_reply('RATE_LIMIT_STATE_INVALID')
   end
-  values[i] = value
-  if not redis.call('ZSCORE', KEYS[1], KEYS[i]) then newKeys = newKeys + 1 end
-end
-if redis.call('ZCARD', KEYS[1]) + newKeys > 10000 then return 0 end
-local allowed = 1
-for i = 2, #KEYS do
-  local limit = tonumber(ARGV[(i - 2) * 2 + 1])
-  local window = tonumber(ARGV[(i - 2) * 2 + 2])
-  local value = values[i]
-  if value >= limit then allowed = 0 end
   local ttl = redis.call('PTTL', KEYS[i])
-  if ttl < 1 then ttl = window end
-  redis.call('SET', KEYS[i], math.min(value + 1, limit + 1), 'PX', ttl)
-  redis.call('ZADD', KEYS[1], now + ttl, KEYS[i])
+  if raw and (ttl < 1 or ttl > 86400000) then
+    return redis.error_reply('RATE_LIMIT_STATE_INVALID')
+  end
+  local kind = redis.call('TYPE', KEYS[i + 1]).ok
+  if kind ~= 'none' and kind ~= 'zset' then
+    return redis.error_reply('RATE_LIMIT_STATE_INVALID')
+  end
+  buckets[#buckets + 1] = {
+    key = KEYS[i], index = KEYS[i + 1], present = raw ~= false,
+    value = value, limit = tonumber(ARGV[i]),
+    ttl = raw and ttl or tonumber(ARGV[i + 1])
+  }
 end
-redis.call('PEXPIRE', KEYS[1], 86401000)
-return allowed
+local denied = false
+local retry = 0
+for _, bucket in ipairs(buckets) do
+  redis.call('ZREMRANGEBYSCORE', bucket.index, '-inf', now)
+  -- A denied coarse gate may count existing finer counters, but cannot create
+  -- a new operation or identity. Scope order is validated by the caller.
+  if bucket.present or not denied then
+    local upstreamDenied = denied
+    if bucket.value >= bucket.limit then denied = true end
+    local indexed = redis.call('ZSCORE', bucket.index, bucket.key)
+    if not indexed and upstreamDenied then
+      -- Legacy counters retain their budget, but a denied coarse gate must not
+      -- import old attack identities into the new indexes during rollout.
+      bucket.write = true
+    elseif not indexed and redis.call('ZCARD', bucket.index) >= 512 then
+      denied = true
+      local first = redis.call('ZRANGE', bucket.index, 0, 0, 'WITHSCORES')
+      local delay = tonumber(first[2]) - now
+      if delay < 1 or delay > 86400000 or delay ~= math.floor(delay) then
+        return redis.error_reply('RATE_LIMIT_STATE_INVALID')
+      end
+      retry = math.max(retry, delay)
+    else
+      bucket.write = true
+      bucket.indexWrite = true
+    end
+    if bucket.write then bucket.value = math.min(bucket.value + 1, bucket.limit + 1) end
+  end
+end
+for _, bucket in ipairs(buckets) do
+  if bucket.write then
+    redis.call('SET', bucket.key, bucket.value, 'PX', bucket.ttl)
+  end
+  if bucket.indexWrite then
+    redis.call('ZADD', bucket.index, now + bucket.ttl, bucket.key)
+    redis.call('PEXPIRE', bucket.index, 86401000)
+  end
+  -- An attempt denied by another dimension can exhaust this dimension too.
+  -- Include that final state so a retry is not advertised prematurely.
+  if denied and bucket.value >= bucket.limit then
+    retry = math.max(retry, bucket.ttl)
+  end
+end
+if denied then return {0, math.max(1, retry)} end
+return {1, 0}
 `;
 
 function validateBuckets(buckets: readonly RateBucket[]): void {
   const candidate: unknown = buckets;
-  if (!Array.isArray(candidate) || buckets.length < 1 || buckets.length > 4) {
+  if (!Array.isArray(candidate) || buckets.length < 1 || buckets.length > 3) {
     throw new RateLimitError('RATE_LIMIT_INVALID');
   }
   const unique = new Set<string>();
-  for (const bucket of buckets) {
+  const scopes = ['ip', 'operation', 'identity'];
+  for (const [index, bucket] of buckets.entries()) {
     if (
       !bucket ||
+      bucket.scope !== scopes[index] ||
       typeof bucket.key !== 'string' ||
       !/^[a-z0-9:_-]{1,160}$/.test(bucket.key) ||
       !Number.isSafeInteger(bucket.limit) ||
@@ -172,18 +224,24 @@ export function createAuthLimiter(redisUrl: string): AuthLimiter {
   return {
     async consume(buckets) {
       validateBuckets(buckets);
-      const keys = buckets.map(({ key }) => `ctp:auth:{rate}:bucket:${key}`);
+      // Retain counter names and remaining budgets across the index upgrade.
+      // The unused legacy global index expires after its last old-version write.
+      const keys = buckets.flatMap(({ key, scope }) => [
+        `ctp:auth:{rate}:bucket:${key}`,
+        `ctp:auth:{rate}:v2:index:${scope}:${createHash('sha256').update(key).digest('hex')[0]}`,
+      ]);
       const args = buckets.flatMap(({ limit, windowMs }) => [limit, windowMs]);
       return run(async () => {
-        const result = await redis.eval(
-          consumeScript,
-          keys.length + 1,
-          'ctp:auth:{rate}:index',
-          ...keys,
-          ...args,
-        );
-        if (result !== 0 && result !== 1) throw new RateLimitError('RATE_LIMIT_UNAVAILABLE');
-        return result === 1;
+        const result = await redis.eval(consumeScript, keys.length, ...keys, ...args);
+        if (
+          !Array.isArray(result) ||
+          result.length !== 2 ||
+          (result[0] !== 0 && result[0] !== 1) ||
+          !Number.isSafeInteger(result[1]) ||
+          (result[0] === 1 ? result[1] !== 0 : result[1] < 1 || result[1] > 86_400_000)
+        )
+          throw new RateLimitError('RATE_LIMIT_UNAVAILABLE');
+        return { allowed: result[0] === 1, retryAfterMs: result[1] as number };
       });
     },
     async ready() {

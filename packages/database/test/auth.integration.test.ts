@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAuthDatabase, createDatabase, type AuthRepository } from '../src/index.js';
+import { normalizeEmail } from '../../auth/src/service.js';
+import { emailCorpus } from '../../../tests/fixtures/auth-email.js';
 
 const project = process.env['CTP_TEST_PROJECT'];
 if (
@@ -243,7 +245,7 @@ describe('authentication database boundary', () => {
     });
   });
 
-  it('invalidates replaced verification tokens and enforces server expiry', async () => {
+  it('preserves an existing verification link during cooldown and enforces server expiry', async () => {
     const account = await user(false);
     const next = hash();
     expect(
@@ -251,14 +253,15 @@ describe('authentication database boundary', () => {
         emailNormalized: account.emailNormalized,
         tokenHash: next,
       }),
-    ).toBe(true);
-    expect(await repository.verifyEmail(account.verificationTokenHash)).toBe(false);
+    ).toBe(false);
+    expect(await repository.verifyEmail(account.verificationTokenHash)).toBe(true);
+    const expired = await user(false);
     await admin.query(
       'UPDATE public.email_verification_token SET "createdAt"=now()-interval \'1 hour\',"expiresAt"=now()-interval \'1 second\' WHERE "tokenHash"=$1',
-      [next],
+      [expired.verificationTokenHash],
     );
-    expect(await repository.verifyEmail(next)).toBe(false);
-    expect(await repository.credentials(account.emailNormalized)).toBeNull();
+    expect(await repository.verifyEmail(expired.verificationTokenHash)).toBe(false);
+    expect(await repository.credentials(expired.emailNormalized)).toBeNull();
   });
 
   it('stores only token hashes and bounds session idle and absolute lifetimes', async () => {
@@ -352,6 +355,22 @@ describe('authentication database boundary', () => {
     expect(await repository.authenticate(b.tokenHash)).toBeNull();
   });
 
+  it('replaces a same-user login session with a distinct token and rejects its old token', async () => {
+    const account = await user();
+    const prior = await session(account);
+    const replacement = hash();
+    const current = await repository.createSession({
+      userId: account.userId,
+      expectedPasswordHash: passwordHash,
+      expectedSessionEpoch: 0,
+      tokenHash: replacement,
+      previousTokenHash: prior.tokenHash,
+    });
+    expect(current?.sessionId).not.toBe(prior.principal.sessionId);
+    expect(await repository.authenticate(prior.tokenHash)).toBeNull();
+    expect((await repository.authenticate(replacement))?.sessionId).toBe(current?.sessionId);
+  });
+
   it('logout-all advances the epoch so an in-flight password verification cannot create a session', async () => {
     const account = await user();
     const first = await session(account);
@@ -400,28 +419,38 @@ describe('authentication database boundary', () => {
     ).toBeNull();
   });
 
-  it('resend reset invalidates its predecessor and rejects expired reset tokens', async () => {
+  it('preserves the reset predecessor during cooldown and rejects expired reset tokens', async () => {
     const account = await user();
     const first = hash();
     const next = hash();
-    await repository.issuePasswordReset({
-      emailNormalized: account.emailNormalized,
-      tokenHash: first,
-    });
-    await repository.issuePasswordReset({
-      emailNormalized: account.emailNormalized,
-      tokenHash: next,
-    });
     expect(
-      await repository.resetPassword({ tokenHash: first, passwordHash: replacementHash }),
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: first,
+      }),
+    ).toBe(true);
+    expect(
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: next,
+      }),
     ).toBe(false);
     const stored = (
       await admin.query<{ lifetime: number }>(
         'SELECT EXTRACT(EPOCH FROM ("expiresAt"-"createdAt"))::integer AS lifetime FROM public.password_reset_token WHERE "tokenHash"=$1',
-        [next],
+        [first],
       )
     ).rows[0];
     expect(stored?.lifetime).toBe(15 * 60);
+    expect(
+      await repository.resetPassword({ tokenHash: first, passwordHash: replacementHash }),
+    ).toBe(true);
+    expect(
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: next,
+      }),
+    ).toBe(true);
     await admin.query(
       'UPDATE public.password_reset_token SET "createdAt"=now()-interval \'1 hour\',"expiresAt"=now()-interval \'1 second\' WHERE "tokenHash"=$1',
       [next],
@@ -613,5 +642,520 @@ describe('authentication database boundary', () => {
     ).rejects.toMatchObject({ code: 'DATABASE_FAILED', message: 'Database operation failed' });
     expect(await repository.authenticate(Buffer.alloc(31))).toBeNull();
     expect(await repository.verifyEmail(hash())).toBe(false);
+  });
+
+  it('serves fifty fresh parallel authentications and session lists without a User lock or tuple update', async () => {
+    const account = await user();
+    const active = await session(account);
+    const before = (
+      await admin.query<{ tuple: string }>(
+        'SELECT ctid::text AS tuple FROM public.user_session WHERE id=$1',
+        [active.principal.sessionId],
+      )
+    ).rows[0]?.tuple;
+    const writer = await admin.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query('SELECT id FROM public."user" WHERE id=$1 FOR UPDATE', [account.userId]);
+      const results = await Promise.all(
+        Array.from({ length: 50 }, () => repository.authenticate(active.tokenHash)),
+      );
+      expect(
+        results.every((principal) => principal?.sessionId === active.principal.sessionId),
+      ).toBe(true);
+      expect(await repository.listSessions(active.tokenHash)).toHaveLength(1);
+      const after = (
+        await admin.query<{ tuple: string }>(
+          'SELECT ctid::text AS tuple FROM public.user_session WHERE id=$1',
+          [active.principal.sessionId],
+        )
+      ).rows[0]?.tuple;
+      expect(after).toBe(before);
+      // The read above linearizes before this commit. Every subsequent read must reject.
+      await writer.query('SELECT ctp_auth.revoke_all_sessions($1)', [active.tokenHash]);
+      await writer.query('COMMIT');
+      expect(await repository.authenticate(active.tokenHash)).toBeNull();
+      expect(await repository.listSessions(active.tokenHash)).toEqual([]);
+    } finally {
+      await writer.query('ROLLBACK');
+      writer.release();
+    }
+  });
+
+  it('coalesces fifty due touches, preserves absolute expiry, and never revives idle expiry', async () => {
+    const active = await session(await user());
+    await admin.query(
+      'UPDATE public.user_session SET "lastSeenAt"=now()-interval \'6 minutes\' WHERE id=$1',
+      [active.principal.sessionId],
+    );
+    const results = await Promise.all(
+      Array.from({ length: 50 }, () => repository.authenticate(active.tokenHash)),
+    );
+    expect(results.every((principal) => principal?.sessionId === active.principal.sessionId)).toBe(
+      true,
+    );
+    expect(new Set(results.map((principal) => principal?.lastSeenAt.toISOString())).size).toBe(1);
+    for (const principal of results) {
+      expect(principal?.expiresAt).toEqual(active.principal.expiresAt);
+      expect(principal?.idleExpiresAt.getTime()).toBeLessThanOrEqual(
+        active.principal.expiresAt.getTime(),
+      );
+    }
+    await admin.query(
+      'UPDATE public.user_session SET "lastSeenAt"=now()-interval \'31 minutes\',"idleExpiresAt"=now()-interval \'1 second\' WHERE id=$1',
+      [active.principal.sessionId],
+    );
+    expect(await repository.authenticate(active.tokenHash)).toBeNull();
+  });
+
+  it.each(['reset', 'logout-all', 'mfa', 'suspend', 'revoke', 'change-password'] as const)(
+    'rechecks a due touch after the concurrent %s transition commits',
+    async (transition) => {
+      const account = await user();
+      const active = await session(account);
+      const reset = hash();
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: reset,
+      });
+      await admin.query(
+        'UPDATE public.user_session SET "lastSeenAt"=now()-interval \'6 minutes\' WHERE id=$1',
+        [active.principal.sessionId],
+      );
+      const writer = await admin.connect();
+      let pending: ReturnType<AuthRepository['authenticate']> | undefined;
+      try {
+        await writer.query('BEGIN');
+        await writer.query('SELECT id FROM public."user" WHERE id=$1 FOR UPDATE', [account.userId]);
+        pending = repository.authenticate(active.tokenHash);
+        const deadline = Date.now() + 1500;
+        let blocked = false;
+        while (Date.now() < deadline) {
+          blocked =
+            (
+              await admin.query<{ blocked: boolean }>(
+                `SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+            WHERE usename=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT * FROM ctp_auth.authenticate%') AS blocked`,
+                [new URL(authUrl).username],
+              )
+            ).rows[0]?.blocked === true;
+          if (blocked) break;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+        switch (transition) {
+          case 'reset':
+            await writer.query('SELECT ctp_auth.reset_password($1,$2)', [reset, replacementHash]);
+            break;
+          case 'logout-all':
+            await writer.query('SELECT ctp_auth.revoke_all_sessions($1)', [active.tokenHash]);
+            break;
+          case 'mfa':
+            await writer.query(
+              `INSERT INTO public.two_factor_config
+              ("tenantId",ciphertext,nonce,tag,"wrappedDek","kmsKeyId","kmsKeyVersion","encryptionVersion","aadVersion","enabledAt","updatedAt")
+              VALUES ($1,$2,$3,$4,$2,'fixture-only','1',1,1,now(),now())`,
+              [account.userId, hash(), Buffer.alloc(12, 1), Buffer.alloc(16, 2)],
+            );
+            break;
+          case 'suspend':
+            await writer.query('UPDATE public."user" SET status=\'SUSPENDED\' WHERE id=$1', [
+              account.userId,
+            ]);
+            break;
+          case 'revoke':
+            await writer.query('SELECT ctp_auth.revoke_session($1,$2)', [
+              active.tokenHash,
+              active.principal.sessionId,
+            ]);
+            break;
+          case 'change-password':
+            await writer.query('SELECT ctp_auth.change_password($1,$2,$3)', [
+              active.tokenHash,
+              passwordHash,
+              replacementHash,
+            ]);
+            break;
+        }
+        await writer.query('COMMIT');
+        expect(await pending).toBeNull();
+        expect(await repository.authenticate(active.tokenHash)).toBeNull();
+      } finally {
+        await writer.query('ROLLBACK');
+        writer.release();
+        await pending;
+      }
+    },
+  );
+
+  it('rechecks a login queued behind logout-all rather than creating an old-epoch session', async () => {
+    const account = await user();
+    const active = await session(account);
+    const writer = await admin.connect();
+    let pending: ReturnType<AuthRepository['createSession']> | undefined;
+    try {
+      await writer.query('BEGIN');
+      await writer.query('SELECT id FROM public."user" WHERE id=$1 FOR UPDATE', [account.userId]);
+      pending = repository.createSession({
+        userId: account.userId,
+        expectedPasswordHash: passwordHash,
+        expectedSessionEpoch: 0,
+        tokenHash: hash(),
+      });
+      await waitForBlockedLogin();
+      await writer.query('SELECT ctp_auth.revoke_all_sessions($1)', [active.tokenHash]);
+      await writer.query('COMMIT');
+      expect(await pending).toBeNull();
+    } finally {
+      await writer.query('ROLLBACK');
+      writer.release();
+      await pending;
+    }
+  });
+
+  it.each(['verification', 'reset'] as const)(
+    'retains three %s links without eviction, bounds cooldown under races and consumes all on success',
+    async (kind) => {
+      const account = await user(kind === 'reset');
+      const tokens: Buffer[] = kind === 'verification' ? [account.verificationTokenHash] : [];
+      const issue = (tokenHash: Buffer) =>
+        kind === 'verification'
+          ? repository.issueVerification({ emailNormalized: account.emailNormalized, tokenHash })
+          : repository.issuePasswordReset({ emailNormalized: account.emailNormalized, tokenHash });
+      const table = kind === 'verification' ? 'email_verification_token' : 'password_reset_token';
+      if (kind === 'reset') {
+        tokens.push(hash());
+        expect(await issue(tokens[0]!)).toBe(true);
+      }
+      expect(await issue(hash())).toBe(false);
+      for (let slot = 1; slot < 3; slot += 1) {
+        await admin.query(
+          `UPDATE public.${table} SET "createdAt"=now()-interval '61 seconds' WHERE "tenantId"=$1`,
+          [account.userId],
+        );
+        const attempts = Array.from({ length: 8 }, () => hash());
+        const results = await Promise.all(attempts.map(issue));
+        expect(results.filter(Boolean)).toHaveLength(1);
+        tokens.push(attempts[results.indexOf(true)]!);
+      }
+      await admin.query(
+        `UPDATE public.${table} SET "createdAt"=now()-interval '61 seconds' WHERE "tenantId"=$1`,
+        [account.userId],
+      );
+      expect(await issue(hash())).toBe(false);
+      const unconsumed = await admin.query<{ n: number }>(
+        `SELECT count(*)::int n FROM public.${table} WHERE "tenantId"=$1 AND "consumedAt" IS NULL`,
+        [account.userId],
+      );
+      expect(unconsumed.rows[0]?.n).toBe(3);
+      const consume = (tokenHash: Buffer) =>
+        kind === 'verification'
+          ? repository.verifyEmail(tokenHash)
+          : repository.resetPassword({ tokenHash, passwordHash: replacementHash });
+      // The first delivered link survives every attempted later issuance.
+      expect(await consume(tokens[0]!)).toBe(true);
+      for (const token of tokens) expect(await consume(token)).toBe(false);
+      expect(
+        (
+          await admin.query<{ n: number }>(
+            `SELECT count(*)::int n FROM public.${table} WHERE "tenantId"=$1 AND "consumedAt" IS NULL`,
+            [account.userId],
+          )
+        ).rows[0]?.n,
+      ).toBe(0);
+    },
+  );
+
+  it.each(['verification', 'reset'] as const)(
+    'allows only one winner when two different valid %s links are consumed concurrently',
+    async (kind) => {
+      const account = await user(kind === 'reset');
+      const first = kind === 'verification' ? account.verificationTokenHash : hash();
+      const second = hash();
+      const table = kind === 'verification' ? 'email_verification_token' : 'password_reset_token';
+      if (kind === 'reset')
+        await repository.issuePasswordReset({
+          emailNormalized: account.emailNormalized,
+          tokenHash: first,
+        });
+      await admin.query(
+        `UPDATE public.${table} SET "createdAt"=now()-interval '61 seconds' WHERE "tenantId"=$1`,
+        [account.userId],
+      );
+      const issued =
+        kind === 'verification'
+          ? await repository.issueVerification({
+              emailNormalized: account.emailNormalized,
+              tokenHash: second,
+            })
+          : await repository.issuePasswordReset({
+              emailNormalized: account.emailNormalized,
+              tokenHash: second,
+            });
+      expect(issued).toBe(true);
+      const results = await Promise.all(
+        [first, second].map((tokenHash) =>
+          kind === 'verification'
+            ? repository.verifyEmail(tokenHash)
+            : repository.resetPassword({ tokenHash, passwordHash: replacementHash }),
+        ),
+      );
+      expect(results.sort()).toEqual([false, true]);
+    },
+  );
+
+  it('does not count expired or old-epoch recovery links against current issuance', async () => {
+    const account = await user();
+    const active = await session(account);
+    const oldToken = hash();
+    expect(
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: oldToken,
+      }),
+    ).toBe(true);
+    await repository.revokeAllSessions(active.tokenHash);
+    const nextToken = hash();
+    expect(
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: nextToken,
+      }),
+    ).toBe(true);
+    expect(
+      await repository.resetPassword({ tokenHash: oldToken, passwordHash: replacementHash }),
+    ).toBe(false);
+    await admin.query(
+      'UPDATE public.password_reset_token SET "createdAt"=now()-interval \'1 hour\',"expiresAt"=now()-interval \'1 second\' WHERE "tenantId"=$1',
+      [account.userId],
+    );
+    expect(
+      await repository.issuePasswordReset({
+        emailNormalized: account.emailNormalized,
+        tokenHash: hash(),
+      }),
+    ).toBe(true);
+    expect(
+      await repository.resetPassword({ tokenHash: nextToken, passwordHash: replacementHash }),
+    ).toBe(false);
+  });
+
+  it.each([
+    [
+      'signup',
+      'SELECT ctp_auth.signup($1,$2,$3)',
+      () => [`${randomUUID()}@snapshot.invalid`, passwordHash, hash()],
+    ],
+    [
+      'issue verification',
+      'SELECT ctp_auth.issue_verification($1,$2)',
+      () => ['missing@snapshot.invalid', hash()],
+    ],
+    ['verify', 'SELECT ctp_auth.verify_email($1)', () => [hash()]],
+    ['credentials', 'SELECT * FROM ctp_auth.credentials($1)', () => ['missing@snapshot.invalid']],
+    [
+      'create session',
+      'SELECT * FROM ctp_auth.create_session($1,$2,0,$3,NULL)',
+      () => [randomUUID(), passwordHash, hash()],
+    ],
+    ['authenticate', 'SELECT * FROM ctp_auth.authenticate($1)', () => [hash()]],
+    ['invalid authenticate', 'SELECT * FROM ctp_auth.authenticate($1)', () => [Buffer.alloc(31)]],
+    ['rotate', 'SELECT * FROM ctp_auth.rotate_session($1,$2)', () => [hash(), hash()]],
+    ['logout', 'SELECT ctp_auth.logout($1)', () => [hash()]],
+    ['list sessions', 'SELECT * FROM ctp_auth.list_sessions($1)', () => [hash()]],
+    ['revoke', 'SELECT ctp_auth.revoke_session($1,$2)', () => [hash(), randomUUID()]],
+    ['logout all', 'SELECT ctp_auth.revoke_all_sessions($1)', () => [hash()]],
+    [
+      'issue reset',
+      'SELECT ctp_auth.issue_password_reset($1,$2)',
+      () => ['missing@snapshot.invalid', hash()],
+    ],
+    ['reset password', 'SELECT ctp_auth.reset_password($1,$2)', () => [hash(), replacementHash]],
+    [
+      'change password',
+      'SELECT ctp_auth.change_password($1,$2,$3)',
+      () => [hash(), passwordHash, replacementHash],
+    ],
+  ] as const)(
+    'rejects caller-owned historical snapshots at %s even for unknown identities/tokens',
+    async (_name, sql, values) => {
+      const connection = await authSql.connect();
+      try {
+        for (const isolation of ['REPEATABLE READ', 'SERIALIZABLE']) {
+          await connection.query(`BEGIN ISOLATION LEVEL ${isolation}`);
+          try {
+            await expect(connection.query(sql, values())).rejects.toMatchObject({ code: '25001' });
+          } finally {
+            await connection.query('ROLLBACK');
+          }
+        }
+      } finally {
+        connection.release();
+      }
+    },
+  );
+
+  it('uses the same accepted normalized email corpus as Node and rejects malformed mailboxes', async () => {
+    let accepted = 0;
+    let rejected = 0;
+    for (const input of emailCorpus) {
+      let normalized: string;
+      try {
+        normalized = normalizeEmail(input);
+      } catch {
+        await expect(
+          authSql.query('SELECT ctp_auth.signup($1,$2,$3)', [input, passwordHash, hash()]),
+        ).rejects.toHaveProperty('code', expect.stringMatching(/^(22023|22021)$/u));
+        rejected += 1;
+        continue;
+      }
+      const result = await authSql.query<{ accepted: boolean }>(
+        'SELECT ctp_auth.signup($1,$2,$3) AS accepted',
+        [normalized, passwordHash, hash()],
+      );
+      expect(typeof result.rows[0]?.accepted).toBe('boolean');
+      accepted += 1;
+    }
+    expect(accepted).toBeGreaterThan(10);
+    expect(rejected).toBeGreaterThan(10);
+  });
+
+  it('denies every secret column to ctp_api and raw application access, role takeover and schema creation to ctp_auth', async () => {
+    for (const sql of [
+      'SELECT "passwordHash" FROM public."user"',
+      'SELECT "tokenHash" FROM public.user_session',
+      'SELECT "tokenHash" FROM public.email_verification_token',
+      'SELECT "tokenHash" FROM public.password_reset_token',
+      'SELECT ciphertext FROM public.two_factor_config',
+      'SELECT "codeHash" FROM public.recovery_code',
+      'SELECT ciphertext FROM public.encrypted_credential',
+    ])
+      await expect(runtime.query(sql)).rejects.toMatchObject({ code: '42501' });
+    for (const sql of [
+      'SELECT * FROM public.exchange_account',
+      'SELECT ciphertext FROM public.encrypted_credential',
+      'UPDATE public."user" SET role=\'ADMIN\'',
+      'SET ROLE ctp_auth_owner',
+      'CREATE TABLE public.auth_hijack_probe(id integer)',
+      'CREATE TABLE ctp_auth.auth_hijack_probe(id integer)',
+      'CREATE TEMP TABLE auth_hijack_probe(id integer)',
+    ])
+      await expect(authSql.query(sql)).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('cannot shadow auth data or helpers through a temporary schema and caller search_path', async () => {
+    const account = await user();
+    const active = await session(account);
+    const authRole = new URL(authUrl).username;
+    expect(authRole).toMatch(/^ctp_p2_auth_[a-f0-9]+$/u);
+    // The migration/admin role creates hypothetical hostile objects; the actual
+    // auth role cannot create these after 005. It still must not resolve them.
+    const connection = await admin.connect();
+    try {
+      await connection.query('BEGIN');
+      await connection.query('CREATE TEMP TABLE "user"(id uuid, "passwordHash" text)');
+      await connection.query('CREATE TEMP TABLE user_session("tokenHash" bytea)');
+      await connection.query(`SET LOCAL ROLE "${authRole}"`);
+      await connection.query('SET LOCAL search_path=pg_temp,public');
+      expect(
+        (
+          await connection.query<{ userId: string }>('SELECT * FROM ctp_auth.authenticate($1)', [
+            active.tokenHash,
+          ])
+        ).rows[0]?.userId,
+      ).toBe(account.userId);
+      expect(
+        (
+          await connection.query<{ passwordHash: string }>(
+            'SELECT * FROM ctp_auth.credentials($1)',
+            [account.emailNormalized],
+          )
+        ).rows[0]?.passwordHash,
+      ).toBe(passwordHash);
+    } finally {
+      await connection.query('ROLLBACK');
+      connection.release();
+    }
+  });
+
+  it('fails runtime readiness on a direct secret column grant and recovers after revocation', async () => {
+    const runtimeRole = new URL(runtimeUrl).username;
+    expect(runtimeRole).toMatch(/^ctp_p2_runtime_[a-f0-9]+$/u);
+    const database = await createDatabase({ connectionString: runtimeUrl, environment: 'test' });
+    try {
+      await admin.query(`GRANT SELECT ("passwordHash") ON public."user" TO "${runtimeRole}"`);
+      await expect(database.ready()).rejects.toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+      await expect(
+        createDatabase({ connectionString: runtimeUrl, environment: 'test' }),
+      ).rejects.toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+    } finally {
+      await admin.query(`REVOKE SELECT ("passwordHash") ON public."user" FROM "${runtimeRole}"`);
+      await database.close();
+    }
+    const recovered = await createDatabase({ connectionString: runtimeUrl, environment: 'test' });
+    await recovered.ready();
+    await recovered.close();
+  });
+
+  it('fails readiness when database TEMP is accidentally restored to runtime or owner roles', async () => {
+    const runtimeRole = new URL(runtimeUrl).username;
+    const authRole = new URL(authUrl).username;
+    const databaseName = new URL(adminUrl).pathname.slice(1);
+    expect(runtimeRole).toMatch(/^ctp_p2_runtime_[a-f0-9]+$/u);
+    expect(authRole).toMatch(/^ctp_p2_auth_[a-f0-9]+$/u);
+    expect(databaseName).toMatch(/^ctp_p2_fresh_[a-f0-9]+$/u);
+    const database = await createDatabase({ connectionString: runtimeUrl, environment: 'test' });
+    try {
+      for (const role of [authRole, 'ctp_auth_owner', runtimeRole]) {
+        try {
+          await admin.query(`GRANT TEMP ON DATABASE "${databaseName}" TO "${role}"`);
+          await expect(
+            role === runtimeRole ? database.ready() : repository.ready(),
+          ).rejects.toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+        } finally {
+          await admin.query(`REVOKE TEMP ON DATABASE "${databaseName}" FROM "${role}"`);
+        }
+      }
+      await repository.ready();
+      await database.ready();
+    } finally {
+      await database.close();
+    }
+  });
+
+  it.each([
+    ['secret ciphertext', 'SELECT (ciphertext)', 'public.encrypted_credential'],
+    ['role promotion', 'UPDATE (role)', 'public."user"'],
+    ['step-up assertion', 'UPDATE ("stepUpAt")', 'public.user_session'],
+  ])('fails auth readiness when its owner gains %s privileges', async (_name, privilege, table) => {
+    try {
+      await admin.query(`GRANT ${privilege} ON ${table} TO ctp_auth_owner`);
+      await expect(repository.ready()).rejects.toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+    } finally {
+      await admin.query(`REVOKE ${privilege} ON ${table} FROM ctp_auth_owner`);
+    }
+    await repository.ready();
+  });
+
+  it('detects private function exposure and unsafe search_path drift during readiness', async () => {
+    const authRole = new URL(authUrl).username;
+    expect(authRole).toMatch(/^ctp_p2_auth_[a-f0-9]+$/u);
+    try {
+      await admin.query(
+        `GRANT EXECUTE ON FUNCTION ctp_auth._replace_password(uuid,text,timestamptz) TO "${authRole}"`,
+      );
+      await expect(repository.ready()).rejects.toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+    } finally {
+      await admin.query(
+        `REVOKE EXECUTE ON FUNCTION ctp_auth._replace_password(uuid,text,timestamptz) FROM "${authRole}"`,
+      );
+    }
+    try {
+      await admin.query('ALTER FUNCTION ctp_auth.authenticate(bytea) SET search_path=public');
+      await expect(repository.ready()).rejects.toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+    } finally {
+      await admin.query('ALTER FUNCTION ctp_auth.authenticate(bytea) SET search_path=pg_catalog');
+    }
+    await repository.ready();
   });
 });

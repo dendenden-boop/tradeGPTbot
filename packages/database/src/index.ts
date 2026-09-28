@@ -3,6 +3,7 @@ export { DatabaseError } from './connection-options.js';
 export {
   createAuthDatabase,
   type AuthRepository,
+  type AuthDatabase,
   type AuthPrincipal,
   type AuthCredentials,
   type SessionSummary,
@@ -104,6 +105,20 @@ export async function createDatabase(options: {
         OR EXISTS (SELECT 1 FROM pg_roles boundary WHERE boundary.rolname IN ('ctp_auth','ctp_auth_owner')
           AND pg_has_role(current_user,boundary.oid,'MEMBER'))
         OR has_schema_privilege(current_user, 'public', 'CREATE')
+        OR has_database_privilege(current_user,current_database(),'TEMP,CREATE')
+        OR EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='public' AND c.relname='user' AND (
+            has_any_column_privilege(current_user,c.oid,'INSERT,UPDATE,REFERENCES')
+            OR has_table_privilege(current_user,c.oid,'DELETE,TRUNCATE,TRIGGER')
+            OR EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid
+              AND a.attnum>0 AND NOT a.attisdropped
+              AND a.attname NOT IN ('id','emailNormalized','status','role','emailVerifiedAt','updatedAt','createdAt')
+              AND has_column_privilege(current_user,c.oid,a.attnum,'SELECT'))))
+        OR EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='public' AND c.relname IN ('user_session','email_verification_token',
+            'password_reset_token','two_factor_config','recovery_code','encrypted_credential')
+          AND (has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,REFERENCES')
+            OR has_table_privilege(current_user,c.oid,'DELETE,TRUNCATE,TRIGGER')))
         OR EXISTS (SELECT 1 FROM pg_roles inherited
           WHERE (inherited.rolsuper OR inherited.rolbypassrls OR inherited.rolcreaterole OR inherited.rolcreatedb OR inherited.rolreplication)
             AND pg_has_role(current_user, inherited.oid, 'MEMBER'))
@@ -128,7 +143,8 @@ export async function createDatabase(options: {
       if (closing) throw new DatabaseError('DATABASE_CLOSED');
       try {
         await checkRole();
-        // Parsing verifies migration 004 and the safe User column grants without reading tenant data.
+        // Check the safe User projection without reading tenant data. The auth pool
+        // separately enforces the current authentication schema version.
         await client.$queryRaw`SELECT id,"emailNormalized",status,role,"emailVerifiedAt" FROM public."user" LIMIT 0`;
       } catch (error) {
         if (error instanceof DatabaseError) throw error;

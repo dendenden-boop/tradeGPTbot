@@ -1,16 +1,20 @@
 import { createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { createAuthLimiter } from '../src/rate-limit.js';
+import { createAuthLimiter, type RateBucket } from '../src/rate-limit.js';
 
 describe('authentication limiter failure boundaries', () => {
   it('rejects invalid, duplicate, excessive or unbounded buckets before connecting', async () => {
     const limiter = createAuthLimiter('redis://127.0.0.1:1/0');
-    const valid = { key: 'signup:abc123', limit: 5, windowMs: 15_000 };
+    const valid: RateBucket = { scope: 'ip', key: 'signup:abc123', limit: 5, windowMs: 15_000 };
     for (const buckets of [
       [],
       [valid, valid],
-      Array.from({ length: 5 }, (_, i) => ({ ...valid, key: `key${i}` })),
+      [valid, { ...valid, scope: 'operation' as const }],
+      [{ ...valid, scope: 'identity' as const }],
+      [valid, { ...valid, key: 'other', scope: 'identity' as const }],
+      [{ ...valid, scope: 'unexpected' as RateBucket['scope'] }],
+      Array.from({ length: 4 }, (_, i) => ({ ...valid, key: `key${i}` })),
       [{ ...valid, key: 'email@example.invalid' }],
       [{ ...valid, key: 'a'.repeat(161) }],
       [{ ...valid, limit: 0 }],

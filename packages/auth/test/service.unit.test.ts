@@ -62,7 +62,7 @@ function fixture() {
     close: vi.fn<AuthMailer['close']>().mockResolvedValue(undefined),
   };
   const limiter = {
-    consume: vi.fn<AuthLimiter['consume']>().mockResolvedValue(true),
+    consume: vi.fn<AuthLimiter['consume']>().mockResolvedValue({ allowed: true, retryAfterMs: 0 }),
     ready: vi.fn<AuthLimiter['ready']>().mockResolvedValue(undefined),
     close: vi.fn<AuthLimiter['close']>().mockResolvedValue(undefined),
   };
@@ -181,7 +181,7 @@ describe('auth service security boundaries', () => {
   });
   it('keeps native hash work and database lookups behind rate limiting', async () => {
     const { service, limiter, repository, hasher } = fixture();
-    limiter.consume.mockResolvedValue(false);
+    limiter.consume.mockResolvedValue({ allowed: false, retryAfterMs: 899_125 });
     await expect(service.login(context, email, password)).rejects.toMatchObject({
       code: 'RATE_LIMITED',
       statusCode: 429,
@@ -275,7 +275,9 @@ describe('auth service security boundaries', () => {
   });
   it('bounds password-change guesses across source IPs by the authenticated account', async () => {
     const { service, limiter, hasher, repository } = fixture();
-    limiter.consume.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    limiter.consume
+      .mockResolvedValueOnce({ allowed: true, retryAfterMs: 0 })
+      .mockResolvedValueOnce({ allowed: false, retryAfterMs: 899_125 });
     await expect(
       service.changePassword(context, rawToken, password, `${password} new`),
     ).rejects.toThrow('RATE_LIMITED');
@@ -351,12 +353,88 @@ describe('auth service security boundaries', () => {
     for (const close of [repository.close, hasher.close, mailer.close, limiter.close])
       expect(close).toHaveBeenCalledOnce();
   });
-  it('probes all resources and sanitizes readiness failures', async () => {
+  it('probes core resources independently of email and sanitizes readiness failures', async () => {
     const { service, repository, limiter, mailer } = fixture();
     repository.ready.mockRejectedValue(new Error('database-secret'));
     await expect(service.ready()).rejects.toThrow('SERVICE_UNAVAILABLE');
     expect(limiter.ready).toHaveBeenCalledOnce();
+    expect(mailer.ready).not.toHaveBeenCalled();
+    await service.emailReady();
     expect(mailer.ready).toHaveBeenCalledOnce();
     await service.close();
   });
+  it('keeps verified login and session operations available throughout SMTP failure and recovery', async () => {
+    const { service, mailer, repository } = fixture();
+    mailer.ready.mockRejectedValue(new Error('smtp-credential-canary'));
+    await expect(service.ready()).resolves.toBeUndefined();
+    await expect(service.emailReady()).rejects.toThrow('SERVICE_UNAVAILABLE');
+    await expect(service.login(context, email, password)).resolves.toMatchObject({ principal });
+    await expect(service.authenticate(context, rawToken)).resolves.toEqual(principal);
+    await expect(service.logout(context, rawToken)).resolves.toBeUndefined();
+    for (const operation of [
+      () => service.signup(context, email, password),
+      () => service.resendVerification(context, email),
+      () => service.forgotPassword(context, email),
+    ])
+      await expect(operation()).rejects.toMatchObject({
+        code: 'SERVICE_UNAVAILABLE',
+        statusCode: 503,
+      });
+    expect(repository.signup).not.toHaveBeenCalled();
+    expect(repository.issueVerification).not.toHaveBeenCalled();
+    expect(repository.issuePasswordReset).not.toHaveBeenCalled();
+    mailer.ready.mockResolvedValue(undefined);
+    await expect(service.emailReady()).resolves.toBeUndefined();
+    await expect(service.forgotPassword(context, email)).resolves.toBeUndefined();
+    await service.close();
+  });
+  it('propagates the actual limiter wait and explicitly orders coarse and identity scopes', async () => {
+    const { service, limiter, hasher } = fixture();
+    limiter.consume.mockResolvedValue({ allowed: false, retryAfterMs: 123_456 });
+    await expect(service.login(context, email, password)).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      retryAfterMs: 123_456,
+    });
+    expect(limiter.consume.mock.calls[0]![0].map(({ scope }) => scope)).toEqual([
+      'ip',
+      'operation',
+      'identity',
+    ]);
+    expect(hasher.verify).not.toHaveBeenCalled();
+    await service.close();
+  });
+  it.each(['active', 'unknown', 'pending', 'suspended', 'mfa'] as const)(
+    'keeps public rejection work and email readiness independent of %s account state',
+    async (state) => {
+      const { service, repository, hasher, mailer, limiter } = fixture();
+      if (['unknown', 'pending', 'suspended'].includes(state))
+        repository.credentials.mockResolvedValue(null);
+      if (state === 'mfa')
+        repository.credentials.mockResolvedValue({
+          userId: principal.userId,
+          passwordHash: 'hash-for-test-only',
+          sessionEpoch: 2,
+          requiresMfa: true,
+        });
+      hasher.verify.mockResolvedValue(false);
+      await expect(service.login(context, email, password)).rejects.toMatchObject({
+        code: 'UNAUTHENTICATED',
+        statusCode: 401,
+      });
+      expect(hasher.verify).toHaveBeenCalledOnce();
+      expect(mailer.ready).not.toHaveBeenCalled();
+      expect(repository.createSession).not.toHaveBeenCalled();
+      expect(limiter.consume).toHaveBeenCalledOnce();
+      repository.signup.mockResolvedValue(false);
+      repository.issueVerification.mockResolvedValue(false);
+      repository.issuePasswordReset.mockResolvedValue(false);
+      await expect(service.signup(context, email, password)).resolves.toBeUndefined();
+      await expect(service.resendVerification(context, email)).resolves.toBeUndefined();
+      await expect(service.forgotPassword(context, email)).resolves.toBeUndefined();
+      expect(hasher.hash).toHaveBeenCalledOnce();
+      expect(mailer.ready).toHaveBeenCalledTimes(3);
+      expect(mailer.send).not.toHaveBeenCalled();
+      await service.close();
+    },
+  );
 });

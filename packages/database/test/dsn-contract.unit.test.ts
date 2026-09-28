@@ -35,6 +35,7 @@ describe('phase 1 config and phase 2/3 database DSN contract', () => {
     expect(() =>
       loadConfig({
         NODE_ENV: 'production',
+        TRUSTED_PROXY_CIDRS: '192.0.2.10/32',
         DATABASE_URL: url,
         REDIS_URL: 'rediss://runtime:v8RmN4qZ7sP2kL6x@127.0.0.1:6379/0',
       }),

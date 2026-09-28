@@ -1,4 +1,4 @@
-import { isIP } from 'node:net';
+import { isIP, SocketAddress } from 'node:net';
 
 import { z } from 'zod';
 
@@ -16,6 +16,7 @@ const fields = [
   'REQUEST_TIMEOUT_MS',
   'CONNECTION_TIMEOUT_MS',
   'POSTGRES_POOL_MAX',
+  'TRUSTED_PROXY_CIDRS',
   'NODE_TLS_REJECT_UNAUTHORIZED',
   'PGSSLMODE',
   'DATABASE_AUTH_URL',
@@ -115,6 +116,32 @@ const redisUrl = z.string().refine((value) => {
   );
 });
 
+const trustedProxyCidrs = z
+  .string()
+  .max(2048)
+  .default('')
+  .transform((value) => (value === '' ? [] : value.split(',').map((entry) => entry.trim())))
+  .refine(
+    (entries) =>
+      entries.length <= 32 &&
+      entries.every((entry) => {
+        const parts = entry.split('/');
+        const address = parts[0]!;
+        const family = isIP(address);
+        if (family === 0 || address.includes('%') || parts.length > 2) return false;
+        if (parts.length === 1) return true;
+        const prefix = parts[1]!;
+        // A mapped IPv6 /96 (or broader) is effectively IPv4 /0, not a bounded proxy subnet.
+        if (
+          family === 6 &&
+          SocketAddress.parse(`[${address}]:0`)?.address.startsWith('::ffff:') &&
+          Number(prefix) <= 96
+        )
+          return false;
+        return /^[1-9]\d*$/u.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
+      }),
+  );
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   HOST: z
@@ -138,6 +165,7 @@ const schema = z.object({
   REQUEST_TIMEOUT_MS: integerSetting(10_000, 120_000),
   CONNECTION_TIMEOUT_MS: integerSetting(5000, 30_000),
   POSTGRES_POOL_MAX: integerSetting(5, 20),
+  TRUSTED_PROXY_CIDRS: trustedProxyCidrs,
   NODE_TLS_REJECT_UNAUTHORIZED: z.enum(['0', '1']).optional(),
   PGSSLMODE: z
     .enum(['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'])
@@ -158,6 +186,7 @@ export interface AppConfig {
   readonly requestTimeoutMs: number;
   readonly connectionTimeoutMs: number;
   readonly postgresPoolMax: number;
+  readonly trustedProxyCidrs: readonly string[];
 }
 
 function hasDeploymentPassword(url: URL): boolean {
@@ -223,6 +252,7 @@ export function loadConfig(raw: Readonly<Record<string, string | undefined>>): A
     if (value.PGSSLMODE !== undefined && value.PGSSLMODE !== 'verify-full') {
       invalid.push('PGSSLMODE');
     }
+    if (value.TRUSTED_PROXY_CIDRS.length === 0) invalid.push('TRUSTED_PROXY_CIDRS');
     if (invalid.length !== 0) {
       throw new ConfigError(invalid);
     }
@@ -242,6 +272,7 @@ export function loadConfig(raw: Readonly<Record<string, string | undefined>>): A
     requestTimeoutMs: value.REQUEST_TIMEOUT_MS,
     connectionTimeoutMs: value.CONNECTION_TIMEOUT_MS,
     postgresPoolMax: value.POSTGRES_POOL_MAX,
+    trustedProxyCidrs: Object.freeze(value.TRUSTED_PROXY_CIDRS),
   });
 }
 
