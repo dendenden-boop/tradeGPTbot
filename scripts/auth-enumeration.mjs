@@ -1,7 +1,66 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { setTimeout as delay } from 'node:timers/promises';
 import { authBrowser } from './auth-http-fixture.mjs';
+
+// Exercise the documented admission limit separately from timing measurements.
+// No retries hide a 503, and no SMTP delivery delay is needed to retain slots.
+export async function exerciseMailCapacity({ base, accounts, canaries }) {
+  const results = {};
+  for (const [index, state] of ['eligible', 'unknown'].entries()) {
+    for (const account of accounts.slice(index * 10, index * 10 + 7)) {
+      await account.browser.request('/api/v1/auth/forgot-password', {
+        method: 'POST',
+        expected: 202,
+        body: { email: account.email },
+      });
+    }
+    const browser = authBrowser({
+      base,
+      canaries,
+      headers: { 'x-forwarded-for': `192.0.2.${240 + index}` },
+    });
+    await browser.request('/api/v1/auth/csrf');
+    const email =
+      state === 'eligible'
+        ? accounts[7].email
+        : `capacity-${randomBytes(8).toString('hex')}@ctp.invalid`;
+    canaries.push(email);
+    const target = await browser.request('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      expected: 202,
+      body: { email },
+    });
+    const probeEmail = `probe-${randomBytes(8).toString('hex')}@ctp.invalid`;
+    canaries.push(probeEmail);
+    const probe = await browser.request('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      expected: 503,
+      body: { email: probeEmail },
+    });
+    results[state] = { targetStatus: target.status, probeStatus: probe.status };
+    await delay(5_050);
+    const recoveryEmail = `recovered-${randomBytes(8).toString('hex')}@ctp.invalid`;
+    canaries.push(recoveryEmail);
+    const recovered = await browser.request('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      expected: 202,
+      body: { email: recoveryEmail },
+    });
+    results[state].recoveredStatus = recovered.status;
+    // The successful unknown-address recovery also consumes its full slot.
+    await delay(5_050);
+  }
+  assert.deepEqual(results.eligible, results.unknown);
+  return {
+    states: results,
+    reservations: 8,
+    holdMs: 5_000,
+    scope:
+      'Real HTTP, PostgreSQL accounts and SMTP; eligible and unknown targets both retain the eighth slot. Capacity recovers after the fixed window.',
+  };
+}
 
 /** Real HTTP/Redis/SQL/Argon/SMTP sample; callers own these disposable accounts. */
 export async function exerciseEnumeration({ base, admin, accounts, password, canaries }) {
@@ -44,6 +103,7 @@ export async function exerciseEnumeration({ base, admin, accounts, password, can
   const result = {},
     lengths = Object.fromEntries(operations.map((operation) => [operation, new Set()]));
   const fixtures = [];
+  const acceptedMailTimes = [];
   for (const [index, [state, account]] of descriptors.entries()) {
     const browser = authBrowser({
       base,
@@ -64,6 +124,15 @@ export async function exerciseEnumeration({ base, admin, accounts, password, can
       canaries.push(email);
       // Signup last: every preceding unknown-account operation is actually unknown.
       for (const operation of operations) {
+        if (operation !== 'login') {
+          // Pace the sample below the public eight-slot/five-second admission
+          // limit. Waiting is outside the measured request, independent of state.
+          while (acceptedMailTimes.length >= 8) {
+            await delay(Math.max(0, acceptedMailTimes[0] + 5_050 - performance.now()));
+            while (acceptedMailTimes.length && acceptedMailTimes[0] + 5_050 <= performance.now())
+              acceptedMailTimes.shift();
+          }
+        }
         const started = performance.now();
         const response = await browser.request(`/api/v1/auth/${operation}`, {
           method: 'POST',
@@ -76,6 +145,7 @@ export async function exerciseEnumeration({ base, admin, accounts, password, can
           },
         });
         samples[operation].push(performance.now() - started);
+        if (operation !== 'login') acceptedMailTimes.push(performance.now());
         statuses[operation] = response.status;
         lengths[operation].add(Buffer.byteLength(JSON.stringify(response.body)));
       }
@@ -112,6 +182,7 @@ export async function exerciseEnumeration({ base, admin, accounts, password, can
     responseBytes: Object.fromEntries(
       operations.map((operation) => [operation, [...lengths[operation]][0]]),
     ),
+    admissionPacing: { maxAccepted: 8, holdMs: 5_000, excludedFromRequestTiming: true },
     scope:
       'Five raw timing samples per state and operation, rotating state order, real loopback stack. Status and response length equality are asserted; timings require human review and do not establish constant-time network behavior.',
   };

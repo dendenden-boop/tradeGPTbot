@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { AuthPrincipal, AuthRepository } from '@ctp/database';
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthMailer } from '../src/mail.js';
+import { MAIL_OPERATION_TIMEOUT_MS, type AuthMailer } from '../src/mail.js';
 import type { PasswordHasher } from '../src/password.js';
 import type { AuthLimiter } from '../src/rate-limit.js';
 import {
@@ -178,6 +178,133 @@ describe('auth service security boundaries', () => {
     expect(repository.issuePasswordReset).toHaveBeenCalledTimes(8);
     finish();
     await service.close();
+  });
+
+  it.each(['eligible', 'unknown', 'suppressed', 'send-failed'] as const)(
+    'does not expose %s recovery eligibility through an associated capacity probe',
+    async (state) => {
+      const { service, mailer, repository } = fixture();
+      let finish!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const candidate = 'candidate@example.invalid';
+      repository.issuePasswordReset.mockImplementation(({ emailNormalized }) =>
+        Promise.resolve(
+          emailNormalized.startsWith('controlled-') ||
+            (emailNormalized === candidate && (state === 'eligible' || state === 'send-failed')),
+        ),
+      );
+      mailer.send.mockImplementation(async (_kind, recipient) => {
+        if (recipient === candidate && state === 'send-failed') throw new Error('SMTP_REJECTED');
+        await pending;
+      });
+      try {
+        await Promise.all(
+          Array.from({ length: 7 }, (_, index) =>
+            service.forgotPassword(context, `controlled-${index}@example.invalid`),
+          ),
+        );
+        await expect(service.forgotPassword(context, candidate)).resolves.toBeUndefined();
+        // Delivery errors must not reveal eligibility by freeing this eighth slot either.
+        await Promise.resolve();
+        await Promise.resolve();
+        await expect(
+          service.forgotPassword(context, 'known-absent@example.invalid'),
+        ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE', statusCode: 503 });
+        expect(repository.issuePasswordReset).toHaveBeenCalledTimes(8);
+      } finally {
+        finish();
+        await service.close();
+      }
+    },
+  );
+
+  it.each(['no-op', 'delivered', 'rejected'] as const)(
+    'retains %s mail admission for the complete public hold interval',
+    async (outcome) => {
+      vi.useFakeTimers();
+      const { service, mailer, repository } = fixture();
+      repository.issuePasswordReset.mockResolvedValue(outcome !== 'no-op');
+      if (outcome === 'rejected') mailer.send.mockRejectedValue(new Error('SMTP_REJECTED'));
+      try {
+        await Promise.all(Array.from({ length: 8 }, () => service.forgotPassword(context, email)));
+        await vi.advanceTimersByTimeAsync(MAIL_OPERATION_TIMEOUT_MS - 1);
+        await expect(service.forgotPassword(context, email)).rejects.toMatchObject({
+          code: 'SERVICE_UNAVAILABLE',
+        });
+        expect(repository.issuePasswordReset).toHaveBeenCalledTimes(8);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(service.forgotPassword(context, email)).resolves.toBeUndefined();
+        expect(repository.issuePasswordReset).toHaveBeenCalledTimes(9);
+      } finally {
+        await service.close();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('keeps the delivery bound when a transport outlives the public hold interval', async () => {
+    vi.useFakeTimers();
+    const { service, mailer, repository } = fixture();
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    mailer.send.mockReturnValue(pending);
+    try {
+      await Promise.all(Array.from({ length: 8 }, () => service.forgotPassword(context, email)));
+      await vi.advanceTimersByTimeAsync(MAIL_OPERATION_TIMEOUT_MS);
+      await expect(service.forgotPassword(context, email)).rejects.toMatchObject({
+        code: 'SERVICE_UNAVAILABLE',
+      });
+      expect(repository.issuePasswordReset).toHaveBeenCalledTimes(8);
+      finish();
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(service.forgotPassword(context, email)).resolves.toBeUndefined();
+    } finally {
+      finish();
+      await service.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels admission padding on close without keeping the process alive or admitting work', async () => {
+    vi.useFakeTimers();
+    const { service, repository } = fixture();
+    repository.issuePasswordReset.mockResolvedValue(false);
+    try {
+      await Promise.all(Array.from({ length: 8 }, () => service.forgotPassword(context, email)));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(vi.getTimerCount()).toBe(8);
+      await service.close();
+      expect(vi.getTimerCount()).toBe(0);
+      await expect(service.forgotPassword(context, email)).rejects.toMatchObject({
+        code: 'SERVICE_UNAVAILABLE',
+      });
+      await service.close();
+      expect(repository.close).toHaveBeenCalledOnce();
+    } finally {
+      await service.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retain admission padding after failures before account lookup', async () => {
+    const { service, mailer, repository } = fixture();
+    mailer.ready.mockRejectedValue(new Error('SMTP_UNAVAILABLE'));
+    try {
+      for (let index = 0; index < 8; index += 1)
+        await expect(service.forgotPassword(context, email)).rejects.toMatchObject({
+          code: 'SERVICE_UNAVAILABLE',
+        });
+      expect(repository.issuePasswordReset).not.toHaveBeenCalled();
+      mailer.ready.mockResolvedValue(undefined);
+      repository.issuePasswordReset.mockResolvedValue(false);
+      await expect(service.forgotPassword(context, email)).resolves.toBeUndefined();
+    } finally {
+      await service.close();
+    }
   });
   it('keeps native hash work and database lookups behind rate limiting', async () => {
     const { service, limiter, repository, hasher } = fixture();

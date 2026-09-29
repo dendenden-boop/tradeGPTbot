@@ -238,6 +238,49 @@ describe('authentication SMTP delivery', () => {
     },
   );
 
+  it.each(['readiness-first', 'deliveries-first'] as const)(
+    'keeps eight delivery slots separate from the readiness slot (%s)',
+    async (order) => {
+      const server = createServer(); // retain both probes and deliveries before the greeting
+      const sockets = trackSockets(server);
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      cleanup.push(
+        () =>
+          new Promise<void>((resolve) => {
+            for (const socket of sockets) socket.destroy();
+            server.close(() => resolve());
+          }),
+      );
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('TEST_SMTP_ADDRESS_INVALID');
+      const mailer = ownMailer(address.port);
+      const rejected: string[] = [];
+      const deliver = () =>
+        Array.from({ length: 8 }, () =>
+          mailer
+            .send('verify-email', 'alice@example.invalid', 'a'.repeat(43))
+            .catch((error: unknown) => {
+              rejected.push((error as { code: string }).code);
+              throw error;
+            }),
+        );
+      const readiness = order === 'readiness-first' ? mailer.ready() : undefined;
+      const sends = Promise.allSettled(deliver());
+      const probes = Promise.allSettled([readiness ?? mailer.ready(), mailer.ready()]);
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      expect(rejected).toEqual([]);
+      expect(sockets.size).toBeLessThanOrEqual(9);
+      await expect(
+        mailer.send('verify-email', 'alice@example.invalid', 'a'.repeat(43)),
+      ).rejects.toMatchObject({ code: 'MAIL_BUSY' });
+      await mailer.close();
+      expect((await sends).every(({ status }) => status === 'rejected')).toBe(true);
+      expect(rejected).toEqual(Array.from({ length: 8 }, () => 'MAIL_UNAVAILABLE'));
+      expect((await probes).every(({ status }) => status === 'rejected')).toBe(true);
+      await expect(mailer.ready()).rejects.toMatchObject({ code: 'MAIL_CLOSED' });
+    },
+  );
+
   it('enforces an absolute deadline even when an SMTP peer keeps the socket active', async () => {
     const server = createServer((socket) => {
       socket.write('220 test.example.invalid ESMTP\r\n');

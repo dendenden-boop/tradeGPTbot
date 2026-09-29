@@ -1097,6 +1097,138 @@ describe('authentication database boundary', () => {
     await recovered.close();
   });
 
+  it.each(
+    (['auth', 'runtime'] as const).flatMap((boundary) => [
+      ...(
+        ['pg_read_server_files', 'pg_write_server_files', 'pg_execute_server_program'] as const
+      ).flatMap((capability) =>
+        (['direct', 'transitive', 'set-only'] as const).map((membership) => ({
+          boundary,
+          capability,
+          membership,
+        })),
+      ),
+      ...(['pg_monitor', 'pg_signal_backend'] as const).map((capability) => ({
+        boundary,
+        capability,
+        membership: 'direct' as const,
+      })),
+    ]),
+  )(
+    'rejects $boundary readiness and startup with $membership membership in $capability',
+    async ({ boundary, capability, membership }) => {
+      const connectionString = boundary === 'auth' ? authUrl : runtimeUrl;
+      const role = new URL(connectionString).username;
+      expect(role).toMatch(/^ctp_p2_(?:auth|runtime)_[a-f0-9]+$/u);
+      const wrapper = `ctp_auth_guard_${randomBytes(6).toString('hex')}`;
+      const createHandle = () =>
+        boundary === 'auth'
+          ? createAuthDatabase({ connectionString, environment: 'test' })
+          : createDatabase({ connectionString, environment: 'test' });
+      const handle = await createHandle();
+      const sql = boundary === 'auth' ? authSql : runtime;
+      let wrapperCreated = false;
+      let granted = false;
+      try {
+        if (membership === 'transitive') {
+          await admin.query(`CREATE ROLE "${wrapper}" NOLOGIN`);
+          wrapperCreated = true;
+          await admin.query(`GRANT "${capability}" TO "${wrapper}"`);
+          await admin.query(`GRANT "${wrapper}" TO "${role}"`);
+        } else {
+          // SET defaults to true. Disabling INHERIT must not hide a capability
+          // which the login can still acquire explicitly with SET ROLE.
+          await admin.query(
+            `GRANT "${capability}" TO "${role}" WITH INHERIT ${membership === 'set-only' ? 'FALSE' : 'TRUE'}`,
+          );
+        }
+        granted = true;
+        const privileges = (
+          await sql.query<{ member: boolean; inherited: boolean; settable: boolean }>(
+            `SELECT pg_has_role(current_user,$1,'MEMBER') AS member,
+              pg_has_role(current_user,$1,'USAGE') AS inherited,
+              pg_has_role(current_user,$1,'SET') AS settable`,
+            [capability],
+          )
+        ).rows[0];
+        expect(privileges).toEqual({
+          member: true,
+          inherited: membership !== 'set-only',
+          settable: true,
+        });
+        if (membership === 'set-only') {
+          const connection = await sql.connect();
+          try {
+            await connection.query('BEGIN');
+            await connection.query(`SET LOCAL ROLE "${capability}"`);
+            expect(
+              (await connection.query<{ role: string }>('SELECT current_user AS role')).rows,
+            ).toEqual([{ role: capability }]);
+          } finally {
+            await connection.query('ROLLBACK');
+            connection.release();
+          }
+        }
+        // Collect both results before asserting, and close any unexpectedly
+        // accepted startup handle so before-fix reproduction cannot leak pools.
+        const readiness = await handle.ready().then(
+          () => null,
+          (error: unknown) => error,
+        );
+        const startup = await createHandle().then(
+          async (accepted) => {
+            await accepted.close();
+            return null;
+          },
+          (error: unknown) => error,
+        );
+        expect(readiness).toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+        expect(startup).toMatchObject({ code: 'DATABASE_ROLE_UNSAFE' });
+      } finally {
+        try {
+          if (granted) {
+            await admin.query(
+              `REVOKE "${membership === 'transitive' ? wrapper : capability}" FROM "${role}"`,
+            );
+          }
+          if (wrapperCreated) await admin.query(`DROP ROLE "${wrapper}"`);
+          await handle.ready();
+        } finally {
+          await handle.close();
+        }
+      }
+    },
+  );
+
+  it.each(['auth', 'runtime'] as const)(
+    'permits a harmless custom grouping role on the %s login',
+    async (boundary) => {
+      const connectionString = boundary === 'auth' ? authUrl : runtimeUrl;
+      const role = new URL(connectionString).username;
+      expect(role).toMatch(/^ctp_p2_(?:auth|runtime)_[a-f0-9]+$/u);
+      const wrapper = `ctp_auth_guard_${randomBytes(6).toString('hex')}`;
+      let wrapperCreated = false;
+      let granted = false;
+      try {
+        await admin.query(`CREATE ROLE "${wrapper}" NOLOGIN`);
+        wrapperCreated = true;
+        await admin.query(`GRANT "${wrapper}" TO "${role}"`);
+        granted = true;
+        const handle = await (boundary === 'auth'
+          ? createAuthDatabase({ connectionString, environment: 'test' })
+          : createDatabase({ connectionString, environment: 'test' }));
+        try {
+          await handle.ready();
+        } finally {
+          await handle.close();
+        }
+      } finally {
+        if (granted) await admin.query(`REVOKE "${wrapper}" FROM "${role}"`);
+        if (wrapperCreated) await admin.query(`DROP ROLE "${wrapper}"`);
+      }
+    },
+  );
+
   it('fails readiness when database TEMP is accidentally restored to runtime or owner roles', async () => {
     const runtimeRole = new URL(runtimeUrl).username;
     const authRole = new URL(authUrl).username;

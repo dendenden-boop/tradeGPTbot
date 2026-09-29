@@ -7,6 +7,9 @@ import { isNormalizedMailbox } from './mailbox.js';
 export type AuthMailKind = 'verify-email' | 'reset-password';
 export type MailErrorCode = 'MAIL_INVALID' | 'MAIL_BUSY' | 'MAIL_CLOSED' | 'MAIL_UNAVAILABLE';
 
+/** Shared with account-independent admission holds in the auth service. */
+export const MAIL_OPERATION_TIMEOUT_MS = 5_000;
+
 export class MailError extends Error {
   constructor(readonly code: MailErrorCode) {
     super(code);
@@ -73,13 +76,15 @@ export function createAuthMailer(options: AuthMailerOptions): AuthMailer {
   let closing: Promise<void> | undefined;
   let readiness: Promise<void> | undefined;
   let readyUntil = 0;
+  let activeSends = 0;
   const active = new Set<{ stop(): void; done: Promise<void> }>();
 
   async function run(send?: { kind: AuthMailKind; email: string; token: string }): Promise<void> {
     if (closed) throw new MailError('MAIL_CLOSED');
     // No Nodemailer pool or offline queue. One extra slot belongs to readiness;
     // the service separately bounds pending deliveries before account lookup.
-    if (active.size >= (send ? 8 : 9)) throw new MailError('MAIL_BUSY');
+    if (active.size >= 9 || (send !== undefined && activeSends >= 8))
+      throw new MailError('MAIL_BUSY');
     let socket: Socket | undefined;
     let ended = false;
     let rejectStopped: (error: MailError) => void = () => {};
@@ -147,7 +152,7 @@ export function createAuthMailer(options: AuthMailerOptions): AuthMailer {
       transporter.close();
       rejectStopped(new MailError('MAIL_UNAVAILABLE'));
     };
-    const deadline = setTimeout(stop, 5_000);
+    const deadline = setTimeout(stop, MAIL_OPERATION_TIMEOUT_MS);
     const work = Promise.resolve().then(async () => {
       if (!send) {
         await transporter.verify();
@@ -180,8 +185,10 @@ export function createAuthMailer(options: AuthMailerOptions): AuthMailer {
         socket?.destroy();
         transporter.close();
         active.delete(job);
+        if (send !== undefined) activeSends -= 1;
       });
     active.add(job);
+    if (send !== undefined) activeSends += 1;
     await job.done;
   }
 

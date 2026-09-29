@@ -63,6 +63,24 @@ export async function exerciseAuthDatabaseHardening({ admin, adminUrl, authUrl, 
       pg_current_wal_insert_lsn()::text AS lsn FROM pg_stat_user_tables WHERE relname='user_session'`)
     ).rows[0];
   }
+  async function flushPoolStats(pool) {
+    // Client socket closure does not wait for PostgreSQL's asynchronous stats
+    // publication. Pin every connection so each backend flushes its counters;
+    // the subsequent round trip crosses the idle/report boundary. This is
+    // outside the timed authenticate batch and retains exact UPDATE assertions.
+    const connections = [];
+    try {
+      for (let index = 0; index < 3; index++) connections.push(await pool.connect());
+      await Promise.all(
+        connections.map(async (connection) => {
+          await connection.query('SELECT pg_stat_force_next_flush()');
+          await connection.query('SELECT 1');
+        }),
+      );
+    } finally {
+      for (const connection of connections) connection.release();
+    }
+  }
   const percentile = (values, fraction) =>
     Number(values[Math.min(values.length - 1, Math.ceil(values.length * fraction) - 1)].toFixed(3));
   try {
@@ -203,7 +221,8 @@ export async function exerciseAuthDatabaseHardening({ admin, adminUrl, authUrl, 
       writer.release();
       if (pendingAuthentication) assert.equal((await pendingAuthentication).rows.length, 1);
     }
-    await auth.end(); // Flush this setup connection's stats before measuring isolated batches.
+    await flushPoolStats(auth);
+    await auth.end();
 
     const measurements = [];
     for (const concurrency of [10, 50, 100]) {
@@ -260,7 +279,11 @@ export async function exerciseAuthDatabaseHardening({ admin, adminUrl, authUrl, 
       } finally {
         clearInterval(sampler);
         await sampling;
-        await pool.end();
+        try {
+          await flushPoolStats(pool);
+        } finally {
+          await pool.end();
+        }
       }
       assert.equal(sampleFailure, false);
       const after = await stats();

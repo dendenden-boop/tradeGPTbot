@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { AuthPrincipal, AuthRepository, SessionSummary } from '@ctp/database';
-import type { AuthMailer } from './mail.js';
+import { MAIL_OPERATION_TIMEOUT_MS, type AuthMailer } from './mail.js';
 import type { PasswordHasher } from './password.js';
 import type { AuthLimiter, RateBucket } from './rate-limit.js';
 import { isNormalizedMailbox } from './mailbox.js';
@@ -134,6 +134,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
   if (!/^[a-f0-9]{64}$/i.test(options.csrfSecret)) throw new AuthError('SERVICE_UNAVAILABLE');
   const rateKey = Buffer.from(options.csrfSecret, 'hex');
   const pendingMail = new Set<Promise<void>>();
+  const mailHolds = new Set<{ cancel(): void }>();
   let mailReservations = 0;
   let closed = false;
   let closing: Promise<void> | undefined;
@@ -194,31 +195,70 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     open();
     if (mailReservations >= 8) throw new AuthError('SERVICE_UNAVAILABLE');
     mailReservations += 1;
-    let queued = false;
+    let retained = false;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      mailReservations -= 1;
+    };
     try {
       // Check transport before knowing whether the account exists, preserving generic responses.
       await backend(() => mailer.ready({ fresh: true }));
       const result = await operation();
-      if (!result.send) return;
-      const sending = Promise.resolve()
-        .then(() => mailer.send(kind, result.email, result.token))
+      // Returning a no-op or finishing SMTP early must not disclose account
+      // eligibility through the next caller's 202/503 admission response.
+      let elapsed = false;
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const releaseIfDone = () => {
+        if (!closed && (!elapsed || !settled)) return;
+        if (timer !== undefined) clearTimeout(timer);
+        mailHolds.delete(hold);
+        release();
+      };
+      const hold = {
+        cancel: () => {
+          elapsed = true;
+          releaseIfDone();
+        },
+      };
+      mailHolds.add(hold);
+      const sending: Promise<void> = Promise.resolve()
+        .then(() => {
+          try {
+            return result.send ? mailer.send(kind, result.email, result.token) : undefined;
+          } finally {
+            // The transport registers its own deadline synchronously before
+            // this timer. Retain slow deliveries until both boundaries settle.
+            if (closed) hold.cancel();
+            else {
+              timer = setTimeout(() => {
+                elapsed = true;
+                releaseIfDone();
+              }, MAIL_OPERATION_TIMEOUT_MS);
+              timer.unref();
+            }
+          }
+        })
         .catch(() => {
           try {
             options.onMailFailure?.();
           } catch {
             /* Diagnostics cannot change account responses. */
           }
+        })
+        .finally(() => {
+          pendingMail.delete(sending);
+          settled = true;
+          releaseIfDone();
         });
       pendingMail.add(sending);
-      queued = true;
-      void sending.finally(() => {
-        pendingMail.delete(sending);
-        mailReservations -= 1;
-      });
+      retained = true;
       return;
     } finally {
-      // A queued send retains its reservation until the transport has settled.
-      if (!queued) mailReservations -= 1;
+      // Failures before account eligibility is returned retain no padding work.
+      if (!retained) release();
     }
   }
 
@@ -388,6 +428,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     close() {
       if (closing) return closing;
       closed = true;
+      for (const hold of mailHolds) hold.cancel();
       closing = (async () => {
         await Promise.allSettled([...pendingMail]);
         const results = await Promise.allSettled([

@@ -1,6 +1,105 @@
 # PHASE 3 Hardening — verification
 
-Состояние: **READY FOR PHASE 4**. Hardening проверен локально и в [CI run 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471) для commit [20f25872394c9d71fefa98edffe2aa5b50a316d5](https://github.com/dendenden-boop/tradeGPTbot/commit/20f25872394c9d71fefa98edffe2aa5b50a316d5): все три jobs PASS, включая Linux Docker smoke с запуском без SMTP и восстановлением без restart. Локальный integration подтвердил 175 PostgreSQL/Redis tests, три service tests, before/after SQL benchmark, compiled auth и 100-user load с пятью циклическими enumeration rounds; CI повторил integration и load. Format/lint/typecheck/unit/HTTP/runtime/docs/Argon benchmark и clean deploy PASS. Dependency audit 28 сентября: 0 vulnerabilities / 404 dependencies; migrations 001–004 и lockfile неизменны. Прежний [отчёт PHASE 3](../phase-3/verification.md) — история commit `fac5c07`. Требования — [requirements](requirements.md), разбор находок — [findings](findings.md).
+Текущее состояние: **NOT READY FOR PHASE 4**. Повторный review с baseline `63c96ac43324b12fbd4e30fdab12035b667a08ff` подтвердил и исправил H3-015, H3-016 и H3-017. Локальные проверки, полный integration и clean завершились PASS; текущий gate ожидает новый CI, включая Docker smoke. Требования — [requirements](requirements.md), разбор находок — [findings](findings.md).
+
+Исторический результат первого hardening: READY для commit [20f25872394c9d71fefa98edffe2aa5b50a316d5](https://github.com/dendenden-boop/tradeGPTbot/commit/20f25872394c9d71fefa98edffe2aa5b50a316d5), локальные проверки и все три jobs [CI 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471) PASS. После публикации отчёта все три jobs [CI 36393750487](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36393750487) также PASS для `63c96ac43324b12fbd4e30fdab12035b667a08ff`. Прежние 556 tests, performance measurements и smoke результаты ниже относятся к завершённому первому hardening; они не объявляются validation текущих исправлений. Прежний [отчёт PHASE 3](../phase-3/verification.md) — история commit `fac5c07`.
+
+## Повторный review от 63c96ac — в работе
+
+Начат 28 сентября 2026: `git status --short` был пуст, HEAD и опубликованный `main` — `63c96ac43324b12fbd4e30fdab12035b667a08ff`. Артефакты нового этапа хранятся в `test-results/phase-3-hardening-recheck/`; они игнорируются Git. `migrations.json` подтвердил совпадение SHA-256 всех опубликованных migrations 001–005 с baseline. Hash 005: `0cf8552ca0bfc8df3a2764822600e0ab3ef9b61ba18e5be578b644fa6d364c8b`. Новая SQL migration для текущих исправлений не требуется.
+
+### Команды до production исправлений
+
+| Команда                                      | Exit status | Фактический результат                                                                                                      |
+| -------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format:check`                          | 0           | Baseline PASS, `checks.json`                                                                                               |
+| `pnpm lint`                                  | 0           | Baseline PASS, `checks.json`                                                                                               |
+| `pnpm typecheck`                             | 0           | Baseline PASS, `checks.json`                                                                                               |
+| `pnpm test:unit`                             | 1 → 0       | Первый запуск блокирован sandbox; разрешённый повтор — 338 PASS, `checks-retry.json`                                       |
+| `pnpm test:http`                             | 1 → 0       | Первый запуск блокирован sandbox; разрешённый повтор — 40 PASS, `checks-retry.json`                                        |
+| `pnpm test:runtime`                          | 1 → 0       | Первый запуск завершился runtime timeout в sandbox; разрешённый повтор PASS, `checks-retry.json`                           |
+| `pnpm docs:check`                            | 0           | Baseline PASS, `checks.json`; изменения отчёта требуют нового запуска                                                      |
+| `pnpm test:database` с новыми negative tests | 1           | 193 tests: 175 прежних PASS, 18 новых role cases FAIL до исправления; `database-before.json`, `database-tests-before.json` |
+
+Первоначальные unit/HTTP failures содержат `Access denied` при запуске esbuild из ограниченного процесса. Повтор тех же команд с разрешённым запуском завершился exit 0. Эти исходные failures сохранены в логах и не считаются успешными запусками. Новые SQL failures — отдельное воспроизведение H3-015 на настоящем PostgreSQL, а не sandbox failure; успешные `pg_has_role` проверки подтверждают выданные MEMBER/USAGE/SET права до неожиданного успешного ответа readiness.
+
+### Новые findings: evidence до и после
+
+| Finding                                    | До исправления                                                                                                                                                               | После исправления                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| H3-015: предопределённые PostgreSQL roles  | 18 negative cases FAIL: два runtime/auth LOGIN получают direct/transitive/INHERIT FALSE grants в server-files/server-program roles; owner membership уже запрещён            | `database-tests-after-retry.json`: 199 PASS, включая 24 новых role regressions                                 |
+| H3-016: SMTP readiness и delivery capacity | `smtp-slot-before.json`: readiness-first FAIL с `MAIL_BUSY`; deliveries-first PASS; остальные 9 tests skipped targeted запуском                                              | `smtp-slot-after.json`: 11 mail tests PASS; полный validation ожидается                                        |
+| H3-017: account-dependent mail reservation | Service + loopback SMTP при семи занятых slots: target 202 в обоих случаях, следующий probe eligible 503 / unknown 202; unit unknown/suppressed/send-failed regressions FAIL | 52 service/mailer tests PASS; full-stack eligible/unknown: target 202, probe 503, recovery 202 в обоих случаях |
+
+### Выполненные проверки исправлений
+
+Manifest `checks-final-retry.json` фиксирует успешные локальные запуски 28 сентября, 18:56–18:58 UTC. Предшествующий `checks-final.json` сохраняет format/format:check exit 0 и первый lint exit 1: новый test stub нарушал `require-await`. Stub исправлен; повтор lint и последующие проверки завершились exit 0. Это исправление тестового кода, а не новый security finding.
+
+| Команда                                | Exit status | Подтверждённый результат                                                                                                               |
+| -------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm format`                          | 0           | `checks-final.json`                                                                                                                    |
+| `pnpm format:check`                    | 0           | `checks-final-retry.json`                                                                                                              |
+| `pnpm lint`                            | 1 → 0       | Устранён `require-await` в новом test stub                                                                                             |
+| `pnpm typecheck`                       | 0           | `checks-final-retry.json`                                                                                                              |
+| `pnpm build`                           | 0           | `checks-final-retry.json`                                                                                                              |
+| `pnpm test:unit`                       | 0           | 350 PASS; targeted service/mailer tests входят в это число                                                                             |
+| `pnpm test:http`                       | 0           | 40 PASS                                                                                                                                |
+| `pnpm test:runtime`                    | 0           | Compiled runtime PASS                                                                                                                  |
+| `pnpm docs:check`                      | 0           | PASS до последующих обновлений отчёта; финальная редакция требует повторной проверки                                                   |
+| `pnpm benchmark:auth`                  | 0           | Argon benchmark PASS; work factor не изменён                                                                                           |
+| `pnpm audit --json`                    | 0           | `audit.json`: 404 dependencies, 0 vulnerabilities всех severities                                                                      |
+| `pnpm test:database` после исправлений | 1 → 0       | `database-after-retry.json`: полный runner PASS, 199 SQL/Redis tests, 46-request compiled auth, benchmark и full-stack load PASS       |
+| `pnpm test:integration`                | 0           | `integration-final.json`, completed 19:07:28 UTC: 3 real-service tests, 199 SQL/Redis, 46-request compiled auth и full-stack load PASS |
+| `pnpm test:smoke`                      | pending     | Будет проверен в Linux CI; прежний Windows Docker build OOM подтверждён в истории, повторная локальная build нагрузка не требуется     |
+| `pnpm test:clean`                      | 0           | `clean-final.json`, 19:08:29–19:09:35 UTC; fresh frozen offline install/build/API/database deploy и native Argon PASS                  |
+| GitHub CI нового commit                | pending     | Старые CI runs подтверждают baseline, а не новые изменения                                                                             |
+
+Первый полный database run после production исправлений завершился exit 1 до новых SQL tests: старый 004 benchmark прочитал только шесть tuple UPDATE вместо ожидаемых десяти. `database-after.json` и `database-after.log` сохраняют этот failure. Fixture ошибочно полагался на завершение `pool.end()` как на гарантию публикации cumulative statistics PostgreSQL. Исправленный harness удерживает все три connections, запрашивает `pg_stat_force_next_flush()` и выполняет следующий round trip до чтения stats. Такое управление flush применяется также в [официальных PostgreSQL regression tests](https://raw.githubusercontent.com/postgres/postgres/REL_17_STABLE/src/test/regress/sql/stats.sql). Flush не входит в latency measurement; строгое ожидание 10/50/100 UPDATE до исправления auth и нуля после него сохранено.
+
+Повтор полного runner завершился exit 0: `database-after-retry.json`, 19:01:26.888–19:04:09.956 UTC. Свежие `database-tests-after-retry.json` (199 PASS), `database-runner-after-retry.json` (fresh/upgrade/non-BYPASS/repeated deploy/reset PASS), `auth-database-hardening-after-retry.json`, `auth-runtime-after-retry.json` (46 requests) и `auth-hardening-load-after-retry.json` относятся к этому запуску. В benchmark все три counter batches подтвердили точные UPDATE 10/50/100 на 004 и ноль на 005. Артефакты SQL/runtime/load прежних runs, оставшиеся после раннего failure, не использованы как evidence того failed attempt.
+
+### Capacity и границы новых measurements
+
+Повторный SQL benchmark с явным flush cumulative statistics сохранил сравнение 004 → 005 при auth pool=3. Измерения относятся к `auth-database-hardening-after-retry.json`, а не к историческому запуску ниже; flush находится вне timed request batches.
+
+| Concurrent authenticate | p95 до, ms | p95 после, ms | UPDATE до → после |
+| ----------------------- | ---------- | ------------- | ----------------- |
+| 10                      | 65,618     | 10,452        | 10 → 0            |
+| 50                      | 277,704    | 23,778        | 50 → 0            |
+| 100                     | 533,212    | 57,093        | 100 → 0           |
+
+Uniform reservation ограничивает email admission максимум восемью operations за пятисекундное окно на процесс плюс время lookup/work. Неотправляющие ветви расходуют ту же bounded capacity; возврат generic response не ждёт padding. Это сознательный operating limit, требующий production capacity/abuse measurement; увеличение числа процессов меняет совокупную capacity.
+
+Обновлённый enumeration fixture сохраняет пять account states и cyclic rounds. Между samples добавлено pacing вне измеряемого request latency, чтобы capacity padding не превращал сравнение response/timing в случайные 503. Samples смешивают первую выдачу recovery token и последующие generic no-op запросы внутри 60-second cooldown. Поэтому medians такого набора не являются сравнением одинакового числа SMTP deliveries, доказательством network constant time или полной защитой от всех side channels. Отдельный full-stack capacity regression проверил именно target/probe/recovery statuses: eligible и unknown дали одинаковые 202 → 503 → 202. Это PASS конкретного сценария, а не доказательство отсутствия всех account side channels.
+
+Полный load run `auth-hardening-load-after-retry.json` завершился PASS 28 сентября, 19:02:25.450–19:03:59.819 UTC (около 94 секунд, включая pacing). 100 пользователей и 100 sessions; 100 reads — все 200; mixed 24 sequences — все 200; burst одного пользователя — 32×200/18×503; login burst — 10×200/10×503; attack — 20×401/80×429. При SMTP down сохранены 20 authenticated reads и controlled 503 трёх mail operations с recovery без restart. Redis delay/timeout paths и secret canaries PASS. Auth pool peak 3 busy/14 waiting, sampled lock waiters 0; Argon peak 2 running/8 queued; event-loop lag p95/p99 20,873/24,527 ms, max 45,679 ms. Эти локальные measurements не устанавливают production SLO.
+
+Подтверждённый test count текущего follow-up — **592** = 350 unit + 40 HTTP + 199 PostgreSQL/Redis + 3 real-service tests. Полный `pnpm test:integration` завершился exit 0 28 сентября в 19:07:28 UTC (`integration-final.json`); его свежие SQL/runtime/load reports сохранены как `*-integration-final.json`. Повторные database/integration runs не суммируются как разные tests. Таблица SQL и load metrics выше сознательно сохраняют один целостный предшествующий успешный retry с указанными artifact names; цифры последующего integration не подмешиваются в него. Clean завершился PASS; новый CI, включая Docker smoke, ещё pending, поэтому READY для текущих изменений пока не заявляется. Ниже сохранён завершённый отчёт первого hardening без подмены его baseline и прежних 556 tests.
+
+### Файлы повторного review
+
+`clean-install-final.json` подтверждает свежую source copy без generated code, frozen offline install, build, проверку policy derived lockfiles, production API/database deploy и native Argon/PostgreSQL WASM без dev tools. SHA-256 `pnpm-lock.yaml` остался `0ca6d5ed1fc49a22602fd5f4daa81ca770abda8e796638682f441c9e1b0ebc2f`; повторный git diff migrations 001–005 и lockfile завершился exit 0.
+
+Относительно baseline `63c96ac` изменены 17 tracked files и добавлен один source file — всего 18. Это отдельный набор follow-up; исторические 53 файла первого hardening перечислены ниже. Reports/build outputs не входят в Git. Опубликованные migrations 001–005 и `pnpm-lock.yaml` не изменяются.
+
+- `README.md`
+- `docs/phase-3-hardening/findings.md`
+- `docs/phase-3-hardening/requirements.md`
+- `docs/phase-3-hardening/verification.md`
+- `docs/phase-3/auth-api.md`
+- `docs/phase-3/database-security.md`
+- `packages/auth/src/mail.ts`
+- `packages/auth/src/service.ts`
+- `packages/auth/test/mail.unit.test.ts`
+- `packages/auth/test/service.unit.test.ts`
+- `packages/database/src/auth-database.ts`
+- `packages/database/src/index.ts`
+- `packages/database/src/role-boundary.ts` — новый
+- `packages/database/test/auth.integration.test.ts`
+- `scripts/auth-enumeration.mjs`
+- `scripts/test-auth-database-hardening.mjs`
+- `scripts/test-auth-hardening.mjs`
+- `scripts/test-database.mjs`
 
 ## Исходное состояние и сохранность migrations
 
@@ -190,7 +289,7 @@ Downloaded artifacts: `test-results/ci-hardening-36392668471/bootstrap-ubuntu-24
 | SIGTERM                 | Shutdown 301 ms, completed shutdown log                                                                             |
 | Container boundaries    | Non-root image, runtime secret canaries и image configuration checks PASS                                           |
 
-## Финальный validation — PASS
+## Первый hardening: финальный validation — PASS
 
 | Команда                    | Локальный результат; для smoke — Linux CI                                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -275,6 +374,8 @@ Downloaded artifacts: `test-results/ci-hardening-36392668471/bootstrap-ubuntu-24
 
 Реальные остаточные production задачи: seven-day token/30-day session retention job и отдельная durable audit policy; надёжная доставка email после crash; проверенный внешний SMTP и deployment proxy ingress; capacity/abuse policy для распределённых IP и scoped Redis saturation. Полный TOTP/KMS verifier и frontend остаются ранее оговорёнными последующими фазами; ADMIN/MFA password-only fallback не добавлен.
 
-Проверка hardening завершена для tested commit `20f25872394c9d71fefa98edffe2aa5b50a316d5`: локальные проверки и все три CI jobs PASS. Docker smoke подтвердил запуск API без mail-sink и последующий recovery; local host failures сохранены в отчёте. Integration/load и enumeration review завершены, dependency audit чистый, hashes 001–004 и lockfile неизменны. Gate для перехода к PHASE 4 открыт; перечисленные production prerequisites сохраняются и не объявляются реализованными.
+Первый hardening завершён для tested commit `20f25872394c9d71fefa98edffe2aa5b50a316d5`: локальные проверки и все три CI jobs PASS. Docker smoke подтвердил запуск API без mail-sink и последующий recovery; local host failures сохранены в отчёте. Integration/load и enumeration review того этапа завершены, dependency audit чистый, hashes 001–004 и lockfile неизменны. Это исторический READY, а не результат последующих исправлений.
 
-**READY FOR PHASE 4**
+Повторный review от `63c96ac` подтвердил H3-015, H3-016 и H3-017. Все три подтверждённых дефекта исправлены и проверены локально; gate остаётся закрытым до успешного CI текущего изменения, включая Linux Docker smoke. Перечисленные production prerequisites сохраняются и не объявляются реализованными.
+
+**NOT READY FOR PHASE 4**

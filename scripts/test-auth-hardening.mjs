@@ -18,7 +18,7 @@ import { buildApp } from '../apps/api/dist/app.js';
 import { createHealthService, databaseReadinessProbe } from '../apps/api/dist/health.js';
 import { createMailSink } from './mail-sink.mjs';
 import { authBrowser } from './auth-http-fixture.mjs';
-import { exerciseEnumeration } from './auth-enumeration.mjs';
+import { exerciseEnumeration, exerciseMailCapacity } from './auth-enumeration.mjs';
 import { report } from './docker-test-utils.mjs';
 
 if (
@@ -381,6 +381,8 @@ try {
   assert.deepEqual(capacity, { running: 2, queued: 8 });
   assert.equal(nativeResults.filter((r) => r.status === 'rejected').length, 12);
   measurements.argonOverflow = { submitted: 22, accepted: 10, rejectedBusy: 12, capacity };
+  stage = 'account-independent email capacity';
+  measurements.mailCapacity = await exerciseMailCapacity({ base, accounts, canaries });
   stage = 'real account enumeration sample';
   measurements.enumeration = await exerciseEnumeration({
     base,
@@ -390,6 +392,9 @@ try {
     canaries,
   });
   stage = 'SMTP degraded';
+  // Ensure these 503s exercise the fresh SMTP probe, not the preceding sample's
+  // account-independent admission window.
+  await delay(5_050);
   await sink.close();
   await accounts[90].browser.request('/health/ready');
   // Email admission bypasses the one-second successful health cache. Assert

@@ -2,9 +2,19 @@
 
 Основание: отдельное пользовательское задание на независимый аудит PHASE 3 перед PHASE 4. Исходный commit: `fac5c07065dc9980a970a28e30a9c9530ce1b09b`; исходная рабочая папка чистая. Проверяем текущий код и воспроизводимые свойства, а не принимаем прежние verification-документы за доказательство.
 
+Повторный review начат 28 сентября 2026 с опубликованного `63c96ac43324b12fbd4e30fdab12035b667a08ff`, при чистой рабочей папке. Это продолжение проверки PHASE 3, включая согласованность PostgreSQL readiness, SMTP capacity и account-enumeration contract. Предыдущие PASS и gate сохраняются как история проверенного commit; новые изменения требуют собственной проверки и не наследуют этот результат.
+
 ## Границы
 
-Только authentication foundation, его HTTP, PostgreSQL, Redis, SMTP, конфигурация, deployment и тестовые инструменты. Реализация Exchange Core и адаптеров бирж исключена. Опубликованные migrations 001–004 неизменяемы; изменения БД оформляются migration 005. Данные и секреты пользователей не используются: проверки работают с изолированными disposable services и случайными canaries.
+Только authentication foundation, его HTTP, PostgreSQL, Redis, SMTP, конфигурация, deployment и тестовые инструменты. Реализация Exchange Core и адаптеров бирж исключена. В первоначальном аудите migrations 001–004 сохранялись неизменными, а изменения БД оформлялись migration 005. К началу повторного review опубликованы уже 001–005: все пять файлов неизменяемы; текущие исправления readiness и SMTP не требуют новой SQL migration. Данные и секреты пользователей не используются: проверки работают с изолированными disposable services и случайными canaries.
+
+## Дополнительные требования повторного review
+
+- PostgreSQL readiness должна отвергать прямое и транзитивное членство runtime/auth/function-owner в предопределённых ролях PostgreSQL с доступом вне разрешённого auth contract. Проверка только флагов `SUPERUSER`, `BYPASSRLS`, `CREATEROLE`, `CREATEDB` и `REPLICATION` недостаточна. Безопасная пользовательская grouping role допустима только для runtime/auth LOGIN при сохранении остальных проверок effective privileges; function-owner по-прежнему не может наследовать никакую роль.
+- Единственный SMTP readiness probe не должен отнимать один из восьми delivery slots. Проверяются оба порядка запуска: probe до deliveries и deliveries до probe, overflow и shutdown при сохранении общего bounded limit.
+- Удержание mail reservation не должно зависеть от eligibility адреса, подавления выдачи token или результата SMTP send. При одинаковой загрузке eligible и unknown requests должны давать одинаковый admission следующего запроса; generic responses и timing samples сами по себе этого не доказывают. Capacity, recovery и shutdown проверяются отдельно, а ограничение throughput фиксируется явно.
+- Текущий operating limit — восемь email operations за пять секунд на процесс плюс lookup/work, включая generic no-op ветви. Enumeration pacing не входит в measured request latency; samples первой выдачи token и no-op внутри 60-second cooldown маркируются как смешанные, без утверждения о constant time.
+- Результаты новых negative tests до исправления, проверки после исправления и CI публикуются раздельно. До полного validation новых изменений текущий gate остаётся **NOT READY FOR PHASE 4**.
 
 ## Проверяемые свойства
 

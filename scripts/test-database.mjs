@@ -442,7 +442,8 @@ try {
     },
     secrets,
     echo: true,
-    timeoutMs: 120000,
+    // Includes fixed-window mail capacity recovery and paced enumeration.
+    timeoutMs: 180000,
   });
 
   // Reset ONLY the DB name created above, then reapply the same versioned migrations.
