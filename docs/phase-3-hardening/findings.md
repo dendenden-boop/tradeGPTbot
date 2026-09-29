@@ -1,28 +1,28 @@
 # PHASE 3 Hardening — findings
 
-Текущий gate: **NOT READY FOR PHASE 4** — повторный review опубликованного `63c96ac43324b12fbd4e30fdab12035b667a08ff` подтвердил и исправил H3-015, H3-016 и H3-017. Локальные проверки, integration и clean завершились PASS; новый CI, включая Docker smoke, ещё ожидается. Текущие evidence и gate — в [verification](verification.md), область задачи — в [requirements](requirements.md).
+Текущий gate: **READY FOR PHASE 4**. Повторный review baseline `63c96ac43324b12fbd4e30fdab12035b667a08ff` завершён 29 сентября 2026: H3-015, H3-016 и H3-017 исправлены в tested commit `1f03d1d64223f508e6494a2f7c73045b0ba26946`. Локальные проверки, integration, clean и все три jobs [CI 36526751308](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36526751308), включая Linux Docker smoke, PASS. Текущие evidence и gate — в [verification](verification.md), область задачи — в [requirements](requirements.md).
 
 Первоначальный аудит `fac5c07065dc9980a970a28e30a9c9530ce1b09b` → `20f25872394c9d71fefa98edffe2aa5b50a316d5` завершился PASS и историческим gate READY: integration после migration 005, локальные проверки, clean deploy и [CI 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471), включая Docker smoke. H3-001–H3-014 ниже описывают этот завершённый этап; его результаты не заменяют проверку новых изменений.
 
-| ID     | Severity | Finding                                                                    | Reproduced                                     | Status                                                                   |
-| ------ | -------- | -------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------ |
-| H3-001 | P1       | Запрещённые запросы одного IP исчерпывают общий Redis index                | Да, настоящий Redis                            | Исправлено; 26 Redis tests PASS                                          |
-| H3-002 | P1       | Reverse proxy объединяет client IP и auth budgets                          | Да, реальные HTTP sockets                      | Исправлено; HTTP regression PASS                                         |
-| H3-003 | P2       | Каждый authenticate блокирует User и обновляет session                     | Да, реальный benchmark 004→005                 | Before/after и полный DB runner PASS                                     |
-| H3-004 | P2       | SMTP outage блокирует запуск core API                                      | Да, composition и Compose review               | Исправлено; application и Docker smoke PASS                              |
-| H3-005 | P2       | Неаутентифицированный resend уничтожает действующую ссылку                 | Да, реальный 004→005 fixture                   | Before/after и полный DB runner PASS                                     |
-| H3-006 | P3       | Retry-After не соответствует blocking bucket                               | Да, константа в handler; Redis TTL regressions | Исправлено; Redis/HTTP PASS                                              |
-| H3-007 | P2       | Malformed session cookie блокирует новый login flow                        | Да, baseline GET csrf → 401                    | Исправлено; HTTP regression PASS                                         |
-| H3-008 | P2       | Historical transaction snapshot сохраняет устаревшее MFA state             | Да, реальный 004→005 fixture                   | Before/after и полный DB runner PASS                                     |
-| H3-009 | P2       | Readiness недостаточно проверяет effective column grants                   | Технически подтверждено                        | Исправлено; negative SQL tests PASS                                      |
-| H3-010 | P3       | SQL допускает адреса вне product email grammar                             | Да, 004 принимает три divergent cases          | Before/after, Node/SMTP и полный DB runner PASS                          |
-| H3-011 | P2       | Early rejection composite probe освобождает single-flight слишком рано     | Да, sibling вызван дважды                      | Исправлено; unit и runtime PASS                                          |
-| H3-012 | P3       | Клиент может повторить request ID                                          | Да; security defect не подтверждён             | Diagnostic-only semantics зафиксированы                                  |
-| H3-013 | P3       | Revoked cookie / tampered preauth требуют ручного удаления                 | Не подтверждено                                | Независимый HTTP test PASS до изменений                                  |
-| H3-014 | P3       | Нет автоматического удаления старых auth records                           | Технически подтверждено                        | Обязательная production task; policy ниже                                |
-| H3-015 | P2       | Readiness пропускает опасные предопределённые PostgreSQL roles             | Да, 18 negative cases на настоящем PostgreSQL  | Исправлено; 199 PostgreSQL/Redis tests PASS                              |
-| H3-016 | P2       | SMTP readiness probe занимает один из восьми delivery slots                | Да, readiness-first получает MAIL_BUSY         | Исправлено в исходниках; 11 mail tests PASS, полный validation ожидается |
-| H3-017 | P2       | Mail reservation раскрывает eligibility через admission следующего запроса | Да, service с loopback SMTP и unit regressions | Исправлено; 52 service/mailer tests и full-stack capacity PASS           |
+| ID     | Severity | Finding                                                                    | Reproduced                                     | Status                                                    |
+| ------ | -------- | -------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------- |
+| H3-001 | P1       | Запрещённые запросы одного IP исчерпывают общий Redis index                | Да, настоящий Redis                            | Исправлено; 26 Redis tests PASS                           |
+| H3-002 | P1       | Reverse proxy объединяет client IP и auth budgets                          | Да, реальные HTTP sockets                      | Исправлено; HTTP regression PASS                          |
+| H3-003 | P2       | Каждый authenticate блокирует User и обновляет session                     | Да, реальный benchmark 004→005                 | Before/after и полный DB runner PASS                      |
+| H3-004 | P2       | SMTP outage блокирует запуск core API                                      | Да, composition и Compose review               | Исправлено; application и Docker smoke PASS               |
+| H3-005 | P2       | Неаутентифицированный resend уничтожает действующую ссылку                 | Да, реальный 004→005 fixture                   | Before/after и полный DB runner PASS                      |
+| H3-006 | P3       | Retry-After не соответствует blocking bucket                               | Да, константа в handler; Redis TTL regressions | Исправлено; Redis/HTTP PASS                               |
+| H3-007 | P2       | Malformed session cookie блокирует новый login flow                        | Да, baseline GET csrf → 401                    | Исправлено; HTTP regression PASS                          |
+| H3-008 | P2       | Historical transaction snapshot сохраняет устаревшее MFA state             | Да, реальный 004→005 fixture                   | Before/after и полный DB runner PASS                      |
+| H3-009 | P2       | Readiness недостаточно проверяет effective column grants                   | Технически подтверждено                        | Исправлено; negative SQL tests PASS                       |
+| H3-010 | P3       | SQL допускает адреса вне product email grammar                             | Да, 004 принимает три divergent cases          | Before/after, Node/SMTP и полный DB runner PASS           |
+| H3-011 | P2       | Early rejection composite probe освобождает single-flight слишком рано     | Да, sibling вызван дважды                      | Исправлено; unit и runtime PASS                           |
+| H3-012 | P3       | Клиент может повторить request ID                                          | Да; security defect не подтверждён             | Diagnostic-only semantics зафиксированы                   |
+| H3-013 | P3       | Revoked cookie / tampered preauth требуют ручного удаления                 | Не подтверждено                                | Независимый HTTP test PASS до изменений                   |
+| H3-014 | P3       | Нет автоматического удаления старых auth records                           | Технически подтверждено                        | Обязательная production task; policy ниже                 |
+| H3-015 | P2       | Readiness пропускает опасные предопределённые PostgreSQL roles             | Да, 18 negative cases на настоящем PostgreSQL  | Исправлено; 199 PostgreSQL/Redis tests PASS               |
+| H3-016 | P2       | SMTP readiness probe занимает один из восьми delivery slots                | Да, readiness-first получает MAIL_BUSY         | Исправлено; mail regressions, полный validation и CI PASS |
+| H3-017 | P2       | Mail reservation раскрывает eligibility через admission следующего запроса | Да, service с loopback SMTP и unit regressions | Исправлено; service/mailer, full-stack capacity и CI PASS |
 
 ## H3-001 — cardinality exhaustion
 
@@ -210,7 +210,7 @@
 
 - **ID:** H3-015.
 - **Severity:** P2.
-- **Status:** исправлено; полный PostgreSQL runner завершился exit 0, 199 tests PASS, включая 24 новых role regressions.
+- **Status:** исправлено; полный PostgreSQL runner завершился exit 0, 199 tests PASS, включая 24 новых role regressions; Linux CI повторил проверку успешно.
 - **Affected code:** runtime readiness в [index.ts](../../packages/database/src/index.ts), [auth-database.ts](../../packages/database/src/auth-database.ts), новый общий predicate [role-boundary.ts](../../packages/database/src/role-boundary.ts).
 - **Reproduction:** новые negative cases выдают членство в `pg_read_server_files`, `pg_write_server_files`, `pg_execute_server_program` двум выделенным LOGIN, которые наследуют соответственно `ctp_api` и `ctp_auth`: прямой grant, транзитивный grant через отдельную wrapper role и прямой grant с `INHERIT FALSE`, но доступным `SET ROLE`. На настоящем PostgreSQL подтверждены membership/USAGE/SET, но прежняя readiness успешно завершается вместо отказа. `test-results/phase-3-hardening-recheck/database-tests-before.json`: 193 tests, 175 прежних PASS, 18 новых FAIL; внешний `pnpm test:database` exit 1. Роль `ctp_auth_owner` уже защищена запретом любого исходящего membership; этот сценарий не выявил обхода её проверки.
 - **Impact:** привилегированный provisioning drift может дать runtime/auth LOGIN чтение/запись серверных файлов или запуск серверных программ, не закрыв readiness. Это нарушение least-privilege boundary при ошибочной конфигурации, а не доказанный публичный HTTP exploit. Специальные полномочия этих ролей описаны в [PostgreSQL 17](https://www.postgresql.org/docs/17/predefined-roles.html).
@@ -223,20 +223,20 @@
 
 - **ID:** H3-016.
 - **Severity:** P2.
-- **Status:** воспроизведено; исправление в исходниках прошло 11 mail tests, итоговый CI и Docker smoke ещё ожидаются.
+- **Status:** исправлено; 11 mail tests, полный локальный validation, CI на Windows/Ubuntu и Linux Docker smoke PASS.
 - **Affected code:** `createAuthMailer` в [mail.ts](../../packages/auth/src/mail.ts), service mail reservations и асинхронная отправка после commit.
 - **Reproduction:** loopback SMTP fixture удерживает readiness probe и запускает восемь deliveries. В readiness-first порядке восьмой send получает `MAIL_BUSY`; обратный порядок проходит. Артефакт `test-results/phase-3-hardening-recheck/smtp-slot-before.json` сохраняет один FAIL, один PASS и девять пропущенных остальных tests targeted запуска.
 - **Impact:** сервис может принять восемь email operations и создать их tokens, но конкурирующий readiness probe уменьшает доступную delivery capacity до семи; одна отправка отклоняется уже после commit.
 - **Root cause:** ограничение send считало общий набор активных transport jobs, куда входит и readiness, вместо отдельного числа deliveries. Граница зависела от порядка запуска.
 - **Fix:** отдельный счётчик active sends с максимумом восемь; общий максимум девять transport jobs оставляет один slot для coalesced readiness. Освобождение send slot выполняется после завершения transport; bounded sockets, deadlines и shutdown сохраняются.
-- **Regression test:** [mail tests](../../packages/auth/test/mail.unit.test.ts) проверяют readiness-first и deliveries-first, overflow и shutdown; `smtp-slot-after.json` — все 11 tests PASS. Дополнительный service + loopback SMTP fixture принял восемь requests и выпустил восемь tokens в обоих случаях: до исправления одна premature delivery failure при восьми sockets, после — ноль при девяти sockets, включая readiness. Артефакты: `mail-capacity-service-before.json`/`mail-capacity-service-after.json`; repository — stub. Это targeted результаты, а не завершённая общая проверка новых изменений.
+- **Regression test:** [mail tests](../../packages/auth/test/mail.unit.test.ts) проверяют readiness-first и deliveries-first, overflow и shutdown; `smtp-slot-after.json` — все 11 tests PASS. Дополнительный service + loopback SMTP fixture принял восемь requests и выпустил восемь tokens в обоих случаях: до исправления одна premature delivery failure при восьми sockets, после — ноль при девяти sockets, включая readiness. Артефакты: `mail-capacity-service-before.json`/`mail-capacity-service-after.json`; repository — stub. Эти targeted результаты дополнены полным локальным validation и CI tested commit `1f03d1d64223f508e6494a2f7c73045b0ba26946`; evidence приведены в verification.
 - **Residual risk:** успешная SMTP проверка не гарантирует доставку; post-commit email workflow по-прежнему недолговечен и может потерять письмо при crash. Account-dependent admission через service mail reservations подтверждён отдельно как H3-017.
 
 ## H3-017 — account eligibility раскрывается через mail capacity
 
 - **ID:** H3-017.
 - **Severity:** P2.
-- **Status:** исправлено; совместные service/mailer tests — 52 PASS, loopback SMTP fixture и полный HTTP/PostgreSQL/Redis/SMTP capacity regression PASS. Общий gate ожидает новый CI, включая Docker smoke.
+- **Status:** исправлено; совместные service/mailer tests — 52 PASS, loopback SMTP fixture и полный HTTP/PostgreSQL/Redis/SMTP capacity regression PASS. CI `36526751308` повторил full-stack capacity regression и Docker smoke успешно.
 - **Affected code:** mail reservations в [service.ts](../../packages/auth/src/service.ts), generic signup/resend/password-recovery admission.
 - **Reproduction:** service fixture с настоящим loopback SMTP и stub repository удерживает семь deliveries, откладывая SMTP completion на 750 ms. Запрос целевого адреса в eligible и unknown случаях получает generic 202, но следующий capacity probe получает соответственно 503 и 202. Таким образом, наблюдаемое различие находится в следующем запросе, а не в generic response самого target. Отдельный `mail-oracle-before.json`: eligible control PASS; unknown/suppressed/send-failed cases FAIL, остальные 31 tests targeted запуском пропущены. Воспроизведение с loopback SMTP использует stub repository; отдельный after regression выполняется с настоящими PostgreSQL/Redis/HTTP/SMTP.
 - **Impact:** при контролируемой заполненности общей mail queue посторонний может различать способность адреса получить recovery email, даже если response target совпадает по status/body. Limiter ограничивает частоту, но не устраняет это различие.

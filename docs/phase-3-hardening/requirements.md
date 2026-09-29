@@ -2,7 +2,7 @@
 
 Основание: отдельное пользовательское задание на независимый аудит PHASE 3 перед PHASE 4. Исходный commit: `fac5c07065dc9980a970a28e30a9c9530ce1b09b`; исходная рабочая папка чистая. Проверяем текущий код и воспроизводимые свойства, а не принимаем прежние verification-документы за доказательство.
 
-Повторный review начат 28 сентября 2026 с опубликованного `63c96ac43324b12fbd4e30fdab12035b667a08ff`, при чистой рабочей папке. Это продолжение проверки PHASE 3, включая согласованность PostgreSQL readiness, SMTP capacity и account-enumeration contract. Предыдущие PASS и gate сохраняются как история проверенного commit; новые изменения требуют собственной проверки и не наследуют этот результат.
+Повторный review начат 28 сентября 2026 с опубликованного `63c96ac43324b12fbd4e30fdab12035b667a08ff`, при чистой рабочей папке. Это продолжение проверки PHASE 3, включая согласованность PostgreSQL readiness, SMTP capacity и account-enumeration contract. Предыдущие PASS и gate сохраняются как история проверенного commit; новые изменения требуют собственной проверки и не наследуют этот результат. Повторный review завершён 29 сентября: tested source commit `1f03d1d64223f508e6494a2f7c73045b0ba26946`, локальный validation и все три jobs [CI 36526751308](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36526751308) PASS. Текущий gate — **READY FOR PHASE 4**; подробные evidence — в [verification](verification.md).
 
 ## Границы
 
@@ -14,7 +14,7 @@
 - Единственный SMTP readiness probe не должен отнимать один из восьми delivery slots. Проверяются оба порядка запуска: probe до deliveries и deliveries до probe, overflow и shutdown при сохранении общего bounded limit.
 - Удержание mail reservation не должно зависеть от eligibility адреса, подавления выдачи token или результата SMTP send. При одинаковой загрузке eligible и unknown requests должны давать одинаковый admission следующего запроса; generic responses и timing samples сами по себе этого не доказывают. Capacity, recovery и shutdown проверяются отдельно, а ограничение throughput фиксируется явно.
 - Текущий operating limit — восемь email operations за пять секунд на процесс плюс lookup/work, включая generic no-op ветви. Enumeration pacing не входит в measured request latency; samples первой выдачи token и no-op внутри 60-second cooldown маркируются как смешанные, без утверждения о constant time.
-- Результаты новых negative tests до исправления, проверки после исправления и CI публикуются раздельно. До полного validation новых изменений текущий gate остаётся **NOT READY FOR PHASE 4**.
+- Результаты новых negative tests до исправления, проверки после исправления и CI публикуются раздельно. Gate открывается только после полного validation новых изменений; для tested source commit это требование выполнено 29 сентября 2026.
 
 ## Проверяемые свойства
 
