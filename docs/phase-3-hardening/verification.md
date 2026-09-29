@@ -1,5 +1,7 @@
 # PHASE 3 Hardening — verification
 
+Сводный результат архитектуры, bootstrap, БД и Authentication, включая согласованность этапов: [итоговый аудит PHASE 0–3](../audit-phases-0-3.md).
+
 Текущее состояние: **READY FOR PHASE 4**. Повторный review с baseline `63c96ac43324b12fbd4e30fdab12035b667a08ff` завершён 29 сентября 2026; H3-015, H3-016 и H3-017 исправлены. Tested source commit — [1f03d1d64223f508e6494a2f7c73045b0ba26946](https://github.com/dendenden-boop/tradeGPTbot/commit/1f03d1d64223f508e6494a2f7c73045b0ba26946). Локальные проверки, полный integration, clean и все три jobs [CI 36526751308](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36526751308), включая Linux Docker smoke, PASS. Требования — [requirements](requirements.md), разбор находок — [findings](findings.md).
 
 Исторический результат первого hardening: READY для commit [20f25872394c9d71fefa98edffe2aa5b50a316d5](https://github.com/dendenden-boop/tradeGPTbot/commit/20f25872394c9d71fefa98edffe2aa5b50a316d5), локальные проверки и все три jobs [CI 36392668471](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36392668471) PASS. После публикации отчёта все три jobs [CI 36393750487](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36393750487) также PASS для `63c96ac43324b12fbd4e30fdab12035b667a08ff`. Прежние 556 tests, performance measurements и smoke результаты ниже относятся к завершённому первому hardening; они не объявляются validation текущих исправлений. Прежний [отчёт PHASE 3](../phase-3/verification.md) — история commit `fac5c07`.

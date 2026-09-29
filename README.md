@@ -1,5 +1,7 @@
 # Crypto Trading Platform
 
+Единый результат аудита фаз 0–3: [итоговый отчёт](docs/audit-phases-0-3.md) — находки, согласованность между этапами, проверенные версии и CI, эксплуатационные ограничения. Решение: **READY FOR PHASE 4**; готовность к production trading ещё не подтверждена.
+
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
 Текущий этап: **PHASE 3 — Authentication завершена**. Добавлены регистрация, подтверждение почты, вход, сессии, сброс и смена пароля, разграничение ролей БД и архитектура 2FA. [Отчёт проверок](docs/phase-3/verification.md), [требования этапа](docs/phase-3/requirements.md), [HTTP API](docs/phase-3/auth-api.md), [роли и миграция](docs/phase-3/database-security.md), [запуск](docs/phase-3/operations.md). Прошли 461 тест, clean deployment, Docker и все три job [CI реализации](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/35514994833).
@@ -131,18 +133,19 @@ pnpm test:smoke
 
 ## Документы
 
-| Документ                                            | Содержание                                                    |
-| --------------------------------------------------- | ------------------------------------------------------------- |
-| [Архитектура](docs/architecture.md)                 | Границы компонентов и поток данных                            |
-| [Отчёт PHASE 1](docs/phase-1/verification.md)       | Выполненные проверки, результаты и открытые ограничения       |
-| [Зависимости PHASE 1](docs/phase-1/dependencies.md) | Версии, лицензии, сопровождение и размер                      |
-| [Требования](docs/phase-0/requirements.md)          | Область работ и соответствие заданию                          |
-| [Биржевые адаптеры](docs/exchange-adapters.md)      | Матрица возможностей четырёх бирж                             |
-| [Market Data](docs/market-data.md)                  | Подписки, свечи, восстановление и нагрузка                    |
-| [Execution](docs/execution.md)                      | Идемпотентность, состояния ордера и reconciliation            |
-| [Risk Engine](docs/risk-engine.md)                  | Лимиты, резервирование и kill switch                          |
-| [База данных](docs/database.md)                     | План сущностей, ограничений и хранения                        |
-| [Безопасность](docs/security.md)                    | Threat model и изоляция пользователей                         |
-| [Эксплуатация](docs/deployment.md)                  | План мониторинга и восстановления                             |
-| [ADR](docs/adr/README.md)                           | Принятые архитектурные решения                                |
-| [Отчёт PHASE 0](docs/phase-0/verification.md)       | Завершённое исследование; историческое состояние до bootstrap |
+| Документ                                             | Содержание                                                    |
+| ---------------------------------------------------- | ------------------------------------------------------------- |
+| [Итоговый аудит PHASE 0–3](docs/audit-phases-0-3.md) | Сводный результат, согласованность этапов и граница допуска   |
+| [Архитектура](docs/architecture.md)                  | Границы компонентов и поток данных                            |
+| [Отчёт PHASE 1](docs/phase-1/verification.md)        | Выполненные проверки, результаты и открытые ограничения       |
+| [Зависимости PHASE 1](docs/phase-1/dependencies.md)  | Версии, лицензии, сопровождение и размер                      |
+| [Требования](docs/phase-0/requirements.md)           | Область работ и соответствие заданию                          |
+| [Биржевые адаптеры](docs/exchange-adapters.md)       | Матрица возможностей четырёх бирж                             |
+| [Market Data](docs/market-data.md)                   | Подписки, свечи, восстановление и нагрузка                    |
+| [Execution](docs/execution.md)                       | Идемпотентность, состояния ордера и reconciliation            |
+| [Risk Engine](docs/risk-engine.md)                   | Лимиты, резервирование и kill switch                          |
+| [База данных](docs/database.md)                      | План сущностей, ограничений и хранения                        |
+| [Безопасность](docs/security.md)                     | Threat model и изоляция пользователей                         |
+| [Эксплуатация](docs/deployment.md)                   | План мониторинга и восстановления                             |
+| [ADR](docs/adr/README.md)                            | Принятые архитектурные решения                                |
+| [Отчёт PHASE 0](docs/phase-0/verification.md)        | Завершённое исследование; историческое состояние до bootstrap |
