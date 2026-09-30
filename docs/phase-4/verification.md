@@ -1,6 +1,6 @@
 # PHASE 4 — Проверка Exchange Core
 
-Дата: **2026-09-30**. Baseline: `cd940304cb730d054fb41429562975c9033fed95`, завершённый [аудит PHASE 0–3](../audit-phases-0-3.md). Gate: **IN PROGRESS** — общие проверки и CI новой реализации ещё не завершены. PHASE 5 не начата.
+Дата: **2026-09-30**. Baseline: `cd940304cb730d054fb41429562975c9033fed95`, завершённый [аудит PHASE 0–3](../audit-phases-0-3.md). Gate: **READY FOR PHASE 5** — PHASE 4 завершена в своём объёме. Source commit: [`19aae01eb1a80b01033ac2875179de71fdb16725`](https://github.com/dendenden-boop/tradeGPTbot/commit/19aae01eb1a80b01033ac2875179de71fdb16725). Все три job [CI 36706979599](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36706979599) завершились успешно. PHASE 5 не начата; готовность реальной торговли не заявляется.
 
 ## Выполненная реализация
 
@@ -39,7 +39,22 @@ Test adapter использует только локальные искусст
 
 `pnpm test:clean` — PASS: fresh source copy, frozen offline install/build, policy verification и isolated production deployments API/database/exchange-core. Native Argon2id и PostgreSQL WASM загружаются без dev tools; Exchange Core импортируется из dist, tests/src/testing export отсутствуют. Lockfile SHA-256: `70c333045e4aab1e118b614fcc7910d718ece85b986748d651db048503704763`.
 
-CI integration/smoke ещё не завершены. Итоговый commit/CI будут зафиксированы после их завершения; до этого gate IN PROGRESS. Unit counts не суммируются повторно между scoped/full runs или платформами.
+## CI и согласование PHASE 0–4
+
+Артефакты run `36706979599` скачаны и сопоставлены с точным source SHA. Windows-2025 и Ubuntu-24.04 прошли frozen install, schema validation, build, auth benchmark, format/docs/lint/typecheck, 1130 unit, 40 HTTP, runtime, clean deployment трёх пакетов и dependency audit. Frozen install сохранил lockfile. Docker job выполнил настоящий PostgreSQL/Redis/SMTP integration и собранный API container.
+
+| Набор                     | Фактическое подтверждение                                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                      | 1130/1130 на каждой ОС; 780 относятся к Exchange Core, включая 200 adapter contract tests для всех 33 методов и failure/concurrency paths |
+| HTTP                      | 40/40 на каждой ОС, включая реальный reverse proxy и межпользовательские проверки                                                         |
+| Database/auth integration | 199/199; fresh/upgrade/repeated deployment, сохранение данных и SQL controls, ownership/concurrency и auth hardening                      |
+| Dependency integration    | 3/3, подтверждены log Docker job: реальные PostgreSQL/Redis, отказ и восстановление                                                       |
+| Auth runtime              | PASS: 46 requests, настоящий SMTP sink/Argon2id, отсутствие secrets в логах; отдельный load/hardening report PASS                         |
+| Docker smoke              | PASS: 46 requests, SMTP boot-down не отключает core; recovery без restart; PostgreSQL/Redis recovery; реальный SIGTERM shutdown 315 ms    |
+
+Итого **1372 tests = 1130 + 40 + 199 + 3**. Повторные scoped runs, Windows/Linux и 46-request process сценарии в это число второй раз не включаются. Новый Exchange Core не подключён к API, а общие проверки подтверждают сохранность предыдущих фаз. Числовые категории и mode/market преобразования дополнительно проверены на границе PHASE 2 ↔ PHASE 4; миграции не изменены.
+
+Локальная копия CI artifacts: `test-results/ci-phase4-36706979599/`; сводка exact SHA/jobs/counts — `test-results/phase4-ci-acceptance.json`. Артефакты в Git не коммитятся; workflow хранит их семь дней. Docker integration/smoke этого source выполнялись на Linux CI; локальный Windows Docker прогон для PHASE 4 не заявляется. Последующий commit итогового отчёта изменяет только документацию, runtime evidence привязано к указанному source commit.
 
 ## Dependency audit
 

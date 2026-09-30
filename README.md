@@ -4,7 +4,7 @@
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
-Текущий этап: **PHASE 4 — Exchange Core, приёмка в процессе**. Добавлен общий пакет с 33 операциями адаптера, decimal/DTO/capability contracts, versioned instrument registry, bounded streams и тестовым transport. [Контракты](docs/phase-4/contracts.md), [требования](docs/phase-4/requirements.md), [отчёт проверок](docs/phase-4/verification.md). Реальные биржевые протоколы относятся к PHASE 5–8.
+Текущий этап: **PHASE 4 — Exchange Core завершена**. Добавлен общий пакет с 33 операциями адаптера, decimal/DTO/capability contracts, versioned instrument registry, bounded streams и тестовым transport. Прошли **1372 tests**, clean deployment и все три job [CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36706979599); dependency audit — 0 vulnerabilities. [Контракты](docs/phase-4/contracts.md), [требования](docs/phase-4/requirements.md), [итоговый отчёт](docs/phase-4/verification.md). Gate: **READY FOR PHASE 5**. Реальные биржевые протоколы относятся к PHASE 5–8.
 
 **PHASE 3 — Authentication завершена**: регистрация, подтверждение почты, вход, сессии, сброс и смена пароля, разграничение ролей БД и архитектура 2FA. [Отчёт проверок](docs/phase-3/verification.md), [HTTP API](docs/phase-3/auth-api.md), [роли и миграция](docs/phase-3/database-security.md), [запуск](docs/phase-3/operations.md). На границе первоначальной реализации прошли 461 тест, clean deployment, Docker и все три job [CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/35514994833).
 
