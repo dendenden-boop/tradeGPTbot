@@ -17,6 +17,7 @@
     "build": "pnpm -r --sort build",
     "test": "pnpm test:unit && pnpm test:http",
     "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:exchange-core": "vitest run --config vitest.unit.config.ts packages/exchange-core --outputFile.json=test-results/exchange-core.json",
     "test:http": "vitest run --config vitest.http.config.ts",
     "test:integration": "node scripts/test-integration.mjs",
     "test:database": "node scripts/test-integration.mjs --database-only",

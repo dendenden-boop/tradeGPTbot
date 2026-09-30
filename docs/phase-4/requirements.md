@@ -1,0 +1,25 @@
+# PHASE 4 — Exchange Core: требования
+
+Основание: пользовательский PHASE 4 («общий interface», test adapter, contract tests), [план этапов](../phase-0/implementation-plan.md), [архитектура адаптеров](../exchange-adapters.md) и завершённый [аудит PHASE 0–3](../audit-phases-0-3.md). Исходная версия — `cd940304cb730d054fb41429562975c9033fed95`. В этом этапе создаётся пакет `@ctp/exchange-core`; реальные протоколы бирж начинаются с PHASE 5.
+
+## Контракты и приёмка
+
+| Область             | Требование                                                                                                                       | Проверяемые отказы и границы                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decimal             | Канонические строки, точные операции, явные единицы BASE / QUOTE / CONTRACTS; совместимость с числовыми категориями PHASE 2      | JS number, exponent, отрицательный ноль, лишняя scale, overflow, шаг 0.05, отрицательные PnL/rebate; никакого скрытого округления                              |
+| Нормализованные DTO | Строгие runtime schemas для instruments/rules, market data, account, orders, fills, algo и pagination                            | Неизвестные поля, неверные OHLC/book/units, числовые IDs, неподтверждённая цена, scope и временные диапазоны                                                   |
+| Profile/capability  | Полный exchange/region/market/environment/accountMode/profileVersion/endpointProfileId scope; adapterVersion и свежесть evidence | LIVE/TESTNET/DEMO не взаимозаменяемы; UNSUPPORTED/UNVERIFIED/expired/ambiguous дают отказ до transport; synthetic требует явного разрешения                    |
+| Registry            | Порт получения versioned instrument/rules и ограниченная reference-реализация                                                    | Scope mismatch, stale/non-trading/expired future, повторы и повторное использование старой версии, overflow capacity/history, изменение options после создания |
+| Общий адаптер       | 33 типизированные операции, `disconnect`, валидация входа и выхода, инъекция transport                                           | Для каждого метода: корректный контракт, лишнее поле, чужой tenant, malformed output; дополнительно scope/filter/capability/rules и неизвестное имя операции   |
+| Mutations           | Различать ACK, definite reject и UNKNOWN; по умолчанию нет разрешения; LIVE закрыт                                               | Hash/permit/account/window, повторная проверка после async authorization, потерянный ответ, abort/timeout, частичный batch; нет автоматического retry          |
+| Streams/lifecycle   | Ограниченная очередь и concurrency, явный resync/closed, deadlines и освобождение source                                         | Медленный consumer, malformed/gap/overflow, late handshake, зависшие request/close, repeated unsubscribe/disconnect, capability expiry                         |
+| Граница PHASE 2     | Сохранить mode subtype, inverse/linear/expiry, decimal range и неизвестную average price                                         | Нельзя подменить TESTNET на DEMO, принять MARGIN/OPTION без реализации или превратить storage marker 0 в подтверждённую цену                                   |
+| Упаковка            | Только compiled production exports; test adapter находится в tests                                                               | Чистый frozen install/build/deploy, импорт в изолированном deployment без исходников/tests и без testing export                                                |
+
+Обязательны общие format/lint/typecheck/build, unit/HTTP/runtime, docs, dependency audit и clean deployment. CI повторяет их на Windows/Linux, затем запускает существующие настоящие PostgreSQL/Redis/SMTP integration tests и Docker smoke. Старые опубликованные migrations не изменяются.
+
+## Граница ответственности
+
+Exchange Core проверяет нормализованный контракт и вызывает доверенные серверные ports. Он не реализует биржевые REST/WS, signing, rate quotas, credential storage, durable OrderIntent/RiskDecision/reservation, dispatch deduplication, ledger, reconciliation или Paper Engine. Название capability не доказывает поддержку конкретной биржей. Тестовые capability evidence и ответы являются искусственными fixtures.
+
+Реальные mutations, включая «тестовый» вызов биржи, не используются для приёмки этого этапа. LIVE gate из плана остаётся обязательным: PHASE 11/12 и отдельный допуск аккаунта. Factory не подключается к API composition root. Подробные [контракты](contracts.md) и [результаты проверок](verification.md) отделяют выполненное от будущих этапов.

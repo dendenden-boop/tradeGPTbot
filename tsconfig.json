@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@ctp/exchange-core": ["./packages/exchange-core/src/index.ts"],
       "@ctp/auth": ["./packages/auth/src/index.ts"],
       "@ctp/config": ["./packages/config/src/index.ts"],
       "@ctp/logger": ["./packages/logger/src/index.ts"],

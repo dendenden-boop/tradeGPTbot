@@ -96,7 +96,7 @@ try {
   );
   assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
   await run(process.execPath, [pnpm, 'build'], options);
-  for (const name of ['api', 'database']) {
+  for (const name of ['api', 'database', 'exchange-core']) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
     const policyDirectory = path.join(directory, `deployment-${name}-policy`);
@@ -164,6 +164,22 @@ try {
     `,
     options,
   );
+  await verifyDeployment(
+    path.join(directory, 'deployment-exchange-core'),
+    String.raw`
+      const core = await import('@ctp/exchange-core');
+      const { existsSync } = await import('node:fs');
+      assert.equal(core.decimalAdd(core.parseDecimal('0.1'), core.parseDecimal('0.2')), '0.3');
+      assert.equal(core.quantize(core.parseDecimal('1.03'), core.parseDecimal('0.05'), 'DOWN'), '1');
+      assert.equal(typeof core.createExchangeAdapter, 'function');
+      assert.equal(typeof core.createInstrumentRegistry, 'function');
+      assert.equal(existsSync('./test'), false, 'Test adapter must not be packaged');
+      assert.equal(existsSync('./src'), false, 'Production package must use compiled output');
+      assert.equal('createTestAdapter' in core, false, 'Test adapter must not be exported');
+      assert.throws(() => import.meta.resolve('@ctp/exchange-core/testing'));
+    `,
+    options,
+  );
   assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
   assert.equal(digest(await readFile(path.join(workspace, 'pnpm-lock.yaml'))), lockfileSha256);
   await report('clean-install', {
@@ -173,9 +189,9 @@ try {
     directory: path.relative(workspace, directory),
     lockfileSha256,
     node: process.version,
-    deployments: ['@ctp/api', '@ctp/database'],
+    deployments: ['@ctp/api', '@ctp/database', '@ctp/exchange-core'],
     scope:
-      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections',
+      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test exchange adapter excluded from deployment and package exports',
   });
   console.log('Clean install/build/deploy PASS; original source and lockfile left unchanged.');
 } catch (error) {
