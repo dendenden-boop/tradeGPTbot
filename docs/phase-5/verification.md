@@ -1,6 +1,6 @@
 # PHASE 5 — Проверка Binance Adapter
 
-Статус: **IN PROGRESS — локальный regression PASS, полный CI ожидается**. PHASE 6 не начата. LIVE trading выключен; реальных private account requests и trading mutations нет. Scope и ограничения: [requirements](requirements.md), [contracts](contracts.md), [dependencies](dependencies.md).
+Решение: **READY FOR PHASE 6**. PHASE 5 завершена в документированном protocol scope после полного CI на source `8b14b4ff4c02e833e115754d51e91672f48d2799`. PHASE 6 не начата. LIVE trading выключен; реальных private account requests и trading mutations нет. Scope и ограничения: [requirements](requirements.md), [contracts](contracts.md), [dependencies](dependencies.md).
 
 Baseline: `09279dcd117b4a7bb1d667b1d660986551b169a5`, clean main до реализации. Прочитаны актуальные PHASE 0–4 docs, исходный roadmap и security/database/execution contracts. До изменений выполнены static/unit/HTTP/build/runtime/docs/clean/audit и все три job [повторного baseline CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36766506108). Старые acceptance PHASE 0–4 не заменяются результатами нового кода.
 
@@ -49,7 +49,27 @@ Windows, Node 24.20.0, pnpm 11.25.0. Результаты нового source п
 
 В unit suite есть actual loopback HTTP/WS integration: hung headers/body/handshake, abort и timeout, oversized/malformed messages, forced close и отсутствие late DATA. Production factory проверяется через loopback remapping только во внутреннем test assembly; пользовательский URL в factory запрещён. Real HTTP HMAC/createOrder, lost ACK/-1007 → UNKNOWN → clientOrderId FOUND выполняются без второго POST. Отдельные тесты освобождают все 16 Core/network slots и подтверждают закрытие серверных sockets после hung transport.
 
-Local Docker integration этого source не заявляется: canonical full real PostgreSQL/Redis/SMTP и API-container acceptance выполняется Linux CI. После CI здесь будут сохранены точный source SHA, run URL, job conclusions и counts из скачанных artifacts. READY gate до этого отсутствует.
+Local Docker integration этого source не заявляется: полный real PostgreSQL/Redis/SMTP и API-container acceptance выполнен Linux CI ниже.
+
+## Full CI и acceptance
+
+[Source CI run 37011583895](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37011583895) на точном `8b14b4ff4c02e833e115754d51e91672f48d2799`: **SUCCESS**, все три job PASS. Windows-2025 и Ubuntu-24.04 прошли frozen install, schema validation, build, auth benchmark, format/docs/lint/typecheck, unit/HTTP/runtime/clean и audit. CI подтвердил отсутствие lockfile drift. Скачанные artifacts сопоставлены с SHA и job conclusions; counts прочитаны из JSON, dependency tests и нулевой audit дополнительно проверены по CI log.
+
+| Набор                     | Подтверждённый результат                                                                                                            |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Unit                      | 1678/1678 на каждой ОС; 806 Core + 522 Binance + 350 прежних                                                                        |
+| HTTP                      | 41/41 на каждой ОС, включая real HTTP/2 trailers reproduction regression                                                            |
+| Clean deployment          | PASS на каждой ОС: API/database/Exchange Core/Binance, frozen lock hash совпадает с локальным                                       |
+| Runtime                   | PASS: Linux OS SIGTERM shutdown 17 мс, Windows test IPC shutdown 28 мс; 64 concurrent readiness, максимум 2 dependency sockets      |
+| Database/auth integration | 199/199: fresh/upgrade/repeated deployment, data preservation, ledger/evidence scope, ownership/auth hardening и decimal boundaries |
+| Dependency integration    | 3/3: real PostgreSQL/Redis, отказ и восстановление                                                                                  |
+| Auth runtime / hardening  | PASS: 46-request real SMTP/Argon2id process scenario, load/admission/mail isolation и secret-free logs                              |
+| Docker smoke              | PASS: 46 auth requests, SMTP boot-down/recovery, PostgreSQL/Redis recovery, real SIGTERM shutdown **278 мс**                        |
+| Dependency audit          | 0 vulnerabilities локально; обе CI ОС сообщают No known vulnerabilities found                                                       |
+
+Итого **1921 tests = 1678 + 41 + 199 + 3**. Scoped повторные runs, две ОС и process HTTP сценарии не суммируются второй раз. Gate подтверждает сохранность PHASE 0–4 вместе с новым protocol package, включая точечный Fastify patch; real exchange private execution в это число не входит.
+
+Локальная копия artifacts: `test-results/ci-phase5-37011583895/`; сводка `test-results/phase5-ci-acceptance.json`; local results/public probe и их SHA-256 — `test-results/phase5-local-acceptance.json`. Artifacts не коммитятся, workflow retention — семь дней. Итоговый acceptance commit меняет только README/отчёт; runtime evidence относится к указанному source SHA. Full CI повторяется на итоговом main, без изменения runtime source.
 
 ## Внешний read-only probe
 
@@ -80,4 +100,4 @@ Scope/order/hash/authorization guards Exchange Core сохранены; вали
 
 ## Acceptance boundary
 
-READY FOR PHASE 6 разрешён только после PASS всех трёх full CI jobs, включая real services/Docker. Gate относится к реализованному Binance protocol package с указанными UNSUPPORTED/NOT RUN границами. Он не разрешает real trading, не заменяет server distributed limiter/durable identity/authorization/admission ports и не заявляет production readiness либо нагрузочный профиль 300 instruments. PHASE 6 до gate не начинается.
+Все три full source CI jobs PASS; gate **READY FOR PHASE 6** установлен. Gate относится к реализованному Binance protocol package с указанными UNSUPPORTED/NOT RUN границами. Он не разрешает real trading, не заменяет server distributed limiter/durable identity/authorization/admission ports и не заявляет production readiness либо нагрузочный профиль 300 instruments. Следующий этап по roadmap — PHASE 6 Bybit; в этом результате он не реализуется.
