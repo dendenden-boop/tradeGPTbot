@@ -71,6 +71,8 @@ Capability record: `feature`, `support=SUPPORTED|UNSUPPORTED|UNVERIFIED`, `imple
 
 Неизвестное числовое поле — null/unavailable с причиной, не ноль. Баланс и цена из разных моментов не обозначаются атомарным snapshot. На сетевой границе decimal и большие exchange IDs — строки; timestamp `number` допускается только после проверки safe integer и единицы.
 
+Уточнение общего контракта из подтверждённых regression PHASE 5: free/locked равны null, если API не сообщает их; wallet/available не используются для выдуманного разложения. OrderBook может не иметь exchangeTime. createAlgoOrder содержит один STOP trigger (BUY ≥ price, SELL ≤ price) и child MARKET/LIMIT с trigger=null; вложенные STOP_* запрещены до transport. Запрошенные внешние client IDs не игнорируются ради нативной интеграции: несовместимый native algo остаётся UNSUPPORTED. [Реализованный контракт PHASE 5](phase-5/contracts.md).
+
 ### Согласование проекта DTO со schema PHASE 2
 
 Ни один storage enum или Prisma row не должен автоматически становиться публичным DTO. Следующие преобразования — обязательный контракт будущих PHASE 3–4/10–11, а не уже реализованный mapping layer.

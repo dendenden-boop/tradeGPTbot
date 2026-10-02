@@ -212,6 +212,8 @@ export const orderBookSchema = z
   .strictObject({
     ...publicIdentity,
     ...clocks,
+    // Spot depth snapshots provide a sequence but no exchange timestamp.
+    exchangeTime: timestampSchema.nullable(),
     kind: z.enum(['SNAPSHOT', 'DELTA']),
     bids: z.array(bookLevelSchema).max(1000),
     asks: z.array(bookLevelSchema).max(1000),
@@ -253,8 +255,9 @@ export const orderBookSchema = z
 
 export const balanceSchema = z.strictObject({
   asset: assetSchema,
-  free: decimalSchema,
-  locked: nonNegativeDecimalSchema,
+  // Derivatives wallets do not necessarily expose Spot free/locked components.
+  free: decimalSchema.nullable(),
+  locked: nonNegativeDecimalSchema.nullable(),
   total: decimalSchema,
   availableToTrade: observedAggregateSchema,
 });
@@ -434,6 +437,19 @@ export const newOrderSchema = z
       ctx.addIssue({ code: 'custom', message: 'INVALID_ORDER_COMBINATION' });
   });
 export type NewOrder = z.infer<typeof newOrderSchema>;
+
+/** The outer algo trigger activates an immediate child; nested STOP triggers are not supported. */
+export const algoChildOrderSchema = newOrderSchema.safeExtend({
+  type: z.enum(['MARKET', 'LIMIT']),
+  trigger: z.null(),
+});
+export const newAlgoOrderSchema = z.strictObject({
+  order: algoChildOrderSchema,
+  clientAlgoId: idSchema,
+  trigger: triggerSchema,
+});
+export type AlgoChildOrder = z.infer<typeof algoChildOrderSchema>;
+export type NewAlgoOrder = z.infer<typeof newAlgoOrderSchema>;
 
 export const pageCursorSchema = z
   .string()

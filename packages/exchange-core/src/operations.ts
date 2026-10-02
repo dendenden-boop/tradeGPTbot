@@ -7,6 +7,7 @@ import {
   candleSchema,
   fillSchema,
   instrumentSchema,
+  newAlgoOrderSchema,
   newOrderSchema,
   orderBookSchema,
   orderSchema,
@@ -14,7 +15,6 @@ import {
   positionSchema,
   tickerSchema,
   tradeTickSchema,
-  triggerSchema,
   timeframeSchema,
 } from './domain.js';
 import { accountScopeSchema, adapterProfileSchema, idSchema, timestampSchema } from './scope.js';
@@ -209,12 +209,7 @@ export const operations = Object.freeze({
     authorized(z.strictObject({ mode: z.enum(['ONE_WAY', 'HEDGE']) })),
     'CHANGE_POSITION_MODE',
   ),
-  createAlgoOrder: mutation(
-    authorized(
-      z.strictObject({ order: newOrderSchema, clientAlgoId: idSchema, trigger: triggerSchema }),
-    ),
-    'ALGO_ORDERS',
-  ),
+  createAlgoOrder: mutation(authorized(newAlgoOrderSchema), 'ALGO_ORDERS'),
   getAlgoOrder: read(algoLocatorQuery, algoOrderSchema, 'ALGO_ORDERS', true),
   cancelAlgoOrder: mutation(authorized(algoLocatorQuery), 'ALGO_ORDERS'),
   getAlgoHistory: read(historyQuery, pageSchema(algoOrderSchema), 'ALGO_ORDERS', true),

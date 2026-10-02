@@ -1,5 +1,7 @@
 # PHASE 4 — Контракт Exchange Core
 
+Подтверждённые дополнения PHASE 5 описаны в [контракте Binance Adapter](../phase-5/contracts.md): общий algo имеет один внешний STOP trigger и child MARKET/LIMIT без второго trigger; BUY активируется при цене ≥ порога, SELL при цене ≤ порога. Balance.free/locked могут быть null, если exchange не предоставляет эти составляющие, а OrderBook.exchangeTime — null при отсутствии exchange timestamp. Требования к decimal, execution timestamps, storage и authorization сохраняются. RED/GREEN воспроизведения находятся в [отчёте PHASE 5](../phase-5/verification.md); исторический acceptance PHASE 4 не подменяет новую проверку.
+
 Реализация: [public exports](../../packages/exchange-core/src/index.ts), [операции и schemas](../../packages/exchange-core/src/operations.ts), [adapter boundary](../../packages/exchange-core/src/adapter.ts). Пакет импортируется как `@ctp/exchange-core`. Это общий контракт с внедряемыми transport/authorization/registry, без реального подключения к бирже.
 
 ## Методы и результаты
