@@ -255,9 +255,11 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
       snapshots.set(token, snapshot);
     }
     const end = offset + input.limit;
+    const nextCursor = end < snapshot.items.length ? `${token}.${end}` : null;
+    if (nextCursor === null) snapshots.delete(token);
     return {
       items: snapshot.items.slice(offset, end),
-      nextCursor: end < snapshot.items.length ? `${token}.${end}` : null,
+      nextCursor,
       queryId: input.queryId,
     };
   }

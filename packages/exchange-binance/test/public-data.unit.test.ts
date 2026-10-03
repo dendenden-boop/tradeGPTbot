@@ -188,6 +188,62 @@ describe('Binance exchangeInfo protocol contract', () => {
       avgPriceMins: 5,
     });
   });
+  it.each(['0.05', 7, true, false])(
+    'marks a known filter with an unknown primitive constraint unsupported: %j',
+    (value) => {
+      const source = spotSymbol();
+      const raw = {
+        ...source,
+        filters: source.filters.map((filter) =>
+          filter.filterType === 'PRICE_FILTER'
+            ? { ...filter, futurePriceConstraint: value }
+            : filter,
+        ),
+      };
+      const admission = normalizeBinanceAdmission(raw);
+      expect(admission.unsupportedFilters).toEqual(['PRICE_FILTER']);
+      expect(admission.filters[0]).toMatchObject({ futurePriceConstraint: value });
+      // Public observations remain available; primitive retention is not support.
+      expect(normalizeExchangeInfo(exchangeInfo([raw]), SPOT_SCOPE, NOW)).toHaveLength(1);
+    },
+  );
+  it.each(['maxPosition', 'applyToMarket', 'avgPriceMins'])(
+    'does not approve a field known on another filter type: %s',
+    (field) => {
+      const source = spotSymbol();
+      expect(
+        normalizeBinanceAdmission({
+          ...source,
+          filters: source.filters.map((filter) =>
+            filter.filterType === 'PRICE_FILTER'
+              ? {
+                  ...filter,
+                  [field]: field === 'maxPosition' ? '1' : field === 'applyToMarket' ? true : 5,
+                }
+              : filter,
+          ),
+        }).unsupportedFilters,
+      ).toEqual(['PRICE_FILTER']);
+    },
+  );
+  it.each([false, true])('accepts native known fields for futures=%s', (futures) => {
+    expect(
+      normalizeBinanceAdmission(futures ? futuresSymbol() : spotSymbol()).unsupportedFilters,
+    ).toEqual([]);
+  });
+  it.each([false, true])('rejects foreign-market filter fields for futures=%s', (futures) => {
+    const source = futures ? futuresSymbol() : spotSymbol();
+    expect(
+      normalizeBinanceAdmission({
+        ...source,
+        filters: source.filters.map((filter) =>
+          filter.filterType === 'MAX_NUM_ORDERS'
+            ? { ...filter, [futures ? 'maxNumOrders' : 'limit']: 200 }
+            : filter,
+        ),
+      }).unsupportedFilters,
+    ).toEqual(['MAX_NUM_ORDERS']);
+  });
   it('keeps undocumented filter semantics unsupported even when a name is recognized', () => {
     const s = spotSymbol();
     expect(

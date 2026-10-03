@@ -353,6 +353,75 @@ describe('Binance signed private reads', () => {
 });
 
 describe('bounded scoped immutable private pagination', () => {
+  it.each([false, true])(
+    'releases only fully consumed snapshots before TTL for futures=%s',
+    async (futures) => {
+      const rows = ['1', '2', '3'].map((id) => ({ ...fill(futures), id }));
+      const h = harness(
+        futures,
+        Array.from({ length: 50 }, () => ({ data: rows })),
+      );
+      const query = { ...history, limit: 1 };
+      const first = (await h.transport.request('getTrades', query, h.context)) as {
+        nextCursor: string;
+      };
+      expect(first.nextCursor).toEqual(expect.any(String));
+      let retainedCursor = '';
+      for (let index = 1; index < 16; index++) {
+        const retained = (await h.transport.request(
+          'getTrades',
+          { ...query, queryId: `retained-${index}` },
+          h.context,
+        )) as { nextCursor: string };
+        if (index === 1) retainedCursor = retained.nextCursor;
+      }
+      const second = (await h.transport.request(
+        'getTrades',
+        { ...query, cursor: first.nextCursor },
+        h.context,
+      )) as { nextCursor: string };
+      expect(second.nextCursor).toEqual(expect.any(String));
+      await expect(
+        h.transport.request('getTrades', { ...query, queryId: 'overflow' }, h.context),
+      ).rejects.toThrow('BUSY');
+      const last = await h.transport.request(
+        'getTrades',
+        { ...query, cursor: second.nextCursor },
+        h.context,
+      );
+      expect(last).toMatchObject({ items: [{ fillId: '3' }], nextCursor: null });
+      // Reuse one freed slot repeatedly without changing the clock or evicting
+      // any of the 15 other live snapshots.
+      for (let index = 0; index < 24; index++) {
+        const freshQuery = { ...query, queryId: `fresh-${index}` };
+        const fresh = (await h.transport.request('getTrades', freshQuery, h.context)) as {
+          nextCursor: string;
+        };
+        const middle = (await h.transport.request(
+          'getTrades',
+          { ...freshQuery, cursor: fresh.nextCursor },
+          h.context,
+        )) as { nextCursor: string };
+        expect(
+          await h.transport.request(
+            'getTrades',
+            { ...freshQuery, cursor: middle.nextCursor },
+            h.context,
+          ),
+        ).toMatchObject({ items: [{ fillId: '3' }], nextCursor: null });
+      }
+      const resumed = (await h.transport.request(
+        'getTrades',
+        { ...query, queryId: 'retained-1', cursor: retainedCursor },
+        h.context,
+      )) as { nextCursor: string };
+      expect(resumed).toMatchObject({ items: [{ fillId: '2' }] });
+      expect(resumed.nextCursor).toEqual(expect.any(String));
+      await expect(
+        h.transport.request('getTrades', { ...query, cursor: first.nextCursor }, h.context),
+      ).rejects.toThrow('INVALID_REQUEST');
+    },
+  );
   it('expires a snapshot without inventing a fresh source timestamp', async () => {
     const h = harness(false, [
       {
@@ -682,6 +751,43 @@ describe('mutation dispatch and UNKNOWN contract', () => {
     ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'UNSUPPORTED' } });
     expect(h.calls).toHaveLength(0);
   });
+  it.each([false, true])(
+    'known filter with an unknown constraint independently denies new risk for futures=%s',
+    async (futures) => {
+      const h = harness(
+        futures,
+        futures
+          ? [
+              { data: { canTrade: true, multiAssetsMargin: false } },
+              { data: { dualSidePosition: false } },
+              { data: order(true) },
+            ]
+          : [{ data: order() }],
+      );
+      const source = futures ? futuresSymbol() : spotSymbol();
+      const transport = createPrivateTransport({
+        ...h.options,
+        admission: () =>
+          normalizeBinanceAdmission({
+            ...source,
+            filters: source.filters.map((filter) =>
+              filter.filterType === 'PRICE_FILTER'
+                ? { ...filter, futurePriceConstraint: '0.05' }
+                : filter,
+            ),
+          }),
+      });
+      expect(
+        await transport.request(
+          'createOrder',
+          h.authorized('createOrder', newOrder(futures)),
+          h.context,
+        ),
+      ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'UNSUPPORTED' } });
+      expect(h.orderAdmission.validate).not.toHaveBeenCalled();
+      expect(h.calls).toHaveLength(0);
+    },
+  );
   it('enforces market lot step separately from ordinary lot step', async () => {
     const h = harness(true);
     const input = {

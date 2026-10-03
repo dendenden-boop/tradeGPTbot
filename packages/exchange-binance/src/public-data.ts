@@ -42,22 +42,51 @@ export interface BinanceAdmission {
   readonly rawOrderTypes: readonly string[];
   readonly rawTimeInForce: readonly string[];
 }
-const KNOWN_FILTERS = new Set([
-  'PRICE_FILTER',
-  'LOT_SIZE',
-  'MARKET_LOT_SIZE',
-  'MIN_NOTIONAL',
-  'NOTIONAL',
-  'PERCENT_PRICE',
-  'PERCENT_PRICE_BY_SIDE',
-  'ICEBERG_PARTS',
-  'MAX_NUM_ORDERS',
-  'MAX_NUM_ALGO_ORDERS',
-  'MAX_NUM_ICEBERG_ORDERS',
-  'MAX_POSITION',
-  'TRAILING_DELTA',
-  'MAX_NUM_ORDER_LISTS',
-  'MAX_NUM_ORDER_AMENDS',
+// Documented field contracts, not a global list of primitive names. Unknown
+// fields (even false/zero or fields known on another filter) deny new risk.
+// Reviewed against Spot filters.md and USD-M exchangeInfo on 2026-10-03.
+const FILTER_FIELDS = new Map<string, readonly string[]>([
+  ['PRICE_FILTER', ['minPrice', 'maxPrice', 'tickSize']],
+  ['LOT_SIZE', ['minQty', 'maxQty', 'stepSize']],
+  ['MARKET_LOT_SIZE', ['minQty', 'maxQty', 'stepSize']],
+  ['MIN_NOTIONAL', ['minNotional', 'applyToMarket', 'avgPriceMins']],
+  [
+    'NOTIONAL',
+    ['minNotional', 'maxNotional', 'applyMinToMarket', 'applyMaxToMarket', 'avgPriceMins'],
+  ],
+  ['PERCENT_PRICE', ['multiplierUp', 'multiplierDown', 'avgPriceMins']],
+  [
+    'PERCENT_PRICE_BY_SIDE',
+    [
+      'bidMultiplierUp',
+      'bidMultiplierDown',
+      'askMultiplierUp',
+      'askMultiplierDown',
+      'avgPriceMins',
+    ],
+  ],
+  ['ICEBERG_PARTS', ['limit']],
+  ['MAX_NUM_ORDERS', ['maxNumOrders']],
+  ['MAX_NUM_ALGO_ORDERS', ['maxNumAlgoOrders']],
+  ['MAX_NUM_ICEBERG_ORDERS', ['maxNumIcebergOrders']],
+  ['MAX_POSITION', ['maxPosition']],
+  [
+    'TRAILING_DELTA',
+    [
+      'minTrailingAboveDelta',
+      'maxTrailingAboveDelta',
+      'minTrailingBelowDelta',
+      'maxTrailingBelowDelta',
+    ],
+  ],
+  ['MAX_NUM_ORDER_LISTS', ['maxNumOrderLists']],
+  ['MAX_NUM_ORDER_AMENDS', ['maxNumOrderAmends']],
+]);
+const PERPETUAL_FILTER_FIELDS = new Map<string, readonly string[]>([
+  ['MIN_NOTIONAL', ['notional']],
+  ['PERCENT_PRICE', ['multiplierUp', 'multiplierDown', 'multiplierDecimal']],
+  ['MAX_NUM_ORDERS', ['limit']],
+  ['MAX_NUM_ALGO_ORDERS', ['limit']],
 ]);
 const DECIMAL_FILTER_FIELDS = new Set([
   'minPrice',
@@ -178,6 +207,7 @@ function requireFields(filter: ObjectValue, fields: readonly string[]): void {
 }
 function admission(raw: ObjectValue): BinanceAdmission {
   const seen = new Set<string>();
+  const unsupported = new Set<string>();
   const filters = array(raw.filters, 64).map((item) => {
     const f = object(item);
     const type = idSchema.parse(f.filterType);
@@ -186,6 +216,15 @@ function admission(raw: ObjectValue): BinanceAdmission {
     const result: Record<string, string | number | boolean> = { filterType: type };
     const fields = Object.entries(f);
     if (fields.length > 32) return invalid();
+    const supportedFields =
+      raw.contractType === 'PERPETUAL'
+        ? (PERPETUAL_FILTER_FIELDS.get(type) ?? FILTER_FIELDS.get(type))
+        : FILTER_FIELDS.get(type);
+    if (
+      supportedFields === undefined ||
+      fields.some(([field]) => field !== 'filterType' && !supportedFields.includes(field))
+    )
+      unsupported.add(type);
     for (const [field, value] of fields) {
       if (field === 'filterType') continue;
       if (DECIMAL_FILTER_FIELDS.has(field)) result[field] = nonnegative(value);
@@ -196,79 +235,13 @@ function admission(raw: ObjectValue): BinanceAdmission {
       else if (typeof value === 'number' && Number.isSafeInteger(value)) result[field] = value;
       else return invalid();
     }
-    switch (type) {
-      case 'PRICE_FILTER':
-        requireFields(result, ['minPrice', 'maxPrice', 'tickSize']);
-        break;
-      case 'LOT_SIZE':
-      case 'MARKET_LOT_SIZE':
-        requireFields(result, ['minQty', 'maxQty', 'stepSize']);
-        break;
-      case 'NOTIONAL':
-        requireFields(result, [
-          'minNotional',
-          'maxNotional',
-          'applyMinToMarket',
-          'applyMaxToMarket',
-          'avgPriceMins',
-        ]);
-        break;
-      case 'MIN_NOTIONAL':
-        if (raw.contractType === 'PERPETUAL') requireFields(result, ['notional']);
-        else requireFields(result, ['minNotional', 'applyToMarket', 'avgPriceMins']);
-        break;
-      case 'PERCENT_PRICE':
-        requireFields(result, [
-          'multiplierUp',
-          'multiplierDown',
-          raw.contractType === 'PERPETUAL' ? 'multiplierDecimal' : 'avgPriceMins',
-        ]);
-        break;
-      case 'PERCENT_PRICE_BY_SIDE':
-        requireFields(result, [
-          'bidMultiplierUp',
-          'bidMultiplierDown',
-          'askMultiplierUp',
-          'askMultiplierDown',
-          'avgPriceMins',
-        ]);
-        break;
-      case 'MAX_NUM_ORDERS':
-        requireFields(result, [raw.contractType === 'PERPETUAL' ? 'limit' : 'maxNumOrders']);
-        break;
-      case 'MAX_NUM_ALGO_ORDERS':
-        requireFields(result, [raw.contractType === 'PERPETUAL' ? 'limit' : 'maxNumAlgoOrders']);
-        break;
-      case 'MAX_NUM_ICEBERG_ORDERS':
-        requireFields(result, ['maxNumIcebergOrders']);
-        break;
-      case 'MAX_NUM_ORDER_LISTS':
-        requireFields(result, ['maxNumOrderLists']);
-        break;
-      case 'MAX_NUM_ORDER_AMENDS':
-        requireFields(result, ['maxNumOrderAmends']);
-        break;
-      case 'MAX_POSITION':
-        requireFields(result, ['maxPosition']);
-        break;
-      case 'ICEBERG_PARTS':
-        requireFields(result, ['limit']);
-        break;
-      case 'TRAILING_DELTA':
-        requireFields(result, [
-          'minTrailingAboveDelta',
-          'maxTrailingAboveDelta',
-          'minTrailingBelowDelta',
-          'maxTrailingBelowDelta',
-        ]);
-        break;
-    }
+    if (supportedFields !== undefined) requireFields(result, supportedFields);
     return result;
   });
   return immutable({
     symbol: symbol(raw.symbol),
     filters,
-    unsupportedFilters: [...seen].filter((type) => !KNOWN_FILTERS.has(type)),
+    unsupportedFilters: [...unsupported],
     quoteOrderQtyMarketAllowed:
       raw.quoteOrderQtyMarketAllowed === undefined ? false : bool(raw.quoteOrderQtyMarketAllowed),
     icebergAllowed: raw.icebergAllowed === undefined ? false : bool(raw.icebergAllowed),

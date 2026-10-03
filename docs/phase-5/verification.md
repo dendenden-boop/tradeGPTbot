@@ -98,6 +98,34 @@ Scope/order/hash/authorization guards Exchange Core сохранены; вали
 - Fastify exact patch в `apps/api/package.json`; HTTP/2 regression и disposable fixture в `apps/api/test/`.
 - Корневые package/lock/tsconfig/Vitest aliases; clean-deployment script, manual public probe, README и phase contracts/docs.
 
+## Hardening перед PHASE 6 — 3 октября 2026
+
+Baseline текущего clean main: `aca7d0e9b5e742a0b9f2270349b93fb3a845f6ae`; remote main совпал. Scope ограничен двумя запрошенными исправлениями Binance; PHASE 6 не начата. Исторический READY gate выше относится к исходной реализации. Приёмка текущего hardening пока **IN PROGRESS: локальный regression PASS, полный CI ожидается**.
+
+### Reproduction → fix → regression
+
+1. **Consumed snapshot удерживал slot до TTL.** До изменения source новый regression заполнял 16 slots, выдавал последнюю страницу первого snapshot с `nextCursor=null`, затем создание следующего snapshot ошибочно возвращало BUSY. Fix: после вычисления terminal cursor snapshot сразу удаляется из Map. Intermediate страницы slot не освобождают; live snapshots не вытесняются. Два теста Spot/USD-M сохраняют 15 других live snapshots, повторно используют освобождённый slot 24 раза без изменения clock/TTL, читают сохранённый cursor и отвергают replay consumed snapshot.
+2. **Неизвестное поле известного filter автоматически допускалось.** До изменения source contract tests показывали пустой unsupportedFilters для PRICE_FILTER с новым primitive constraint, полем другого filter type либо чужого Spot/USD-M варианта. Отдельные корректные mutation fixtures подтверждали ACCEPTED createOrder для обоих рынков при неизвестном constraint и одобряющем server admission port. Fix: market-specific field allowlists одновременно задают обязательные поля и границу известной семантики. Любое дополнительное поле помечает filter type как unsupported; bounded primitive остаётся только observational data. Новый риск отвергается независимо от одобрения port, до его вызова и до любого HTTP dispatch. Missing/malformed required fields по-прежнему отклоняются; неизвестные filter types остаются unsupported.
+
+Baseline targeted suite — 139 PASS. После добавления tests до исправления: 13 FAIL / 141 PASS из 154; отдельный уточнённый dispatch reproduction — 2 FAIL (оба рынка действительно ACCEPTED). После исправления: 154/154 PASS. Всего добавлено 15 tests: 2 pagination, 11 normalization/allowlist contracts и 2 new-risk dispatch regressions. Ссылки на первичный контракт: [Spot filters](https://github.com/binance/binance-spot-api-docs/blob/master/filters.md), [USD-M exchangeInfo](https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data); новые поля не объявляются поддержанными только на основании primitive type или имени.
+
+Локальные артефакты: `test-results/phase5-hardening-baseline.json`, `phase5-hardening-before.json`, `phase5-hardening-dispatch-before.json`, `phase5-hardening-after.json`. RED artifacts относятся к коду до исправления, не к итоговой приёмке.
+
+### Локальные проверки hardening
+
+| Команда                                                | Фактический результат                                                             |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `pnpm format:check`                                    | PASS; изменённые docs дополнительно форматируются перед commit                    |
+| `pnpm lint`, `pnpm typecheck`                          | PASS после исправления unsafe any только в новом assertion                        |
+| `pnpm test:unit`                                       | PASS: 1693 tests, включая 806 Core, 537 Binance и 350 прежних                     |
+| `pnpm test:http`                                       | PASS: 41 tests                                                                    |
+| `pnpm build`                                           | PASS: все workspace packages/apps                                                 |
+| `pnpm test:clean`                                      | PASS: frozen fresh source/build и isolated production deployments четырёх пакетов |
+| `pnpm audit --json`                                    | PASS: 0 vulnerabilities всех severity                                             |
+| Опубликованные migrations / database / dependency lock | Изменений нет                                                                     |
+
+Full CI этой версии ещё не завершён; новый READY gate будет подтверждён только по фактическим job conclusions и artifacts. Реальные приватные биржевые запросы и trading mutations не выполнялись; LIVE выключен. Два protocol fixes не расширяют capabilities и не создают новые authorization/Risk bypasses.
+
 ## Acceptance boundary
 
-Все три full source CI jobs PASS; gate **READY FOR PHASE 6** установлен. Gate относится к реализованному Binance protocol package с указанными UNSUPPORTED/NOT RUN границами. Он не разрешает real trading, не заменяет server distributed limiter/durable identity/authorization/admission ports и не заявляет production readiness либо нагрузочный профиль 300 instruments. Следующий этап по roadmap — PHASE 6 Bybit; в этом результате он не реализуется.
+Исторический gate исходной PHASE 5 — **READY FOR PHASE 6**; перед переходом требуется завершить текущую hardening-приёмку выше. Gate относится к реализованному Binance protocol package с указанными UNSUPPORTED/NOT RUN границами. Он не разрешает real trading, не заменяет server distributed limiter/durable identity/authorization/admission ports и не заявляет production readiness либо нагрузочный профиль 300 instruments. Следующий этап по roadmap — PHASE 6 Bybit; в этой задаче он не реализуется.
