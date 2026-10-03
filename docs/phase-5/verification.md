@@ -1,6 +1,6 @@
 # PHASE 5 — Проверка Binance Adapter
 
-Решение: **READY FOR PHASE 6**. PHASE 5 завершена в документированном protocol scope после полного CI на source `8b14b4ff4c02e833e115754d51e91672f48d2799`. PHASE 6 не начата. LIVE trading выключен; реальных private account requests и trading mutations нет. Scope и ограничения: [requirements](requirements.md), [contracts](contracts.md), [dependencies](dependencies.md).
+Решение: **READY FOR PHASE 6**, подтверждено после двух hardening fixes полным [CI 37146908217](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37146908217) на source `1538e3b489d6c5038b6b5f14a85f4a1882ce3e0c`. Исходная PHASE 5 принята на `8b14b4ff4c02e833e115754d51e91672f48d2799`; результаты 2 октября ниже сохранены отдельно от hardening-приёмки 3 октября. PHASE 6 не начата. LIVE trading выключен; реальных private account requests и trading mutations нет. Scope и ограничения: [requirements](requirements.md), [contracts](contracts.md), [dependencies](dependencies.md).
 
 Baseline: `09279dcd117b4a7bb1d667b1d660986551b169a5`, clean main до реализации. Прочитаны актуальные PHASE 0–4 docs, исходный roadmap и security/database/execution contracts. До изменений выполнены static/unit/HTTP/build/runtime/docs/clean/audit и все три job [повторного baseline CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/36766506108). Старые acceptance PHASE 0–4 не заменяются результатами нового кода.
 
@@ -100,7 +100,7 @@ Scope/order/hash/authorization guards Exchange Core сохранены; вали
 
 ## Hardening перед PHASE 6 — 3 октября 2026
 
-Baseline текущего clean main: `aca7d0e9b5e742a0b9f2270349b93fb3a845f6ae`; remote main совпал. Scope ограничен двумя запрошенными исправлениями Binance; PHASE 6 не начата. Исторический READY gate выше относится к исходной реализации. Приёмка текущего hardening пока **IN PROGRESS: локальный regression PASS, полный CI ожидается**.
+Baseline текущего clean main: `aca7d0e9b5e742a0b9f2270349b93fb3a845f6ae`; remote main совпал. Scope ограничен двумя запрошенными исправлениями Binance; PHASE 6 не начата. Source hardening: `1538e3b489d6c5038b6b5f14a85f4a1882ce3e0c`. Приёмка **PASS: локальный regression и полный CI SUCCESS**; gate **READY FOR PHASE 6** сохраняется.
 
 ### Reproduction → fix → regression
 
@@ -115,7 +115,7 @@ Baseline targeted suite — 139 PASS. После добавления tests до
 
 | Команда                                                | Фактический результат                                                             |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `pnpm format:check`                                    | PASS; изменённые docs дополнительно форматируются перед commit                    |
+| `pnpm format:check`                                    | PASS; source и docs прошли также обе CI ОС                                        |
 | `pnpm lint`, `pnpm typecheck`                          | PASS после исправления unsafe any только в новом assertion                        |
 | `pnpm test:unit`                                       | PASS: 1693 tests, включая 806 Core, 537 Binance и 350 прежних                     |
 | `pnpm test:http`                                       | PASS: 41 tests                                                                    |
@@ -124,8 +124,25 @@ Baseline targeted suite — 139 PASS. После добавления tests до
 | `pnpm audit --json`                                    | PASS: 0 vulnerabilities всех severity                                             |
 | Опубликованные migrations / database / dependency lock | Изменений нет                                                                     |
 
-Full CI этой версии ещё не завершён; новый READY gate будет подтверждён только по фактическим job conclusions и artifacts. Реальные приватные биржевые запросы и trading mutations не выполнялись; LIVE выключен. Два protocol fixes не расширяют capabilities и не создают новые authorization/Risk bypasses.
+### Итоговый полный CI hardening
+
+[CI run 37146908217](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37146908217) на точном source `1538e3b489d6c5038b6b5f14a85f4a1882ce3e0c` — **SUCCESS**, все три job: Checks (windows-2025), Checks (ubuntu-24.04), Real services and Docker smoke — PASS. Conclusions, SHA, JSON artifacts и log проверены после завершения run.
+
+| Набор                     | Подтверждённый результат                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Unit / HTTP               | 1693/1693 и 41/41 на каждой ОС; unit включает 806 Core + 537 Binance + 350 прежних                                        |
+| Static / build / clean    | Frozen install, schema/build, auth benchmark, format/docs/lint/typecheck/runtime/clean и отсутствие lockfile drift — PASS |
+| Clean deployment          | Четыре пакета на каждой ОС; lock SHA-256 `d30337fc28949ff05ee8704508dd625122e1eb0fcdd9bce5ccb3439e0148bdc1` совпал        |
+| Runtime                   | Linux OS SIGTERM shutdown 16 мс, Windows test IPC shutdown 37 мс; 64 concurrent readiness, максимум 2 dependency sockets  |
+| Database/auth integration | 199/199; fresh/upgrade/repeated migrations, сохранность данных и security contracts — PASS                                |
+| Dependency integration    | 3/3; реальные PostgreSQL/Redis, отказ и восстановление                                                                    |
+| Auth / Docker smoke       | SMTP/Argon2id runtime, auth hardening/load, SMTP recovery и API container smoke — PASS; Docker SIGTERM shutdown 341 мс    |
+| Dependency audit          | 0 vulnerabilities локально; обе CI ОС: No known vulnerabilities found                                                     |
+
+Итого **1936 tests = 1693 + 41 + 199 + 3**. Две ОС и повторные scoped/process runs не суммируются второй раз. Скачанные artifacts: `test-results/ci-phase5-hardening-37146908217/`; machine summary: `test-results/phase5-hardening-ci-acceptance.json`; log/conclusions: `phase5-hardening-ci-source.log` / `phase5-hardening-ci-source.json`. Эти локальные файлы не коммитятся; CI retention — семь дней. Acceptance commit меняет только документацию, без runtime source changes.
+
+Опубликованные migrations, database source/schema, Exchange Core и dependency lock не изменены. Новых серьёзных defects в этой проверке не обнаружено. Реальные приватные биржевые запросы и trading mutations не выполнялись; LIVE выключен. Два protocol fixes не расширяют capabilities и не создают новые authorization/Risk bypasses.
 
 ## Acceptance boundary
 
-Исторический gate исходной PHASE 5 — **READY FOR PHASE 6**; перед переходом требуется завершить текущую hardening-приёмку выше. Gate относится к реализованному Binance protocol package с указанными UNSUPPORTED/NOT RUN границами. Он не разрешает real trading, не заменяет server distributed limiter/durable identity/authorization/admission ports и не заявляет production readiness либо нагрузочный профиль 300 instruments. Следующий этап по roadmap — PHASE 6 Bybit; в этой задаче он не реализуется.
+После завершённой hardening-приёмки gate остаётся **READY FOR PHASE 6**. Gate относится к реализованному Binance protocol package с указанными UNSUPPORTED/NOT RUN границами. Он не разрешает real trading, не заменяет server distributed limiter/durable identity/authorization/admission ports и не заявляет production readiness либо нагрузочный профиль 300 instruments. Следующий этап по roadmap — PHASE 6 Bybit; в этой задаче он не реализуется.
