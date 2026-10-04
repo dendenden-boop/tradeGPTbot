@@ -1,0 +1,7 @@
+# PHASE 8 — Dependencies and deferred composition
+
+Standalone HTX package reuses pinned `@ctp/exchange-core`, `zod@4.5.4`, `ws@8.22.0` and dev types `@types/ws@8.18.2`, plus Node 24 crypto/http/https/zlib. No third-party SDK, new version selection, install-time network hook or credentials in source. Root TypeScript/Vitest aliases and clean deployment must include HTX. Workspace lockfile change is limited to its importer; published migrations are unchanged.
+
+Mandatory server ports: durable RuntimeInstrumentRegistry with atomic version history and restart recovery; shared rate allocator observing Spot X-HB and derivatives ratelimit headers; account enrollment/credentials/permission/identity owner. Explicit test/reference registries and public diagnostic limiter are fixtures and do not prove a production storage/rate service. Account permission evidence expires within 30s and native account checks supplement it. Neither caller payload nor a capability fixture is authority.
+
+PHASE 9 owns market-data multiplexing, reconnect/backfill, long-lived feeds and freshness orchestration. PHASE 11/12 own persisted order intents/dispatch evidence/UNKNOWN reconciliation and Risk/Authorization; PHASE 13 owns Paper. Confirmed exchange sandbox and safe execution profile, native derivative limits, dynamic price/slippage/turnover admission, multi-asset V5 and unsupported private stream/conditional operations require independent later proof. No LIVE mutation capability is enabled here. No new application/db composition or migration is part of this package.

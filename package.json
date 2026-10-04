@@ -45,7 +45,9 @@
     "docs:check": "node -e \"import('./scripts/check-docs.mjs').then(m => m.checkDocs()).then(console.log)\"",
     "audit:dependencies": "pnpm audit --audit-level=high",
     "test:okx": "vitest run --config vitest.unit.config.ts packages/exchange-okx --outputFile.json=test-results/exchange-okx.json",
-    "probe:okx": "node scripts/probe-okx-public.mjs"
+    "probe:okx": "node scripts/probe-okx-public.mjs",
+    "test:htx": "vitest run --config vitest.unit.config.ts packages/exchange-htx --outputFile.json=test-results/exchange-htx.json",
+    "probe:htx": "node scripts/probe-htx-public.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

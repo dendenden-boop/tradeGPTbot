@@ -103,6 +103,7 @@ try {
     'exchange-binance',
     'exchange-bybit',
     'exchange-okx',
+    'exchange-htx',
   ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
@@ -235,6 +236,27 @@ try {
     options,
   );
   await verifyDeployment(
+    path.join(directory, 'deployment-exchange-htx'),
+    String.raw`
+      const htx = await import('@ctp/exchange-htx');
+      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
+      const { existsSync } = await import('node:fs');
+      assert.deepEqual(Object.keys(htx), ['createHtxAdapter']);
+      assert.equal(existsSync('./test'), false, 'HTX protocol fixtures must not be packaged');
+      assert.equal(existsSync('./src'), false, 'HTX must use compiled output');
+      for (const subpath of ['io', 'auth', 'profiles', 'testing']) assert.throws(() => import.meta.resolve('@ctp/exchange-htx/' + subpath));
+      const options = { profileId: 'htx-spot-live-v1', symbols: ['btcusdt'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
+      assert.throws(() => htx.createHtxAdapter({ ...options, rest: 'https://user.example' }), /INVALID_HTX_CONFIGURATION/);
+      assert.throws(() => htx.createHtxAdapter({ ...options, profileId: 'htx-spot-testnet-v1' }), /INVALID_HTX_CONFIGURATION/);
+      assert.throws(() => htx.createHtxAdapter(options), /INVALID_HTX_CONFIGURATION/);
+      const adapter = htx.createHtxAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
+      assert.equal(adapter.account, null);
+      assert.equal(adapter.profile.environment, 'LIVE');
+      await adapter.disconnect();
+    `,
+    options,
+  );
+  await verifyDeployment(
     path.join(directory, 'deployment-exchange-core'),
     String.raw`
       const core = await import('@ctp/exchange-core');
@@ -266,9 +288,10 @@ try {
       '@ctp/exchange-binance',
       '@ctp/exchange-bybit',
       '@ctp/exchange-okx',
+      '@ctp/exchange-htx',
     ],
     scope:
-      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
+      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX/HTX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
   });
   console.log('Clean install/build/deploy PASS; original source and lockfile left unchanged.');
 } catch (error) {

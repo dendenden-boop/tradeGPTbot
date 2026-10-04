@@ -10,7 +10,8 @@
       "@ctp/config": ["./packages/config/src/index.ts"],
       "@ctp/logger": ["./packages/logger/src/index.ts"],
       "@ctp/database": ["./packages/database/src/index.ts"],
-      "@ctp/exchange-okx": ["./packages/exchange-okx/src/index.ts"]
+      "@ctp/exchange-okx": ["./packages/exchange-okx/src/index.ts"],
+      "@ctp/exchange-htx": ["./packages/exchange-htx/src/index.ts"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts", "tests/**/*.ts", "vitest*.ts"],
