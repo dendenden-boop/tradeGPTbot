@@ -242,9 +242,11 @@ export function createStreams(
         lastActivity = now(),
         lastTicker = -1,
         lastBook = -1,
+        lastBookHash = '',
         lastTickerHash = '',
         lastPositionTime = -1,
         lastPositionHash = '';
+      let lastBookVersion: bigint | null = null;
       const seen = new Map<string, string>(),
         orderTimes = new Map<string, number>(),
         candles = new Map<number, { fingerprint: string; revision: number; complete: boolean }>();
@@ -515,11 +517,26 @@ export function createStreams(
             lastTickerHash = hash;
             onEvent(normalizeTicker(x.tick, r, time, now()));
           } else if (operation === 'subscribeOrderBook') {
-            const b = normalizeBook(x.tick, r, depth, now());
-            if (b.sourceSequence !== null && !unique('book.' + b.sourceSequence, x.tick)) return;
+            const b = normalizeBook(x.tick, r, depth, now()),
+              hash = fingerprint(x.tick);
+            if (b.sourceSequence !== null && !/^(?:0|[1-9]\d*)$/.test(b.sourceSequence))
+              throw new HtxProtocolError('INVALID_RESPONSE');
+            // wireId/DTO already bounds the lexeme; never round native versions through Number.
+            const version = b.sourceSequence === null ? null : BigInt(b.sourceSequence);
+            if (version !== null) {
+              // Ordering must precede dedup: an old replay is a gap even if its payload was seen.
+              if (lastBookVersion !== null && version < lastBookVersion)
+                throw new HtxProtocolError('INVALID_RESPONSE');
+              if (!unique('book.' + b.sourceSequence, x.tick)) return;
+            } else if (b.exchangeTime !== null && b.exchangeTime === lastBook) {
+              if (hash !== lastBookHash) throw new HtxProtocolError('INVALID_RESPONSE');
+              return;
+            }
             if (b.exchangeTime !== null && b.exchangeTime < lastBook)
               throw new HtxProtocolError('INVALID_RESPONSE');
             if (b.exchangeTime !== null) lastBook = b.exchangeTime;
+            if (version !== null) lastBookVersion = version;
+            lastBookHash = hash;
             onEvent(b);
           } else if (operation === 'subscribeTrades') {
             for (const row of array(object(x.tick).data, 100)) {
