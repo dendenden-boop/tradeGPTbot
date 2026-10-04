@@ -88,6 +88,14 @@ export function createPublicTransport(
       refreshing = false;
     }
   }
+  function assertRecord(expected: InstrumentRecord) {
+    const current = record(expected.instrument.id);
+    if (
+      current.rules.version !== expected.rules.version ||
+      current.instrument.metadataVersion !== expected.instrument.metadataVersion
+    )
+      throw new OkxProtocolError('STALE_METADATA');
+  }
   return Object.freeze({
     client,
     record,
@@ -146,6 +154,7 @@ export function createPublicTransport(
           ),
           rows = array(readResponse(response), 1);
         if (rows.length !== 1) throw new OkxProtocolError('INVALID_RESPONSE');
+        assertRecord(r);
         return normalizeTicker(rows[0], r, response.receivedAt);
       }
       if (operation === 'getOrderBook') {
@@ -157,6 +166,7 @@ export function createPublicTransport(
           ),
           rows = array(readResponse(response), 1);
         if (rows.length !== 1) throw new OkxProtocolError('INVALID_RESPONSE');
+        assertRecord(r);
         const x = object(rows[0]);
         // REST books may omit sequence. No fabricated sequence enters a WS continuity contract.
         if (x.seqId === undefined) throw new OkxProtocolError('UNSUPPORTED');
@@ -194,6 +204,7 @@ export function createPublicTransport(
             },
             context,
           );
+        assertRecord(r);
         const items = normalizeCandles(
           readResponse(response),
           r,

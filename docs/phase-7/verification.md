@@ -1,6 +1,6 @@
 # PHASE 7 — OKX verification
 
-Gate: **READY FOR PHASE 8**, within the initial [requirements](requirements.md) and [contracts](contracts.md). Source [`e022b60c24e1ca7bb2ae065a0844b973152bb92f`](https://github.com/dendenden-boop/tradeGPTbot/commit/e022b60c24e1ca7bb2ae065a0844b973152bb92f) passed all three jobs of [CI 37192370532](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37192370532), completed **2026-10-04 09:39:30 UTC**. This gate is protocol/module acceptance, not production trading readiness. PHASE 8 has not started.
+Gate: **WITHHELD pending metadata-lifetime hardening acceptance**. The first source [`e022b60c24e1ca7bb2ae065a0844b973152bb92f`](https://github.com/dendenden-boop/tradeGPTbot/commit/e022b60c24e1ca7bb2ae065a0844b973152bb92f) passed all three jobs of [CI 37192370532](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37192370532), completed **2026-10-04 09:39:30 UTC**. A subsequent cross-component audit reproduced stale contract interpretation in asynchronous market data; the former gate is superseded until the correction passes full regression/CI. PHASE 8 has not started.
 
 Baseline `b7f934c930b55c066bcfbe6ccb20453206b9225f`, clean main/origin identical; [baseline CI 37188771838](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37188771838) SUCCESS all three jobs. Full local baseline before edits: format/docs/lint/typecheck/unit/HTTP/build/schema/runtime/clean/audit exit 0; 1825 unit, 41 HTTP, five production deployments, zero vulnerabilities. Artifacts: ignored `test-results/phase7-baseline-*`.
 
@@ -41,4 +41,12 @@ Total: **2230 distinct tests = 1987 unit + 41 HTTP + 199 database + 3 dependency
 
 Cross-phase preservation is verified by identical baseline/source trees: Core `a2530842aad20afd90215679e7bf35ac9c11c848`, Binance `bdfeeede50386294fac6b0ecf6bed175df6ed9b3`, Bybit `00d9b06f263e29411c066715ebb44edff3c44f1a`, published migrations `7d846113c5801472e8b8a03cf4da034a55cb090e`. Application/database sources are unchanged. New OKX source/package/test tree: `2466f03693e865a715f8ca10f74e2b32d0604bc9`. Only a workspace importer is added to the lockfile.
 
-Limits remain explicit: actual private exchange acceptance NOT RUN; live trading disabled; unknown Demo metadata constraints fail closed; 300-instrument load, durable trading services, automatic reconnect/backfill and later phases are not claimed. No unresolved reproduced defect remains in the implemented scope. The gate remains READY FOR PHASE 8 within these boundaries.
+Limits remain explicit: actual private exchange acceptance NOT RUN; live trading disabled; unknown Demo metadata constraints fail closed; 300-instrument load, durable trading services, automatic reconnect/backfill and later phases are not claimed. The first source CI remains historical evidence; the correction requires its own complete acceptance.
+
+## Cross-component metadata-lifetime correction
+
+Three tests reproduced the issue before changes: metadata expires during a REST book request; WS data arrives after metadata expiry; the registry replaces contract version/ctVal while a WS source holds its old immutable record. All three incorrectly emitted readable/fresh data, including old CONTRACTS→BASE conversion. Artifact phase7-metadata-lifetime-before: **3 failed**.
+
+Fix: recheck the active registry/cache version and expiry before REST normalization and each WS frame; bound WS lifetime by metadata expiry and emit resync when expiry/version differs. Source closes and releases timers/resources. Artifact phase7-metadata-lifetime-after: **165 OKX tests PASS**, including **3 RED → GREEN** metadata-lifetime regressions. No completed phase or published migration was changed.
+
+Correction local acceptance on 2026-10-04: format/docs/lint/typecheck/unit/HTTP/build/schema/runtime/clean/audit all exit 0; **1990 unit + 41 HTTP passed, zero failures/skips**, six clean deployments with unchanged lockfile SHA256, zero audit vulnerabilities at every severity (407 dependencies). The corrected build also passed **24/24 public-only REST/WS probes** across all four profiles. Evidence: ignored phase7-hardening checks, audit, unit, HTTP, clean and public-probe reports. Full CI for this correction is pending; the gate remains withheld.

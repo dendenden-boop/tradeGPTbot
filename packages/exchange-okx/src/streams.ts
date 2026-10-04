@@ -36,6 +36,7 @@ export function createStreams(
   privateTransport: PrivateTransport,
   syncTime: (context: RequestContext) => Promise<void>,
   now: () => number,
+  currentRecord: (instrumentId: string) => InstrumentRecord,
 ) {
   let disconnected = false;
   const sources = new Set<() => Promise<void>>();
@@ -64,6 +65,16 @@ export function createStreams(
       )
         throw new OkxProtocolError('UNSUPPORTED');
       if (!record) throw new OkxProtocolError('STALE_METADATA');
+      const assertRecord = () => {
+        const current = currentRecord(record.instrument.id);
+        if (
+          now() >= record.rules.expiresAt ||
+          current.rules.version !== record.rules.version ||
+          current.instrument.metadataVersion !== record.instrument.metadataVersion
+        )
+          throw new OkxProtocolError('STALE_METADATA');
+      };
+      assertRecord();
       const symbol = record.instrument.exchangeSymbol,
         depth = operation === 'subscribeOrderBook' ? integer(input.depth) : 0;
       const channel =
@@ -115,6 +126,7 @@ export function createStreams(
         beforeAck.length = 0;
         beforeAckBytes = 0;
         clearTimeout(timer);
+        clearTimeout(metadataTimer);
         if (heartbeat) clearInterval(heartbeat);
         context.signal.removeEventListener('abort', abort);
         pending?.reject(new OkxProtocolError('UNAVAILABLE'));
@@ -134,6 +146,7 @@ export function createStreams(
           void close();
         },
         timer = setTimeout(abort, Math.max(1, context.deadline - now()));
+      const metadataTimer = setTimeout(fail, Math.max(1, record.rules.expiresAt - now()));
       context.signal.addEventListener('abort', abort, { once: true });
       sources.add(close);
       const rate = (controls: number, connections = 0): OkxRateRequest =>
@@ -170,6 +183,7 @@ export function createStreams(
       function receive(text: string) {
         if (!active) return;
         try {
+          assertRecord();
           if (text === 'pong') {
             if (!heartbeatPending) throw new OkxProtocolError('INVALID_RESPONSE');
             heartbeatPending = false;

@@ -140,7 +140,16 @@ export function createOkxAdapterWithIo(raw: OkxAdapterOptions, io: NetworkIo): E
       ...(options.orderAdmission === undefined ? {} : { orderAdmission: options.orderAdmission }),
       ...(options.tradeMode === undefined ? {} : { tradeMode: options.tradeMode }),
     }),
-    streams = createStreams(endpoint, io, options.limiter, signer, privateTransport, syncTime, now);
+    streams = createStreams(
+      endpoint,
+      io,
+      options.limiter,
+      signer,
+      privateTransport,
+      syncTime,
+      now,
+      publicTransport.record,
+    );
   return createExchangeAdapter({
     profile,
     account,
