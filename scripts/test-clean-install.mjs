@@ -96,7 +96,7 @@ try {
   );
   assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
   await run(process.execPath, [pnpm, 'build'], options);
-  for (const name of ['api', 'database', 'exchange-core', 'exchange-binance']) {
+  for (const name of ['api', 'database', 'exchange-core', 'exchange-binance', 'exchange-bybit']) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
     const policyDirectory = path.join(directory, `deployment-${name}-policy`);
@@ -186,6 +186,24 @@ try {
     options,
   );
   await verifyDeployment(
+    path.join(directory, 'deployment-exchange-bybit'),
+    String.raw`
+      const bybit = await import('@ctp/exchange-bybit');
+      const { existsSync } = await import('node:fs');
+      assert.deepEqual(Object.keys(bybit), ['createBybitAdapter']);
+      assert.equal(existsSync('./test'), false, 'Bybit protocol fixtures must not be packaged');
+      assert.equal(existsSync('./src'), false, 'Bybit must use compiled output');
+      for (const subpath of ['io', 'auth', 'profiles', 'testing']) assert.throws(() => import.meta.resolve('@ctp/exchange-bybit/' + subpath));
+      const options = { profileId: 'bybit-spot-testnet-v1', symbols: ['BTCUSDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
+      assert.throws(() => bybit.createBybitAdapter({ ...options, rest: 'https://user.example' }), /INVALID_BYBIT_CONFIGURATION/);
+      const adapter = bybit.createBybitAdapter(options);
+      assert.equal(adapter.account, null);
+      assert.equal(adapter.profile.environment, 'TESTNET');
+      await adapter.disconnect();
+    `,
+    options,
+  );
+  await verifyDeployment(
     path.join(directory, 'deployment-exchange-core'),
     String.raw`
       const core = await import('@ctp/exchange-core');
@@ -210,9 +228,15 @@ try {
     directory: path.relative(workspace, directory),
     lockfileSha256,
     node: process.version,
-    deployments: ['@ctp/api', '@ctp/database', '@ctp/exchange-core', '@ctp/exchange-binance'],
+    deployments: [
+      '@ctp/api',
+      '@ctp/database',
+      '@ctp/exchange-core',
+      '@ctp/exchange-binance',
+      '@ctp/exchange-bybit',
+    ],
     scope:
-      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
+      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
   });
   console.log('Clean install/build/deploy PASS; original source and lockfile left unchanged.');
 } catch (error) {

@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 
 export const aliases = {
+  '@ctp/exchange-bybit': fileURLToPath(
+    new URL('./packages/exchange-bybit/src/index.ts', import.meta.url),
+  ),
   '@ctp/exchange-binance': fileURLToPath(
     new URL('./packages/exchange-binance/src/index.ts', import.meta.url),
   ),
