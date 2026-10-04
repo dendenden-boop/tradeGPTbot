@@ -1,5 +1,5 @@
 {
-  "name": "@ctp/exchange-binance",
+  "name": "@ctp/market-data",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,10 +7,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./market-data": {
-      "types": "./dist/market-data.d.ts",
-      "default": "./dist/market-data.js"
     }
   },
   "files": [
@@ -21,10 +17,16 @@
   },
   "dependencies": {
     "@ctp/exchange-core": "workspace:*",
+    "pg": "8.23.0",
     "ws": "8.22.0",
-    "zod": "4.5.4"
+    "zod": "4.5.4",
+    "@ctp/exchange-binance": "workspace:*",
+    "@ctp/exchange-bybit": "workspace:*",
+    "@ctp/exchange-okx": "workspace:*",
+    "@ctp/exchange-htx": "workspace:*"
   },
   "devDependencies": {
+    "@types/pg": "8.23.1",
     "@types/ws": "8.18.2"
   }
 }

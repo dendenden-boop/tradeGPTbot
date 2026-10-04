@@ -104,6 +104,7 @@ try {
     'exchange-bybit',
     'exchange-okx',
     'exchange-htx',
+    'market-data',
   ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
@@ -273,6 +274,26 @@ try {
     options,
   );
   assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
+  await verifyDeployment(
+    path.join(directory, 'deployment-market-data'),
+    String.raw`
+    const market = await import('@ctp/market-data');
+    assert.equal(typeof market.createMarketDataEngine,'function');
+    assert.equal(typeof market.createMarketDataWorker,'function');
+    assert.equal(typeof market.createPostgresMarketStore,'function');
+    assert.equal(typeof market.createNativeTradeFeed,'function');
+    assert.throws(()=>market.createMarketDataEngine({}));
+    assert.throws(()=>market.createNativeTradeFeed({registry:{get(){}},limiter:{reserve(){}},url:'wss://untrusted.invalid'}));
+    assert.throws(()=>import.meta.resolve('@ctp/market-data/native-io'));
+    assert.throws(()=>import.meta.resolve('@ctp/market-data/testing'));
+    assert.equal('nativeFeed' in market,false);
+    for(const exchange of ['binance','bybit','okx','htx']) {
+      const publicFeed = await import('@ctp/exchange-'+exchange+'/market-data');
+      assert.deepEqual(Object.keys(publicFeed).sort(),['normalizeTrade','publicMarketProfile']);
+    }
+  `,
+    options,
+  );
   assert.equal(digest(await readFile(path.join(workspace, 'pnpm-lock.yaml'))), lockfileSha256);
   await report('clean-install', {
     status: 'PASS',
@@ -289,6 +310,7 @@ try {
       '@ctp/exchange-bybit',
       '@ctp/exchange-okx',
       '@ctp/exchange-htx',
+      '@ctp/market-data',
     ],
     scope:
       'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX/HTX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',

@@ -1,6 +1,21 @@
 import { fileURLToPath } from 'node:url';
 
 export const aliases = {
+  '@ctp/exchange-binance/market-data': fileURLToPath(
+    new URL('./packages/exchange-binance/src/market-data.ts', import.meta.url),
+  ),
+  '@ctp/exchange-bybit/market-data': fileURLToPath(
+    new URL('./packages/exchange-bybit/src/market-data.ts', import.meta.url),
+  ),
+  '@ctp/exchange-okx/market-data': fileURLToPath(
+    new URL('./packages/exchange-okx/src/market-data.ts', import.meta.url),
+  ),
+  '@ctp/exchange-htx/market-data': fileURLToPath(
+    new URL('./packages/exchange-htx/src/market-data.ts', import.meta.url),
+  ),
+  '@ctp/market-data': fileURLToPath(
+    new URL('./packages/market-data/src/index.ts', import.meta.url),
+  ),
   '@ctp/exchange-htx': fileURLToPath(
     new URL('./packages/exchange-htx/src/index.ts', import.meta.url),
   ),

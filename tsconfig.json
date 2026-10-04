@@ -3,6 +3,11 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@ctp/exchange-binance/market-data": ["./packages/exchange-binance/src/market-data.ts"],
+      "@ctp/exchange-bybit/market-data": ["./packages/exchange-bybit/src/market-data.ts"],
+      "@ctp/exchange-okx/market-data": ["./packages/exchange-okx/src/market-data.ts"],
+      "@ctp/exchange-htx/market-data": ["./packages/exchange-htx/src/market-data.ts"],
+      "@ctp/market-data": ["./packages/market-data/src/index.ts"],
       "@ctp/exchange-bybit": ["./packages/exchange-bybit/src/index.ts"],
       "@ctp/exchange-binance": ["./packages/exchange-binance/src/index.ts"],
       "@ctp/exchange-core": ["./packages/exchange-core/src/index.ts"],

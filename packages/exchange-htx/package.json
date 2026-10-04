@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./market-data": {
+      "types": "./dist/market-data.d.ts",
+      "default": "./dist/market-data.js"
     }
   },
   "files": [
