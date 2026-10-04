@@ -1,6 +1,6 @@
 # PHASE 9 verification
 
-Gate: **NOT READY FOR PHASE 10**. Implementation and acceptance are in progress.
+Gate: **READY FOR PHASE 10**. PHASE 9 implementation and full source acceptance are complete. PHASE 10 has not started.
 
 Baseline main: `20523a4455d79c9f4ff77b2cccf6d53d1d6b250a`. Before phase source changes, format:check, docs:check, lint, typecheck, test:unit, test:http, build, db:validate, test:runtime and test:clean passed on 4 October 2026 (18:01–18:05 UTC). 2217 unit tests and 41 HTTP tests; seven clean deployments. Dependency audit has zero vulnerabilities at all severities (407 dependencies). Ignored evidence: phase9-baseline-checks.json, phase9-baseline-*.log and phase9-baseline-audit.json.
 
@@ -22,8 +22,36 @@ After the PONG fix, the full local sequence above passed again on 4 October 2026
 
 The load test uses **300 unique Binance Spot TESTNET keys**, **6000 native frames**, **three real loopback WS sockets** and **seven timeframes**, with zero dropped inputs. Its registry/store are explicitly test/reference models. JSON records hardware/runtime, duration, CPU/RSS, event-loop delay, latency, queue and state bytes. Initial synchronous draining showed a multi-second event-loop stall; bounded work/yield and asynchronous native delivery reduced it. Numbers vary with concurrent tests; CI artifacts retain their own measurements. This is neither a 6000 messages/s production certificate nor a 24h soak, and it does not benchmark 300 native order-book streams. Extended performance acceptance remains PHASE 20.
 
-Docker CLI is not installed locally. The new PostgreSQL integration tests are wired into the existing isolated real-services CI runner, with a separate restricted ingest login; no local real-PostgreSQL result is claimed. Gate remains **NOT READY FOR PHASE 10** until all CI jobs and artifacts succeed for the final source.
+Docker CLI is not installed locally. The new PostgreSQL integration tests run in the existing isolated real-services CI runner, with a separate restricted ingest login; no local real-PostgreSQL result is claimed. Final source acceptance is recorded below.
 
 ## Initial source CI
 
 [CI 37227648784](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37227648784) succeeded for `8b1f4b870bbaab4c8be5055b4bdb4bda77a71f67` on 4 October 2026 at 19:26:37 UTC. All three jobs passed. Downloaded artifacts were checked against the exact SHA: both Ubuntu and Windows passed 2277 unit tests (60 market-data, 215 HTX), 41 HTTP tests, eight clean deployments and runtime/audit checks. The Docker job passed 208 real database tests, including all nine new market-data tests, three dependency lifecycle tests, integration/auth/SMTP/Redis recovery and 46 authentication smoke requests. This is 2529 distinct tests across the suites; platform repeats are not added. Evidence: ignored phase9-source-ci.json/log, phase9-ci-source artifacts and phase9-source-artifacts-verified.json. This run predates the PONG regression and is not the final acceptance run.
+
+## Final source acceptance
+
+Accepted source: **`e3226a841dc873c3e934d330efca31f99bfeaf3a`**. Full [CI 37229487039](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37229487039) completed successfully on **4 October 2026, 19:55:50 UTC**, including the masked-PONG regression. All three jobs passed. Downloaded sanitized reports were checked against the exact source SHA at 19:57:26 UTC; no failed or skipped unit tests.
+
+| Acceptance                                                | Actual result                                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Ubuntu and Windows unit suites                            | 2278 passed on each OS, including 61 PHASE 9 and 215 HTX                              |
+| HTTP suites                                               | 41 passed on each OS                                                                  |
+| Real PostgreSQL                                           | 208 passed, including nine PHASE 9 integration tests                                  |
+| Dependency lifecycle                                      | Three passed against real services                                                    |
+| Clean deployment                                          | Eight isolated packages on each OS; frozen lockfile unchanged                         |
+| Runtime / format / docs / lint / types / build / schema   | PASS                                                                                  |
+| Dependency audit                                          | Both CI audits report no known vulnerabilities; local JSON has zero at all severities |
+| Integration / auth / SMTP / Redis recovery / Docker smoke | PASS; 46 auth smoke requests; shutdown 371ms                                          |
+
+**2530 distinct tests** = 2278 unit + 41 HTTP + 208 database + three dependency lifecycle. Platform repeats and smoke requests are not added to this count. The nine new real-PostgreSQL tests cover restricted role admission, atomic checkpoint/bar/outbox, restart fencing and replay, concurrent CAS, outbox rollback, physical query abort/deadline, checkpoint hash/financial permissions and conflicting candle revisions. Existing order/risk/auth tests and permanent registry version anti-reuse tests remain green. Previous published migrations are unchanged; only additive `202610040001_market_data` was introduced.
+
+The 300-key loopback fixture passed on both OS: 6000 native frames, three physical WS connections, seven timeframes, zero drops and a drained queue. Maximum queue: 6000 items / 2,306,160 bytes; final candle state: 2,603,404 bytes. Measured results from the accepted source run:
+
+| Platform                     | Duration  | Frames/s | Feed latency p99 | Event-loop p99 | RSS after         |
+| ---------------------------- | --------- | -------- | ---------------- | -------------- | ----------------- |
+| Ubuntu / Xeon Platinum 8370C | 5469.52ms | 1096.99  | 393ms            | 97.06ms        | 267,304,960 bytes |
+| Windows / EPYC 7763          | 8408.74ms | 713.54   | 1225ms           | 44.47ms        | 266,641,408 bytes |
+
+These are concurrent CI fixture measurements with reference registry/storage, not production SLO certification. Native exchange capacity, runtime registry/recovery provisioning and 24h soak remain explicit operational/PHASE 20 acceptance work. LIVE mutations remain disabled; real private acceptance is NOT RUN. No PHASE 10 code was added.
+
+Evidence: ignored phase9-source-final-ci.json/log, phase9-ci-source-final/{ubuntu,windows,docker} reports and phase9-source-final-artifacts-verified.json. Gate: **READY FOR PHASE 10** on the accepted source. A documentation-only main update records this decision; its final-main CI is checked separately before handoff.
