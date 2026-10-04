@@ -1,6 +1,6 @@
 # PHASE 7 — OKX contracts
 
-The [Exchange Core contracts](../phase-4/contracts.md) and [requirements](requirements.md) remain authoritative. The factory implements the existing 33-operation interface. An unavailable feature returns UNSUPPORTED; no synthetic exchange operation is substituted. Acceptance remains IN PROGRESS until full regression and CI finish.
+The [Exchange Core contracts](../phase-4/contracts.md) and [requirements](requirements.md) remain authoritative. The factory implements the existing 33-operation interface. An unavailable feature returns UNSUPPORTED; no synthetic exchange operation is substituted. Full regression and all three source CI jobs passed; acceptance and limitations are recorded in [verification](verification.md).
 
 ## Trusted composition and profiles
 
