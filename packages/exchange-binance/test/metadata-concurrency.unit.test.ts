@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { capabilityRecordSchema } from '@ctp/exchange-core';
+import { createInstrumentRegistry, capabilityRecordSchema } from '@ctp/exchange-core';
 import { createBinanceAdapterWithIo } from '../src/adapter.js';
 import { adapterProfile, getBinanceProfile } from '../src/profiles.js';
 import type { HttpResponse, NetworkIo } from '../src/io.js';
@@ -20,6 +20,7 @@ function harness() {
   const adapter = createBinanceAdapterWithIo(
     {
       profileId: endpoint.id,
+      registry: createInstrumentRegistry({ capacity: 2, versionCapacity: 100_000 }),
       symbols: ['BTCUSDT', 'ETHUSDT'],
       now: () => NOW,
       limiter: { reserve: () => Promise.resolve(true), observe: () => Promise.resolve() },

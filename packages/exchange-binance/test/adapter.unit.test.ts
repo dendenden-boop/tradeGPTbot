@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { capabilityRecordSchema, featureSchema, type RequestContext } from '@ctp/exchange-core';
+import {
+  createInstrumentRegistry,
+  capabilityRecordSchema,
+  featureSchema,
+  type RequestContext,
+} from '@ctp/exchange-core';
 import { createBinanceAdapterWithIo } from '../src/adapter.js';
 import type { BinanceAdapterOptions } from '../src/ports.js';
 import type { NetworkIo } from '../src/io.js';
@@ -11,6 +16,7 @@ function options(): BinanceAdapterOptions {
   const profile = adapterProfile(getBinanceProfile(profileId));
   return {
     profileId,
+    registry: createInstrumentRegistry({ capacity: 2, versionCapacity: 100_000 }),
     symbols: ['BTCUSDT', 'ETHUSDT'],
     now: () => NOW,
     capabilities: featureSchema.options.map((feature) =>

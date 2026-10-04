@@ -4,7 +4,7 @@ The [Exchange Core contracts](../phase-4/contracts.md) and [requirements](requir
 
 ## Trusted composition and profiles
 
-Only `createOkxAdapter` is a production runtime export. The strict factory accepts four server profile IDs, selected symbols, bounded capability evidence, rate limiter, optional scoped connection/credentials/permissions/authorization/Demo grant/identities/order admission/registry, server SWAP tradeMode and clock. No destination, raw credential or request authority is accepted. There is no default authorizer or I/O on construction.
+Only `createOkxAdapter` is a production runtime export. The strict factory requires four server profile IDs, selected symbols, bounded capability evidence, rate limiter and an injected RuntimeInstrumentRegistry; scoped connection/credentials/permissions/authorization/Demo grant/identities/order admission, server SWAP tradeMode and clock remain optional ports where applicable. No destination, raw credential or request authority is accepted. There is no default registry/authorizer or I/O on construction. Lifecycle and persistence obligations are defined by the [cross-adapter registry contract](../instrument-registry-lifecycle.md).
 
 Profiles: `okx-{spot,swap}-{live,demo}-v1`. Global REST is openapi.okx.com; Demo sends x-simulated-trading=1 on all requests. Public/private/business WS use ws.okx.com or wspap.okx.com on TLS443. No TESTNET, regional fallback or alternate host. LIVE reads may be admitted by fresh capabilities; every LIVE mutation is denied before private authorization/dispatch. Demo writes additionally require Core authorization/command hash, a trusted authorization port, explicit Demo acceptance grant and complete admission for createOrder.
 

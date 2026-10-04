@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 import {
   computeCommandHash,
+  createInstrumentRegistry,
   featureSchema,
   parseDecimal,
   type Authorization,
@@ -212,6 +213,7 @@ export function harness(
       order: () => identity,
       fill: () => ({ internalOrderId: identity.internalOrderId }),
     },
+    registry: createInstrumentRegistry({ capacity: 300, versionCapacity: 100_000 }),
     now: () => state.time,
     ...overrides,
   } as OkxAdapterOptions;

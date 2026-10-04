@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   capabilityRecordSchema,
   createExchangeAdapter,
-  createInstrumentRegistry,
   immutable,
   operations,
   type ExchangeAdapter,
@@ -46,7 +45,7 @@ const configuration = z.strictObject({
   ]).optional(),
   identities: port<NonNullable<OkxAdapterOptions['identities']>>(['order', 'fill']).optional(),
   orderAdmission: port<NonNullable<OkxAdapterOptions['orderAdmission']>>(['validate']).optional(),
-  registry: port<NonNullable<OkxAdapterOptions['registry']>>(['get', 'put']).optional(),
+  registry: port<OkxAdapterOptions['registry']>(['get', 'put']),
   tradeMode: z.enum(['cross', 'isolated']).optional(),
   now: z.custom<() => number>((value) => typeof value === 'function').optional(),
 });
@@ -68,9 +67,7 @@ export function createOkxAdapterWithIo(raw: OkxAdapterOptions, io: NetworkIo): E
     now = options.now ?? Date.now;
   if (options.symbols.some((symbol) => symbol.endsWith('-SWAP') !== (endpoint.instType === 'SWAP')))
     throw new Error('INVALID_OKX_CONFIGURATION');
-  const registry =
-    options.registry ??
-    createInstrumentRegistry({ capacity: options.symbols.length, versionCapacity: 100000 });
+  const registry = options.registry;
   const unsupported = new Set([
     'QUOTE_BUDGET_MARKET_BUY',
     'TRIGGER_ORDER',

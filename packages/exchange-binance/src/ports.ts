@@ -3,7 +3,8 @@ import type {
   AdapterAuthorizationPort,
   CapabilityRecord,
   InstrumentRecord,
-  InstrumentRegistry,
+  RuntimeInstrumentRegistry,
+  WritableInstrumentRegistry as CoreWritableInstrumentRegistry,
   NewOrder,
   RequestContext,
   Result,
@@ -91,7 +92,8 @@ export interface BinanceOrderAdmissionPort {
     context: RequestContext,
   ): Promise<boolean>;
 }
-export interface WritableInstrumentRegistry extends InstrumentRegistry {
+/** Compatibility name for explicit test/reference transport injection. */
+export interface WritableInstrumentRegistry extends CoreWritableInstrumentRegistry {
   put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
 }
 export interface BinanceAdapterOptions {
@@ -105,6 +107,7 @@ export interface BinanceAdapterOptions {
   readonly sandboxAcceptance?: BinanceSandboxAcceptancePort;
   readonly identities?: BinanceIdentityPort;
   readonly orderAdmission?: BinanceOrderAdmissionPort;
-  readonly registry?: WritableInstrumentRegistry;
+  /** Mandatory server-owned runtime port; no reference registry default. */
+  readonly registry: RuntimeInstrumentRegistry;
   readonly now?: () => number;
 }

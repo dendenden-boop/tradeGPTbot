@@ -163,6 +163,7 @@ try {
     path.join(directory, 'deployment-exchange-binance'),
     String.raw`
       const binance = await import('@ctp/exchange-binance');
+      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.equal(typeof binance.createBinanceAdapter, 'function');
       assert.equal('createBinanceAdapterWithIo' in binance, false);
@@ -173,7 +174,8 @@ try {
       assert.throws(() => import.meta.resolve('@ctp/exchange-binance/io'));
       const options = { profileId: 'binance-spot-testnet-v1', symbols: ['BTCUSDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
       assert.throws(() => binance.createBinanceAdapter({ ...options, rest: 'https://user.example' }), /INVALID_BINANCE_CONFIGURATION/);
-      const adapter = binance.createBinanceAdapter(options);
+      assert.throws(() => binance.createBinanceAdapter(options), /INVALID_BINANCE_CONFIGURATION/);
+      const adapter = binance.createBinanceAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'TESTNET');
       await adapter.disconnect();
@@ -196,6 +198,7 @@ try {
     path.join(directory, 'deployment-exchange-bybit'),
     String.raw`
       const bybit = await import('@ctp/exchange-bybit');
+      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.deepEqual(Object.keys(bybit), ['createBybitAdapter']);
       assert.equal(existsSync('./test'), false, 'Bybit protocol fixtures must not be packaged');
@@ -203,7 +206,8 @@ try {
       for (const subpath of ['io', 'auth', 'profiles', 'testing']) assert.throws(() => import.meta.resolve('@ctp/exchange-bybit/' + subpath));
       const options = { profileId: 'bybit-spot-testnet-v1', symbols: ['BTCUSDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
       assert.throws(() => bybit.createBybitAdapter({ ...options, rest: 'https://user.example' }), /INVALID_BYBIT_CONFIGURATION/);
-      const adapter = bybit.createBybitAdapter(options);
+      assert.throws(() => bybit.createBybitAdapter(options), /INVALID_BYBIT_CONFIGURATION/);
+      const adapter = bybit.createBybitAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'TESTNET');
       await adapter.disconnect();
@@ -214,6 +218,7 @@ try {
     path.join(directory, 'deployment-exchange-okx'),
     String.raw`
       const okx = await import('@ctp/exchange-okx');
+      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.deepEqual(Object.keys(okx), ['createOkxAdapter']);
       assert.equal(existsSync('./test'), false, 'OKX protocol fixtures must not be packaged');
@@ -221,7 +226,8 @@ try {
       for (const subpath of ['io', 'auth', 'profiles', 'testing']) assert.throws(() => import.meta.resolve('@ctp/exchange-okx/' + subpath));
       const options = { profileId: 'okx-spot-demo-v1', symbols: ['BTC-USDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
       assert.throws(() => okx.createOkxAdapter({ ...options, rest: 'https://user.example' }), /INVALID_OKX_CONFIGURATION/);
-      const adapter = okx.createOkxAdapter(options);
+      assert.throws(() => okx.createOkxAdapter(options), /INVALID_OKX_CONFIGURATION/);
+      const adapter = okx.createOkxAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'DEMO');
       await adapter.disconnect();

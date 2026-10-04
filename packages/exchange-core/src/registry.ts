@@ -14,6 +14,25 @@ export interface InstrumentRecord {
 export interface InstrumentRegistry {
   get(scope: MarketScope, instrumentId: string, now: number): Result<InstrumentRecord>;
 }
+export interface WritableInstrumentRegistry extends InstrumentRegistry {
+  put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
+}
+/**
+ * Trusted production port, owned by the server composition, never by an adapter.
+ * Success means the immutable record and anti-reuse history are durably committed
+ * atomically. Recovery must retain history and fail closed until complete. Historical
+ * IDs cannot be forgotten to reclaim capacity. See the registry lifecycle contract.
+ * Structural typing does not attest persistence; implementers must prove this contract.
+ */
+export interface RuntimeInstrumentRegistry extends WritableInstrumentRegistry {
+  /** A successful result includes durable atomic commitment of anti-reuse history. */
+  put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
+}
+/** Finite process-local fixture: no durable recovery or long-running runtime guarantee. */
+export interface ReferenceInstrumentRegistry extends WritableInstrumentRegistry {
+  put(input: unknown, now: number): Result<InstrumentRecord>;
+  size(): number;
+}
 export function sameMarketScope(a: MarketScope, b: MarketScope): boolean {
   return (
     a.exchange === b.exchange &&
@@ -44,7 +63,7 @@ function guarded<T>(code: ExchangeErrorCode, action: () => Result<T>): Result<T>
 export function createInstrumentRegistry(options: {
   readonly capacity: number;
   readonly versionCapacity?: number;
-}) {
+}): ReferenceInstrumentRegistry {
   let capacity: number;
   let versionCapacity: number;
   try {

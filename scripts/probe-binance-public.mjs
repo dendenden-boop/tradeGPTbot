@@ -1,3 +1,4 @@
+import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -141,6 +142,7 @@ async function probeProfile(profileId) {
     },
   });
   const adapter = createBinanceAdapter({
+    registry: createInstrumentRegistry({ capacity: 1, versionCapacity: 128 }),
     profileId,
     symbols: ['BTCUSDT'],
     capabilities: nativeEvidence(endpoint, startedAt),

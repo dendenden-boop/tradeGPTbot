@@ -2,6 +2,8 @@
 
 Scope and acceptance: [requirements](requirements.md), [verification](verification.md). Factory: [index](../../packages/exchange-bybit/src/index.ts); trusted integration ports: [ports](../../packages/exchange-bybit/src/ports.ts). The adapter implements the existing 33-operation [Exchange Core contract](../phase-4/contracts.md), without changing its authorization, decimal, registry or stream semantics.
 
+The factory now requires a server-injected RuntimeInstrumentRegistry with get/put after the reproduced cross-adapter lifecycle defect. There is no implicit reference default. Read/write semantics and anti-reuse are preserved; reference stores are explicit test/diagnostic fixtures only. See the [durable lifecycle contract and verification](../instrument-registry-lifecycle.md).
+
 ## Profiles and authority
 
 | Profile IDs                                     | REST                  | Public WS                                         | Private WS                          |

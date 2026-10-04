@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 import {
   computeCommandHash,
+  createInstrumentRegistry,
   featureSchema,
   parseDecimal,
   type Authorization,
@@ -241,6 +242,7 @@ export function harness(
       }),
       fill: () => ({ internalOrderId: '33333333-3333-4333-8333-333333333333' }),
     },
+    registry: createInstrumentRegistry({ capacity: 300, versionCapacity: 100_000 }),
     now: () => state.time,
     ...overrides,
   };

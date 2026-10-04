@@ -3,7 +3,8 @@ import type {
   AdapterAuthorizationPort,
   CapabilityRecord,
   InstrumentRecord,
-  InstrumentRegistry,
+  RuntimeInstrumentRegistry,
+  WritableInstrumentRegistry as CoreWritableInstrumentRegistry,
   NewOrder,
   RequestContext,
   Result,
@@ -102,7 +103,8 @@ export interface OkxOrderAdmissionPort {
     context: RequestContext,
   ): Promise<boolean>;
 }
-export interface WritableInstrumentRegistry extends InstrumentRegistry {
+/** Compatibility name for explicit test/reference transport injection. */
+export interface WritableInstrumentRegistry extends CoreWritableInstrumentRegistry {
   put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
 }
 export interface OkxAdapterOptions {
@@ -117,7 +119,8 @@ export interface OkxAdapterOptions {
   readonly sandboxAcceptance?: OkxSandboxAcceptancePort;
   readonly identities?: OkxIdentityPort;
   readonly orderAdmission?: OkxOrderAdmissionPort;
-  readonly registry?: WritableInstrumentRegistry;
+  /** Mandatory server-owned runtime port; no reference registry default. */
+  readonly registry: RuntimeInstrumentRegistry;
   readonly tradeMode?: 'cross' | 'isolated';
   readonly now?: () => number;
 }

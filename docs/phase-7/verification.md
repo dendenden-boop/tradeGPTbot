@@ -1,6 +1,8 @@
 # PHASE 7 — OKX verification
 
-Gate: **READY FOR PHASE 8**. Accepted source [`ff7db4290e56e870049ac2697b9b8d470b71fc8e`](https://github.com/dendenden-boop/tradeGPTbot/commit/ff7db4290e56e870049ac2697b9b8d470b71fc8e) passed all three jobs of [CI 37194114436](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37194114436), completed **2026-10-04 10:12:08 UTC**. Downloaded Ubuntu, Windows and Docker artifacts verify the corrected metadata lifetime and full regression below. PHASE 8 has not started.
+Current gate: **NOT READY FOR PHASE 8** pending [cross-adapter InstrumentRegistry lifecycle acceptance](../instrument-registry-lifecycle.md). PHASE 8 has not started. The results below are the historical OKX acceptance before this newly reproduced defect.
+
+Historical gate: **READY FOR PHASE 8**. Accepted source [`ff7db4290e56e870049ac2697b9b8d470b71fc8e`](https://github.com/dendenden-boop/tradeGPTbot/commit/ff7db4290e56e870049ac2697b9b8d470b71fc8e) passed all three jobs of [CI 37194114436](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37194114436), completed **2026-10-04 10:12:08 UTC**. Downloaded Ubuntu, Windows and Docker artifacts verify the corrected metadata lifetime and full regression below.
 
 Historical first source `e022b60c24e1ca7bb2ae065a0844b973152bb92f` passed [CI 37192370532](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37192370532) at 09:39:30 UTC. A subsequent cross-component audit reproduced stale contract interpretation in asynchronous market data, withholding the former gate. Three reproduction tests preceded the correction; the accepted source and CI above supersede that earlier acceptance.
 

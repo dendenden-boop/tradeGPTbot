@@ -3,7 +3,6 @@ import {
   accountSnapshotSchema,
   capabilityRecordSchema,
   createExchangeAdapter,
-  createInstrumentRegistry,
   operations,
   orderLookupSchema,
   type ExchangeAdapter,
@@ -61,7 +60,7 @@ const configuration = z.strictObject({
   orderAdmission: port<NonNullable<BinanceAdapterOptions['orderAdmission']>>([
     'validate',
   ]).optional(),
-  registry: port<NonNullable<BinanceAdapterOptions['registry']>>(['get', 'put']).optional(),
+  registry: port<BinanceAdapterOptions['registry']>(['get', 'put']),
   now: z.custom<() => number>((value) => typeof value === 'function').optional(),
 });
 
@@ -118,9 +117,7 @@ export function createBinanceAdapterWithIo(
   const account = binding?.account ?? null;
   const profile = adapterProfile(endpoint, binding?.credentialRef);
   const now = options.now ?? Date.now;
-  const registry =
-    options.registry ??
-    createInstrumentRegistry({ capacity: options.symbols.length, versionCapacity: 100_000 });
+  const registry = options.registry;
   const publicTransport = createPublicTransport(
     endpoint,
     options.symbols,

@@ -1,3 +1,4 @@
+import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -84,7 +85,13 @@ export async function probeBybitPublic() {
       expiresAt: start + 30_000,
       adapterVersion: 'bybit-v1',
     }));
-    const adapter = createBybitAdapter({ profileId, symbols: ['BTCUSDT'], capabilities, limiter });
+    const adapter = createBybitAdapter({
+      registry: createInstrumentRegistry({ capacity: 1, versionCapacity: 128 }),
+      profileId,
+      symbols: ['BTCUSDT'],
+      capabilities,
+      limiter,
+    });
     const context = (end = deadline) => ({
       profile: adapter.profile,
       account: null,

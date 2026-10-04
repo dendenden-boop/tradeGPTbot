@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   capabilityRecordSchema,
   createExchangeAdapter,
-  createInstrumentRegistry,
   immutable,
   operations,
   type ExchangeAdapter,
@@ -47,7 +46,7 @@ const configuration = z.strictObject({
   ]).optional(),
   identities: port<NonNullable<BybitAdapterOptions['identities']>>(['order', 'fill']).optional(),
   orderAdmission: port<NonNullable<BybitAdapterOptions['orderAdmission']>>(['validate']).optional(),
-  registry: port<NonNullable<BybitAdapterOptions['registry']>>(['get', 'put']).optional(),
+  registry: port<BybitAdapterOptions['registry']>(['get', 'put']),
   now: z.custom<() => number>((value) => typeof value === 'function').optional(),
 });
 export function createBybitAdapter(options: BybitAdapterOptions): ExchangeAdapter {
@@ -66,9 +65,7 @@ export function createBybitAdapterWithIo(raw: BybitAdapterOptions, io: NetworkIo
     account = binding?.account ?? null,
     profile = adapterProfile(endpoint, binding?.credentialRef),
     now = options.now ?? Date.now;
-  const registry =
-    options.registry ??
-    createInstrumentRegistry({ capacity: options.symbols.length, versionCapacity: 100_000 });
+  const registry = options.registry;
   const unsupported = new Set([
     'QUOTE_BUDGET_MARKET_BUY',
     'TRIGGER_ORDER',

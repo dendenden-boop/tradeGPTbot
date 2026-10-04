@@ -2,6 +2,8 @@
 
 Контракт реализован в `@ctp/exchange-binance`; база — [Exchange Core](../phase-4/contracts.md). Статус acceptance и точное evidence находятся в [verification](verification.md). Пакет не подключён к API и не предоставляет разрешение на торговлю.
 
+Factory требует обязательный server-injected RuntimeInstrumentRegistry с get/put; implicit reference default удалён после воспроизведённого cross-adapter lifecycle defect. Read/write semantics и anti-reuse сохранены. Reference registry допускается только как явно выбранная test/diagnostic fixture; [durable lifecycle contract и verification](../instrument-registry-lifecycle.md).
+
 ## Общая семантика algo
 
 `createAlgoOrder` содержит ровно один внешний `trigger`. Его срабатывание активирует child `MARKET` или `LIMIT`; `child.trigger` всегда null. `STOP_MARKET`/`STOP_LIMIT` внутри child запрещены до authorization и transport. Двухступенчатого ожидания trigger в этом контракте нет. Это общее правило Exchange Core для Binance/Bybit/OKX/HTX, а не скрытая интерпретация Binance serializer.

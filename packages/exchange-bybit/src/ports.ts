@@ -3,7 +3,8 @@ import type {
   AdapterAuthorizationPort,
   CapabilityRecord,
   InstrumentRecord,
-  InstrumentRegistry,
+  RuntimeInstrumentRegistry,
+  WritableInstrumentRegistry as CoreWritableInstrumentRegistry,
   NewOrder,
   RequestContext,
   Result,
@@ -101,7 +102,8 @@ export interface BybitOrderAdmissionPort {
     context: RequestContext,
   ): Promise<boolean>;
 }
-export interface WritableInstrumentRegistry extends InstrumentRegistry {
+/** Compatibility name for explicit test/reference transport injection. */
+export interface WritableInstrumentRegistry extends CoreWritableInstrumentRegistry {
   put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
 }
 export interface BybitAdapterOptions {
@@ -116,6 +118,7 @@ export interface BybitAdapterOptions {
   readonly sandboxAcceptance?: BybitSandboxAcceptancePort;
   readonly identities?: BybitIdentityPort;
   readonly orderAdmission?: BybitOrderAdmissionPort;
-  readonly registry?: WritableInstrumentRegistry;
+  /** Mandatory server-owned runtime port; no reference registry default. */
+  readonly registry: RuntimeInstrumentRegistry;
   readonly now?: () => number;
 }

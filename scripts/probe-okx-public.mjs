@@ -1,3 +1,4 @@
+import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -85,7 +86,13 @@ export async function probeOkxPublic() {
       expiresAt: start + 30_000,
       adapterVersion: 'okx-v1',
     }));
-    const adapter = createOkxAdapter({ profileId, symbols: [symbol], capabilities, limiter });
+    const adapter = createOkxAdapter({
+      registry: createInstrumentRegistry({ capacity: 1, versionCapacity: 128 }),
+      profileId,
+      symbols: [symbol],
+      capabilities,
+      limiter,
+    });
     const context = (end = deadline) => ({
       profile: adapter.profile,
       account: null,
