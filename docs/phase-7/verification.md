@@ -1,6 +1,6 @@
 # PHASE 7 — OKX verification
 
-Current gate: **NOT READY FOR PHASE 8** pending [cross-adapter InstrumentRegistry lifecycle acceptance](../instrument-registry-lifecycle.md). PHASE 8 has not started. The results below are the historical OKX acceptance before this newly reproduced defect.
+Current gate: **READY FOR PHASE 8** after [cross-adapter InstrumentRegistry lifecycle acceptance](../instrument-registry-lifecycle.md): mandatory runtime injection, preserved anti-reuse, **2245 tests** and all three jobs of [CI 37203716441](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37203716441) SUCCESS. PHASE 8 has not started. The results below are the historical OKX acceptance before this subsequently reproduced and corrected defect.
 
 Historical gate: **READY FOR PHASE 8**. Accepted source [`ff7db4290e56e870049ac2697b9b8d470b71fc8e`](https://github.com/dendenden-boop/tradeGPTbot/commit/ff7db4290e56e870049ac2697b9b8d470b71fc8e) passed all three jobs of [CI 37194114436](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37194114436), completed **2026-10-04 10:12:08 UTC**. Downloaded Ubuntu, Windows and Docker artifacts verify the corrected metadata lifetime and full regression below.
 

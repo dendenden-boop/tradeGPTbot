@@ -4,7 +4,7 @@
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).
 
-Текущий gate: **NOT READY FOR PHASE 8** — выполняется [cross-adapter InstrumentRegistry lifecycle hardening](docs/instrument-registry-lifecycle.md) после воспроизведения исчерпания reference version budget на 300 инструментах. Acceptance ниже относится к состоянию до этого нового дефекта; PHASE 8 не начата.
+Текущий gate: **READY FOR PHASE 8** — [cross-adapter InstrumentRegistry lifecycle hardening](docs/instrument-registry-lifecycle.md) завершён полным [CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37203716441), **2245 tests**, шесть deployments; anti-reuse сохранён. Production Binance/Bybit/OKX требуют обязательный server-injected runtime registry; reference defaults удалены. Acceptance отдельных фаз ниже историческое; PHASE 8 не начата.
 
 **PHASE 7 — OKX Adapter завершена**, gate **READY FOR PHASE 8** подтверждён после исправления срока действия metadata полным [CI](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37194114436). Отдельный пакет реализует global V5 Spot/USDT SWAP, четыре server profiles, passphrase signing и bounded REST/WS. Прошли **2233 tests**, включая **165 OKX**, шесть clean deployments и **24/24 real public REST/WS probes**. [Требования](docs/phase-7/requirements.md), [контракты](docs/phase-7/contracts.md), [проверки и ограничения](docs/phase-7/verification.md), [зависимости](docs/phase-7/dependencies.md). LIVE mutations выключены; реальная private acceptance — NOT RUN; неизвестные constraints блокируют new-risk admission. PHASE 8 не начата.
 
