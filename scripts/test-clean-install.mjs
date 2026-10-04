@@ -96,7 +96,14 @@ try {
   );
   assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
   await run(process.execPath, [pnpm, 'build'], options);
-  for (const name of ['api', 'database', 'exchange-core', 'exchange-binance', 'exchange-bybit']) {
+  for (const name of [
+    'api',
+    'database',
+    'exchange-core',
+    'exchange-binance',
+    'exchange-bybit',
+    'exchange-okx',
+  ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
     const policyDirectory = path.join(directory, `deployment-${name}-policy`);
@@ -204,6 +211,24 @@ try {
     options,
   );
   await verifyDeployment(
+    path.join(directory, 'deployment-exchange-okx'),
+    String.raw`
+      const okx = await import('@ctp/exchange-okx');
+      const { existsSync } = await import('node:fs');
+      assert.deepEqual(Object.keys(okx), ['createOkxAdapter']);
+      assert.equal(existsSync('./test'), false, 'OKX protocol fixtures must not be packaged');
+      assert.equal(existsSync('./src'), false, 'OKX must use compiled output');
+      for (const subpath of ['io', 'auth', 'profiles', 'testing']) assert.throws(() => import.meta.resolve('@ctp/exchange-okx/' + subpath));
+      const options = { profileId: 'okx-spot-demo-v1', symbols: ['BTC-USDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
+      assert.throws(() => okx.createOkxAdapter({ ...options, rest: 'https://user.example' }), /INVALID_OKX_CONFIGURATION/);
+      const adapter = okx.createOkxAdapter(options);
+      assert.equal(adapter.account, null);
+      assert.equal(adapter.profile.environment, 'DEMO');
+      await adapter.disconnect();
+    `,
+    options,
+  );
+  await verifyDeployment(
     path.join(directory, 'deployment-exchange-core'),
     String.raw`
       const core = await import('@ctp/exchange-core');
@@ -234,9 +259,10 @@ try {
       '@ctp/exchange-core',
       '@ctp/exchange-binance',
       '@ctp/exchange-bybit',
+      '@ctp/exchange-okx',
     ],
     scope:
-      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
+      'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
   });
   console.log('Clean install/build/deploy PASS; original source and lockfile left unchanged.');
 } catch (error) {

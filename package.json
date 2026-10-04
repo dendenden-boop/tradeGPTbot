@@ -43,7 +43,9 @@
     "mail:sink": "node --env-file-if-exists=.env scripts/mail-sink.mjs",
     "benchmark:auth": "node scripts/benchmark-auth.mjs",
     "docs:check": "node -e \"import('./scripts/check-docs.mjs').then(m => m.checkDocs()).then(console.log)\"",
-    "audit:dependencies": "pnpm audit --audit-level=high"
+    "audit:dependencies": "pnpm audit --audit-level=high",
+    "test:okx": "vitest run --config vitest.unit.config.ts packages/exchange-okx --outputFile.json=test-results/exchange-okx.json",
+    "probe:okx": "node scripts/probe-okx-public.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
