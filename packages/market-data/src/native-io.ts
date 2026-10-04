@@ -402,7 +402,7 @@ export function nativeFeed(options: {
           void reserve('CONTROL')
             .then((ok) => {
               if (!ok || !active) throw new Error('RATE_LIMITED');
-              socket!.pong(bytes, false, (e) => {
+              socket!.pong(bytes, true, (e) => {
                 if (e) fail('PONG_FAILED');
               });
             })

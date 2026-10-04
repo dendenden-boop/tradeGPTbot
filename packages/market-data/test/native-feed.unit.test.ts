@@ -17,6 +17,33 @@ const limiter = {
   },
 };
 const intents = [{ scope, instrumentId: 'BTCUSDT', profileId: 'binance-spot-testnet-v1' }];
+it('sends a correctly masked client PONG on a real server PING', async () => {
+  const pongs: Buffer[] = [];
+  const server = await wsFixture((ws) => {
+    ws.on('pong', (payload) => pongs.push(Buffer.from(payload)));
+    ws.on('message', (raw) => {
+      const x = JSON.parse(Buffer.isBuffer(raw) ? raw.toString() : '') as { id: number };
+      ws.send(JSON.stringify({ id: x.id, result: null }));
+      ws.ping(Buffer.from('heartbeat'));
+    });
+  });
+  cleanup.push(() => server.close());
+  const feed = nativeFeed({
+    registry: registry(1),
+    limiter,
+    dial: () => new WebSocket(server.url, { autoPong: false }),
+  });
+  const conn = await feed.open(
+    intents,
+    { signal: new AbortController().signal, deadline: Date.now() + 2000 },
+    () => {},
+    () => {},
+  );
+  cleanup.push(() => conn.close());
+  await until(() => pongs.length === 1);
+  expect(pongs[0]?.toString()).toBe('heartbeat');
+  expect(server.ws.clients.size).toBe(1);
+});
 it.each([
   ['BYBIT', 'SPOT', 'TESTNET', 'bybit-spot-testnet-v1', 'BTCUSDT'],
   ['BYBIT', 'LINEAR_PERPETUAL', 'TESTNET', 'bybit-linear-testnet-v1', 'BTCUSDT'],
