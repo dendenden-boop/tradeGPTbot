@@ -43,8 +43,8 @@ async function fixture(): Promise<Binding> {
     `${b.tenantId}@example.invalid`,
   ]);
   await admin.query(
-    `INSERT INTO exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE','DEMO',$1::text,'global','SPOT','DISABLED','portfolio-test',now())`,
-    [b.accountId, b.tenantId],
+    `INSERT INTO exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE','DEMO',$3,'global','SPOT','DISABLED','portfolio-test',now())`,
+    [b.accountId, b.tenantId, b.externalAccountId],
   );
   await admin.query(
     `INSERT INTO exchange_connection(id,"tenantId","accountId",mode,label,status,permissions,"updatedAt") VALUES($1,$2,$3,'DEMO','portfolio-test','DISABLED','{}',now())`,
