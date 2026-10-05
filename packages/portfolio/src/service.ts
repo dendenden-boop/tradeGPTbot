@@ -130,6 +130,9 @@ export function createPortfolioAccount(options: {
         'FUNDING_POSITION_SCOPE',
         'UNSUPPORTED_QUANTITY_UNIT',
         'UNPROVEN_FEE_CONVERSION',
+        'HOLD_HISTORY_REQUIRED',
+        'HOLD_VERSION_CONFLICT',
+        'HOLD_CLOSED',
       ]);
       const code =
         error instanceof Error &&

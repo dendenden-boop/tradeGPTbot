@@ -113,6 +113,13 @@ export function normalizeWallet(
     x.position_mode !== 'dual_side'
   )
     throw new HtxProtocolError('SCOPE_MISMATCH');
+  // Native equity includes unrealized PnL; Portfolio adds that component separately.
+  const total = decimal(x.margin_static);
+  if (
+    receivedAt - t > 5000 ||
+    decimalCompare(decimal(x.margin_balance), decimalAdd(total, decimal(x.profit_unreal))) !== 0
+  )
+    throw new HtxProtocolError('INVALID_RESPONSE');
   return immutable(
     accountSnapshotSchema.parse({
       account,
@@ -122,7 +129,7 @@ export function normalizeWallet(
           asset: 'USDT',
           free: null,
           locked: null,
-          total: decimal(x.margin_balance),
+          total,
           availableToTrade: unavailable,
         },
       ],

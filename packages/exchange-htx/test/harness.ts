@@ -103,6 +103,8 @@ export function harness(
           margin_asset: 'USDT',
           position_mode: state.positionMode,
           margin_balance: '10',
+          margin_static: '10',
+          profit_unreal: '0',
         },
       ]);
     if (path.endsWith('swap_cross_position_info')) return response([]);

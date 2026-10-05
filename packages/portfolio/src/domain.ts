@@ -23,15 +23,14 @@ export const bindingSchema = z
     accountId: z.uuid(),
     connectionId: z.uuid(),
     externalAccountId: idSchema,
-    mode: z.enum(['PAPER', 'DEMO', 'LIVE']),
+    mode: z.enum(['PAPER', 'TESTNET', 'DEMO', 'LIVE']),
     walletId: idSchema,
     scope: marketScopeSchema,
   })
   .superRefine((b, c) => {
     if (
       !['SPOT', 'LINEAR_PERPETUAL'].includes(b.scope.market) ||
-      (b.mode === 'LIVE' && b.scope.environment !== 'LIVE') ||
-      (b.mode === 'DEMO' && b.scope.environment === 'LIVE')
+      (b.mode !== 'PAPER' && b.mode !== b.scope.environment)
     )
       c.addIssue({ code: 'custom', message: 'UNSUPPORTED_ACCOUNT_PROFILE' });
   });
@@ -152,6 +151,14 @@ export interface Posting {
 export interface Reduction {
   state: PortfolioState;
   postings: Posting[];
+  holdWatermark?: HoldWatermark;
+  ignored?: boolean;
+}
+export interface HoldWatermark {
+  timestamp: number;
+  fingerprint: string;
+  released: boolean;
+  unknown: boolean;
 }
 export interface IoContext {
   signal: AbortSignal;

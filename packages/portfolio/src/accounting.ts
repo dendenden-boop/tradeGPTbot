@@ -1,4 +1,5 @@
 import { Decimal } from 'decimal.js';
+import { createHash } from 'node:crypto';
 import {
   decimalAdd,
   decimalSubtract,
@@ -17,6 +18,7 @@ import {
   type PortfolioEvent,
   type Reduction,
   type Posting,
+  type HoldWatermark,
 } from './domain.js';
 const D = Decimal.clone({
   precision: 100,
@@ -124,13 +126,47 @@ function trade(
 export function reducePortfolio(
   input: PortfolioState,
   raw: PortfolioEvent,
-  context: { now: () => number },
+  context: { now: () => number; holdWatermark?: HoldWatermark | null },
 ): Reduction {
   const s = restorePortfolio(input),
     e = eventSchema.parse(raw),
     postings: Posting[] = [];
   const now = context.now();
   if (!Number.isSafeInteger(now) || e.timestamp > now) throw new Error('FUTURE_EVENT');
+  let holdWatermark: HoldWatermark | undefined;
+  if (e.type === 'COMMITMENT' || e.type === 'RELEASE') {
+    if (context.holdWatermark === undefined) throw new Error('HOLD_HISTORY_REQUIRED');
+    const previous = context.holdWatermark;
+    const fingerprint = createHash('sha256')
+      .update(
+        canonical(
+          e.type === 'COMMITMENT'
+            ? { type: e.type, hold: e.hold }
+            : { type: e.type, holdId: e.holdId, resolved: e.resolved },
+        ),
+      )
+      .digest('hex');
+    if (previous && e.timestamp < previous.timestamp)
+      return { state: s, postings, holdWatermark: previous, ignored: true };
+    if (previous && e.timestamp === previous.timestamp) {
+      if (fingerprint !== previous.fingerprint) throw new Error('HOLD_VERSION_CONFLICT');
+      return { state: s, postings, holdWatermark: previous, ignored: true };
+    }
+    if (previous?.released && e.type === 'COMMITMENT') throw new Error('HOLD_CLOSED');
+    if (
+      previous?.unknown &&
+      (e.type === 'RELEASE' ? !e.resolved : fingerprint !== previous.fingerprint)
+    )
+      throw new Error('UNKNOWN_COMMITMENT');
+    const active = s.holds.find((h) => h.id === (e.type === 'COMMITMENT' ? e.hold.id : e.holdId));
+    if (active && !previous) throw new Error('HOLD_HISTORY_REQUIRED');
+    holdWatermark = {
+      timestamp: e.timestamp,
+      fingerprint,
+      released: e.type === 'RELEASE',
+      unknown: e.type === 'COMMITMENT' && e.hold.status === 'UNKNOWN',
+    };
+  }
   const cash = (
     asset: string,
     amount: string,
@@ -213,7 +249,12 @@ export function reducePortfolio(
         }
       } else {
         s.positions.push({
-          ...p,
+          instrumentId: p.instrumentId,
+          positionSide: p.positionSide,
+          bucket: p.bucket,
+          base: p.base,
+          quote: p.quote,
+          quantity: p.quantity,
           basis:
             p.quantity === '0'
               ? '0'
@@ -317,5 +358,5 @@ export function reducePortfolio(
     s.pending.push(e.id);
     s.lastEconomicAt = Math.max(s.lastEconomicAt ?? 0, e.timestamp);
   }
-  return { state: restorePortfolio(s), postings };
+  return { state: restorePortfolio(s), postings, ...(holdWatermark ? { holdWatermark } : {}) };
 }

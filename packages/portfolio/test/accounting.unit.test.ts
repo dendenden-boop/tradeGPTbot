@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createState, reducePortfolio, positionKey } from '../src/accounting.js';
-import type { PortfolioEvent } from '../src/domain.js';
+import type { PortfolioEvent, HoldWatermark } from '../src/domain.js';
 import { binding, fill, snapshot, context } from './fixtures.js';
 
 function anchored(market: 'SPOT' | 'LINEAR_PERPETUAL' = 'SPOT') {
@@ -139,22 +139,31 @@ describe('portfolio decimal accounting contracts', () => {
     expect(r.state.positions[0]?.realizedGross).toBe('0');
   });
   it('retains unknown commitment across snapshots and rejects unproven release', () => {
-    const s = apply(anchored(), {
-      type: 'COMMITMENT',
-      id: 'hold1',
-      timestamp: 1000,
-      hold: { id: 'intent1', asset: 'USDT', amount: '100', status: 'UNKNOWN', reflected: false },
-    }).state;
+    const initial = reducePortfolio(
+      anchored(),
+      {
+        type: 'COMMITMENT',
+        id: 'hold1',
+        timestamp: 1000,
+        hold: { id: 'intent1', asset: 'USDT', amount: '100', status: 'UNKNOWN', reflected: false },
+      },
+      { ...context, holdWatermark: null },
+    );
+    const s = initial.state;
     const r = apply(s, snapshot({ id: 'snap2' }));
     expect(r.state.holds[0]?.status).toBe('UNKNOWN');
     expect(() =>
-      apply(s, {
-        type: 'RELEASE',
-        id: 'release1',
-        timestamp: 1000,
-        holdId: 'intent1',
-        resolved: false,
-      }),
+      reducePortfolio(
+        s,
+        {
+          type: 'RELEASE',
+          id: 'release1',
+          timestamp: 1001,
+          holdId: 'intent1',
+          resolved: false,
+        },
+        { now: () => 1001, holdWatermark: initial.holdWatermark as HoldWatermark },
+      ),
     ).toThrow('UNKNOWN_COMMITMENT');
   });
   it('marks explicit gap and never freshens it with a fill', () => {

@@ -20,7 +20,7 @@ it('rejects inconsistent free+locked snapshots and invalid available components'
   ).toThrow('BALANCE_COMPONENTS');
 });
 it('does not weaken UNKNOWN by an unproven commitment replacement', () => {
-  const s = reducePortfolio(
+  const initial = reducePortfolio(
     fresh(),
     {
       type: 'COMMITMENT',
@@ -28,18 +28,18 @@ it('does not weaken UNKNOWN by an unproven commitment replacement', () => {
       timestamp: 1000,
       hold: { id: 'intent', asset: 'USDT', amount: '10', status: 'UNKNOWN', reflected: false },
     },
-    context,
-  ).state;
+    { ...context, holdWatermark: null },
+  );
   expect(() =>
     reducePortfolio(
-      s,
+      initial.state,
       {
         type: 'COMMITMENT',
         id: 'h2',
-        timestamp: 1000,
+        timestamp: 1001,
         hold: { id: 'intent', asset: 'USDT', amount: '0', status: 'RESERVED', reflected: true },
       },
-      context,
+      { now: () => 1001, holdWatermark: initial.holdWatermark! },
     ),
   ).toThrow('UNKNOWN_COMMITMENT');
 });

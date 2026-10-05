@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { run, report, workspace } from './docker-test-utils.mjs';
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
 import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
+import { preparePortfolioUpgrade, verifyPortfolioUpgrade } from './portfolio-upgrade.mjs';
 
 const expectedMigrations = [
   '202609070001_initial',
@@ -16,6 +17,7 @@ const expectedMigrations = [
   '202609200001_auth_hardening',
   '202610040001_market_data',
   '202610040002_portfolio',
+  '202610050001_portfolio_hold_ordering',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -327,7 +329,21 @@ try {
     authUrl: dbUrl(databases[1], false, false, true),
     stage: 'published004',
   });
+  for (const migration of [
+    '202609200001_auth_hardening',
+    '202610040001_market_data',
+    '202610040002_portfolio',
+  ]) {
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', migration),
+      path.join(authPreviousMigrations, migration),
+      { recursive: true },
+    );
+  }
+  await migrate(databases[1], authPreviousConfig);
+  const portfolioUpgrade = await preparePortfolioUpgrade(upgrade, marker, upgradeAccount);
   await migrate(databases[1]);
+  await verifyPortfolioUpgrade(upgrade, portfolioUpgrade);
   const authHardeningAfter = await exerciseAuthDatabaseHardening({
     admin: upgrade,
     adminUrl: dbUrl(databases[1]),

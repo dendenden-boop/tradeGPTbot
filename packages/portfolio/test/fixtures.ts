@@ -6,7 +6,7 @@ export function binding(market: 'SPOT' | 'LINEAR_PERPETUAL' = 'SPOT'): Binding {
     accountId: '22222222-2222-4222-8222-222222222222',
     connectionId: '33333333-3333-4333-8333-333333333333',
     externalAccountId: 'native-account',
-    mode: 'DEMO',
+    mode: 'TESTNET',
     walletId: 'primary',
     scope: { exchange: 'BINANCE', region: 'global', market, environment: 'TESTNET' },
   };

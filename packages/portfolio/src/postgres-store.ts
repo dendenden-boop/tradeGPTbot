@@ -10,6 +10,7 @@ import {
   type Checkpoint,
   type PortfolioStore,
   type PortfolioEvent,
+  type HoldWatermark,
 } from './domain.js';
 import { createState, reducePortfolio, restorePortfolio } from './accounting.js';
 const digest = (value: string) => createHash('sha256').update(value).digest();
@@ -33,6 +34,9 @@ const safeErrors = new Set([
   'FUNDING_UNITS',
   'SPOT_FUNDING_UNSUPPORTED',
   'PORTFOLIO_CAPACITY',
+  'HOLD_HISTORY_REQUIRED',
+  'HOLD_VERSION_CONFLICT',
+  'HOLD_CLOSED',
 ]);
 export async function createPostgresPortfolioStore(options: {
   connectionString: string;
@@ -252,7 +256,57 @@ export async function createPostgresPortfolioStore(options: {
           [b.tenantId, row.id],
         );
         if ((count.rows[0]?.n ?? 10000) >= 10000) throw new Error('PORTFOLIO_OUTBOX_FULL');
-        const reduced = reducePortfolio(previous.state, event, { now: () => Date.now() });
+        let holdWatermark: HoldWatermark | null = null;
+        if (event.type === 'COMMITMENT' || event.type === 'RELEASE') {
+          const r = await c.query<{
+            timestamp: string;
+            fingerprint: Buffer;
+            released: boolean;
+            unknown: boolean;
+          }>(
+            'SELECT timestamp,fingerprint,released,unknown FROM ctp_portfolio.hold_watermark WHERE "tenantId"=$1 AND book=$2 AND "holdId"=$3',
+            [b.tenantId, row.id, event.type === 'COMMITMENT' ? event.hold.id : event.holdId],
+          );
+          const w = r.rows[0];
+          if (w) {
+            if (!Number.isSafeInteger(Number(w.timestamp)) || w.fingerprint.length !== 32)
+              throw new Error('CORRUPT_CHECKPOINT');
+            holdWatermark = {
+              timestamp: Number(w.timestamp),
+              fingerprint: w.fingerprint.toString('hex'),
+              released: w.released,
+              unknown: w.unknown,
+            };
+          }
+        }
+        const reduced = reducePortfolio(previous.state, event, {
+          now: () => Date.now(),
+          holdWatermark,
+        });
+        if (reduced.ignored) {
+          await c.query(
+            'INSERT INTO ctp_portfolio.evidence("tenantId",book,"accountId",mode,id,fingerprint,payload,ledger) VALUES($1,$2,$3,$4,$5,$6,$7,NULL)',
+            [b.tenantId, row.id, b.accountId, b.mode, event.id, fingerprint, payload],
+          );
+          return { checkpoint: previous, duplicate: true };
+        }
+        if (reduced.holdWatermark && (event.type === 'COMMITMENT' || event.type === 'RELEASE')) {
+          const w = reduced.holdWatermark;
+          await c.query(
+            'INSERT INTO ctp_portfolio.hold_watermark("tenantId",book,"accountId",mode,"holdId",timestamp,fingerprint,released,unknown) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT ("tenantId",book,"holdId") DO UPDATE SET timestamp=EXCLUDED.timestamp,fingerprint=EXCLUDED.fingerprint,released=EXCLUDED.released,unknown=EXCLUDED.unknown',
+            [
+              b.tenantId,
+              row.id,
+              b.accountId,
+              b.mode,
+              event.type === 'COMMITMENT' ? event.hold.id : event.holdId,
+              w.timestamp,
+              Buffer.from(w.fingerprint, 'hex'),
+              w.released,
+              w.unknown,
+            ],
+          );
+        }
         const ledger = reduced.postings.length ? randomUUID() : null;
         if (ledger) {
           await c.query(

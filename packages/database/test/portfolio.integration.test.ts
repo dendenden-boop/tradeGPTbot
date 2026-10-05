@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createPostgresPortfolioStore, type PortfolioStore, type Binding } from '@ctp/portfolio';
@@ -30,12 +30,17 @@ afterAll(async () => {
   await store?.close();
   await admin.end();
 });
-async function fixture(): Promise<Binding> {
+async function fixture(mode: Binding['mode'] = 'TESTNET'): Promise<Binding> {
   const b = {
     ...binding(),
     tenantId: randomUUID(),
     accountId: randomUUID(),
     connectionId: randomUUID(),
+    mode,
+    scope: {
+      ...binding().scope,
+      environment: mode === 'DEMO' ? ('DEMO' as const) : ('TESTNET' as const),
+    },
   };
   b.externalAccountId = b.accountId;
   await admin.query('INSERT INTO "user"(id,"emailNormalized","updatedAt") VALUES($1,$2,now())', [
@@ -43,12 +48,12 @@ async function fixture(): Promise<Binding> {
     `${b.tenantId}@example.invalid`,
   ]);
   await admin.query(
-    `INSERT INTO exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE','DEMO',$3,'global','SPOT','DISABLED','portfolio-test',now())`,
-    [b.accountId, b.tenantId, b.externalAccountId],
+    `INSERT INTO exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE',$4,$3,'global','SPOT','DISABLED','portfolio-test',now())`,
+    [b.accountId, b.tenantId, b.externalAccountId, b.mode],
   );
   await admin.query(
-    `INSERT INTO exchange_connection(id,"tenantId","accountId",mode,label,status,permissions,"updatedAt") VALUES($1,$2,$3,'DEMO','portfolio-test','DISABLED','{}',now())`,
-    [b.connectionId, b.tenantId, b.accountId],
+    `INSERT INTO exchange_connection(id,"tenantId","accountId",mode,label,status,permissions,"updatedAt") VALUES($1,$2,$3,$4,'portfolio-test','DISABLED','{}',now())`,
+    [b.connectionId, b.tenantId, b.accountId, b.mode],
   );
   return b;
 }
@@ -229,4 +234,142 @@ it('stores immutable journal and verifies checkpoint digest under restricted gra
   await expect(
     admin.query(`UPDATE ctp_portfolio.book SET state='{}' WHERE "tenantId"=$1`, [b.tenantId]),
   ).rejects.toThrow();
+});
+
+it.each(['TESTNET', 'DEMO'] as const)(
+  'uses exact %s account/connection mode and rejects contradictory environments',
+  async (mode) => {
+    const b = await fixture(mode);
+    await store.apply(b, snapshot(), 0, io());
+    expect((await store.read(b, io())).state.binding.mode).toBe(mode);
+    await expect(
+      store.read(
+        { ...b, scope: { ...b.scope, environment: mode === 'TESTNET' ? 'DEMO' : 'TESTNET' } },
+        io(),
+      ),
+    ).rejects.toThrow();
+    const other: Binding = {
+      ...b,
+      mode: mode === 'TESTNET' ? 'DEMO' : 'TESTNET',
+      scope: { ...b.scope, environment: mode === 'TESTNET' ? 'DEMO' : 'TESTNET' },
+    };
+    await expect(store.read(other, io())).rejects.toThrow('PORTFOLIO_BINDING_DENIED');
+  },
+);
+const reservation = {
+  id: 'durable-hold',
+  asset: 'USDT',
+  amount: '100',
+  status: 'RESERVED' as const,
+  reflected: false,
+};
+const commitment = (id: string, timestamp: number, amount = '100') => ({
+  type: 'COMMITMENT' as const,
+  id,
+  timestamp,
+  hold: { ...reservation, amount },
+});
+const releaseHold = (id: string, timestamp: number, resolved = true) => ({
+  type: 'RELEASE' as const,
+  id,
+  timestamp,
+  holdId: reservation.id,
+  resolved,
+});
+it('durable hold ordering ignores old updates/releases without revision or outbox effects', async () => {
+  const b = await fixture();
+  await store.apply(b, commitment('new', 900), 0, io());
+  expect((await store.apply(b, commitment('old', 800, '1'), 1, io())).duplicate).toBe(true);
+  expect((await store.apply(b, releaseHold('old-release', 850), 1, io())).duplicate).toBe(true);
+  const cp = await store.read(b, io());
+  expect(cp.revision).toBe(1);
+  expect(cp.state.holds[0]?.amount).toBe('100');
+  expect(await store.events(b, 200, io())).toHaveLength(1);
+  expect(await store.evidence(b, ['old', 'old-release'], io())).toHaveLength(2);
+});
+it('durable tombstone survives restart and blocks reservation resurrection and identity conflicts', async () => {
+  const b = await fixture();
+  await store.apply(b, commitment('create', 800), 0, io());
+  await store.apply(b, releaseHold('release', 900), 1, io());
+  const restarted = await createPostgresPortfolioStore({
+    connectionString: required('DATABASE_PORTFOLIO_URL'),
+    environment: 'test',
+  });
+  try {
+    expect((await restarted.apply(b, commitment('late', 850), 2, io())).duplicate).toBe(true);
+    expect((await restarted.apply(b, commitment('create', 800), 0, io())).duplicate).toBe(true);
+    expect((await restarted.read(b, io())).state.holds).toEqual([]);
+    await expect(restarted.apply(b, commitment('reuse', 950), 2, io())).rejects.toThrow(
+      'HOLD_CLOSED',
+    );
+    await expect(restarted.apply(b, commitment('late', 850, '99'), 2, io())).rejects.toThrow(
+      'EVIDENCE_CONFLICT',
+    );
+  } finally {
+    await restarted.close();
+  }
+});
+it('rejects equal timestamp conflicts and weak UNKNOWN resolution while allowing identical semantic replay', async () => {
+  const b = await fixture();
+  const event = { ...commitment('u', 800), hold: { ...reservation, status: 'UNKNOWN' as const } };
+  await store.apply(b, event, 0, io());
+  expect((await store.apply(b, { ...event, id: 'same-semantic' }, 1, io())).duplicate).toBe(true);
+  await expect(store.apply(b, commitment('conflict', 800, '1'), 1, io())).rejects.toThrow(
+    'HOLD_VERSION_CONFLICT',
+  );
+  await expect(store.apply(b, releaseHold('unproven', 900, false), 1, io())).rejects.toThrow(
+    'UNKNOWN_COMMITMENT',
+  );
+  await store.apply(b, releaseHold('resolved', 900), 1, io());
+  expect((await store.read(b, io())).state.holds).toEqual([]);
+});
+it('outbox rollback rolls back the hold watermark, and SQL cannot regress it', async () => {
+  const b = await fixture();
+  await store.read(b, io());
+  await admin.query(
+    `CREATE FUNCTION ctp_portfolio.test_fail_hold() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."tenantId"='${b.tenantId}'::uuid THEN RAISE EXCEPTION 'fixture'; END IF; RETURN NEW; END $$; CREATE TRIGGER test_fail_hold BEFORE INSERT ON ctp_portfolio.outbox FOR EACH ROW EXECUTE FUNCTION ctp_portfolio.test_fail_hold()`,
+  );
+  try {
+    await expect(store.apply(b, commitment('retry', 900), 0, io())).rejects.toThrow();
+    expect(
+      (
+        await admin.query('SELECT * FROM ctp_portfolio.hold_watermark WHERE "tenantId"=$1', [
+          b.tenantId,
+        ])
+      ).rows,
+    ).toEqual([]);
+  } finally {
+    await admin.query(
+      'DROP TRIGGER test_fail_hold ON ctp_portfolio.outbox; DROP FUNCTION ctp_portfolio.test_fail_hold()',
+    );
+  }
+  await store.apply(b, commitment('retry', 900), 0, io());
+  await expect(
+    admin.query('UPDATE ctp_portfolio.hold_watermark SET timestamp=800 WHERE "tenantId"=$1', [
+      b.tenantId,
+    ]),
+  ).rejects.toThrow();
+});
+it('legacy journal watermark backfill fails closed and requires newer trusted resolution', async () => {
+  const b = await fixture();
+  await store.read(b, io());
+  // Same placeholder representation as migration backfill; migration execution is
+  // independently covered by the upgrade fixture in the database runner.
+  await admin.query(
+    `INSERT INTO ctp_portfolio.hold_watermark("tenantId",book,"accountId",mode,"holdId",timestamp,fingerprint,released,unknown) SELECT "tenantId",id,"accountId",mode,$2,900,$3,false,true FROM ctp_portfolio.book WHERE "tenantId"=$1`,
+    [
+      b.tenantId,
+      reservation.id,
+      createHash('sha256')
+        .update('legacy-hold-history:' + reservation.id)
+        .digest(),
+    ],
+  );
+  await expect(store.apply(b, commitment('unproven', 950), 0, io())).rejects.toThrow(
+    'UNKNOWN_COMMITMENT',
+  );
+  await store.apply(b, releaseHold('trusted', 950), 0, io());
+  await expect(store.apply(b, commitment('resurrect', 1000), 1, io())).rejects.toThrow(
+    'HOLD_CLOSED',
+  );
 });

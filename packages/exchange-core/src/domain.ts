@@ -258,6 +258,7 @@ export const balanceSchema = z.strictObject({
   // Derivatives wallets do not necessarily expose Spot free/locked components.
   free: decimalSchema.nullable(),
   locked: nonNegativeDecimalSchema.nullable(),
+  // Derivatives: static wallet cash excluding unrealized PnL; never account equity.
   total: decimalSchema,
   availableToTrade: observedAggregateSchema,
 });

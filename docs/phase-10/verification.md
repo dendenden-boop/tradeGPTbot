@@ -1,6 +1,18 @@
 # PHASE 10 verification
 
-Gate: **READY FOR PHASE 11** on accepted source `6dcedb4acea41dc02e796c10b74b68145d1671f8`. PHASE 11 has not been started.
+## Requested hardening, 5 October 2026
+
+Baseline exact main `38c0e2a13b98f1d0d310a785a2f5fccaa63a46c6`, clean workspace. Baseline format/docs/lint/types/unit/HTTP/build/schema/runtime passed, 2322 unit / 41 HTTP. Baseline clean initially hit native OOM; full retry with local 1024MiB heap / 4MiB semi-space passed nine deployments. Baseline JSON audit has zero vulnerabilities across 407 dependencies. Evidence: ignored phase10-h2-baseline-*.log/json. No CI configuration was changed.
+
+RED contracts: phase10-h2-red.json/log reported nine failures and eight passes across the new hold/mode/HTX cases. The initial HTX cross test had a cleanup-fixture error, so it is not claimed as an equity reproduction. After correct cleanup, a native snapshot position revealed a separate import defect: observation-only `entryPrice` leaked into strict state. Dedicated phase10-h2-import-red.json/log reproduced it before fixing field projection. Then phase10-h2-htx-cross-red.json/log reproduced exact double counting: expected equity 110, actual 120. Fix uses confirmed native static balance and rejects missing/stale/inconsistent static/equity/unrealized fields.
+
+Hold fixes use durable per-hold timestamp/fingerprint/UNKNOWN/released watermarks, permanent tombstones and a monotonic SQL guard. Old observations are journaled without checkpoint/outbox effects; equal-version conflicts reject. UNKNOWN needs a newer trusted release. Additive `202610050001_portfolio_hold_ordering` is required because hot-state arrays cannot retain unbounded lifetime tombstones. It conservatively quarantines unproven legacy hold histories, retaining monetary/journal evidence and FORCE RLS. Existing published migrations are unchanged.
+
+TESTNET is now an exact storage mode. TESTNET/DEMO/LIVE must match environment, and all existing Binance test fixtures use actual TESTNET. New PG fixtures bind account and connection with exact TESTNET/DEMO and test contradictory environment and ownership rejection. PAPER remains separate with a server-selected public profile.
+
+Targeted GREEN: **275 Portfolio/HTX tests**, including 60 Portfolio tests. Complete local format/docs/lint/typecheck/unit/HTTP/build/schema/runtime/clean suite passed: **2340 unit**, **41 HTTP**, nine deployments, JSON audit zero at all severities / 407 dependencies. Local heap used 2048MiB for lint and 1024MiB elsewhere; standard CI configuration is unchanged. Evidence: phase10-h2-final-checks.json, phase10-h2-final-*.log/json. Exact new SQL additionally passed a prepublication PGlite 0.4.3 check with minimal parent DDL, NOBYPASSRLS migration owner, actual legacy upgrade fixture, permanent fingerprints and FORCE RLS (phase10-h2-sql-check.json). This is not real PostgreSQL/network integration. Real PG tests and the fresh/published-schema upgrade fixture await CI because Docker is unavailable locally. Gate remains **NOT READY FOR PHASE 11**. No PHASE 11 code or LIVE mutation capability was added.
+
+Gate: **NOT READY FOR PHASE 11** while the three requested hardening defects undergo full regression/CI. PHASE 11 has not been started. Previous acceptance below is historical.
 
 Recorded baseline: `accbcb56f4da146511b59695d234971ecf334195`, clean main. Before source changes, format:check, docs:check, lint, typecheck, test:unit, test:http, build, db:validate, test:runtime, test:clean and audit passed on 4 October 2026. 2278 unit tests, 41 HTTP tests, eight isolated clean deployments; audit JSON has zero vulnerabilities at all severities, 407 dependencies. Evidence is ignored phase10-baseline-checks.json, phase10-baseline-*.log and phase10-baseline-audit.json.
 
