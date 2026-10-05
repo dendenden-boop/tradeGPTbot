@@ -1,6 +1,6 @@
 # PHASE 11 verification
 
-Gate: **NOT READY FOR PHASE 12** until native PostgreSQL and the complete source CI pass. PHASE 12 has not started. LIVE execution is disabled; no real exchange mutation was performed.
+Gate: **READY FOR PHASE 12**. PHASE 11 acceptance passed on the exact source commit below. PHASE 12 has not started. LIVE execution is disabled; no real exchange mutation was performed.
 
 ## Baseline
 
@@ -24,4 +24,10 @@ Final local regression completed at **12:58:32 UTC, 5 October 2026**: format/doc
 
 ## CI acceptance
 
-Source commit, native PostgreSQL results and final CI run are pending. No READY gate is claimed.
+Full [source CI 37313570241](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37313570241) passed at **13:10:27 UTC, 5 October 2026**, on `30ae642d7436d025bce105caf0824c33ea99c1c6`. All three jobs succeeded: Ubuntu 24.04, Windows 2025 and real-services/Docker. Downloaded job reports and logs were machine-verified against the exact SHA at 13:12:04 UTC; evidence is retained in ignored `test-results/phase11-source-artifacts-verified.json` and `phase11-ci-source/`.
+
+Each OS passed **2371 unit / 41 HTTP**, build, schema, format/docs/lint/types/runtime, audit and ten isolated deployments. Lock SHA-256 matched the local frozen source above. Order Engine contributed **31 unit**; existing Portfolio 60, HTX 215 and Market Data 61 unit cases stayed green. Market Data fixture retained 300 instruments / 6000 trades / three connections / seven timeframes with zero drops. Both dependency audits reported no known vulnerabilities.
+
+Native PostgreSQL passed **244 integration cases**, including **19 Order Engine**, 17 Portfolio and nine Market Data. Physical abort/deadline settlement, expired/delayed one-use permits, permanent idempotency, restart/replay, monetary adoption and outbox rollback passed. Fresh, repeated, non-bypass owner and exact PHASE 10 upgrade paths passed; prior counters and Portfolio data survived, and no historical commands were invented. All nine migrations are now published and remain immutable.
+
+Docker service recovery, authentication, SMTP isolation and built-container smoke passed; smoke made 46 authenticated requests and shutdown completed in 376ms. Three dependency lifecycle cases also passed. Total: **2659 distinct tests** (2371 + 41 + 244 + 3); OS repetitions and smoke requests are not counted twice. This confirms PHASE 11's documented execution contract, not production/LIVE or exchange-private credential acceptance. Only verification/README publication follows this source acceptance; the unchanged full push workflow checks that main commit again.
