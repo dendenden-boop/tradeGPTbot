@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { computeCommandHash, orderSchema, type Order } from '@ctp/exchange-core';
+import {
+  computeCommandHash,
+  orderSchema,
+  createExchangeAdapter,
+  createInstrumentRegistry,
+  type Order,
+} from '@ctp/exchange-core';
 import {
   createPostgresOrderStore,
+  createOrderEngine,
   type OrderStore,
   type OrderState,
   type RiskGrant,
@@ -12,6 +19,7 @@ import {
 import { createPostgresPortfolioStore, type PortfolioStore } from '@ctp/portfolio';
 import { state, native } from '../../order-engine/test/fixtures.js';
 import { binding as portfolioBinding, snapshot, fill } from '../../portfolio/test/fixtures.js';
+import { instrument, rules } from '../../exchange-core/test/fixtures/adapter.js';
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('Order tests require isolated runner');
 const required = (key: string) => {
@@ -184,6 +192,114 @@ async function submitted() {
   await store.result(f.b, c, { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } }, io());
   return { ...f, s, c };
 }
+it('service create replay survives rules replacement and PostgreSQL restart without new effects', async () => {
+  const { b, draft } = await fixture(),
+    registry = createInstrumentRegistry({ capacity: 1 });
+  const refresh = (version: string) => {
+    expect(
+      registry.put(
+        {
+          instrument: {
+            ...instrument,
+            id: draft.order.instrumentId,
+            exchangeSymbol: draft.order.instrumentId,
+            metadataVersion: version,
+          },
+          rules: {
+            ...rules,
+            instrumentId: draft.order.instrumentId,
+            version,
+            effectiveAt: Date.now() - 1000,
+            expiresAt: Date.now() + 60000,
+          },
+        },
+        Date.now(),
+      ).ok,
+    ).toBe(true);
+  };
+  refresh('v1');
+  const adapter = createExchangeAdapter({
+    profile: b.profile,
+    account: {
+      tenantId: b.tenantId,
+      connectionId: b.connectionId,
+      externalAccountId: b.externalAccountId,
+    },
+    adapterVersion: 'v1',
+    registry,
+    capabilities: [],
+    transport: {
+      request: () => Promise.reject(new Error('No exchange I/O expected')),
+      subscribe: () => Promise.reject(new Error('No stream expected')),
+      disconnect: () => Promise.resolve(),
+    },
+    now: Date.now,
+  });
+  const compose = (durable: OrderStore) =>
+    createOrderEngine({
+      binding: b,
+      authorization: { check: () => Promise.resolve(true) },
+      risk: { approve: () => Promise.reject(new Error('No Risk evaluation expected')) },
+      fills: { ingest: () => Promise.reject(new Error('No fill ingestion expected')) },
+      registry,
+      store: durable,
+      adapter,
+      now: Date.now,
+    });
+  const effects = async () =>
+    (
+      await admin.query<{
+        intents: number;
+        orders: number;
+        commands: number;
+        outbox: number;
+        counter: string;
+      }>(
+        `SELECT (SELECT count(*)::int FROM order_intent WHERE "tenantId"=$1) AS intents,(SELECT count(*)::int FROM public."order" WHERE "tenantId"=$1) AS orders,(SELECT count(*)::int FROM ctp_execution.command WHERE "tenantId"=$1) AS commands,(SELECT count(*)::int FROM outbox_event WHERE "tenantId"=$1) AS outbox,"clientIdHighWatermark"::text AS counter FROM exchange_account WHERE "tenantId"=$1 AND id=$2`,
+        [b.tenantId, b.accountId],
+      )
+    ).rows[0];
+  const engine = compose(store);
+  let restarted: OrderStore | undefined,
+    recovered: ReturnType<typeof createOrderEngine> | undefined;
+  try {
+    const original = await engine.create(draft),
+      before = await effects();
+    await admin.query('UPDATE instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+      draft.dbRuleId,
+    ]);
+    const currentRule = randomUUID();
+    await admin.query(
+      `INSERT INTO instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1,$2,2,true,now(),now(),$3,0.01,0.001,0.001,'{"version":"v2"}')`,
+      [currentRule, draft.dbInstrumentId, Buffer.alloc(32, 2)],
+    );
+    refresh('v2');
+    expect(await engine.create(structuredClone(draft))).toEqual(original);
+    await engine.close();
+    restarted = await open();
+    recovered = compose(restarted);
+    expect(await recovered.create(structuredClone(draft))).toEqual(original);
+    await expect(
+      recovered.create({ ...draft, order: { ...draft.order, side: 'SELL' } }),
+    ).rejects.toThrow('ORDER_IDEMPOTENCY_CONFLICT');
+    const stale = { ...draft, key: randomUUID() };
+    await expect(recovered.create(stale)).rejects.toThrow('ORDER_METADATA');
+    await expect(restarted.create(b, stale, io())).rejects.toThrow('ORDER_METADATA');
+    expect(await effects()).toEqual(before);
+    const fresh = await recovered.create({
+      ...draft,
+      key: randomUUID(),
+      dbRuleId: currentRule,
+      order: { ...draft.order, ruleVersion: 'v2' },
+    });
+    expect(fresh.command.clientOrderId).toBe('9007199254740994');
+  } finally {
+    await recovered?.close();
+    await restarted?.close();
+    await engine.close();
+    await adapter.disconnect();
+  }
+});
 it('rejects admin/API/auth/ingest/Portfolio roles for execution', async () => {
   for (const key of [
     'DATABASE_MIGRATION_URL',

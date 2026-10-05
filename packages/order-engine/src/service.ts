@@ -255,6 +255,9 @@ export function createOrderEngine(options: {
         'CREATE',
         async (c) => {
           const d = draftSchema.parse(raw);
+          const existing = await options.store.findCreate(b, d, c);
+          check(c);
+          if (existing !== null) return existing;
           metadata(d);
           check(c);
           return options.store.create(b, d, c);

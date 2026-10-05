@@ -187,6 +187,55 @@ it('concurrent user clicks create one persisted command and conflicting key fail
     x.engine.create({ ...x.s.draft, order: { ...x.s.draft.order, side: 'SELL' } }),
   ).rejects.toThrow('ORDER_IDEMPOTENCY_CONFLICT');
 });
+it('replays a permanent create key after rules replacement and service restart without new work', async () => {
+  const x = fixture(),
+    original = await x.engine.create(x.s.draft);
+  expect(
+    x.registry.put(
+      {
+        instrument: { ...instrument, metadataVersion: 'v2' },
+        rules: { ...rules, version: 'v2', effectiveAt: clock() - 10, expiresAt: clock() + 60000 },
+      },
+      clock(),
+    ).ok,
+  ).toBe(true);
+  expect(await x.engine.create(structuredClone(x.s.draft))).toEqual(original);
+  await x.engine.close();
+  const restarted = createOrderEngine(x.options);
+  cleaners.push(() => restarted.close());
+  expect(await restarted.create(structuredClone(x.s.draft))).toEqual(original);
+  await expect(restarted.create({ ...x.s.draft, key: 'new-stale' })).rejects.toThrow(
+    'ORDER_METADATA',
+  );
+  expect(x.m.orders.size).toBe(1);
+  const fresh = await restarted.create({
+    ...x.s.draft,
+    key: 'new-current',
+    order: { ...x.s.draft.order, ruleVersion: 'v2' },
+  });
+  expect(fresh.command.clientOrderId).toBe('2');
+  expect(x.m.orders.size).toBe(2);
+  expect(x.counts()).toEqual({ submits: 0, cancels: 0 });
+  x.deny();
+  await expect(restarted.create(x.s.draft)).rejects.toThrow('ORDER_AUTHORIZATION_DENIED');
+});
+it('reports semantic key conflict before current metadata rejection after replacement', async () => {
+  const x = fixture();
+  await x.engine.create(x.s.draft);
+  expect(
+    x.registry.put(
+      {
+        instrument: { ...instrument, metadataVersion: 'v2' },
+        rules: { ...rules, version: 'v2', effectiveAt: clock() - 10, expiresAt: clock() + 60000 },
+      },
+      clock(),
+    ).ok,
+  ).toBe(true);
+  await expect(
+    x.engine.create({ ...x.s.draft, order: { ...x.s.draft.order, side: 'SELL' } }),
+  ).rejects.toThrow('ORDER_IDEMPOTENCY_CONFLICT');
+  expect(x.m.orders.size).toBe(1);
+});
 it('exact mode binding and unsupported hedge/client identity fields fail closed', () => {
   const s = state();
   expect(bindingSchema.safeParse({ ...s.binding, mode: 'DEMO' }).success).toBe(false);

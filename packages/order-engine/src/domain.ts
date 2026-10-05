@@ -133,6 +133,12 @@ export interface DispatchClaim {
   expiresAt: number;
 }
 export interface OrderStore {
+  /** Authorized durable lookup: exact replay, conflict, or null for a new key; never admits risk. */
+  findCreate(
+    binding: OrderBinding,
+    draft: OrderDraft,
+    context: IoContext,
+  ): Promise<OrderState | null>;
   create(binding: OrderBinding, draft: OrderDraft, context: IoContext): Promise<OrderState>;
   read(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
   cancelIntent(

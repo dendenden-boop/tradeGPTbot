@@ -1,8 +1,10 @@
 # PHASE 11 verification
 
-Gate: **READY FOR PHASE 12**. PHASE 11 acceptance passed on the exact source commit below. PHASE 12 has not started. LIVE execution is disabled; no real exchange mutation was performed.
+Gate: **NOT READY FOR PHASE 12** while permanent replay hardening acceptance is in progress. The earlier acceptance below is historical. PHASE 12 has not started. LIVE execution is disabled; no real exchange mutation was performed.
 
 ## Baseline
+
+Current hardening starts from clean main `50eff552cccf35901bc78504fbbd25258c9bcb75`, accepted by all three jobs of [CI 37315312766](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37315312766). Local and remote HEAD matched before edits. The baseline has 2659 distinct tests and unchanged published migrations. This task stays in PHASE 11.
 
 Started from clean main `0a078887bc79ff171abb2ce0b506bacddeb6fbd0`, the accepted PHASE 10 hardening. Format/docs/lint/types/2340 unit/41 HTTP/build/schema/runtime passed before implementation. Baseline clean initially exhausted native memory during parallel builds; a complete sequential retry passed nine isolated deployments at 10:25:14 UTC, 5 October 2026. Audit exited zero with every severity zero across 407 dependencies. Published migrations and CI policies remain unchanged.
 
@@ -22,7 +24,7 @@ Targeted Order Engine tests: **31 unit PASS**. All nine exact migration SQL file
 
 Final local regression completed at **12:58:32 UTC, 5 October 2026**: format/docs/lint/types/**2371 unit / 41 HTTP**/build/schema/runtime/clean all exited zero. Ten isolated deployments passed with the original lockfile SHA-256 `98b93b061179a31f319e4089af4627369581175b7c5ea59e951f843bc62f8a82` unchanged. Audit exited zero: every severity zero across 407 dependencies. Local commands use `pnpm_config_workspace_concurrency=1`, one V8 pool worker, 1024MiB heap / 4MiB semi-space (lint 2048MiB) because native builds exhausted this workstation's memory. The final SQL probe passed using one Vitest thread / 256MiB heap after native-memory failures in fork mode. No CI configuration was weakened. Evidence is retained in ignored `test-results/phase11-*.log/json`; local Docker is unavailable, so real-service acceptance must come from CI.
 
-## CI acceptance
+## Initial CI acceptance (historical)
 
 Full [source CI 37313570241](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37313570241) passed at **13:10:27 UTC, 5 October 2026**, on `30ae642d7436d025bce105caf0824c33ea99c1c6`. All three jobs succeeded: Ubuntu 24.04, Windows 2025 and real-services/Docker. Downloaded job reports and logs were machine-verified against the exact SHA at 13:12:04 UTC; evidence is retained in ignored `test-results/phase11-source-artifacts-verified.json` and `phase11-ci-source/`.
 
@@ -31,3 +33,15 @@ Each OS passed **2371 unit / 41 HTTP**, build, schema, format/docs/lint/types/ru
 Native PostgreSQL passed **244 integration cases**, including **19 Order Engine**, 17 Portfolio and nine Market Data. Physical abort/deadline settlement, expired/delayed one-use permits, permanent idempotency, restart/replay, monetary adoption and outbox rollback passed. Fresh, repeated, non-bypass owner and exact PHASE 10 upgrade paths passed; prior counters and Portfolio data survived, and no historical commands were invented. All nine migrations are now published and remain immutable.
 
 Docker service recovery, authentication, SMTP isolation and built-container smoke passed; smoke made 46 authenticated requests and shutdown completed in 376ms. Three dependency lifecycle cases also passed. Total: **2659 distinct tests** (2371 + 41 + 244 + 3); OS repetitions and smoke requests are not counted twice. This confirms PHASE 11's documented execution contract, not production/LIVE or exchange-private credential acceptance. Only verification/README publication follows this source acceptance; the unchanged full push workflow checks that main commit again.
+
+## Permanent replay and AMEND scope correction
+
+RED: two new unit regressions failed with ORDER_METADATA after v1-to-v2 replacement: exact accepted-key replay and conflicting semantic reuse. The service-to-store PostgreSQL contract case also failed at the same replay boundary in the prepublication SQL probe (one failure, 17 existing passes, two physical tests excluded). Evidence: ignored phase11-h1-unit-red.json/log and phase11-h1-sql-red.json/log. Native PostgreSQL will execute that committed case in CI; the probe is not native acceptance.
+
+Fix: required authorized durable findCreate before registry validation; canonical request mismatch rejects immediately, exact replay reads the original durable order, and new keys retain full registry plus SQL admission. Atomic create repeats its permanent lookup under the account lock. No migration change is needed. Tests cover original order/intent/client identity/command, restart, conflict, new stale rejection, accepted fresh request and unchanged durable intent/order/command/outbox/counter effects.
+
+AMEND review found that the Core command shape does not specify safe amendment/replace lifecycle, and all accepted production adapters keep the capability unsupported. Per the user's authorized alternative, the canonical roadmap now explicitly transfers AMEND to PHASE 12 after a generic semantic/capability contract, with full Order Engine/Risk/uncertainty/restart guarantees. PHASE 11 accepts PLACE/CANCEL; AMEND is assigned, not omitted. PHASE 12 implementation has not started.
+
+Targeted GREEN: **33 Order Engine unit** and **18 SQL-probe cases** passed; two physical socket cases remain native-runner-only. Evidence: phase11-h1-unit-green.json/log and phase11-h1-sql-green.json/log.
+
+Full local format/docs/lint/typecheck/**2373 unit / 41 HTTP**/build/db:validate/runtime passed. The first clean attempt exceeded its existing local build deadline; a complete unchanged-budget clean install/build/deploy retry passed all **ten deployments** at **14:04:47 UTC, 5 October 2026**. The frozen lock hash remained unchanged. Audit JSON exited zero with every severity zero across 407 dependencies. Evidence: phase11-h1-regression-checks.json/logs, phase11-h1-clean-retry.json/log and phase11-h1-regression-audit.json. No timeout, policy or CI configuration changed. New full source CI and native PostgreSQL acceptance remain pending; the gate stays closed.

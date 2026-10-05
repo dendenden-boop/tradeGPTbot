@@ -29,6 +29,12 @@ export function memoryStore(currentRule = () => 'v1') {
     return structuredClone(s);
   };
   const store: OrderStore = {
+    async findCreate(b, d) {
+      const k = keys.get(`${b.tenantId}:${d.key}`);
+      if (!k) return null;
+      if (k.fp !== hash({ b, d })) throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+      return bind(b, k.id);
+    },
     async create(b, d) {
       const fp = hash({ b, d }),
         key = `${b.tenantId}:${d.key}`,

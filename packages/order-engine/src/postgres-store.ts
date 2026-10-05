@@ -383,22 +383,34 @@ export async function createPostgresOrderStore(options: {
       throw new Error('ORDER_RISK_DENIED');
     await metadata(p, b, decisionDraft);
   }
+  async function findCreate(p: PoolClient, b: OrderBinding, d: OrderDraft) {
+    const seen = await p.query<{ id: string; requestHash: Buffer }>(
+      'SELECT c."orderId" AS id,c."requestHash" FROM ctp_execution.command c JOIN public.order_intent i ON i."tenantId"=c."tenantId" AND i.id=c."intentId" WHERE i."tenantId"=$1 AND i.operation=\'PLACE\' AND i."idempotencyKey"=$2',
+      [b.tenantId, d.key],
+    );
+    const previous = seen.rows[0];
+    if (!previous) return null;
+    if (!previous.requestHash.equals(bytes(hash({ binding: b, draft: d }))))
+      throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+    return read(p, b, previous.id);
+  }
   return Object.freeze({
+    findCreate(rawB: OrderBinding, rawD: OrderDraft, c: IoContext) {
+      const b = bindingSchema.parse(rawB),
+        d = draftSchema.parse(rawD);
+      return tx(b, c, async (p) => {
+        await owner(p, b);
+        return findCreate(p, b, d);
+      });
+    },
     create(rawB: OrderBinding, rawD: OrderDraft, c: IoContext) {
       const b = bindingSchema.parse(rawB),
         d = draftSchema.parse(rawD),
         requestHash = hash({ binding: b, draft: d });
       return tx(b, c, async (p) => {
         const a = await owner(p, b, true);
-        const seen = await p.query<{ id: string; requestHash: Buffer }>(
-          'SELECT c."orderId" AS id,c."requestHash" FROM ctp_execution.command c JOIN public.order_intent i ON i."tenantId"=c."tenantId" AND i.id=c."intentId" WHERE i."tenantId"=$1 AND i.operation=\'PLACE\' AND i."idempotencyKey"=$2',
-          [b.tenantId, d.key],
-        );
-        if (seen.rows[0]) {
-          if (!seen.rows[0].requestHash.equals(bytes(requestHash)))
-            throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
-          return read(p, b, seen.rows[0].id);
-        }
+        const existing = await findCreate(p, b, d);
+        if (existing !== null) return existing;
         if (BigInt(a.counter) >= 9223372036854775807n) throw new Error('ORDER_ID_EXHAUSTED');
         const clientId = (BigInt(a.counter) + 1n).toString();
         await p.query(
