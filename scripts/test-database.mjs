@@ -18,6 +18,7 @@ const expectedMigrations = [
   '202610040001_market_data',
   '202610040002_portfolio',
   '202610050001_portfolio_hold_ordering',
+  '202610050002_order_engine',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -57,6 +58,7 @@ const ownerPassword = randomBytes(24).toString('hex');
 const authPassword = randomBytes(24).toString('hex');
 const ingestPassword = randomBytes(24).toString('hex');
 const portfolioPassword = randomBytes(24).toString('hex');
+const executionPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -64,6 +66,7 @@ const secrets = [
   authPassword,
   ingestPassword,
   portfolioPassword,
+  executionPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -72,6 +75,7 @@ const ownerRole = `ctp_p2_owner_${suffix}`;
 const authRole = `ctp_p2_auth_${suffix}`;
 const ingestRole = `ctp_p2_ingest_${suffix}`;
 const portfolioRole = `ctp_p2_portfolio_${suffix}`;
+const executionRole = `ctp_p2_execution_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -103,6 +107,7 @@ const dbUrl = (
   auth = false,
   ingest = false,
   portfolio = false,
+  execution = false,
 ) => {
   const url = new URL(adminUrl);
   url.pathname = '/' + name;
@@ -125,6 +130,10 @@ const dbUrl = (
   if (portfolio) {
     url.username = portfolioRole;
     url.password = portfolioPassword;
+  }
+  if (execution) {
+    url.username = executionRole;
+    url.password = executionPassword;
   }
   return url.href;
 };
@@ -220,6 +229,10 @@ try {
     `CREATE ROLE ${identifier(portfolioRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${portfolioPassword}'`,
   );
   await admin.query(`GRANT ctp_portfolio TO ${identifier(portfolioRole)}`);
+  await admin.query(
+    `CREATE ROLE ${identifier(executionRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${executionPassword}'`,
+  );
+  await admin.query(`GRANT ctp_execution TO ${identifier(executionRole)}`);
   // Cluster roles outlive databases. PostgreSQL 17 requires existing role SET
   // membership before a different non-super DDL owner can transfer functions.
   await admin.query(`GRANT ctp_auth_owner TO ${identifier(ownerRole)}`);
@@ -342,8 +355,37 @@ try {
   }
   await migrate(databases[1], authPreviousConfig);
   const portfolioUpgrade = await preparePortfolioUpgrade(upgrade, marker, upgradeAccount);
+  await cp(
+    path.join(
+      workspace,
+      'packages/database/prisma/migrations/202610050001_portfolio_hold_ordering',
+    ),
+    path.join(authPreviousMigrations, '202610050001_portfolio_hold_ordering'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  await verifyPortfolioUpgrade(upgrade, portfolioUpgrade);
+  const priorCounter = (
+    await upgrade.query(
+      'SELECT "clientIdHighWatermark"::text AS counter FROM exchange_account WHERE id=$1',
+      [upgradeAccount],
+    )
+  ).rows[0].counter;
   await migrate(databases[1]);
   await verifyPortfolioUpgrade(upgrade, portfolioUpgrade);
+  assert.equal(
+    (
+      await upgrade.query(
+        'SELECT "clientIdHighWatermark"::text AS counter FROM exchange_account WHERE id=$1',
+        [upgradeAccount],
+      )
+    ).rows[0].counter,
+    priorCounter,
+  );
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int AS n FROM ctp_execution.command')).rows[0].n,
+    0,
+  );
   const authHardeningAfter = await exerciseAuthDatabaseHardening({
     admin: upgrade,
     adminUrl: dbUrl(databases[1]),
@@ -454,6 +496,7 @@ try {
         DATABASE_RUNTIME_URL: dbUrl(databases[0], true),
         DATABASE_INGEST_URL: dbUrl(databases[0], false, false, false, true),
         DATABASE_PORTFOLIO_URL: dbUrl(databases[0], false, false, false, false, true),
+        DATABASE_EXECUTION_URL: dbUrl(databases[0], false, false, false, false, false, true),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -523,6 +566,7 @@ try {
     isolatedReset: 'PASS',
     authenticatedRuntime: 'PASS',
     authenticationHardening: 'PASS',
+    orderEngineUpgradeFromPhase10: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

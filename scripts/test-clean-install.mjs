@@ -82,6 +82,23 @@ try {
   const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
   const lockfileSha256 = digest(await readFile(path.join(directory, 'pnpm-lock.yaml')));
   const options = { cwd: directory, env: { ...process.env, CI: 'true' }, echo: true };
+  // A frozen source install can be admitted by attestations without populating
+  // the full metadata mirror needed by the offline verifier in a fresh path.
+  // Verify this exact graph online first; never turn off release-age policies.
+  await run(
+    process.execPath,
+    [
+      pnpm,
+      'install',
+      '--lockfile-only',
+      '--frozen-lockfile',
+      '--ignore-scripts',
+      '--store-dir',
+      path.join(workspace, '.pnpm-store'),
+    ],
+    { ...options, timeoutMs: 180000 },
+  );
+  assert.equal(digest(await readFile(path.join(directory, 'pnpm-lock.yaml'))), lockfileSha256);
   await run(
     process.execPath,
     [
@@ -106,6 +123,7 @@ try {
     'exchange-htx',
     'market-data',
     'portfolio',
+    'order-engine',
   ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
@@ -309,12 +327,25 @@ try {
   `,
     options,
   );
+  await verifyDeployment(
+    path.join(directory, 'deployment-order-engine'),
+    String.raw`
+    const engine=await import('@ctp/order-engine');
+    assert.equal(typeof engine.createOrderEngine,'function');
+    assert.equal(typeof engine.createPostgresOrderStore,'function');
+    assert.throws(()=>engine.createOrderEngine({}));
+    assert.throws(()=>import.meta.resolve('@ctp/order-engine/testing'));
+    assert.equal('memoryStore' in engine,false);
+  `,
+    options,
+  );
   await report('clean-install', {
     status: 'PASS',
     startedAt,
     completedAt: new Date().toISOString(),
     directory: path.relative(workspace, directory),
     lockfileSha256,
+    sourcePolicyVerified: true,
     node: process.version,
     deployments: [
       '@ctp/api',
@@ -326,6 +357,7 @@ try {
       '@ctp/exchange-htx',
       '@ctp/market-data',
       '@ctp/portfolio',
+      '@ctp/order-engine',
     ],
     scope:
       'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX/HTX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',

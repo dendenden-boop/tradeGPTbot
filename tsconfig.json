@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@ctp/order-engine": ["./packages/order-engine/src/index.ts"],
       "@ctp/portfolio": ["./packages/portfolio/src/index.ts"],
       "@ctp/exchange-binance/market-data": ["./packages/exchange-binance/src/market-data.ts"],
       "@ctp/exchange-bybit/market-data": ["./packages/exchange-bybit/src/market-data.ts"],

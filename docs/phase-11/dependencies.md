@@ -1,0 +1,15 @@
+# PHASE 11 dependencies and operations
+
+Order Engine uses existing pinned Exchange Core, Portfolio, pg 8.23.0 and Zod 4.5.4. Monetary arithmetic uses Core exact decimals and Portfolio's 100-digit context. No new external version, endpoint or credential source is introduced.
+
+Apply additive `202610050002_order_engine` after PHASE 10 migrations. It creates four execution sidecars, FORCE RLS, immutable evidence, monotonic native/client watermarks and restricted `ctp_execution`. Partial one-attempt indexes apply to Order Engine commands without changing legacy retry semantics. Published migrations are unchanged. Fresh, repeated, PHASE 10 upgrade and non-bypass migration-owner paths belong to PostgreSQL acceptance.
+
+Provision a separate LOGIN member of `ctp_execution`. It may append intents/orders/attempts/events/fills/fees/outbox, update lifecycle and increase the counter; it cannot forge Risk evidence, edit Portfolio evidence or write money. Admission rejects privileged/other service memberships, dangerous direct grants and schema/database creation. Supply its DSN from server secrets; production requires verify-full TLS. Store, native observations and bindings are server-only.
+
+Composition requires authenticated authorization, a certified Risk evaluator, Portfolio ingestion coordinator, durable runtime registry, restricted store and accepted exchange adapter. No permissive defaults exist. Portfolio ingestion preserves exact fill/fee identity and returns persisted book/event identity; adoption independently verifies the journal and existing posting. Observed internal UUID is not binding proof. Workers/dispatcher provisioning remain operator responsibilities; no scheduler or trading HTTP endpoint is enabled.
+
+Operations are bounded to 32 concurrent settlements, 1–5000ms configured budgets and ten pages of at most 200 fills. PostgreSQL uses four connections, 1s acquisition, 2s statements, 2.5s queries and 3s transactions. Abort destroys the owned query socket; uncertain commit requires durable reread. Injected ports must honor cancellation and physically settle within budgets. Engine close aborts and drains owned work; composition closes shared adapter/store/registry separately.
+
+Back up financial tables, client counters and execution/Portfolio evidence consistently. Never reset counters after namespace changes or prune permanent fingerprints to reclaim hot capacity. Outbox consumers persist inbox deduplication before acknowledgment. Monitor unresolved attempts, reconciliation-required accounts, stale approvals, deadlines and publication backlog. Crash after claim, including before provable dispatch, requires lookup/history reconciliation and never another placement attempt.
+
+Execution supports NET/BASE quantities in Spot/BASE linear perpetual accounting. Quote-budget, contracts, inverse/dated/hedge admission remain unsupported. LIVE is disabled; PAPER waits for PHASE 13. TESTNET and DEMO remain exact storage/profile modes. No real exchange mutation, production load certification or 24h soak is claimed by fixtures.
