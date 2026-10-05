@@ -3,113 +3,47 @@ import { evaluateRiskPolicy, intersectRiskLimits } from '../src/index.js';
 import { parseDecimal } from '@ctp/exchange-core';
 import { grantSchema } from '../../order-engine/src/domain.js';
 import { NOW, recordFixture, newOrderFixture } from '../../exchange-core/test/fixtures/domain.js';
-import { capabilities, profile } from '../../exchange-core/test/fixtures/adapter.js';
+import {
+  adapterProfile as binanceProfile,
+  getBinanceProfile,
+} from '../../exchange-binance/src/profiles.js';
 
-function fixture() {
-  const record = recordFixture();
-  const binding = {
-    tenantId: '11111111-1111-4111-8111-111111111111',
-    accountId: '22222222-2222-4222-8222-222222222222',
-    mode: 'TESTNET',
-    profile,
-  };
-  const limits = {
-    valuationAsset: 'USDT',
-    maxOrderNotional: '100',
-    maxInstrumentExposure: '200',
-    maxAssetExposure: '300',
-    maxAccountExposure: '400',
-    maxUserExposure: '500',
-    maxConcurrentPositions: 3,
-    maxOpenOrders: 5,
-    maxLeverage: '5',
-    maxDailyRealizedLoss: '20',
-    maxDailyTotalLoss: '30',
-    maxDrawdownRate: '0.2',
-    maxOrdersPerMinute: 10,
-    minAvailableBalance: '1',
-    maxPriceDeviationRate: '0.1',
-    maxSpreadRate: '0.02',
-    minLiquidityNotional: '50',
-    maxEvidenceAgeMs: 5000,
-  };
-  return {
-    now: NOW,
-    binding,
-    adapterVersion: 'v1',
-    platform: { ...limits },
-    user: { ...limits },
-    order: newOrderFixture(record),
-    record,
-    capabilities: capabilities
-      .filter((x) => ['LIMIT_ORDER', 'MARKET_ORDER', 'REDUCE_ONLY'].includes(x.feature))
-      .map((x) => ({ ...x, profile, checkedAt: NOW - 1000, expiresAt: NOW + 60000 })),
-    snapshot: {
-      binding: structuredClone(binding),
-      instrumentId: record.instrument.id,
-      revision: '9007199254740993',
-      sourceId: 'certified-fixture',
-      sourceAt: NOW - 100,
-      reconciledAt: NOW - 50,
-      complete: true,
-      unknownExposure: false,
-      valuationAsset: 'USDT',
-      instrumentExposure: '10',
-      assetExposure: '20',
-      accountExposure: '30',
-      userExposure: '40',
-      positionQuantity: '0',
-      committedReductionQuantity: '0',
-      instrumentHasPendingEntry: false,
-      concurrentPositions: 1,
-      openOrders: 1,
-      ordersInLastMinute: 1,
-      leverage: '1',
-      availableAsset: 'USDT',
-      availableAmount: '1000',
-      dailyNetRealizedPnl: '0',
-      adjustedOpeningEquity: '100',
-      adjustedCurrentEquity: '100',
-      adjustedPeakEquity: '100',
-      utcDayStart: Math.floor(NOW / 86400000) * 86400000,
-      lossBaselineComplete: true,
-      pauses: { global: false, user: false, connection: false, strategy: false },
-      circuit: 'CLOSED',
-      health: {
-        database: 'HEALTHY',
-        limiter: 'HEALTHY',
-        authentication: 'HEALTHY',
-        exchangeRest: 'HEALTHY',
-        privateStream: 'HEALTHY',
-        clock: 'HEALTHY',
-        latency: 'HEALTHY',
-        rejectRate: 'HEALTHY',
-        maintenance: 'HEALTHY',
-      },
-      market: {
-        sourceId: 'book-and-price-fixture',
-        asOf: NOW - 20,
-        complete: true,
-        referencePrice: '10',
-        lowerExecutionPrice: '9.9',
-        upperExecutionPrice: '10.1',
-        bid: '9.95',
-        ask: '10.05',
-        liquidityNotional: '1000',
-        quoteToValuation: '1',
-        fxSourceId: 'identity-fx',
-        fxAsOf: NOW - 20,
-        kind: 'LAST',
-        executionBoundEnforced: true,
-        feeAsset: 'USDT',
-        maxFeeRate: '0.01',
-      },
-    },
-  };
-}
+import { fixture } from './fixtures.js';
+
 const rejected = (input: unknown, reason: string) =>
   expect(evaluateRiskPolicy(input)).toEqual({ kind: 'REJECTED', reasons: [reason] });
 describe('PHASE 12 pure policy contract (does not issue RiskGrant)', () => {
+  it('rejects derivative admission without account position-mode proof', () => {
+    const f = fixture();
+    f.binding.profile = binanceProfile(getBinanceProfile('binance-usdm-testnet-v1'));
+    f.snapshot.binding = structuredClone(f.binding);
+    f.record = recordFixture({ market: 'LINEAR_PERPETUAL' });
+    f.record.rules.quantityUnit = 'BASE';
+    f.record.rules.leverageTiers = [
+      { notionalCap: '1000', maxLeverage: '5' },
+    ] as typeof f.record.rules.leverageTiers;
+    f.order = newOrderFixture(f.record);
+    f.capabilities = f.capabilities.map((c) => ({ ...c, profile: f.binding.profile }));
+    f.snapshot.market.kind = 'MARK';
+    const { positionEvidence: omitted, ...snapshot } = f.snapshot;
+    void omitted;
+    rejected({ ...f, snapshot }, 'RISK_INPUT');
+  });
+  it('requires explicit liquidity currency even for identity FX', () => {
+    const f = fixture(),
+      { liquidityAsset: omitted, ...market } = f.snapshot.market;
+    void omitted;
+    rejected({ ...f, snapshot: { ...f.snapshot, market } }, 'RISK_INPUT');
+  });
+  it('does not treat unqualified liquidity as USD when quote is USDT', () => {
+    const f = fixture();
+    f.platform.valuationAsset = f.user.valuationAsset = f.snapshot.valuationAsset = 'USD';
+    f.snapshot.market.quoteToValuation = '1.2';
+    f.snapshot.market.fxSourceId = 'usdt-usd-observation';
+    const { liquidityAsset: omitted, ...market } = f.snapshot.market;
+    void omitted;
+    rejected({ ...f, snapshot: { ...f.snapshot, market } }, 'RISK_INPUT');
+  });
   it('computes a conservative amount without changing command or claiming authority', () => {
     const input = fixture(),
       before = structuredClone(input),
@@ -366,25 +300,6 @@ describe('PHASE 12 pure policy contract (does not issue RiskGrant)', () => {
     p.snapshot.adjustedOpeningEquity = '0';
     rejected(p, 'RISK_LOSS_BASELINE');
   });
-  it.each(['BINANCE', 'BYBIT', 'OKX', 'HTX'] as const)(
-    'evaluates exact %s profile without adapter-specific permissive defaults',
-    (exchange) => {
-      const f = fixture();
-      f.binding.profile = { ...f.binding.profile, exchange };
-      f.snapshot.binding = structuredClone(f.binding);
-      f.record = {
-        instrument: { ...f.record.instrument, scope: { ...f.record.instrument.scope, exchange } },
-        rules: { ...f.record.rules, scope: { ...f.record.rules.scope, exchange } },
-      };
-      f.capabilities = f.capabilities.map((c) => ({ ...c, profile: f.binding.profile }));
-      expect(evaluateRiskPolicy(f).kind).toBe('EVALUATED');
-      f.capabilities = f.capabilities.map((c) => ({
-        ...c,
-        profile: { ...c.profile, profileVersion: 'different' },
-      }));
-      rejected(f, 'RISK_CAPABILITY');
-    },
-  );
   it('preserves tighter platform maxima over a deterministic range of user limits', () => {
     for (let i = 0; i < 100; i++) {
       const f = fixture();
@@ -417,10 +332,16 @@ describe('PHASE 12 pure policy contract (does not issue RiskGrant)', () => {
     ] as typeof r.rules.leverageTiers;
     f.record = r;
     f.order = newOrderFixture(r, { side: 'SELL', reduceOnly: true });
-    f.binding.profile = { ...profile, market: 'LINEAR_PERPETUAL', accountMode: 'UNIFIED' };
+    f.binding.profile = binanceProfile(getBinanceProfile('binance-usdm-testnet-v1'));
     f.snapshot.binding = structuredClone(f.binding);
     f.capabilities = f.capabilities.map((x) => ({ ...x, profile: f.binding.profile }));
     f.snapshot.positionQuantity = '1';
+    f.snapshot.positionEvidence = {
+      ...f.snapshot.positionEvidence,
+      mode: 'ONE_WAY',
+      accountMode: f.binding.profile.accountMode,
+      quantity: '1',
+    };
     f.snapshot.committedReductionQuantity = '0.5';
     f.snapshot.availableAmount = '1.05';
     f.snapshot.market.kind = 'MARK';
@@ -466,6 +387,7 @@ describe('PHASE 12 pure policy contract (does not issue RiskGrant)', () => {
         f.snapshot.instrumentHasPendingEntry = true;
         f.snapshot.openOrders = 0;
       }
+      f.snapshot.positionEvidence.quantity = f.snapshot.positionQuantity;
       rejected(f, 'RISK_STATE_UNPROVED');
     },
   );

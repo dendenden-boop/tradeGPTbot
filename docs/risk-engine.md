@@ -4,6 +4,8 @@ PHASE 0 — контракт и критерии проверки. Ни один
 
 PHASE 12 начата: независимый `@ctp/risk-engine` реализует первый increment чистых правил согласно [требованиям](phase-12/requirements.md) и [контрактам](phase-12/contracts.md). Результат EVALUATED не является durable RiskGrant. Атомарные reservations, certified snapshot coordinator, final dispatch/pause gate и AMEND lifecycle ещё обязательны; [verification](phase-12/verification.md) сохраняет NOT READY FOR PHASE 13. Ниже остаётся полный целевой contract, а не заявление о завершённом gateway.
 
+Текущий evaluator требует position-mode evidence с exact NET quantity/account/source revision и отвергает HEDGE, включая реальный HTX linear profile. Цены и price bounds выражены в native quoteAsset; notional конвертируется в valuationAsset один раз, liquidity явно выражена в valuationAsset. FX доказывает обе валюты, source/time и IDENTITY/OBSERVED semantics, без stablecoin parity. Execution допускает только точную final-gate SQL function; эти guards не превращают caller-provided snapshot в authority.
+
 ## Интерфейс и входные данные
 
 `evaluateAndReserve(intent, trustedContext) → RiskDecision` выполняется application service с транзакционным repository. Чистые функции отдельных правил получают immutable `RiskSnapshot`. Decision: APPROVED/REJECTED/RECONCILIATION_REQUIRED, список стабильных reason codes, normalized payload hash, policy/state/instrument versions, data timestamps, reservationId и expiresAt. Перед фактической отправкой execution вызывает `validateDispatch(decision, currentState)`; прежнее одобрение не является бессрочным разрешением.

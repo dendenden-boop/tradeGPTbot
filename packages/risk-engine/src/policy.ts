@@ -108,6 +108,17 @@ const snapshotSchema = z.strictObject({
   accountExposure: nonNegativeDecimalSchema,
   userExposure: nonNegativeDecimalSchema,
   positionQuantity: amountDecimalSchema,
+  positionEvidence: z.strictObject({
+    mode: z.enum(['SPOT', 'ONE_WAY', 'HEDGE']),
+    accountMode: idSchema,
+    accountId: z.uuid(),
+    instrumentId: idSchema,
+    sourceId: idSchema,
+    revision: z.string().regex(/^[1-9]\d{0,63}$/),
+    asOf: timestampSchema,
+    side: z.enum(['NET', 'LONG', 'SHORT']),
+    quantity: amountDecimalSchema,
+  }),
   committedReductionQuantity: nonNegativeDecimalSchema,
   instrumentHasPendingEntry: z.boolean(),
   concurrentPositions: count,
@@ -150,7 +161,12 @@ const snapshotSchema = z.strictObject({
     bid: positiveAmountSchema,
     ask: positiveAmountSchema,
     liquidityNotional: nonNegativeDecimalSchema,
+    liquidityAsset: idSchema,
+    priceAsset: idSchema,
     quoteToValuation: positiveDecimalSchema,
+    fxFromAsset: idSchema,
+    fxToAsset: idSchema,
+    fxKind: z.enum(['IDENTITY', 'OBSERVED']),
     fxSourceId: idSchema,
     fxAsOf: timestampSchema,
     kind: z.enum(['LAST', 'MARK']),
@@ -205,6 +221,27 @@ export function evaluateRiskPolicy(raw: unknown): RiskEvaluation {
       s.valuationAsset !== p.valuationAsset
     )
       return reject('RISK_SCOPE');
+    const position = s.positionEvidence;
+    const oneWayAccountMode = {
+      BINANCE: 'ONE_WAY',
+      BYBIT: 'UTA2_ONE_WAY',
+      OKX: 'FUTURES_MODE_NET',
+      HTX: null,
+    }[binding.profile.exchange];
+    if (
+      position.mode !== (binding.profile.market === 'SPOT' ? 'SPOT' : 'ONE_WAY') ||
+      (binding.profile.market !== 'SPOT' && binding.profile.accountMode !== oneWayAccountMode) ||
+      position.accountMode !== binding.profile.accountMode ||
+      position.accountId !== binding.accountId ||
+      position.instrumentId !== order.instrumentId ||
+      position.sourceId !== s.sourceId ||
+      position.revision !== s.revision ||
+      position.side !== 'NET' ||
+      position.quantity !== s.positionQuantity ||
+      position.asOf > now ||
+      now - position.asOf > p.maxEvidenceAgeMs
+    )
+      return reject('RISK_POSITION_MODE_UNPROVED');
     if (
       !['SPOT', 'LINEAR_PERPETUAL'].includes(binding.profile.market) ||
       order.size.kind !== 'BASE_QUANTITY' ||
@@ -256,7 +293,15 @@ export function evaluateRiskPolicy(raw: unknown): RiskEvaluation {
       (binding.profile.market !== 'SPOT' && m.kind !== 'MARK')
     )
       return reject('RISK_MARKET_UNPROVED');
-    if (record.instrument.quoteAsset === p.valuationAsset && m.quoteToValuation !== '1')
+    if (
+      m.priceAsset !== record.instrument.quoteAsset ||
+      m.liquidityAsset !== p.valuationAsset ||
+      m.fxFromAsset !== record.instrument.quoteAsset ||
+      m.fxToAsset !== p.valuationAsset ||
+      (record.instrument.quoteAsset === p.valuationAsset
+        ? m.fxKind !== 'IDENTITY' || m.quoteToValuation !== '1'
+        : m.fxKind !== 'OBSERVED')
+    )
       return reject('RISK_CURRENCY_UNPROVED');
     if (cmp(s.leverage, p.maxLeverage) > 0) return reject('RISK_MAX_LEVERAGE');
     if (binding.profile.market === 'SPOT' && s.leverage !== '1')

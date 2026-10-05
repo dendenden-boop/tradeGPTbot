@@ -364,6 +364,44 @@ it('execution cannot acquire controller authority by direct SQL function grant',
     );
   }
 });
+it('execution rejects every additional Risk function privilege including unknown overloads', async () => {
+  const suffix = randomUUID().replaceAll('-', ''),
+    role = 'ctp_risk_extra_' + suffix,
+    fn = 'ctp_risk.extra_' + suffix,
+    url = new URL(required('DATABASE_EXECUTION_URL'));
+  url.username = role;
+  url.password = randomUUID();
+  await admin.query(
+    `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${url.password}'; GRANT ctp_execution TO "${role}"; CREATE FUNCTION ${fn}(text) RETURNS boolean LANGUAGE sql AS 'SELECT true'; REVOKE ALL ON FUNCTION ${fn}(text) FROM PUBLIC; GRANT EXECUTE ON FUNCTION ${fn}(text) TO "${role}"`,
+  );
+  try {
+    await expect(
+      createPostgresOrderStore({ connectionString: url.toString(), environment: 'test' }),
+    ).rejects.toThrow('ORDER_DATABASE_ROLE_UNSAFE');
+  } finally {
+    await admin.query(
+      `DROP FUNCTION ${fn}(text); REVOKE ctp_execution FROM "${role}"; DROP ROLE "${role}"`,
+    );
+  }
+});
+it('execution cannot create future Risk functions after its startup allowlist check', async () => {
+  const role = 'ctp_risk_create_' + randomUUID().replaceAll('-', ''),
+    url = new URL(required('DATABASE_EXECUTION_URL'));
+  url.username = role;
+  url.password = randomUUID();
+  await admin.query(
+    `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${url.password}'; GRANT ctp_execution TO "${role}"; GRANT CREATE ON SCHEMA ctp_risk TO "${role}"`,
+  );
+  try {
+    await expect(
+      createPostgresOrderStore({ connectionString: url.toString(), environment: 'test' }),
+    ).rejects.toThrow('ORDER_DATABASE_ROLE_UNSAFE');
+  } finally {
+    await admin.query(
+      `REVOKE CREATE ON SCHEMA ctp_risk FROM "${role}"; REVOKE ctp_execution FROM "${role}"; DROP ROLE "${role}"`,
+    );
+  }
+});
 it('atomically creates intent, command, order and outbox with lossless durable client counter', async () => {
   const { b, draft } = await fixture(),
     results = await Promise.all(Array.from({ length: 8 }, () => store.create(b, draft, io())));
