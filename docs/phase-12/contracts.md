@@ -1,5 +1,15 @@
 # PHASE 12 contracts
 
+## Durable current policy authority
+
+createPostgresPolicies is a server-only publisher/read service, separate from OrderRiskPort.approve. PLATFORM requires the isolated ctp_risk_policy_operator role; USER requires ctp_risk_policy_controller and server-authorized tenant selection. It exposes no HTTP endpoint, decision, reservation or transport permission. Each storage mode has its own platform and per-user immutable limits revisions; TESTNET never aliases DEMO. Limits are mandatory with no deployment preset, retain canonical decimal strings and have a SHA-256 hash of sorted canonical limits text. Current read requires both policies, verifies content hashes and rejects a different valuationAsset; intersectRiskLimits still enforces platform maxima/minimum protections.
+
+Updates carry a permanent eventId, expectedVersion and bounded reason. Exact replay returns its original version even after A → B → A replacement or restart; changed semantics under the same eventId conflict. Event identity is permanent across modes within its authority scope. New events use bigint CAS and advance exactly once; exhausted versions reject. Head identity cannot change, regress or be deleted; revisions cannot be updated or deleted. SQL independently validates known constraints, decimal envelopes, content hashes and scope. Policy SQL rejects direct grants to execution and mixed role membership even when the caller bypasses factory checks. The DDL owner remains trusted migration authority; its credentials are rejected by the runtime factory.
+
+Platform replacement takes the existing exclusive GLOBAL advisory lock. User replacement takes shared GLOBAL then exclusive tenant; current reads take shared GLOBAL then shared tenant. Approve/final dispatch must reread the returned exact revision IDs/hashes inside their own GLOBAL → tenant → account/reservation transaction. The publisher explicitly uses READ COMMITTED to avoid an inherited stale transaction snapshot after a lock wait. Abort/deadline destroys the actual connection; response/COMMIT uncertainty yields no successful result, including abort as COMMIT settles. Locks finish at SQL COMMIT, never around exchange I/O. Policy expiry does not exist: retirement/replacement is explicit, and reservation expiry cannot be inferred from policy replacement.
+
+This module persists policy authority only. It does not certify Portfolio/market/health/loss evidence or atomically reserve funds; those coordinator/gateway/Portfolio integrations and native AMEND remain incomplete acceptance requirements.
+
 ## Trust and policy evaluation
 
 Bindings, policies, capabilities, market state, accounting totals, loss baselines and classification come from authorized server composition. Strict schemas prove shape and scope, not authenticity. No client-provided snapshot can authorize an order. The pure evaluator returns EVALUATED or REJECTED with stable reason codes and a conservative reservation proposal; neither result contains a durable decision ID, reservation ID or transport permission. The PHASE 11 OrderRiskPort continues requiring an independently persisted RiskGrant.

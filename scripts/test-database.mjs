@@ -20,6 +20,7 @@ const expectedMigrations = [
   '202610050001_portfolio_hold_ordering',
   '202610050002_order_engine',
   '202610050003_risk_controls',
+  '202610050004_risk_policies',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -62,6 +63,8 @@ const portfolioPassword = randomBytes(24).toString('hex');
 const executionPassword = randomBytes(24).toString('hex');
 const riskControlPassword = randomBytes(24).toString('hex');
 const riskOperatorPassword = randomBytes(24).toString('hex');
+const policyOperatorPassword = randomBytes(24).toString('hex');
+const policyControllerPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -72,6 +75,8 @@ const secrets = [
   executionPassword,
   riskControlPassword,
   riskOperatorPassword,
+  policyOperatorPassword,
+  policyControllerPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -83,6 +88,8 @@ const portfolioRole = `ctp_p2_portfolio_${suffix}`;
 const executionRole = `ctp_p2_execution_${suffix}`;
 const riskControlRole = `ctp_p2_risk_control_${suffix}`;
 const riskOperatorRole = `ctp_p2_risk_operator_${suffix}`;
+const policyOperatorRole = `ctp_p2_policy_operator_${suffix}`;
+const policyControllerRole = `ctp_p2_policy_controller_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -148,6 +155,12 @@ const controlUrl = (name, global = false) => {
   const url = new URL(dbUrl(name));
   url.username = global ? riskOperatorRole : riskControlRole;
   url.password = global ? riskOperatorPassword : riskControlPassword;
+  return url.href;
+};
+const policyUrl = (name, platform = false) => {
+  const url = new URL(dbUrl(name));
+  url.username = platform ? policyOperatorRole : policyControllerRole;
+  url.password = platform ? policyOperatorPassword : policyControllerPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -249,6 +262,8 @@ try {
   for (const [role, secret, group] of [
     [riskControlRole, riskControlPassword, 'ctp_risk_control'],
     [riskOperatorRole, riskOperatorPassword, 'ctp_risk_operator'],
+    [policyOperatorRole, policyOperatorPassword, 'ctp_risk_policy_operator'],
+    [policyControllerRole, policyControllerPassword, 'ctp_risk_policy_controller'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -262,6 +277,10 @@ try {
   assert.deepEqual((await fresh.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
     { state: 'PAUSED', epoch: '1' },
   ]);
+  assert.equal(
+    (await fresh.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
+    0,
+  );
   assert.equal(
     (
       await fresh.query(
@@ -406,7 +425,56 @@ try {
     (await upgrade.query("SELECT to_regnamespace('ctp_risk') IS NULL AS missing")).rows[0].missing,
     true,
   );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/202610050003_risk_controls'),
+    path.join(authPreviousMigrations, '202610050003_risk_controls'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  await upgrade.query('BEGIN');
+  try {
+    await upgrade.query("SELECT set_config('app.tenant_id',$1,true)", [marker]);
+    await upgrade.query('SELECT ctp_risk.update_tenant($1::jsonb)', [
+      JSON.stringify({
+        scope: { kind: 'USER', tenantId: marker, targetId: marker },
+        kind: 'KILL_SWITCH',
+        key: 'kill',
+        state: 'PAUSED',
+        eventId: randomUUID(),
+        expectedEpoch: '0',
+        reason: 'POLICY_UPGRADE_PROOF',
+        evidenceHash: 'a'.repeat(64),
+      }),
+    ]);
+    await upgrade.query('COMMIT');
+  } finally {
+    await upgrade.query('ROLLBACK').catch(() => {});
+  }
+  const priorControlHeads = (
+    await upgrade.query(
+      'SELECT * FROM ctp_risk.tenant_head ORDER BY "tenantId",scope,target,kind,key',
+    )
+  ).rows;
+  const priorControlEvents = (
+    await upgrade.query('SELECT * FROM ctp_risk.tenant_event ORDER BY "tenantId",id')
+  ).rows;
   await migrate(databases[1]);
+  assert.deepEqual(
+    (
+      await upgrade.query(
+        'SELECT * FROM ctp_risk.tenant_head ORDER BY "tenantId",scope,target,kind,key',
+      )
+    ).rows,
+    priorControlHeads,
+  );
+  assert.deepEqual(
+    (await upgrade.query('SELECT * FROM ctp_risk.tenant_event ORDER BY "tenantId",id')).rows,
+    priorControlEvents,
+  );
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
+    0,
+  );
   assert.deepEqual(
     (await upgrade.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows,
     [{ state: 'PAUSED', epoch: '1' }],
@@ -505,7 +573,8 @@ try {
   );
   await migrate(databases[2], config, true);
   await verifyAuditUpgrade(ownerDatabase, ownerLegacy);
-  const { createPostgresControls } = await import('../packages/risk-engine/dist/index.js');
+  const { createPostgresControls, createPostgresPolicies } =
+    await import('../packages/risk-engine/dist/index.js');
   const controlTenant = randomUUID();
   await ownerDatabase.query(
     'INSERT INTO public."user"(id,"emailNormalized","updatedAt") VALUES($1,$2,now())',
@@ -534,6 +603,77 @@ try {
     assert.equal(result.state, 'PAUSED');
   } finally {
     await nonBypassControls.close();
+  }
+  const nonBypassPolicyOperator = await createPostgresPolicies({
+    connectionString: policyUrl(databases[2], true),
+    environment: 'test',
+    authority: 'PLATFORM',
+  });
+  const nonBypassPolicyController = await createPostgresPolicies({
+    connectionString: policyUrl(databases[2]),
+    environment: 'test',
+    authority: 'USER',
+  });
+  const restrictiveLimits = {
+    valuationAsset: 'USDT',
+    maxOrderNotional: '0',
+    maxInstrumentExposure: '0',
+    maxAssetExposure: '0',
+    maxAccountExposure: '0',
+    maxUserExposure: '0',
+    maxConcurrentPositions: 0,
+    maxOpenOrders: 0,
+    maxLeverage: '1',
+    maxDailyRealizedLoss: '0',
+    maxDailyTotalLoss: '0',
+    maxDrawdownRate: '0',
+    maxOrdersPerMinute: 0,
+    minAvailableBalance: '0',
+    maxPriceDeviationRate: '0',
+    maxSpreadRate: '0',
+    minLiquidityNotional: '0',
+    maxEvidenceAgeMs: 1000,
+  };
+  const policyRequest = {
+    mode: 'TESTNET',
+    eventId: randomUUID(),
+    expectedVersion: '0',
+    reason: 'NON_BYPASS_POLICY_PROOF',
+    limits: restrictiveLimits,
+  };
+  const policyIo = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2500 });
+  try {
+    assert.equal(
+      (
+        await nonBypassPolicyOperator.update(
+          { ...policyRequest, scope: { kind: 'PLATFORM' } },
+          policyIo(),
+        )
+      ).version,
+      '1',
+    );
+    assert.equal(
+      (
+        await nonBypassPolicyController.update(
+          {
+            ...policyRequest,
+            eventId: randomUUID(),
+            scope: { kind: 'USER', tenantId: controlTenant },
+          },
+          policyIo(),
+        )
+      ).version,
+      '1',
+    );
+    const heads = await nonBypassPolicyController.read(controlTenant, 'TESTNET', policyIo());
+    assert.equal(heads.length, 2);
+    assert.deepEqual(
+      heads.map((h) => h.limits),
+      [restrictiveLimits, restrictiveLimits],
+    );
+  } finally {
+    await nonBypassPolicyOperator.close();
+    await nonBypassPolicyController.close();
   }
   assert.deepEqual(
     (await admin.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1', [ownerRole]))
@@ -568,6 +708,8 @@ try {
         DATABASE_EXECUTION_URL: dbUrl(databases[0], false, false, false, false, false, true),
         DATABASE_RISK_CONTROL_URL: controlUrl(databases[0]),
         DATABASE_RISK_OPERATOR_URL: controlUrl(databases[0], true),
+        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[0], true),
+        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -627,6 +769,10 @@ try {
   assert.deepEqual((await reset.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
     { state: 'PAUSED', epoch: '1' },
   ]);
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
+    0,
+  );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -645,6 +791,9 @@ try {
     riskControlsUpgradePaused: 'PASS',
     riskControlsUpgradeFromPhase11: 'PASS',
     riskControlsNonBypassOwner: 'PASS',
+    riskPoliciesFreshAndResetMissing: 'PASS',
+    riskPoliciesUpgradeFromPhase12: 'PASS',
+    riskPoliciesNonBypassOwner: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

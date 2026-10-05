@@ -43,6 +43,8 @@ Daily interval — UTC. Realized net включает realized trading PnL, fees
 
 ## Атомарное резервирование
 
+Реализованный prerequisite PHASE 12: server-only createPostgresPolicies хранит immutable platform/user limits revisions и monotonic heads отдельно для PAPER/TESTNET/DEMO/LIVE. Permanent event replay/CAS переживает restart; отсутствие обеих policies или несовпадение valuationAsset закрывает current read. Policy publisher работает под отдельными SQL roles без финансовых writes; direct execution grant и смешанная Portfolio/controller роль не проходят SQL guard. Replacement участвует в GLOBAL → tenant ordering. Это источник policy versions для будущих approve/final checks; atomic Risk gateway и certified snapshot ещё не реализованы, policy read не выдаёт RiskGrant.
+
 Две стратегии с доступными 100 USDT не должны одновременно получить независимые approvals по 80. Короткая транзакция берёт locks для user aggregate, account collateral и instrument budgets в одном стабильном порядке, повторно читает версии, проверяет общие и локальные limits, создаёт decision/reservation, обновляет budget version и outbox. SERIALIZABLE conflicts повторяются ограниченно с jitter до deadline; внешних действий внутри retry нет.
 
 Reservations не удаляются по TTL при неизвестном dispatch: expiry запрещает новую отправку, но не освобождает потенциально потраченный баланс. Release разрешается по definitive non-submission/rejection/cancel/fill evidence. Stop strategy прекращает новые intents, но не забывает существующие orders/reservations. Leader/Redis lock лишь ускоряет coordination; корректность обеспечивают PostgreSQL constraints/CAS и [dispatch protocol](execution.md).
