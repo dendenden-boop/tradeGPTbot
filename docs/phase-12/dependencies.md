@@ -1,0 +1,9 @@
+# PHASE 12 dependencies and operation
+
+The first increment is `@ctp/risk-engine`, a server-only pure library built with the existing pinned Node.js 24.20.0/TypeScript toolchain. It depends on existing `@ctp/exchange-core` and Zod 4.5.4; no external version or supply-chain policy changes. The lockfile adds only the workspace importer. Clean production verification includes a separate eleventh isolated deployment, compiled public exports, rejected malformed input, absence of test/source files and absence of RiskGrant/transport authority exports.
+
+The library has no connection string, network endpoint, credential, clock timer, database writer, HTTP route, worker or exchange mutation. It accepts the complete evaluation time explicitly and requires both platform and user limits. Structural validation does not certify a principal, snapshot source, FX, execution-price bound, fee model or persisted policy version. Server provisioning of these inputs remains a required future PHASE 12 module.
+
+Before acceptance, the durable Risk gateway needs a restricted SQL owner/worker contract, stable shared budget locks, additive migration and fresh/upgrade/role tests. Certified Portfolio/Market Data snapshots must reconstruct restart and UTC loss baselines, preserve permanent reservation ownership and avoid double accounting. Durable pauses and final dispatch need a common race-tested gate. AMEND still needs native capability mappings, separate immutable intents/attempts and positive revision-aware recovery. None of these is represented by a process-local mock in the production package.
+
+Existing Order Engine requires a durable RiskGrant and continues rejecting LIVE dispatch. The pure result cannot be used in that port. Paper simulation and future strategy/UI implementations are outside this increment. State retention, backup, global operator permissions and circuit recovery runbooks will be specified with the durable implementation before READY FOR PHASE 13.

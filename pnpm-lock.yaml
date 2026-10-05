@@ -274,6 +274,15 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
 
+  packages/risk-engine:
+    dependencies:
+      '@ctp/exchange-core':
+        specifier: workspace:*
+        version: link:../exchange-core
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+
 packages:
 
   '@cacheable/memory@2.2.0':

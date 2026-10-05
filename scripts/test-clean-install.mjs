@@ -124,6 +124,7 @@ try {
     'market-data',
     'portfolio',
     'order-engine',
+    'risk-engine',
   ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
@@ -339,6 +340,22 @@ try {
   `,
     options,
   );
+  await verifyDeployment(
+    path.join(directory, 'deployment-risk-engine'),
+    String.raw`
+    const risk=await import('@ctp/risk-engine');
+    const { existsSync }=await import('node:fs');
+    assert.equal(typeof risk.evaluateRiskPolicy,'function');
+    assert.equal(typeof risk.intersectRiskLimits,'function');
+    assert.deepEqual(risk.evaluateRiskPolicy({}),{kind:'REJECTED',reasons:['RISK_INPUT']});
+    assert.equal('approve' in risk,false);
+    assert.equal('createRiskGrant' in risk,false);
+    assert.equal(existsSync('./test'),false);
+    assert.equal(existsSync('./src'),false);
+    assert.throws(()=>import.meta.resolve('@ctp/risk-engine/testing'));
+  `,
+    options,
+  );
   await report('clean-install', {
     status: 'PASS',
     startedAt,
@@ -358,6 +375,7 @@ try {
       '@ctp/market-data',
       '@ctp/portfolio',
       '@ctp/order-engine',
+      '@ctp/risk-engine',
     ],
     scope:
       'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX/HTX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
