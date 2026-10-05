@@ -1,0 +1,31 @@
+# PHASE 10 verification
+
+Gate: **NOT READY FOR PHASE 11**. Implementation and acceptance are in progress.
+
+Recorded baseline: `accbcb56f4da146511b59695d234971ecf334195`, clean main. Before source changes, format:check, docs:check, lint, typecheck, test:unit, test:http, build, db:validate, test:runtime, test:clean and audit passed on 4 October 2026. 2278 unit tests, 41 HTTP tests, eight isolated clean deployments; audit JSON has zero vulnerabilities at all severities, 407 dependencies. Evidence is ignored phase10-baseline-checks.json, phase10-baseline-*.log and phase10-baseline-audit.json.
+
+Docker is unavailable locally; no local real-service integration result is claimed. The preceding exact-main full CI is [37230378615](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37230378615), all three jobs successful. PHASE 11 and LIVE trading are not enabled.
+
+## Reproduction and fixes
+
+The following failures were reproduced while implementing the new Portfolio package, before the corresponding fixes. They do not claim regressions in completed PHASE 0–9 source.
+
+| RED reproduction                                                                                                                                   | Fix and retained regression                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Three failures in accounting-hardening: economic time regression, inconsistent balance components, weakening UNKNOWN commitment                    | Reject regressing economic input and invalid balances; UNKNOWN requires proven resolution.                                                                                                                                                   |
+| Two failures in anchor-cut: unseen execution at or before an absolute snapshot cut changed its balance                                             | Inclusive snapshot cut rejects unseen old events; durable identical replay remains a no-op.                                                                                                                                                  |
+| Cross-scope tests exposed future fee FX, unscoped derivative MARK acceptance and incorrect multi-quote Spot inventory comparison                   | Timestamped fee FX, exact scope/instrument MARK evidence and inventory summed across quote-qualified lots. The scoped MARK case also initially lacked the required schema capability; it was already rejected rather than accepted unsafely. |
+| Three reconciliation contract failures: opening postings missing, cash discrepancy cleared by repeated snapshots, explicit repair unsupported      | Conserved opening/adjustment ledger postings, sticky discrepancies, explicit latest-snapshot repair with unknown historical realized PnL. The repair test initially failed schema validation because the capability did not yet exist.       |
+| Two service lifecycle failures: metadata replaced during asynchronous fee lookup still committed; close returned before the aborted source settled | Recheck immutable metadata immediately before commit; account close waits for actual operation settlement.                                                                                                                                   |
+
+The first scaffold run only failed module resolution and is not counted as an executed RED regression. A valuation fixture also initially omitted its quote-conversion price; correcting that fixture is not claimed as a product defect. Targeted final Portfolio run: **42 passed across seven files** on 5 October 2026, recorded in ignored phase10-portfolio-final.json/log.
+
+The ten real-PostgreSQL tests are implemented for restricted writer role admission, atomic evidence/ledger/checkpoint/outbox, permanent replay after consumption/restart, conflicting identity reuse, concurrent revision CAS, outbox rollback, tenant/account/connection binding, physical abort/deadline settlement and immutable evidence/digest checks. Their execution is pending full CI; no local PostgreSQL result is claimed.
+
+## Local verification and acceptance status
+
+Final local format/docs/lint/typecheck, unit, HTTP, build, schema validation and runtime checks passed on 5 October 2026: **2320 unit tests**, **41 HTTP tests**, zero failures or pending tests. Nine isolated clean deployments passed at **08:09:48 UTC**, with frozen lockfile SHA256 `a146198d64ea0745f54e2f0adfc761a0bb17f81f1e04ea575eeafecf4f7b1e2a`. `pnpm audit --json` exited zero. Evidence is ignored phase10-final-checks.json, phase10-final-*.log/json and clean-install.json; these results do not substitute for real-service CI.
+
+Earlier lint/typecheck attempts on the constrained host exited 134 with Node heap exhaustion. The subsequent checks used local `NODE_OPTIONS=--max-old-space-size=2048 --max-semi-space-size=4`. The first schema check failed on an UNKNOWN stdin read error; its standalone retry succeeded. The first clean deployment exhausted native memory during parallel builds; its complete retry passed with a 1024MiB heap, 4MiB semi-space and local `npm_config_workspace_concurrency=1`. No CI heap/concurrency setting or platform configuration was changed. Sanitized source/database error boundaries retain fixed safe causes, with two narrowly documented lint exceptions so raw credential/account details cannot escape.
+
+Only additive migration `202610040002_portfolio` and PHASE 10 harness/package/docs changes have been made. Previously published migrations and exchange/auth/risk source remain unchanged. Full CI and real-service reports are required before changing the gate.

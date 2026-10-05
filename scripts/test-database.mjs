@@ -15,6 +15,7 @@ const expectedMigrations = [
   '202609140001_authentication',
   '202609200001_auth_hardening',
   '202610040001_market_data',
+  '202610040002_portfolio',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -53,12 +54,14 @@ const password = randomBytes(24).toString('hex');
 const ownerPassword = randomBytes(24).toString('hex');
 const authPassword = randomBytes(24).toString('hex');
 const ingestPassword = randomBytes(24).toString('hex');
+const portfolioPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
   ownerPassword,
   authPassword,
   ingestPassword,
+  portfolioPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -66,6 +69,7 @@ const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
 const authRole = `ctp_p2_auth_${suffix}`;
 const ingestRole = `ctp_p2_ingest_${suffix}`;
+const portfolioRole = `ctp_p2_portfolio_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -90,7 +94,14 @@ const connect = (url, maintenance = false) => {
   return pool;
 };
 const admin = connect(adminUrl.href, true);
-const dbUrl = (name, runtime = false, owner = false, auth = false, ingest = false) => {
+const dbUrl = (
+  name,
+  runtime = false,
+  owner = false,
+  auth = false,
+  ingest = false,
+  portfolio = false,
+) => {
   const url = new URL(adminUrl);
   url.pathname = '/' + name;
   if (runtime) {
@@ -108,6 +119,10 @@ const dbUrl = (name, runtime = false, owner = false, auth = false, ingest = fals
   if (ingest) {
     url.username = ingestRole;
     url.password = ingestPassword;
+  }
+  if (portfolio) {
+    url.username = portfolioRole;
+    url.password = portfolioPassword;
   }
   return url.href;
 };
@@ -199,6 +214,10 @@ try {
     `CREATE ROLE ${identifier(ingestRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${ingestPassword}'`,
   );
   await admin.query(`GRANT ctp_ingest TO ${identifier(ingestRole)}`);
+  await admin.query(
+    `CREATE ROLE ${identifier(portfolioRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${portfolioPassword}'`,
+  );
+  await admin.query(`GRANT ctp_portfolio TO ${identifier(portfolioRole)}`);
   // Cluster roles outlive databases. PostgreSQL 17 requires existing role SET
   // membership before a different non-super DDL owner can transfer functions.
   await admin.query(`GRANT ctp_auth_owner TO ${identifier(ownerRole)}`);
@@ -418,6 +437,7 @@ try {
         DATABASE_MIGRATION_URL: dbUrl(databases[0]),
         DATABASE_RUNTIME_URL: dbUrl(databases[0], true),
         DATABASE_INGEST_URL: dbUrl(databases[0], false, false, false, true),
+        DATABASE_PORTFOLIO_URL: dbUrl(databases[0], false, false, false, false, true),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,

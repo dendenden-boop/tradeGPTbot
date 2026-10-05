@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 export const aliases = {
+  '@ctp/portfolio': fileURLToPath(new URL('./packages/portfolio/src/index.ts', import.meta.url)),
   '@ctp/exchange-binance/market-data': fileURLToPath(
     new URL('./packages/exchange-binance/src/market-data.ts', import.meta.url),
   ),

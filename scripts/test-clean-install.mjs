@@ -105,6 +105,7 @@ try {
     'exchange-okx',
     'exchange-htx',
     'market-data',
+    'portfolio',
   ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
@@ -295,6 +296,19 @@ try {
     options,
   );
   assert.equal(digest(await readFile(path.join(workspace, 'pnpm-lock.yaml'))), lockfileSha256);
+  await verifyDeployment(
+    path.join(directory, 'deployment-portfolio'),
+    String.raw`
+    const portfolio=await import('@ctp/portfolio');
+    assert.equal(typeof portfolio.createPortfolioAccount,'function');
+    assert.equal(typeof portfolio.createPostgresPortfolioStore,'function');
+    assert.equal(typeof portfolio.valuePortfolio,'function');
+    assert.throws(()=>portfolio.createPortfolioAccount({}));
+    assert.throws(()=>import.meta.resolve('@ctp/portfolio/testing'));
+    assert.equal('createMemoryPortfolioStore' in portfolio,false);
+  `,
+    options,
+  );
   await report('clean-install', {
     status: 'PASS',
     startedAt,
@@ -311,6 +325,7 @@ try {
       '@ctp/exchange-okx',
       '@ctp/exchange-htx',
       '@ctp/market-data',
+      '@ctp/portfolio',
     ],
     scope:
       'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX/HTX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
