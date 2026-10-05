@@ -1,4 +1,5 @@
 import dns from 'node:dns';
+import WebSocket from 'ws';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNetworkIo } from '../src/io.js';
 import type { IoContext, NetworkIo } from '../src/io.js';
@@ -278,6 +279,45 @@ describe('bounded real HTTP IO', () => {
 });
 
 describe('bounded real WebSocket IO', () => {
+  it.each(['native handshake timeout', 'expired deadline before timer dispatch'] as const)(
+    'classifies %s and physically releases the handshake socket',
+    async (mode) => {
+      const fixture = await http(() => undefined);
+      fixture.server.on('upgrade', (_request, socket) => {
+        socket.on('end', () => socket.end());
+        socket.resume();
+      });
+      const url = new URL(fixture.url);
+      url.protocol = 'ws:';
+      const registrations = vi.spyOn(WebSocket.prototype, 'on');
+      const network = io();
+      const ctx = context();
+      const end = vi.fn();
+      const pending = network.openSocket(url, ctx, vi.fn(), end).catch((e: unknown) => e);
+      await until(() => fixture.sockets.size === 1);
+      const socket = registrations.mock.instances.find((s) => s instanceof WebSocket);
+      expect(socket).toBeDefined();
+      const clock =
+        mode === 'expired deadline before timer dispatch'
+          ? vi.spyOn(Date, 'now').mockReturnValue(ctx.deadline + 1)
+          : undefined;
+      socket!.emit(
+        'error',
+        new Error(
+          mode === 'native handshake timeout'
+            ? 'Opening handshake has timed out'
+            : 'connection lost',
+        ),
+      );
+      clock?.mockRestore();
+      expect(await pending).toMatchObject({ code: 'DEADLINE_EXCEEDED' });
+      await until(() => fixture.sockets.size === 0);
+      expect(end).toHaveBeenCalledTimes(1);
+      const healthy = await ws();
+      const next = await network.openSocket(healthy.url, context(), vi.fn(), vi.fn());
+      await next.close();
+    },
+  );
   it('exchanges text messages and automatically answers server pings', async () => {
     let pong = false;
     const fixture = await ws((socket) => {

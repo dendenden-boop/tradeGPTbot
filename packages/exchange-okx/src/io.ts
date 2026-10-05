@@ -376,7 +376,16 @@ export function createNetworkIo(): NetworkIo {
           maxHeaderSize: MAX_HEADERS,
           handshakeTimeout: Math.max(1, context.deadline - Date.now()),
         });
-        socket.on('error', () => stop('UNAVAILABLE'));
+        socket.on('error', (cause: Error) => {
+          // ws has its own handshake timer; it may fire before our deadline callback.
+          // Preserve cancellation/deadline semantics regardless of event-loop ordering.
+          stop(
+            checkContext(context) ??
+              (!opened && cause.message === 'Opening handshake has timed out'
+                ? 'DEADLINE_EXCEEDED'
+                : 'UNAVAILABLE'),
+          );
+        });
         socket.on('close', finish);
         socket.on('open', () => {
           if (stopped || context.signal.aborted || Date.now() >= context.deadline) {
