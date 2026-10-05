@@ -101,6 +101,7 @@ export async function createPostgresOrderStore(options: {
       const value = await work(p);
       if (destroyed || c.signal.aborted) throw new Error('ORDER_ABORTED');
       await p.query('COMMIT');
+      if (destroyed || c.signal.aborted) throw new Error('ORDER_ABORTED');
       return value;
     } catch (error) {
       if (p && !destroyed) await p.query('ROLLBACK').catch(() => {});
@@ -121,11 +122,11 @@ export async function createPostgresOrderStore(options: {
   try {
     await tx(null, io(), async (p) => {
       const r = await p.query<{ safe: boolean }>(
-        `SELECT NOT(r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication) AND current_user=session_user AND pg_has_role(current_user,'ctp_execution','MEMBER') AND NOT EXISTS(SELECT 1 FROM pg_roles x WHERE (x.rolsuper OR x.rolbypassrls OR x.rolcreatedb OR x.rolcreaterole OR x.rolreplication OR left(x.rolname,3)='pg_' OR x.rolname IN('ctp_api','ctp_auth','ctp_auth_owner','ctp_ingest','ctp_signer','ctp_portfolio')) AND pg_has_role(current_user,x.oid,'MEMBER')) AND NOT has_schema_privilege(current_user,'public','CREATE') AND NOT has_schema_privilege(current_user,'ctp_execution','CREATE') AND NOT has_database_privilege(current_user,current_database(),'CREATE,TEMP') AND NOT EXISTS(SELECT 1 FROM pg_class x JOIN pg_namespace n ON n.oid=x.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution') AND pg_has_role(current_user,x.relowner,'MEMBER')) AND NOT has_table_privilege(current_user,'public.ledger_transaction','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AS safe FROM pg_roles r WHERE r.rolname=current_user`,
+        `SELECT NOT(r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication) AND current_user=session_user AND NOT has_function_privilege(current_user,'ctp_risk.update_global(jsonb)','EXECUTE') AND NOT has_function_privilege(current_user,'ctp_risk.update_tenant(jsonb)','EXECUTE') AND pg_has_role(current_user,'ctp_execution','MEMBER') AND NOT EXISTS(SELECT 1 FROM pg_roles x WHERE (x.rolsuper OR x.rolbypassrls OR x.rolcreatedb OR x.rolcreaterole OR x.rolreplication OR left(x.rolname,3)='pg_' OR x.rolname IN('ctp_api','ctp_auth','ctp_auth_owner','ctp_ingest','ctp_signer','ctp_portfolio','ctp_risk_control','ctp_risk_operator')) AND pg_has_role(current_user,x.oid,'MEMBER')) AND NOT has_schema_privilege(current_user,'public','CREATE') AND NOT has_schema_privilege(current_user,'ctp_execution','CREATE') AND NOT has_database_privilege(current_user,current_database(),'CREATE,TEMP') AND NOT EXISTS(SELECT 1 FROM pg_class x JOIN pg_namespace n ON n.oid=x.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND pg_has_role(current_user,x.relowner,'MEMBER')) AND NOT has_table_privilege(current_user,'public.ledger_transaction','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AS safe FROM pg_roles r WHERE r.rolname=current_user`,
       );
       if (r.rows[0]?.safe !== true) throw new Error('ORDER_ROLE_UNSAFE');
       const privileges = await p.query<{ safe: boolean }>(`SELECT NOT EXISTS(
-        SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution') AND t.relkind IN('r','p','v','m','f') AND (
+        SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND t.relkind IN('r','p','v','m','f') AND (
           (t.oid NOT IN('public.exchange_account'::regclass,'public.exchange_connection'::regclass,'public.instrument'::regclass,'public.instrument_rule_version'::regclass,'public.capability_snapshot'::regclass,'public.account_state_version'::regclass,'public.risk_decision'::regclass,'public.risk_reservation'::regclass,'public.ledger_transaction'::regclass,'public.order_intent'::regclass,'public.order'::regclass,'public.order_event'::regclass,'public.submission_attempt'::regclass,'public.fill'::regclass,'public.fee'::regclass,'public.outbox_event'::regclass,'ctp_portfolio.book'::regclass,'ctp_portfolio.evidence'::regclass,'ctp_execution.command'::regclass,'ctp_execution.progress'::regclass,'ctp_execution.evidence'::regclass,'ctp_execution.fill_adoption'::regclass) AND (has_table_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES') OR has_any_column_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
           OR has_table_privilege(current_user,t.oid,'DELETE,TRUNCATE,TRIGGER,REFERENCES')
           OR (t.oid IN('public.exchange_connection'::regclass,'public.instrument'::regclass,'public.instrument_rule_version'::regclass,'public.capability_snapshot'::regclass,'public.account_state_version'::regclass,'public.risk_decision'::regclass,'public.risk_reservation'::regclass,'public.ledger_transaction'::regclass,'ctp_portfolio.book'::regclass,'ctp_portfolio.evidence'::regclass) AND (has_table_privilege(current_user,t.oid,'INSERT,UPDATE') OR has_any_column_privilege(current_user,t.oid,'INSERT,UPDATE')))
@@ -889,6 +890,11 @@ export async function createPostgresOrderStore(options: {
           return false;
         return await tx(null, context, async (p) => {
           await p.query("SELECT set_config('app.tenant_id',$1,true)", [a.account.tenantId]);
+          const gate = await p.query<{ allowed: boolean }>(
+            'SELECT ctp_risk.dispatch_gate($1::uuid,$2::uuid) AS allowed',
+            [a.account.tenantId, a.account.connectionId],
+          );
+          if (gate.rows[0]?.allowed !== true) return false;
           const r = await p.query<{
             binding: string;
             orderId: string;

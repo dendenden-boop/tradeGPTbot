@@ -347,6 +347,8 @@ try {
     const { existsSync }=await import('node:fs');
     assert.equal(typeof risk.evaluateRiskPolicy,'function');
     assert.equal(typeof risk.intersectRiskLimits,'function');
+    assert.equal(typeof risk.createPostgresControls,'function');
+    assert.equal(typeof risk.controlUpdateSchema.parse,'function');
     assert.deepEqual(risk.evaluateRiskPolicy({}),{kind:'REJECTED',reasons:['RISK_INPUT']});
     assert.equal('approve' in risk,false);
     assert.equal('createRiskGrant' in risk,false);

@@ -43,6 +43,22 @@ const open = () =>
   });
 let store: OrderStore, portfolio: PortfolioStore, capability: string;
 beforeAll(async () => {
+  // Only this isolated fixture opens the migration's fail-closed GLOBAL gate.
+  const head = await admin.query<{ epoch: string }>(
+    "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
+  );
+  await admin.query('SELECT ctp_risk.update_global($1::jsonb)', [
+    JSON.stringify({
+      scope: { kind: 'GLOBAL' },
+      kind: 'KILL_SWITCH',
+      key: 'kill',
+      state: 'RUNNING',
+      eventId: randomUUID(),
+      expectedEpoch: head.rows[0]?.epoch,
+      reason: 'ISOLATED_TEST_INITIALIZATION',
+      evidenceHash: 'a'.repeat(64),
+    }),
+  ]);
   store = await open();
   portfolio = await createPostgresPortfolioStore({
     connectionString: required('DATABASE_PORTFOLIO_URL'),
@@ -330,6 +346,24 @@ it('rejects execution identities with direct grants to forge Risk evidence', asy
     );
   }
 });
+it('execution cannot acquire controller authority by direct SQL function grant', async () => {
+  const role = 'ctp_risk_exec_probe_' + randomUUID().replaceAll('-', ''),
+    url = new URL(required('DATABASE_EXECUTION_URL'));
+  url.username = role;
+  url.password = randomUUID();
+  await admin.query(
+    `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${url.password}'; GRANT ctp_execution TO "${role}"; GRANT EXECUTE ON FUNCTION ctp_risk.update_global(jsonb) TO "${role}"`,
+  );
+  try {
+    await expect(
+      createPostgresOrderStore({ connectionString: url.href, environment: 'test' }),
+    ).rejects.toThrow('ORDER_DATABASE_ROLE_UNSAFE');
+  } finally {
+    await admin.query(
+      `REVOKE EXECUTE ON FUNCTION ctp_risk.update_global(jsonb) FROM "${role}"; REVOKE ctp_execution FROM "${role}"; DROP ROLE "${role}"`,
+    );
+  }
+});
 it('atomically creates intent, command, order and outbox with lossless durable client counter', async () => {
   const { b, draft } = await fixture(),
     results = await Promise.all(Array.from({ length: 8 }, () => store.create(b, draft, io())));
@@ -443,6 +477,110 @@ it('rejects forged result claims without changing attempt or order', async () =>
   ).rejects.toThrow('ORDER_BINDING_DENIED');
   expect((await store.read(b, s.id, io())).status).toBe('UNKNOWN');
 });
+it.each(['USER', 'CONNECTION', 'GLOBAL', 'OPEN', 'HALF_OPEN'] as const)(
+  'final transport permit rejects a newer durable %s control without consuming it',
+  async (scope) => {
+    const { b, draft } = await fixture(),
+      s = await store.create(b, draft, io()),
+      g = await grant(s),
+      c = await store.begin(b, s.id, s.intentId, g, io());
+    if (!c) throw new Error('No claim');
+    const global = scope === 'GLOBAL';
+    const p = await admin.connect();
+    let epoch = '0',
+      released = false;
+    const request = {
+      scope: global
+        ? { kind: 'GLOBAL' }
+        : {
+            kind: scope === 'CONNECTION' ? 'CONNECTION' : 'USER',
+            tenantId: b.tenantId,
+            targetId: scope === 'CONNECTION' ? b.connectionId : b.tenantId,
+          },
+      kind: scope === 'OPEN' || scope === 'HALF_OPEN' ? 'CIRCUIT' : 'KILL_SWITCH',
+      key: scope === 'OPEN' || scope === 'HALF_OPEN' ? 'private_ws' : 'kill',
+      state: scope === 'OPEN' || scope === 'HALF_OPEN' ? scope : 'PAUSED',
+      eventId: randomUUID(),
+      expectedEpoch: '0',
+      reason: 'TEST_PAUSE',
+      evidenceHash: 'a'.repeat(64),
+    };
+    try {
+      await p.query('BEGIN');
+      if (global) {
+        const r = await p.query<{ epoch: string }>(
+          "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH'",
+        );
+        request.expectedEpoch = r.rows[0]!.epoch;
+      } else await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+      const r = await p.query<{ result: { epoch: string } }>(
+        global
+          ? 'SELECT ctp_risk.update_global($1::jsonb) AS result'
+          : 'SELECT ctp_risk.update_tenant($1::jsonb) AS result',
+        [JSON.stringify(request)],
+      );
+      epoch = r.rows[0]!.result.epoch;
+      await p.query('COMMIT');
+      p.release();
+      released = true;
+      const account = {
+        tenantId: b.tenantId,
+        connectionId: b.connectionId,
+        externalAccountId: b.externalAccountId,
+      };
+      const authorization = {
+        commandId: s.intentId,
+        commandHash: c.commandHash,
+        dispatchAttemptId: c.attemptId,
+        profile: b.profile,
+        account,
+        issuedAt: Date.now(),
+        expiresAt: Date.now() + 1000,
+      };
+      expect(
+        await store.authorize(
+          'createOrder',
+          { command: s.command, authorization },
+          { ...io(), profile: b.profile, account, correlationId: randomUUID() },
+        ),
+      ).toBe(false);
+      expect(
+        (
+          await admin.query<{ started: Date | null }>(
+            'SELECT "transportStartedAt" AS started FROM submission_attempt WHERE id=$1',
+            [c.attemptId],
+          )
+        ).rows[0]?.started,
+      ).toBeNull();
+      const restarted = await open();
+      try {
+        expect(
+          await restarted.authorize(
+            'createOrder',
+            { command: s.command, authorization },
+            { ...io(), profile: b.profile, account, correlationId: randomUUID() },
+          ),
+        ).toBe(false);
+      } finally {
+        await restarted.close();
+      }
+    } finally {
+      if (!released) {
+        await p.query('ROLLBACK').catch(() => {});
+        p.release();
+      }
+      if (global && epoch !== '0')
+        await admin.query('SELECT ctp_risk.update_global($1::jsonb)', [
+          JSON.stringify({
+            ...request,
+            eventId: randomUUID(),
+            expectedEpoch: epoch,
+            state: 'RUNNING',
+          }),
+        ]);
+    }
+  },
+);
 it('consumes an exact adapter permit once and rechecks permission before transport', async () => {
   const { b, draft } = await fixture(),
     s = await store.create(b, draft, io()),
@@ -632,6 +770,64 @@ it('CANCEL has its own durable intent and stays pending until positive native ca
   );
   expect(final.status).toBe('CANCELED');
   expect(final.reconciliation).toBe('CONSISTENT');
+});
+it('unclassified CANCEL cannot bypass a kill switch or consume transport authority', async () => {
+  const { b, s } = await submitted();
+  await store.observe(b, s.id, observation(s), io());
+  const cmd = await store.cancelIntent(b, s.id, 'paused-cancel', io()),
+    g = await grant(s, cmd.intentId, cmd.commandHash),
+    c = await store.begin(b, s.id, cmd.intentId, g, io());
+  if (!c) throw new Error('No claim');
+  const p = await admin.connect();
+  try {
+    await p.query('BEGIN');
+    await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+    await p.query('SELECT ctp_risk.update_tenant($1::jsonb)', [
+      JSON.stringify({
+        scope: { kind: 'USER', tenantId: b.tenantId, targetId: b.tenantId },
+        kind: 'KILL_SWITCH',
+        key: 'kill',
+        state: 'PAUSED',
+        eventId: randomUUID(),
+        expectedEpoch: '0',
+        reason: 'TEST_PAUSE',
+        evidenceHash: 'a'.repeat(64),
+      }),
+    ]);
+    await p.query('COMMIT');
+  } finally {
+    await p.query('ROLLBACK').catch(() => {});
+    p.release();
+  }
+  const account = {
+      tenantId: b.tenantId,
+      connectionId: b.connectionId,
+      externalAccountId: b.externalAccountId,
+    },
+    authorization = {
+      commandId: cmd.intentId,
+      commandHash: c.commandHash,
+      dispatchAttemptId: c.attemptId,
+      profile: b.profile,
+      account,
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + 1000,
+    };
+  expect(
+    await store.authorize(
+      'cancelOrder',
+      { command: c.command, authorization },
+      { ...io(), profile: b.profile, account, correlationId: randomUUID() },
+    ),
+  ).toBe(false);
+  expect(
+    (
+      await admin.query<{ started: Date | null }>(
+        'SELECT "transportStartedAt" AS started FROM submission_attempt WHERE id=$1',
+        [c.attemptId],
+      )
+    ).rows[0]?.started,
+  ).toBeNull();
 });
 it('fresh complete history restores a durable gap without inventing a new native timestamp', async () => {
   const { b, s } = await submitted(),

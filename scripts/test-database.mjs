@@ -19,6 +19,7 @@ const expectedMigrations = [
   '202610040002_portfolio',
   '202610050001_portfolio_hold_ordering',
   '202610050002_order_engine',
+  '202610050003_risk_controls',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -59,6 +60,8 @@ const authPassword = randomBytes(24).toString('hex');
 const ingestPassword = randomBytes(24).toString('hex');
 const portfolioPassword = randomBytes(24).toString('hex');
 const executionPassword = randomBytes(24).toString('hex');
+const riskControlPassword = randomBytes(24).toString('hex');
+const riskOperatorPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -67,6 +70,8 @@ const secrets = [
   ingestPassword,
   portfolioPassword,
   executionPassword,
+  riskControlPassword,
+  riskOperatorPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -76,6 +81,8 @@ const authRole = `ctp_p2_auth_${suffix}`;
 const ingestRole = `ctp_p2_ingest_${suffix}`;
 const portfolioRole = `ctp_p2_portfolio_${suffix}`;
 const executionRole = `ctp_p2_execution_${suffix}`;
+const riskControlRole = `ctp_p2_risk_control_${suffix}`;
+const riskOperatorRole = `ctp_p2_risk_operator_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -135,6 +142,12 @@ const dbUrl = (
     url.username = executionRole;
     url.password = executionPassword;
   }
+  return url.href;
+};
+const controlUrl = (name, global = false) => {
+  const url = new URL(dbUrl(name));
+  url.username = global ? riskOperatorRole : riskControlRole;
+  url.password = global ? riskOperatorPassword : riskControlPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -233,10 +246,22 @@ try {
     `CREATE ROLE ${identifier(executionRole)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${executionPassword}'`,
   );
   await admin.query(`GRANT ctp_execution TO ${identifier(executionRole)}`);
+  for (const [role, secret, group] of [
+    [riskControlRole, riskControlPassword, 'ctp_risk_control'],
+    [riskOperatorRole, riskOperatorPassword, 'ctp_risk_operator'],
+  ]) {
+    await admin.query(
+      `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
+    );
+    await admin.query(`GRANT ${group} TO ${identifier(role)}`);
+  }
   // Cluster roles outlive databases. PostgreSQL 17 requires existing role SET
   // membership before a different non-super DDL owner can transfer functions.
   await admin.query(`GRANT ctp_auth_owner TO ${identifier(ownerRole)}`);
   const fresh = connect(dbUrl(databases[0]));
+  assert.deepEqual((await fresh.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
+    { state: 'PAUSED', epoch: '1' },
+  ]);
   assert.equal(
     (
       await fresh.query(
@@ -371,7 +396,21 @@ try {
       [upgradeAccount],
     )
   ).rows[0].counter;
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/202610050002_order_engine'),
+    path.join(authPreviousMigrations, '202610050002_order_engine'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  assert.equal(
+    (await upgrade.query("SELECT to_regnamespace('ctp_risk') IS NULL AS missing")).rows[0].missing,
+    true,
+  );
   await migrate(databases[1]);
+  assert.deepEqual(
+    (await upgrade.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows,
+    [{ state: 'PAUSED', epoch: '1' }],
+  );
   await verifyPortfolioUpgrade(upgrade, portfolioUpgrade);
   assert.equal(
     (
@@ -466,6 +505,36 @@ try {
   );
   await migrate(databases[2], config, true);
   await verifyAuditUpgrade(ownerDatabase, ownerLegacy);
+  const { createPostgresControls } = await import('../packages/risk-engine/dist/index.js');
+  const controlTenant = randomUUID();
+  await ownerDatabase.query(
+    'INSERT INTO public."user"(id,"emailNormalized","updatedAt") VALUES($1,$2,now())',
+    [controlTenant, controlTenant + '@example.invalid'],
+  );
+  const nonBypassControls = await createPostgresControls({
+    connectionString: controlUrl(databases[2]),
+    environment: 'test',
+    authority: 'TENANT',
+  });
+  try {
+    const result = await nonBypassControls.update(
+      {
+        scope: { kind: 'USER', tenantId: controlTenant, targetId: controlTenant },
+        kind: 'KILL_SWITCH',
+        key: 'kill',
+        state: 'PAUSED',
+        eventId: randomUUID(),
+        expectedEpoch: '0',
+        reason: 'NON_BYPASS_OWNER_PROOF',
+        evidenceHash: 'a'.repeat(64),
+      },
+      { signal: new AbortController().signal, deadline: Date.now() + 2500 },
+    );
+    assert.equal(result.epoch, '1');
+    assert.equal(result.state, 'PAUSED');
+  } finally {
+    await nonBypassControls.close();
+  }
   assert.deepEqual(
     (await admin.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1', [ownerRole]))
       .rows,
@@ -497,6 +566,8 @@ try {
         DATABASE_INGEST_URL: dbUrl(databases[0], false, false, false, true),
         DATABASE_PORTFOLIO_URL: dbUrl(databases[0], false, false, false, false, true),
         DATABASE_EXECUTION_URL: dbUrl(databases[0], false, false, false, false, false, true),
+        DATABASE_RISK_CONTROL_URL: controlUrl(databases[0]),
+        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[0], true),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -553,6 +624,9 @@ try {
   await migrate(databases[0]);
   const reset = connect(dbUrl(databases[0]));
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
+  assert.deepEqual((await reset.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
+    { state: 'PAUSED', epoch: '1' },
+  ]);
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -567,6 +641,10 @@ try {
     authenticatedRuntime: 'PASS',
     authenticationHardening: 'PASS',
     orderEngineUpgradeFromPhase10: 'PASS',
+    riskControlsFreshAndResetPaused: 'PASS',
+    riskControlsUpgradePaused: 'PASS',
+    riskControlsUpgradeFromPhase11: 'PASS',
+    riskControlsNonBypassOwner: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
