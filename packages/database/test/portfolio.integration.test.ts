@@ -243,9 +243,11 @@ it.each(['TESTNET', 'DEMO'] as const)(
     await store.apply(b, snapshot(), 0, io());
     expect((await store.read(b, io())).state.binding.mode).toBe(mode);
     await expect(
-      store.read(
-        { ...b, scope: { ...b.scope, environment: mode === 'TESTNET' ? 'DEMO' : 'TESTNET' } },
-        io(),
+      Promise.resolve().then(() =>
+        store.read(
+          { ...b, scope: { ...b.scope, environment: mode === 'TESTNET' ? 'DEMO' : 'TESTNET' } },
+          io(),
+        ),
       ),
     ).rejects.toThrow();
     const other: Binding = {
