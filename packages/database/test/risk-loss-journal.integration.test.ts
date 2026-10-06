@@ -318,7 +318,11 @@ it('native long-running batches retain one bounded current checkpoint without re
 });
 async function waitForBlockedBy(pid: number, expected: boolean) {
   const started = Date.now();
-  while (Date.now() - started < 1500) {
+  // The socket settles immediately; a backend inside a blocked SQL statement
+  // observes disconnect when its existing 2 s statement timeout fires. Verify
+  // physical backend settling inside the documented 3 s transaction bound.
+  const bound = expected ? 1500 : 3000;
+  while (Date.now() - started < bound) {
     const n = await admin.query<{ blocked: boolean }>(
       'SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::int=ANY(pg_blocking_pids(pid))) AS blocked',
       [pid],
