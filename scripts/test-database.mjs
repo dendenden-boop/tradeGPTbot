@@ -21,6 +21,7 @@ const expectedMigrations = [
   '202610050002_order_engine',
   '202610050003_risk_controls',
   '202610050004_risk_policies',
+  '202610060001_risk_loss_journal',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -65,6 +66,7 @@ const riskControlPassword = randomBytes(24).toString('hex');
 const riskOperatorPassword = randomBytes(24).toString('hex');
 const policyOperatorPassword = randomBytes(24).toString('hex');
 const policyControllerPassword = randomBytes(24).toString('hex');
+const evidencePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -77,6 +79,7 @@ const secrets = [
   riskOperatorPassword,
   policyOperatorPassword,
   policyControllerPassword,
+  evidencePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -90,6 +93,7 @@ const riskControlRole = `ctp_p2_risk_control_${suffix}`;
 const riskOperatorRole = `ctp_p2_risk_operator_${suffix}`;
 const policyOperatorRole = `ctp_p2_policy_operator_${suffix}`;
 const policyControllerRole = `ctp_p2_policy_controller_${suffix}`;
+const evidenceRole = `ctp_p2_evidence_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -161,6 +165,12 @@ const policyUrl = (name, platform = false) => {
   const url = new URL(dbUrl(name));
   url.username = platform ? policyOperatorRole : policyControllerRole;
   url.password = platform ? policyOperatorPassword : policyControllerPassword;
+  return url.href;
+};
+const evidenceUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = evidenceRole;
+  url.password = evidencePassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -264,6 +274,7 @@ try {
     [riskOperatorRole, riskOperatorPassword, 'ctp_risk_operator'],
     [policyOperatorRole, policyOperatorPassword, 'ctp_risk_policy_operator'],
     [policyControllerRole, policyControllerPassword, 'ctp_risk_policy_controller'],
+    [evidenceRole, evidencePassword, 'ctp_risk_evidence_collector'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -281,6 +292,7 @@ try {
     (await fresh.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
     0,
   );
+  assert.equal((await fresh.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n, 0);
   assert.equal(
     (
       await fresh.query(
@@ -459,6 +471,10 @@ try {
     await upgrade.query('SELECT * FROM ctp_risk.tenant_event ORDER BY "tenantId",id')
   ).rows;
   await migrate(databases[1]);
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n,
+    0,
+  );
   assert.deepEqual(
     (
       await upgrade.query(
@@ -573,7 +589,7 @@ try {
   );
   await migrate(databases[2], config, true);
   await verifyAuditUpgrade(ownerDatabase, ownerLegacy);
-  const { createPostgresControls, createPostgresPolicies } =
+  const { createPostgresControls, createPostgresPolicies, createPostgresLossJournal } =
     await import('../packages/risk-engine/dist/index.js');
   const controlTenant = randomUUID();
   await ownerDatabase.query(
@@ -675,6 +691,34 @@ try {
     await nonBypassPolicyOperator.close();
     await nonBypassPolicyController.close();
   }
+  const nonBypassLoss = await createPostgresLossJournal({
+    connectionString: evidenceUrl(databases[2]),
+    environment: 'test',
+  });
+  const lossAt = Date.now(),
+    lossDay = Math.floor(lossAt / 86400000) * 86400000;
+  const lossBatch = {
+    scope: { tenantId: controlTenant, mode: 'TESTNET', valuationAsset: 'USDT' },
+    dayStart: lossDay,
+    id: randomUUID(),
+    expectedSequence: '0',
+    opening: { at: lossDay, equity: '1000', sourceId: randomUUID(), sourceHash: 'a'.repeat(64) },
+    coveredThrough: lossAt,
+    events: [{ id: randomUUID(), at: lossAt, kind: 'EQUITY', amount: '1000' }],
+    coverage: {
+      from: lossDay,
+      through: lossAt,
+      sourceId: randomUUID(),
+      sourceHash: 'b'.repeat(64),
+    },
+  };
+  try {
+    const head = await nonBypassLoss.append(lossBatch, policyIo());
+    assert.equal(head.sequence, '2');
+    assert.deepEqual(await nonBypassLoss.read(lossBatch.scope, lossDay, policyIo()), head);
+  } finally {
+    await nonBypassLoss.close();
+  }
   assert.deepEqual(
     (await admin.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1', [ownerRole]))
       .rows,
@@ -710,6 +754,7 @@ try {
         DATABASE_RISK_OPERATOR_URL: controlUrl(databases[0], true),
         DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[0], true),
         DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
+        DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -773,6 +818,7 @@ try {
     (await reset.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
     0,
   );
+  assert.equal((await reset.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n, 0);
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -794,6 +840,9 @@ try {
     riskPoliciesFreshAndResetMissing: 'PASS',
     riskPoliciesUpgradeFromPhase12: 'PASS',
     riskPoliciesNonBypassOwner: 'PASS',
+    riskLossFreshAndResetMissing: 'PASS',
+    riskLossUpgradeFromPhase12: 'PASS',
+    riskLossNonBypassOwner: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

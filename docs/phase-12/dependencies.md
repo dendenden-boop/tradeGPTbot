@@ -1,5 +1,7 @@
 # PHASE 12 dependencies and operation
 
+The durable UTC loss source reuses the existing pg/Zod/Core dependencies and frozen lock. Additive migration 202610060001_risk_loss_journal introduces three private ctp_risk tables with FORCE RLS, immutable history and a nondeletable monotonic head. Eleven published migrations remain unchanged. The isolated collector role has exact SQL function grants and no additional client, HTTP endpoint, Risk grant or money writer authority.
+
 ## Coordinator reconstruction dependency
 
 RiskSnapshotStore is mandatory server-owned runtime injection, with no exported memory fallback. Its PostgreSQL implementation and the durable market/FX/health/UTC source collectors remain outstanding; the service contract alone must not be installed as production Risk authority. The backend must validate all current source heads and exact owned same-mode inventory under one bounded READ COMMITTED transaction, preserve immutable certificate/revision history across restart and terminate the physical connection on abort/deadline. Source hashes and valid UUIDs do not authenticate a source or tenant. No extra SQL authority, monetary writes or migrations are granted by the reconstruction increment.

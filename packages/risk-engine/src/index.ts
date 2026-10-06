@@ -5,3 +5,5 @@ export * from './policies.js';
 export * from './postgres-policies.js';
 export * from './evidence.js';
 export * from './coordinator.js';
+export * from './loss-journal.js';
+export * from './postgres-loss-journal.js';
