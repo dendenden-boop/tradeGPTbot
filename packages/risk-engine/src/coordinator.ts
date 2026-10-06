@@ -13,6 +13,7 @@ import {
 } from '@ctp/exchange-core';
 import { riskEvaluationInputSchema, intersectRiskLimits } from './policy.js';
 import { policyHeadSchema } from './policies.js';
+import { lossCheckpointSchema, consumeLossCheckpoint } from './loss-journal.js';
 import {
   riskExposureEvidenceSchema,
   utcLossEvidenceSchema,
@@ -89,7 +90,7 @@ export const riskSnapshotSourcesSchema = z.strictObject({
     }),
   ),
   exposure: source(riskExposureEvidenceSchema),
-  loss: source(utcLossEvidenceSchema),
+  loss: source(z.union([utcLossEvidenceSchema, lossCheckpointSchema])),
   market: source(snapshot.shape.market),
   controls: source(
     z.strictObject({ pauses: snapshot.shape.pauses, circuit: snapshot.shape.circuit }),
@@ -314,7 +315,18 @@ export function prepareRiskSnapshot(
     key.instrumentId,
     m.record.instrument.baseAsset,
   );
-  const loss = reconstructUtcLoss(s.loss.value, scope, now, limits.maxEvidenceAgeMs);
+  const lossValue = s.loss.value;
+  if (
+    'batchId' in lossValue &&
+    (s.loss.reference.id !== lossValue.batchId ||
+      s.loss.reference.revision !== lossValue.sequence ||
+      s.loss.reference.asOf !== lossValue.coveredThrough)
+  )
+    throw new Error('RISK_CERTIFICATE_SOURCE');
+  const loss =
+    'batchId' in lossValue
+      ? consumeLossCheckpoint(lossValue, scope, now, limits.maxEvidenceAgeMs)
+      : reconstructUtcLoss(lossValue, scope, now, limits.maxEvidenceAgeMs);
   const nativeBinding = {
     tenantId: key.binding.tenantId,
     accountId: key.binding.accountId,

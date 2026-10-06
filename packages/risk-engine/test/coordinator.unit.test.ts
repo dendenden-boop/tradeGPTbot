@@ -421,3 +421,102 @@ it('a stored certificate cannot extend the policy freshness window by changing e
   });
   await expect(service.readCurrent(f.key, f.io())).rejects.toThrow('RISK_CERTIFICATE_INVALID');
 });
+
+function checkpointSources(f: ReturnType<typeof fixture>) {
+  const value = {
+    scope: f.sources.exposure.value.scope,
+    dayStart: Math.floor(f.now / 86400000) * 86400000,
+    sequence: '9007199254740993',
+    batchId: randomUUID(),
+    coveredThrough: f.now,
+    openingEquity: '1000',
+    externalFlows: '50',
+    netRealized: '-10',
+    adjustedCurrentEquity: '990',
+    adjustedPeakEquity: '1010',
+    hash: 'a'.repeat(64),
+  };
+  return {
+    ...f.sources,
+    loss: {
+      ...f.sources.loss,
+      value,
+      reference: {
+        ...f.sources.loss.reference,
+        id: value.batchId,
+        revision: value.sequence,
+        asOf: value.coveredThrough,
+        hash: riskEvidenceHash(value),
+      },
+    },
+  };
+}
+it('consumes the bounded durable UTC checkpoint without reconstructing an unbounded event array', () => {
+  const f = fixture(),
+    sources = checkpointSources(f);
+  const projection = prepareRiskSnapshot(sources, f.key, referenceIdentity, f.now);
+  expect(projection.snapshot).toMatchObject({
+    adjustedOpeningEquity: '1000',
+    adjustedCurrentEquity: '990',
+    adjustedPeakEquity: '1010',
+    dailyNetRealizedPnl: '-10',
+  });
+  expect(projection.sources.find((s) => s.kind === 'loss')?.reference).toEqual(
+    sources.loss.reference,
+  );
+});
+it('checkpoint consumption keeps 18-place equity precision and does not subtract external flows twice', () => {
+  const f = fixture(),
+    sources = checkpointSources(f);
+  sources.loss.value.adjustedCurrentEquity = '9007199254740993.000000000000000001';
+  sources.loss.value.adjustedPeakEquity = sources.loss.value.adjustedCurrentEquity;
+  sources.loss.reference.hash = riskEvidenceHash(sources.loss.value);
+  expect(
+    prepareRiskSnapshot(sources, f.key, referenceIdentity, f.now).snapshot.adjustedCurrentEquity,
+  ).toBe(sources.loss.value.adjustedCurrentEquity);
+});
+it('a checkpoint certificate survives coordinator restart and rejects a replacement durable loss head', async () => {
+  const f = fixture();
+  f.sources = riskSnapshotSourcesSchema.parse(checkpointSources(f));
+  const b = backend(f),
+    service = createRiskSnapshotCoordinator({ store: b.store, now: () => f.now });
+  const certified = await service.certify(f.key, f.io());
+  const restarted = createRiskSnapshotCoordinator({ store: b.store, now: () => f.now + 1 });
+  expect(await restarted.readCurrent(f.key, f.io())).toEqual(certified);
+  const next = checkpointSources(f);
+  next.loss.value.sequence = '9007199254740994';
+  next.loss.reference.revision = next.loss.value.sequence;
+  next.loss.reference.hash = riskEvidenceHash(next.loss.value);
+  f.sources = riskSnapshotSourcesSchema.parse(next);
+  await expect(restarted.readCurrent(f.key, f.io())).rejects.toThrow('RISK_CERTIFICATE_REPLACED');
+});
+it.each([
+  'tenant',
+  'mode',
+  'asset',
+  'day',
+  'future',
+  'stale',
+  'openingPeak',
+  'currentPeak',
+  'sequenceProof',
+  'batchProof',
+  'timeProof',
+])('rejects a bounded checkpoint with conflicting %s evidence', (defect) => {
+  const f = fixture(),
+    sources = checkpointSources(f),
+    c = sources.loss.value;
+  if (defect === 'tenant') c.scope = { ...c.scope, tenantId: randomUUID() };
+  if (defect === 'mode') c.scope = { ...c.scope, mode: 'DEMO' };
+  if (defect === 'asset') c.scope = { ...c.scope, valuationAsset: 'USD' };
+  if (defect === 'day') c.dayStart -= 86400000;
+  if (defect === 'future') c.coveredThrough = f.now + 1;
+  if (defect === 'stale') c.coveredThrough = f.now - 5001;
+  if (defect === 'openingPeak') c.adjustedPeakEquity = '999';
+  if (defect === 'currentPeak') c.adjustedCurrentEquity = '1011';
+  if (defect === 'sequenceProof') sources.loss.reference.revision = '1';
+  if (defect === 'batchProof') sources.loss.reference.id = randomUUID();
+  if (defect === 'timeProof') sources.loss.reference.asOf--;
+  sources.loss.reference.hash = riskEvidenceHash(c);
+  expect(() => prepareRiskSnapshot(sources, f.key, referenceIdentity, f.now)).toThrow();
+});

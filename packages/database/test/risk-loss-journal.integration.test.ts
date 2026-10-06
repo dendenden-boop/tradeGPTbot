@@ -4,6 +4,7 @@ import { beforeAll, afterAll, expect, it } from 'vitest';
 import { decimalSchema } from '@ctp/exchange-core';
 import {
   createPostgresLossJournal,
+  consumeLossCheckpoint,
   lossBatchSchema,
   type LossJournal,
   type LossBatch,
@@ -109,7 +110,28 @@ it('durable UTC baseline/flow-adjusted peak and realized loss survive restart an
   });
   const restarted = await open();
   try {
-    expect(await restarted.read(p.scope, p.dayStart, io())).toEqual(second);
+    const checkpoint = await restarted.read(p.scope, p.dayStart, io());
+    expect(checkpoint).toEqual(second);
+    expect(consumeLossCheckpoint(checkpoint, p.scope, checkpoint.coveredThrough, 5000)).toEqual({
+      utcDayStart: p.dayStart,
+      adjustedOpeningEquity: '1000',
+      adjustedCurrentEquity: '1010',
+      adjustedPeakEquity: '1010',
+      dailyNetRealizedPnl: '-10',
+      externalFlows: '50',
+      lastSequence: '5',
+    });
+    expect(() =>
+      consumeLossCheckpoint(checkpoint, p.scope, checkpoint.coveredThrough + 5001, 5000),
+    ).toThrow('RISK_LOSS_BASELINE');
+    expect(() =>
+      consumeLossCheckpoint(
+        checkpoint,
+        { ...p.scope, mode: 'DEMO' },
+        checkpoint.coveredThrough,
+        5000,
+      ),
+    ).toThrow('RISK_LOSS_BASELINE');
     expect(await restarted.append(p, io())).toEqual(first);
   } finally {
     await restarted.close();
