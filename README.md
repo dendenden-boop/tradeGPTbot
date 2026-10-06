@@ -169,3 +169,9 @@ pnpm test:smoke
 | [Эксплуатация](docs/deployment.md)                   | План мониторинга и восстановления                             |
 | [ADR](docs/adr/README.md)                            | Принятые архитектурные решения                                |
 | [Отчёт PHASE 0](docs/phase-0/verification.md)        | Завершённое исследование; историческое состояние до bootstrap |
+
+## PHASE 12: durable native market evidence
+
+Добавлен server-only PostgreSQL source для native ticker/book snapshots и GAP под существующей Market Data authority. Он сохраняет ordering watermark и permanent replay после рестарта, проверяет current DB rules и freshness и не даёт обновлённому ticker освежить неизменившийся book. Новая additive migration не меняет опубликованные migrations или financial writers. Проверки этого increment фиксируются в [PHASE 12 verification](docs/phase-12/verification.md).
+
+Это prerequisite для production coordinator. Полный PostgreSQL RiskSnapshot backend, atomic approve/reserve, Portfolio bridge/release/recovery, final current-policy/state gate и native AMEND ещё не приняты. **NOT READY FOR PHASE 13**. PHASE 13 не начата; LIVE disabled.

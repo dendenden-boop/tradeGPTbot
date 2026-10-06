@@ -10,3 +10,5 @@ export {
   type MetadataRefreshPort,
   type TradeRecoveryPort,
 } from './worker.js';
+export * from './durable-snapshots.js';
+export * from './postgres-snapshots.js';

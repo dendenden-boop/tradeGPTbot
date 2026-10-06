@@ -64,3 +64,9 @@ Emergency cancel проверяет ownership, правильный order ID/env
 Каждое правило проверяется на границе/за границей, нуле, отрицательных/невалидных decimal, metadata change и stale inputs. Property tests проверяют, что rounding quantity не увеличивает исходный размер, hard limits нельзя расширить user policy, reservations не создают отрицательные available funds, reduction не увеличивает exposure.
 
 DB integration: две конкурентные стратегии, cross-account user cap, повтор intent/job, serialization retry, partial fill+cancel, unknown reservation expiry, lost DB response, external manual order, midnight/external cash flow, kill-switch race, leverage/mode change. Security integration: forged tenant/mode/risk approval/hash. Все paths включая manual, synthetic stop, TWAP slice, paper и demo проходят один gateway. LIVE dispatch остаётся закрыт до фактического прохождения этих тестов.
+
+## PHASE 12 native Market Data source status
+
+The new PostgreSQL Market Data evidence component persists native ticker/book pairs and gaps under ctp_market. It preserves permanent event identity and native sequence/time ordering through restart, rejects current DB rule mismatches and stale native observations, and prevents unchanged-book freshness laundering. Its isolated publisher has no accounting or Risk issuance authority. It is a source prerequisite, not the production certified RiskSnapshot backend or OrderRiskPort.approve. Missing native MARK/FX/liquidity/health/permission evidence must still deny coordinator admission; LAST is not relabelled MARK and stablecoin parity is not guessed.
+
+PHASE 12 remains **NOT READY FOR PHASE 13** while physical authoritative snapshot composition, atomic shared-limit reservations, Portfolio hold/release recovery, current-state final dispatch and native AMEND lifecycle are incomplete or unverified. LIVE mutations remain disabled.

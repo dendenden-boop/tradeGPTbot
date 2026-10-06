@@ -22,6 +22,7 @@ const expectedMigrations = [
   '202610050003_risk_controls',
   '202610050004_risk_policies',
   '202610060001_risk_loss_journal',
+  '202610060002_market_snapshots',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -67,6 +68,7 @@ const riskOperatorPassword = randomBytes(24).toString('hex');
 const policyOperatorPassword = randomBytes(24).toString('hex');
 const policyControllerPassword = randomBytes(24).toString('hex');
 const evidencePassword = randomBytes(24).toString('hex');
+const snapshotPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -80,6 +82,7 @@ const secrets = [
   policyOperatorPassword,
   policyControllerPassword,
   evidencePassword,
+  snapshotPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -94,6 +97,7 @@ const riskOperatorRole = `ctp_p2_risk_operator_${suffix}`;
 const policyOperatorRole = `ctp_p2_policy_operator_${suffix}`;
 const policyControllerRole = `ctp_p2_policy_controller_${suffix}`;
 const evidenceRole = `ctp_p2_evidence_${suffix}`;
+const snapshotRole = `ctp_p2_snapshot_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -171,6 +175,12 @@ const evidenceUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = evidenceRole;
   url.password = evidencePassword;
+  return url.href;
+};
+const snapshotUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = snapshotRole;
+  url.password = snapshotPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -275,6 +285,7 @@ try {
     [policyOperatorRole, policyOperatorPassword, 'ctp_risk_policy_operator'],
     [policyControllerRole, policyControllerPassword, 'ctp_risk_policy_controller'],
     [evidenceRole, evidencePassword, 'ctp_risk_evidence_collector'],
+    [snapshotRole, snapshotPassword, 'ctp_market_snapshot'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -293,6 +304,10 @@ try {
     0,
   );
   assert.equal((await fresh.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n, 0);
+  assert.equal(
+    (await fresh.query('SELECT count(*)::int n FROM ctp_market.snapshot_head')).rows[0].n,
+    0,
+  );
   assert.equal(
     (
       await fresh.query(
@@ -470,9 +485,79 @@ try {
   const priorControlEvents = (
     await upgrade.query('SELECT * FROM ctp_risk.tenant_event ORDER BY "tenantId",id')
   ).rows;
-  await migrate(databases[1]);
+  // Exercise exactly the previously published PHASE 12 boundary before quote evidence.
+  for (const migration of ['202610050004_risk_policies', '202610060001_risk_loss_journal']) {
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', migration),
+      path.join(authPreviousMigrations, migration),
+      { recursive: true },
+    );
+  }
+  await migrate(databases[1], authPreviousConfig);
   assert.equal(
-    (await upgrade.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n,
+    (
+      await upgrade.query(
+        "SELECT to_regprocedure('ctp_market.publish_snapshot(text,text)') IS NULL AS missing",
+      )
+    ).rows[0].missing,
+    true,
+  );
+  const upgradeLossAt = Date.now(),
+    upgradeLossDay = Math.floor(upgradeLossAt / 86400000) * 86400000;
+  await upgrade.query('BEGIN');
+  try {
+    await upgrade.query("SELECT set_config('app.tenant_id',$1,true)", [marker]);
+    await upgrade.query('SELECT ctp_risk.append_loss_batch($1::jsonb)', [
+      JSON.stringify({
+        scope: { tenantId: marker, mode: 'TESTNET', valuationAsset: 'USDT' },
+        dayStart: upgradeLossDay,
+        id: randomUUID(),
+        expectedSequence: '0',
+        opening: {
+          at: upgradeLossDay,
+          equity: '1000',
+          sourceId: randomUUID(),
+          sourceHash: 'a'.repeat(64),
+        },
+        coveredThrough: upgradeLossAt,
+        events: [{ id: randomUUID(), at: upgradeLossAt, kind: 'EQUITY', amount: '990' }],
+        coverage: {
+          from: upgradeLossDay,
+          through: upgradeLossAt,
+          sourceId: randomUUID(),
+          sourceHash: 'b'.repeat(64),
+        },
+      }),
+    ]);
+    await upgrade.query('COMMIT');
+  } finally {
+    await upgrade.query('ROLLBACK').catch(() => {});
+  }
+  const priorLossBatches = (
+    await upgrade.query('SELECT * FROM ctp_risk.loss_batch ORDER BY "tenantId",id')
+  ).rows;
+  const priorLossEvents = (
+    await upgrade.query('SELECT * FROM ctp_risk.loss_event_identity ORDER BY "tenantId",id')
+  ).rows;
+  const priorLossHeads = (
+    await upgrade.query('SELECT * FROM ctp_risk.loss_head ORDER BY "tenantId",mode,asset,day')
+  ).rows;
+  await migrate(databases[1]);
+  assert.deepEqual(
+    (await upgrade.query('SELECT * FROM ctp_risk.loss_batch ORDER BY "tenantId",id')).rows,
+    priorLossBatches,
+  );
+  assert.deepEqual(
+    (await upgrade.query('SELECT * FROM ctp_risk.loss_event_identity ORDER BY "tenantId",id')).rows,
+    priorLossEvents,
+  );
+  assert.deepEqual(
+    (await upgrade.query('SELECT * FROM ctp_risk.loss_head ORDER BY "tenantId",mode,asset,day'))
+      .rows,
+    priorLossHeads,
+  );
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int n FROM ctp_market.snapshot_head')).rows[0].n,
     0,
   );
   assert.deepEqual(
@@ -719,6 +804,41 @@ try {
   } finally {
     await nonBypassLoss.close();
   }
+  const { createPostgresMarketSnapshots } = await import('@ctp/market-data');
+  const nonBypassSnapshots = await createPostgresMarketSnapshots({
+    connectionString: snapshotUrl(databases[2]),
+    environment: 'test',
+  });
+  const missingMarketKey = {
+    scope: { exchange: 'BINANCE', region: 'global', market: 'SPOT', environment: 'TESTNET' },
+    instrumentId: 'not-collected',
+    dbInstrumentId: randomUUID(),
+    dbRuleId: randomUUID(),
+  };
+  try {
+    assert.equal(
+      (
+        await nonBypassSnapshots.publish(
+          {
+            id: randomUUID(),
+            key: missingMarketKey,
+            expectedRevision: '0',
+            timestamp: Date.now(),
+            kind: 'GAP',
+            reason: 'NO_NATIVE_EVIDENCE',
+          },
+          policyIo(),
+        )
+      ).revision,
+      '1',
+    );
+    await assert.rejects(
+      nonBypassSnapshots.read(missingMarketKey, policyIo()),
+      /MARKET_EVIDENCE_RESYNC_REQUIRED/,
+    );
+  } finally {
+    await nonBypassSnapshots.close();
+  }
   assert.deepEqual(
     (await admin.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1', [ownerRole]))
       .rows,
@@ -755,6 +875,7 @@ try {
         DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[0], true),
         DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
         DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -819,6 +940,10 @@ try {
     0,
   );
   assert.equal((await reset.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n, 0);
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_market.snapshot_head')).rows[0].n,
+    0,
+  );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -843,6 +968,9 @@ try {
     riskLossFreshAndResetMissing: 'PASS',
     riskLossUpgradeFromPhase12: 'PASS',
     riskLossNonBypassOwner: 'PASS',
+    marketSnapshotsFreshAndResetMissing: 'PASS',
+    marketSnapshotsNonBypassOwner: 'PASS',
+    marketSnapshotsUpgradeFromPhase12: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
