@@ -804,7 +804,7 @@ try {
   } finally {
     await nonBypassLoss.close();
   }
-  const { createPostgresMarketSnapshots } = await import('@ctp/market-data');
+  const { createPostgresMarketSnapshots } = await import('../packages/market-data/dist/index.js');
   const nonBypassSnapshots = await createPostgresMarketSnapshots({
     connectionString: snapshotUrl(databases[2]),
     environment: 'test',

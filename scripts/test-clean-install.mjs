@@ -301,6 +301,7 @@ try {
     assert.equal(typeof market.createMarketDataEngine,'function');
     assert.equal(typeof market.createMarketDataWorker,'function');
     assert.equal(typeof market.createPostgresMarketStore,'function');
+    assert.equal(typeof market.createPostgresMarketSnapshots,'function');
     assert.equal(typeof market.createNativeTradeFeed,'function');
     assert.throws(()=>market.createMarketDataEngine({}));
     assert.throws(()=>market.createNativeTradeFeed({registry:{get(){}},limiter:{reserve(){}},url:'wss://untrusted.invalid'}));

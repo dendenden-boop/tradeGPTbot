@@ -135,3 +135,9 @@ Full local regression/native PostgreSQL/full CI for this increment are pending. 
 ### Local regression of the native Market Data source
 
 Full local format/docs/lint/typecheck, **2617 unit / 41 HTTP**, build/db:validate/runtime and all **11 clean install/deployments** exited zero, with clean completed at **11:23:16 UTC, 6 October 2026**. Audit JSON exited zero with all five vulnerability severities zero across 407 dependencies. Frozen lock remains bbaeb7040a1622f3f05a2f67c12235169f170647d00d34f2a53598bb99c9ecb8. Evidence: phase12-market-final-checks.json/logs, unit.json, http.json, clean-install.json and phase12-market-final-audit.json. The final native-test-only additions and factual docs receive format/docs/lint/typecheck again before publication. Native PostgreSQL/full CI remain pending; these local checks do not accept the remaining production Risk modules.
+
+### First source CI and runner repair
+
+[CI 37463181396](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37463181396) on 5a04df6c0b6f3806fd2149e09e65065234936d99 passed both Ubuntu and Windows checks, but real-services failed before native tests: scripts/test-database.mjs imported @ctp/market-data by bare name from the root workspace, where it is not a declared dependency. Fresh/upgrade and non-BYPASSRLS migration application succeeded; native tests and container smoke are not accepted from this run. Evidence: phase12-market-source-failed.log.
+
+Repair follows the runner's existing Risk import pattern and loads ../packages/market-data/dist/index.js. The real compiled Node import passes locally; clean production deployment now explicitly checks the new snapshot factory export. No dependency or published migration changes, privilege relaxation or test exclusions. Full post-repair CI is required; gate remains **NOT READY FOR PHASE 13**.
