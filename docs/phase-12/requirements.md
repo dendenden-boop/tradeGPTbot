@@ -1,5 +1,11 @@
 # PHASE 12 — Risk Engine and AMEND requirements
 
+## Completion acceptance status
+
+The coordinator reconstruction/service protocol now checks all nine required source families, exact binding and current evidence, reconstructs exposure once per correlated order/reservation/hold and replays externally adjusted UTC loss/peak. Its tests use an explicit reference transaction store. This is a prerequisite, not completed production coordinator acceptance.
+
+Still mandatory before READY FOR PHASE 13: the physical PostgreSQL snapshot/source backend; atomic production OrderRiskPort.approve with account/user/instrument/asset limits and uncertain-COMMIT proof; the same-transaction Portfolio commitment/release bridge with durable UNKNOWN/tombstones; final current-policy/state validation under permit ordering; and the complete immutable native AMEND lifecycle with at least one accepted native profile. Contract interfaces or reference-store restart tests cannot replace native concurrency/restart acceptance. LIVE and PHASE 13 remain disabled.
+
 Baseline: clean main `8ccd81df43f1a7e18005d349bf08a0ad45888260`, with [PHASE 11 acceptance](../phase-11/verification.md) and full [CI 37324540510](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37324540510). Scope follows the [canonical roadmap](../phase-0/implementation-plan.md), [Risk design](../risk-engine.md) and [Portfolio contract](../phase-10/contracts.md). PHASE 13 is not started. LIVE remains disabled and no real exchange mutation is authorized by this phase transition.
 
 ## Required modules and acceptance

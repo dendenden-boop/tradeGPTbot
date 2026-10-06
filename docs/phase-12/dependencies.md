@@ -1,5 +1,11 @@
 # PHASE 12 dependencies and operation
 
+## Coordinator reconstruction dependency
+
+RiskSnapshotStore is mandatory server-owned runtime injection, with no exported memory fallback. Its PostgreSQL implementation and the durable market/FX/health/UTC source collectors remain outstanding; the service contract alone must not be installed as production Risk authority. The backend must validate all current source heads and exact owned same-mode inventory under one bounded READ COMMITTED transaction, preserve immutable certificate/revision history across restart and terminate the physical connection on abort/deadline. Source hashes and valid UUIDs do not authenticate a source or tenant. No extra SQL authority, monetary writes or migrations are granted by the reconstruction increment.
+
+CI on the original 5882347 source was rerun completely. Both OS jobs reached audit and failed on GHSA-68fv-2mgg-jv7q in Vite/PostCSS source-map-js 1.2.1; native/Docker was skipped. The descendant security fix pins only postcss@8.5.28>source-map-js to 1.2.2, retaining release-age, frozen-lockfile and audit policies. The seven dependency contract tests resolve the actual Vite -> PostCSS package. The full descendant CI must be collected before this increment is accepted, independently of the unfinished production PHASE 12 gate.
+
 The first increment is `@ctp/risk-engine`, a server-only pure library built with the existing pinned Node.js 24.20.0/TypeScript toolchain. It depends on existing `@ctp/exchange-core` and Zod 4.5.4; no external version or supply-chain policy changes. The lockfile adds only the workspace importer. Clean production verification includes a separate eleventh isolated deployment, compiled public exports, rejected malformed input, absence of test/source files and absence of RiskGrant/transport authority exports.
 
 The pure evaluator has no connection string, network endpoint, credential, clock timer, database writer or exchange mutation. It accepts the complete evaluation time explicitly and requires both platform and user limits. Structural validation does not certify a principal, snapshot source, FX, execution-price bound, fee model or persisted policy version. Server provisioning of these inputs remains a required future PHASE 12 module.

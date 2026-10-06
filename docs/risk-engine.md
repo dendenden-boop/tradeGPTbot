@@ -1,5 +1,7 @@
 # Risk Engine
 
+PHASE 12 now includes coordinator source reconstruction and an explicit transactional persistence port: nine scoped source families, current graph comparison, lossless exposure/hold deduplication, fresh qualified FX and UTC external-flow-adjusted loss/peak replay. These functions do not authorize trading. The PostgreSQL RiskSnapshotStore/source backend, atomic production approve/reserve, Portfolio bridge, final current-policy gate and native AMEND remain outstanding; the test reference store is not production or native acceptance. See [current contracts](phase-12/contracts.md) and [verification](phase-12/verification.md). Gate remains NOT READY FOR PHASE 13; LIVE is disabled.
+
 PHASE 0 — контракт и критерии проверки. Ни один manual/strategy/paper/demo/live order не должен обходить risk. Этот модуль не прогнозирует доходность; он ограничивает допустимые действия при известных данных.
 
 PHASE 12 начата: независимый `@ctp/risk-engine` реализует первый increment чистых правил согласно [требованиям](phase-12/requirements.md) и [контрактам](phase-12/contracts.md). Результат EVALUATED не является durable RiskGrant. Атомарные reservations, certified snapshot coordinator, final dispatch/pause gate и AMEND lifecycle ещё обязательны; [verification](phase-12/verification.md) сохраняет NOT READY FOR PHASE 13. Ниже остаётся полный целевой contract, а не заявление о завершённом gateway.
