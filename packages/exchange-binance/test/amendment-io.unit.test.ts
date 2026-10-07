@@ -3,6 +3,7 @@ import {
   computeCommandHash,
   inPlaceAmendmentSchema,
   mutationOutcomeSchema,
+  validateOrderAgainstRules,
 } from '@ctp/exchange-core';
 import { httpFixture, until } from './fixtures/io.js';
 import { createNetworkIo } from '../src/io.js';
@@ -125,14 +126,18 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
             revision: '1',
             observedAt: t,
             nativeUpdatedAt: t - 10,
-            current: newOrder(),
+            current: { ...newOrder(), ruleVersion: record.rules.version },
             filledQuantity: '0.025',
           },
           replacement: {
             ...newOrder(),
+            ruleVersion: record.rules.version,
             clientOrderId: 'fixture-amend-1',
             size: { kind: 'BASE_QUANTITY', asset: 'BTC', value: '0.075' },
           },
+        });
+        expect(validateOrderAgainstRules(command.replacement, record, Date.now())).toMatchObject({
+          ok: true,
         });
         const controller = new AbortController(),
           deadline = Date.now() + (kind === 'DEADLINE' ? 500 : 2000);
@@ -163,7 +168,7 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
           pending.then((raw) => {
             const outcome = mutationOutcomeSchema.parse(raw);
             throw new Error(
-              `AMEND_FIXTURE_BEFORE_PUT_${outcome.kind}_${outcome.kind === 'ACCEPTED' ? 'ACK' : outcome.error.code}`,
+              `AMEND_FIXTURE_BEFORE_PUT_${outcome.kind}_${outcome.kind === 'ACCEPTED' ? 'ACK' : outcome.error.code}_AGE_${Date.now() - t}_RULE_${validateOrderAgainstRules(command.replacement, record, Date.now()).ok}_METHODS_${calls.join('_')}`,
             );
           }),
         ]);

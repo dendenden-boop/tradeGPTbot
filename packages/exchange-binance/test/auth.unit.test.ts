@@ -29,6 +29,46 @@ const sample = (now: number): BinanceClockSample => ({
   roundTripMs: 0,
 });
 
+describe('clock observation and validation ordering', () => {
+  it.each(['REST', 'WS'] as const)(
+    'accepts a current sample obtained after the prior local tick for %s',
+    async (kind) => {
+      let now = 1499827319559;
+      const signer = createBinanceSigner(
+        endpoint,
+        binding,
+        port(),
+        () => sample(++now),
+        () => now,
+      );
+      const io = context(now);
+      const result =
+        kind === 'REST'
+          ? await signer.signRest({ symbol: 'BTCUSDT' }, io)
+          : await signer.spotSubscription('clock-ordering', io);
+      expect(String(result.params.timestamp)).toBe(String(now));
+    },
+  );
+  it.each(['REST', 'WS'] as const)(
+    'still rejects a genuinely future sample for %s',
+    async (kind) => {
+      const now = 1499827319559;
+      const signer = createBinanceSigner(
+        endpoint,
+        binding,
+        port(),
+        () => sample(now + 1),
+        () => now,
+      );
+      await expect(
+        kind === 'REST'
+          ? signer.signRest({ symbol: 'BTCUSDT' }, context(now))
+          : signer.spotSubscription('clock-ordering', context(now)),
+      ).rejects.toThrow('STALE_METADATA');
+    },
+  );
+});
+
 describe('server credential binding', () => {
   it('permits public-only construction without connection authority', () => {
     expect(resolveBinanceBinding(endpoint, undefined)).toBeNull();

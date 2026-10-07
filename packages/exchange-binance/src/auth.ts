@@ -86,9 +86,13 @@ function copiedParameters(params: Readonly<Record<string, string>>): Record<stri
   }
 }
 
-function timestampFromSample(clock: () => BinanceClockSample | null, now: number): number {
+function timestampFromSample(
+  clock: () => BinanceClockSample | null,
+  localClock: () => number,
+): number {
   try {
-    const sample = clock();
+    const sample = clock(),
+      now = localClock();
     if (
       sample === null ||
       !Number.isSafeInteger(now) ||
@@ -249,7 +253,7 @@ export function createBinanceSigner(
     async signRest(params: Readonly<Record<string, string>>, context: IoContext) {
       const unsigned = copiedParameters(params);
       const resolved = await credential(context);
-      const timestamp = timestampFromSample(clock, now());
+      const timestamp = timestampFromSample(clock, now);
       const wire = { ...unsigned, recvWindow: String(RECV_WINDOW), timestamp: String(timestamp) };
       // The client uses this same URLSearchParams insertion order and encoding.
       // Keep all parameters in the query; mixed query/body signing is excluded.
@@ -266,7 +270,7 @@ export function createBinanceSigner(
       if (endpoint.scope.market !== 'SPOT') throw error('UNSUPPORTED');
       if (!idSchema.safeParse(id).success) throw error('INVALID_REQUEST');
       const resolved = await credential(context);
-      const timestamp = timestampFromSample(clock, now());
+      const timestamp = timestampFromSample(clock, now);
       const params = { apiKey: resolved.apiKey, recvWindow: RECV_WINDOW, timestamp };
       // Unlike REST, Binance WS signs parameters sorted by their ASCII names.
       const payload = Object.entries(params)

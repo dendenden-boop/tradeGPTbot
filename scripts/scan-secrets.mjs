@@ -56,12 +56,14 @@ export function scanRepository(root, git = 'git') {
     .filter((line) => line.startsWith('120000 '));
   if (symlinks.length) throw new Error('SECRET_SCAN_TRACKED_SYMLINK');
   const findings = files.flatMap((file) => {
-    const path = resolve(root, file),
-      info = lstatSync(path);
-    if (!info.isFile() || info.isSymbolicLink()) throw new Error('SECRET_SCAN_FILE_KIND');
-    if (info.size > 4 * 1024 * 1024) throw new Error('SECRET_SCAN_FILE_CAPACITY');
+    const path = resolve(root, file);
     const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     try {
+      // Open first: a path inspection never authorizes a later path open.
+      // O_NOFOLLOW rejects symlinks where available; the subsequent identity
+      // check also rejects them on Windows before any content is read.
+      const info = lstatSync(path);
+      if (!info.isFile() || info.isSymbolicLink()) throw new Error('SECRET_SCAN_FILE_KIND');
       // All content reads use this owned descriptor. Replacing the path or
       // growing its contents cannot turn the pre-read size bound into a guess.
       const opened = fstatSync(fd);
