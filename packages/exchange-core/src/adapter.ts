@@ -581,10 +581,26 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
 
     const work = async (): Promise<InternalResult> => {
       try {
+        const refreshCurrent = async (): Promise<ExchangeErrorCode | null> => {
+          if (!options.registry.readCurrent) return null;
+          for (const id of instrumentIds(request)) {
+            const current = await options.registry.readCurrent(scope, id, now(), internalContext);
+            if (!current.ok) return current.error.code;
+          }
+          return null;
+        };
+        if (options.registry.readCurrent) {
+          const initialMetadata = await refreshCurrent();
+          if (initialMetadata !== null) return reject(operation, request, initialMetadata, false);
+        }
         if (isMutation(operation)) {
           const authorized = await authorize(operation, request, internalContext);
           if (authorized !== true)
             return reject(operation, request, 'AUTHORIZATION_REQUIRED', false);
+          if (options.registry.readCurrent) {
+            const currentMetadata = await refreshCurrent();
+            if (currentMetadata !== null) return reject(operation, request, currentMetadata, false);
+          }
         }
         // Authorization can suspend; every time-dependent guard must be repeated.
         const refusal = preflight(operation, request, internalContext);
@@ -601,6 +617,13 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
         }
         if (operations[operation].kind === 'STREAM') {
           const streamOperation = operation as StreamOperation;
+          const openedMetadata = new Map(
+            [...instrumentIds(request)].map((id) => {
+              const record = getInstrument(scope, id, now());
+              if (!record.ok) throw new Error('STALE_STREAM_METADATA');
+              return [id, record.value] as const;
+            }),
+          );
           const streamController = new AbortController();
           streams.add(streamController);
           let sourceClose: (() => Promise<void>) | undefined;
@@ -642,6 +665,15 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
             deadline: expiry,
             signal: streamController.signal,
             parse(value: unknown): unknown {
+              for (const [id, opened] of openedMetadata) {
+                const current = getInstrument(scope, id, now());
+                if (
+                  !current.ok ||
+                  current.value.instrument.metadataVersion !== opened.instrument.metadataVersion ||
+                  current.value.rules.version !== opened.rules.version
+                )
+                  throw new Error('STALE_STREAM_METADATA');
+              }
               const checked = operations[operation].output.parse(value);
               if (!responseMatches(operation, request, checked))
                 throw new Error('INVALID_STREAM_SCOPE');

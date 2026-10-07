@@ -185,7 +185,7 @@ try {
     path.join(directory, 'deployment-exchange-binance'),
     String.raw`
       const binance = await import('@ctp/exchange-binance');
-      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
+      const { createInstrumentRegistry, createRuntimeInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.equal(typeof binance.createBinanceAdapter, 'function');
       assert.equal('createBinanceAdapterWithIo' in binance, false);
@@ -197,10 +197,14 @@ try {
       const options = { profileId: 'binance-spot-testnet-v1', symbols: ['BTCUSDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
       assert.throws(() => binance.createBinanceAdapter({ ...options, rest: 'https://user.example' }), /INVALID_BINANCE_CONFIGURATION/);
       assert.throws(() => binance.createBinanceAdapter(options), /INVALID_BINANCE_CONFIGURATION/);
-      const adapter = binance.createBinanceAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
+      assert.throws(() => binance.createBinanceAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) }), /INVALID_BINANCE_CONFIGURATION/);
+      // Explicit packaging-only lifecycle fixture; native PostgreSQL durability is accepted separately.
+      const registry = await createRuntimeInstrumentRegistry({ scope: { exchange: 'BINANCE', region: 'global', market: 'SPOT', environment: 'TESTNET' }, instrumentIds: options.symbols, store: { read: async () => [], publish: async () => { throw new Error('NO_METADATA_IO_IN_PACKAGING_FIXTURE'); }, close: async () => {} } });
+      const adapter = binance.createBinanceAdapter({ ...options, registry });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'TESTNET');
       await adapter.disconnect();
+      await registry.close();
     `,
     options,
   );
@@ -220,7 +224,7 @@ try {
     path.join(directory, 'deployment-exchange-bybit'),
     String.raw`
       const bybit = await import('@ctp/exchange-bybit');
-      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
+      const { createInstrumentRegistry, createRuntimeInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.deepEqual(Object.keys(bybit), ['createBybitAdapter']);
       assert.equal(existsSync('./test'), false, 'Bybit protocol fixtures must not be packaged');
@@ -229,10 +233,14 @@ try {
       const options = { profileId: 'bybit-spot-testnet-v1', symbols: ['BTCUSDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
       assert.throws(() => bybit.createBybitAdapter({ ...options, rest: 'https://user.example' }), /INVALID_BYBIT_CONFIGURATION/);
       assert.throws(() => bybit.createBybitAdapter(options), /INVALID_BYBIT_CONFIGURATION/);
-      const adapter = bybit.createBybitAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
+      assert.throws(() => bybit.createBybitAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) }), /INVALID_BYBIT_CONFIGURATION/);
+      // Explicit packaging-only lifecycle fixture; native PostgreSQL durability is accepted separately.
+      const registry = await createRuntimeInstrumentRegistry({ scope: { exchange: 'BYBIT', region: 'global', market: 'SPOT', environment: 'TESTNET' }, instrumentIds: options.symbols, store: { read: async () => [], publish: async () => { throw new Error('NO_METADATA_IO_IN_PACKAGING_FIXTURE'); }, close: async () => {} } });
+      const adapter = bybit.createBybitAdapter({ ...options, registry });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'TESTNET');
       await adapter.disconnect();
+      await registry.close();
     `,
     options,
   );
@@ -240,7 +248,7 @@ try {
     path.join(directory, 'deployment-exchange-okx'),
     String.raw`
       const okx = await import('@ctp/exchange-okx');
-      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
+      const { createInstrumentRegistry, createRuntimeInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.deepEqual(Object.keys(okx), ['createOkxAdapter']);
       assert.equal(existsSync('./test'), false, 'OKX protocol fixtures must not be packaged');
@@ -249,10 +257,14 @@ try {
       const options = { profileId: 'okx-spot-demo-v1', symbols: ['BTC-USDT'], capabilities: [], limiter: { reserve: async () => false, observe: async () => {} } };
       assert.throws(() => okx.createOkxAdapter({ ...options, rest: 'https://user.example' }), /INVALID_OKX_CONFIGURATION/);
       assert.throws(() => okx.createOkxAdapter(options), /INVALID_OKX_CONFIGURATION/);
-      const adapter = okx.createOkxAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
+      assert.throws(() => okx.createOkxAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) }), /INVALID_OKX_CONFIGURATION/);
+      // Explicit packaging-only lifecycle fixture; native PostgreSQL durability is accepted separately.
+      const registry = await createRuntimeInstrumentRegistry({ scope: { exchange: 'OKX', region: 'global', market: 'SPOT', environment: 'DEMO' }, instrumentIds: options.symbols, store: { read: async () => [], publish: async () => { throw new Error('NO_METADATA_IO_IN_PACKAGING_FIXTURE'); }, close: async () => {} } });
+      const adapter = okx.createOkxAdapter({ ...options, registry });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'DEMO');
       await adapter.disconnect();
+      await registry.close();
     `,
     options,
   );
@@ -260,7 +272,7 @@ try {
     path.join(directory, 'deployment-exchange-htx'),
     String.raw`
       const htx = await import('@ctp/exchange-htx');
-      const { createInstrumentRegistry } = await import('@ctp/exchange-core');
+      const { createInstrumentRegistry, createRuntimeInstrumentRegistry } = await import('@ctp/exchange-core');
       const { existsSync } = await import('node:fs');
       assert.deepEqual(Object.keys(htx), ['createHtxAdapter']);
       assert.equal(existsSync('./test'), false, 'HTX protocol fixtures must not be packaged');
@@ -270,10 +282,14 @@ try {
       assert.throws(() => htx.createHtxAdapter({ ...options, rest: 'https://user.example' }), /INVALID_HTX_CONFIGURATION/);
       assert.throws(() => htx.createHtxAdapter({ ...options, profileId: 'htx-spot-testnet-v1' }), /INVALID_HTX_CONFIGURATION/);
       assert.throws(() => htx.createHtxAdapter(options), /INVALID_HTX_CONFIGURATION/);
-      const adapter = htx.createHtxAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) });
+      assert.throws(() => htx.createHtxAdapter({ ...options, registry: createInstrumentRegistry({ capacity: 1 }) }), /INVALID_HTX_CONFIGURATION/);
+      // Explicit packaging-only lifecycle fixture; native PostgreSQL durability is accepted separately.
+      const registry = await createRuntimeInstrumentRegistry({ scope: { exchange: 'HTX', region: 'global', market: 'SPOT', environment: 'LIVE' }, instrumentIds: options.symbols, store: { read: async () => [], publish: async () => { throw new Error('NO_METADATA_IO_IN_PACKAGING_FIXTURE'); }, close: async () => {} } });
+      const adapter = htx.createHtxAdapter({ ...options, registry });
       assert.equal(adapter.account, null);
       assert.equal(adapter.profile.environment, 'LIVE');
       await adapter.disconnect();
+      await registry.close();
     `,
     options,
   );
@@ -302,6 +318,7 @@ try {
     assert.equal(typeof market.createMarketDataWorker,'function');
     assert.equal(typeof market.createPostgresMarketStore,'function');
     assert.equal(typeof market.createPostgresMarketSnapshots,'function');
+    assert.equal(typeof market.createPostgresInstrumentRegistry,'function');
     assert.equal(typeof market.createNativeTradeFeed,'function');
     assert.throws(()=>market.createMarketDataEngine({}));
     assert.throws(()=>market.createNativeTradeFeed({registry:{get(){}},limiter:{reserve(){}},url:'wss://untrusted.invalid'}));

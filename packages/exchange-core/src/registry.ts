@@ -13,9 +13,28 @@ export interface InstrumentRecord {
 }
 export interface InstrumentRegistry {
   get(scope: MarketScope, instrumentId: string, now: number): Result<InstrumentRecord>;
+  readCurrent?(
+    scope: MarketScope,
+    instrumentId: string,
+    now: number,
+    io: RegistryIo,
+  ): Promise<Result<InstrumentRecord>>;
 }
 export interface WritableInstrumentRegistry extends InstrumentRegistry {
-  put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
+  put(
+    record: InstrumentRecord,
+    now: number,
+    io?: RegistryIo,
+  ): Result<InstrumentRecord> | Promise<Result<InstrumentRecord>>;
+  putBatch?(
+    records: readonly InstrumentRecord[],
+    now: number,
+    io: RegistryIo,
+  ): Promise<Result<readonly InstrumentRecord[]>>;
+}
+export interface RegistryIo {
+  readonly signal: AbortSignal;
+  readonly deadline: number;
 }
 /**
  * Trusted production port, owned by the server composition, never by an adapter.
@@ -26,7 +45,11 @@ export interface WritableInstrumentRegistry extends InstrumentRegistry {
  */
 export interface RuntimeInstrumentRegistry extends WritableInstrumentRegistry {
   /** A successful result includes durable atomic commitment of anti-reuse history. */
-  put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
+  put(
+    record: InstrumentRecord,
+    now: number,
+    io?: RegistryIo,
+  ): Result<InstrumentRecord> | Promise<Result<InstrumentRecord>>;
 }
 /** Finite process-local fixture: no durable recovery or long-running runtime guarantee. */
 export interface ReferenceInstrumentRegistry extends WritableInstrumentRegistry {
@@ -50,7 +73,11 @@ function key(scope: MarketScope, instrumentId: string): string {
     instrumentId,
   ]);
 }
-const recordSchema = z.strictObject({ instrument: instrumentSchema, rules: tradingRulesSchema });
+export const instrumentRecordSchema = z.strictObject({
+  instrument: instrumentSchema,
+  rules: tradingRulesSchema,
+});
+const recordSchema = instrumentRecordSchema;
 function guarded<T>(code: ExchangeErrorCode, action: () => Result<T>): Result<T> {
   try {
     return action();

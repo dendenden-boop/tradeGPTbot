@@ -311,7 +311,7 @@ describe.each(cases)(
         await adapter.disconnect();
       }
     }, 60_000);
-    it('injected durable history survives reopen and rejects independent rules/metadata A→B→A reuse', () => {
+    it('injected durable history survives reopen and rejects independent rules/metadata A→B→A reuse', async () => {
       const root = resolve(tmpdir());
       const directory = mkdtempSync(join(root, 'registry-contract-'));
       const path = join(directory, 'history.jsonl');
@@ -321,8 +321,8 @@ describe.each(cases)(
         const a = records(exchange, 0)[0]!,
           b = records(exchange, 1)[0]!;
         const first = journalFixture(path);
-        expect(first.put(a, NOW).ok).toBe(true);
-        expect(first.put(b, NOW + 60_000).ok).toBe(true);
+        expect((await first.put(a, NOW)).ok).toBe(true);
+        expect((await first.put(b, NOW + 60_000)).ok).toBe(true);
         const reopened = journalFixture(path);
         expect(reopened.get(b.instrument.scope, b.instrument.id, NOW + 60_000)).toMatchObject({
           ok: true,

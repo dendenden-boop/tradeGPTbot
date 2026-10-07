@@ -172,6 +172,74 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
+describe('stream current metadata boundary', () => {
+  it.each(['metadata', 'rules'] as const)(
+    'resyncs after %s replacement while subscribed',
+    async (kind) => {
+      const env = setup();
+      const subscription = await stream(
+        env.adapter.subscribeTicker(operationFixtures.subscribeTicker.input, env.context()),
+      );
+      expect(
+        env.registry.put(
+          {
+            instrument: {
+              ...instrument,
+              metadataVersion: kind === 'metadata' ? 'v2' : instrument.metadataVersion,
+            },
+            rules: { ...rules, version: kind === 'rules' ? 'v2' : rules.version },
+          },
+          NOW,
+        ).ok,
+      ).toBe(true);
+      env.sinks.get('subscribeTicker')!.event(ticker);
+      expect(await subscription[Symbol.asyncIterator]().next()).toMatchObject({
+        value: { kind: 'RESYNC_REQUIRED' },
+      });
+      expect(env.sourceClose).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('resyncs on metadata expiry earlier than capability/request expiry', async () => {
+    const env = setup();
+    expect(
+      env.registry.put(
+        {
+          instrument: { ...instrument, metadataVersion: 'v2' },
+          rules: { ...rules, version: 'v2', expiresAt: NOW + 100 },
+        },
+        NOW,
+      ).ok,
+    ).toBe(true);
+    const subscription = await stream(
+      env.adapter.subscribeTicker(operationFixtures.subscribeTicker.input, env.context()),
+    );
+    env.clock.value = NOW + 100;
+    env.sinks.get('subscribeTicker')!.event(ticker);
+    expect(await subscription[Symbol.asyncIterator]().next()).toMatchObject({
+      value: { kind: 'RESYNC_REQUIRED' },
+    });
+  });
+  it('resyncs if registry read authority is unavailable after stream opening', async () => {
+    const reference = createInstrumentRegistry({ capacity: 1 });
+    reference.put({ instrument, rules }, NOW);
+    let available = true;
+    const env = setup({
+      registry: {
+        get: (scope, id, now) =>
+          available ? reference.get(scope, id, now) : { ok: false, error: { code: 'UNAVAILABLE' } },
+      },
+    });
+    const subscription = await stream(
+      env.adapter.subscribeTicker(operationFixtures.subscribeTicker.input, env.context()),
+    );
+    available = false;
+    env.sinks.get('subscribeTicker')!.event(ticker);
+    expect(await subscription[Symbol.asyncIterator]().next()).toMatchObject({
+      value: { kind: 'RESYNC_REQUIRED' },
+    });
+  });
+});
+
 describe('every ExchangeAdapter named method', () => {
   it.each(names)('%s validates and returns its own typed contract', async (operation) => {
     const env = setup();

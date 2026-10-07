@@ -1,8 +1,12 @@
+import { createBybitAdapterWithIo } from '../packages/exchange-bybit/dist/adapter.js';
+import { createNetworkIo } from '../packages/exchange-bybit/dist/io.js';
+// Bounded read-only diagnostic assembly; finite reference ports never reach a production factory.
+const createBybitAdapter = (options) => createBybitAdapterWithIo(options, createNetworkIo());
 import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createBybitAdapter } from '../packages/exchange-bybit/dist/index.js';
+
 import {
   getBybitProfile,
   adapterProfile,

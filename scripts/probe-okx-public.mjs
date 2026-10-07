@@ -1,8 +1,12 @@
+import { createOkxAdapterWithIo } from '../packages/exchange-okx/dist/adapter.js';
+import { createNetworkIo } from '../packages/exchange-okx/dist/io.js';
+// Bounded read-only diagnostic assembly; finite reference ports never reach a production factory.
+const createOkxAdapter = (options) => createOkxAdapterWithIo(options, createNetworkIo());
 import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createOkxAdapter } from '../packages/exchange-okx/dist/index.js';
+
 import {
   getOkxProfile,
   adapterProfile,

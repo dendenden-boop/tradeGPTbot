@@ -1,5 +1,7 @@
 # InstrumentRegistry lifecycle hardening
 
+Current PHASE 12 runtime contract and acceptance work: [PostgreSQL registry](phase-12/runtime-instrument-registry.md). This extends the historical injection-only fix below with an explicit recovered owner boundary, awaitable put/batch commit, authoritative readCurrent and a bounded observational synchronous get. Reference registries now reject at all four production factories. The historical acceptance below does not certify the new backend or describe the current async publication contract.
+
 Gate: **READY FOR PHASE 8** after full local regression and all three jobs of [source CI 37203716441](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37203716441). Accepted source [`78c7976a4c8599a3ed66daa99e90580fe606276c`](https://github.com/dendenden-boop/tradeGPTbot/commit/78c7976a4c8599a3ed66daa99e90580fe606276c); CI completed **2026-10-04 13:03:54 UTC**. Baseline clean main `bba87005ccb087fe6065ba0510e31b5bf8a7b3b4`; previous PHASE 5–7 contracts and PHASE 7 acceptance read. This task fixes one reproduced cross-adapter lifecycle defect. PHASE 8 is not started. Published migrations, Risk/authorization/order contracts and native exchange protocols are unchanged.
 
 ## Reproduction and decision

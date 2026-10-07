@@ -7,7 +7,6 @@ import type {
   WritableInstrumentRegistry as CoreWritableInstrumentRegistry,
   NewOrder,
   RequestContext,
-  Result,
 } from '@ctp/exchange-core';
 import type { BybitProfileId } from './profiles.js';
 import type { IoContext } from './io.js';
@@ -103,9 +102,7 @@ export interface BybitOrderAdmissionPort {
   ): Promise<boolean>;
 }
 /** Compatibility name for explicit test/reference transport injection. */
-export interface WritableInstrumentRegistry extends CoreWritableInstrumentRegistry {
-  put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
-}
+export type WritableInstrumentRegistry = CoreWritableInstrumentRegistry;
 export interface BybitAdapterOptions {
   readonly profileId: BybitProfileId;
   readonly symbols: readonly string[];

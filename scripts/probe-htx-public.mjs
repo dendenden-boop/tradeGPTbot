@@ -1,8 +1,12 @@
+import { createHtxAdapterWithIo } from '../packages/exchange-htx/dist/adapter.js';
+import { createNetworkIo } from '../packages/exchange-htx/dist/io.js';
+// Bounded read-only diagnostic assembly; finite reference ports never reach a production factory.
+const createHtxAdapter = (options) => createHtxAdapterWithIo(options, createNetworkIo());
 import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createHtxAdapter } from '../packages/exchange-htx/dist/index.js';
+
 import {
   getHtxProfile,
   adapterProfile,

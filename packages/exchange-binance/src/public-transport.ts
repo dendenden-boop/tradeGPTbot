@@ -103,11 +103,16 @@ export function createPublicTransport(
           return [result.symbol, result] as const;
         }),
     );
-    for (const value of nextRecords) {
-      const inserted = registry.put(value, response.receivedAt);
+    if (registry.putBatch) {
+      const inserted = await registry.putBatch(nextRecords, response.receivedAt, context);
       if (!inserted.ok)
         throw Object.assign(new Error(inserted.error.code), { code: inserted.error.code });
-    }
+    } else
+      for (const value of nextRecords) {
+        const inserted = await registry.put(value, response.receivedAt, context);
+        if (!inserted.ok)
+          throw Object.assign(new Error(inserted.error.code), { code: inserted.error.code });
+      }
     records = immutable(nextRecords);
     admissions = nextAdmissions;
     lease = response.receivedAt;

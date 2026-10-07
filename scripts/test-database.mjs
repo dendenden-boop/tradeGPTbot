@@ -25,6 +25,7 @@ const expectedMigrations = [
   '202610060002_market_snapshots',
   '202610070001_deferred_transport_permit',
   '202610070002_risk_portfolio_source',
+  '202610070003_runtime_instrument_registry',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -72,6 +73,7 @@ const policyControllerPassword = randomBytes(24).toString('hex');
 const evidencePassword = randomBytes(24).toString('hex');
 const snapshotPassword = randomBytes(24).toString('hex');
 const riskSnapshotPassword = randomBytes(24).toString('hex');
+const registryPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -87,6 +89,7 @@ const secrets = [
   evidencePassword,
   snapshotPassword,
   riskSnapshotPassword,
+  registryPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -103,6 +106,7 @@ const policyControllerRole = `ctp_p2_policy_controller_${suffix}`;
 const evidenceRole = `ctp_p2_evidence_${suffix}`;
 const snapshotRole = `ctp_p2_snapshot_${suffix}`;
 const riskSnapshotRole = `ctp_p2_risk_snapshot_${suffix}`;
+const registryRole = `ctp_p2_registry_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -192,6 +196,12 @@ const riskSnapshotUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = riskSnapshotRole;
   url.password = riskSnapshotPassword;
+  return url.href;
+};
+const registryUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = registryRole;
+  url.password = registryPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -298,6 +308,7 @@ try {
     [evidenceRole, evidencePassword, 'ctp_risk_evidence_collector'],
     [snapshotRole, snapshotPassword, 'ctp_market_snapshot'],
     [riskSnapshotRole, riskSnapshotPassword, 'ctp_risk_snapshot_reader'],
+    [registryRole, registryPassword, 'ctp_instrument_registry'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -603,7 +614,27 @@ try {
         )
       ).rows,
     );
+  // Exercise the immediate predecessor (15 migrations) before the additive
+  // registry upgrade, preserving all existing Portfolio/Order monetary evidence.
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/202610070002_risk_portfolio_source'),
+    path.join(authPreviousMigrations, '202610070002_risk_portfolio_source'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  assert.equal(
+    (
+      await upgrade.query(
+        'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
+      )
+    ).rows[0].n,
+    15,
+  );
   await migrate(databases[1]);
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int n FROM ctp_registry.current_record')).rows[0].n,
+    0,
+  );
   for (const [index, table] of portfolioAuthorityTables.entries())
     assert.deepEqual(
       (
@@ -890,7 +921,81 @@ try {
   } finally {
     await nonBypassLoss.close();
   }
-  const { createPostgresMarketSnapshots } = await import('../packages/market-data/dist/index.js');
+  const { createPostgresMarketSnapshots, createPostgresInstrumentRegistry } =
+    await import('../packages/market-data/dist/index.js');
+  const registryScope = {
+    exchange: 'BINANCE',
+    region: 'global',
+    market: 'SPOT',
+    environment: 'TESTNET',
+  };
+  const registryAt = Date.now();
+  const registryRecord = {
+    instrument: {
+      id: 'BTCUSDT',
+      scope: registryScope,
+      exchangeSymbol: 'BTCUSDT',
+      displaySymbol: 'BTC/USDT',
+      baseAsset: 'BTC',
+      quoteAsset: 'USDT',
+      settlementAsset: null,
+      contract: null,
+      expiryAt: null,
+      status: 'TRADING',
+      metadataVersion: 'owner-registry-v1',
+    },
+    rules: {
+      instrumentId: 'BTCUSDT',
+      scope: registryScope,
+      version: 'owner-registry-v1',
+      effectiveAt: registryAt,
+      expiresAt: registryAt + 60000,
+      tickSize: '0.05',
+      stepSize: '0.001',
+      minQuantity: '0.001',
+      maxQuantity: '100',
+      marketMinQuantity: '0.001',
+      marketMaxQuantity: '100',
+      minNotional: '5',
+      maxNotional: '1000000',
+      minPrice: '0.05',
+      maxPrice: '1000000',
+      quantityUnit: 'BASE',
+      pricePrecision: 2,
+      quantityPrecision: 3,
+      orderTypes: ['LIMIT'],
+      timeInForce: ['GTC'],
+      leverageTiers: [],
+    },
+  };
+  const ownerRegistry = await createPostgresInstrumentRegistry({
+    connectionString: registryUrl(databases[2]),
+    environment: 'test',
+    scope: registryScope,
+    instrumentIds: ['BTCUSDT'],
+  });
+  try {
+    assert.equal((await ownerRegistry.put(registryRecord, Date.now(), policyIo())).ok, true);
+    assert.deepEqual(
+      (await ownerRegistry.readCurrent(registryScope, 'BTCUSDT', Date.now(), policyIo())).value,
+      registryRecord,
+    );
+  } finally {
+    await ownerRegistry.close();
+  }
+  assert.equal(
+    (await ownerDatabase.query('SELECT count(*)::int n FROM ctp_registry.version_history')).rows[0]
+      .n,
+    2,
+  );
+  assert.equal(
+    (
+      await ownerDatabase.query(
+        `SELECT count(*)::int n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='ctp_registry' AND c.relrowsecurity AND c.relforcerowsecurity`,
+      )
+    ).rows[0].n,
+    3,
+  );
   const nonBypassSnapshots = await createPostgresMarketSnapshots({
     connectionString: snapshotUrl(databases[2]),
     environment: 'test',
@@ -1025,6 +1130,7 @@ try {
         DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
         DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
         DATABASE_RISK_SNAPSHOT_URL: riskSnapshotUrl(databases[0]),
+        DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -1093,6 +1199,14 @@ try {
     (await reset.query('SELECT count(*)::int n FROM ctp_market.snapshot_head')).rows[0].n,
     0,
   );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_registry.current_record')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_registry.version_history')).rows[0].n,
+    0,
+  );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -1123,6 +1237,9 @@ try {
     deferredPermitUpgradeFromPhase12: 'PASS',
     riskPortfolioSourceNonBypassOwner: 'PASS',
     riskPortfolioSourceUpgradeFromPhase12: 'PASS',
+    instrumentRegistryFreshAndReset: 'PASS',
+    instrumentRegistryUpgradeFromPhase12: 'PASS',
+    instrumentRegistryNonBypassOwner: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

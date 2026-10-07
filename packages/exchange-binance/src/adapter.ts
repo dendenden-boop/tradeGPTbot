@@ -3,6 +3,7 @@ import {
   accountSnapshotSchema,
   capabilityRecordSchema,
   createExchangeAdapter,
+  isRuntimeInstrumentRegistry,
   operations,
   orderLookupSchema,
   type ExchangeAdapter,
@@ -66,6 +67,8 @@ const configuration = z.strictObject({
 
 /** Public production factory accepts trusted server ports and an allowlisted profile only. */
 export function createBinanceAdapter(options: BinanceAdapterOptions): ExchangeAdapter {
+  if (!isRuntimeInstrumentRegistry(options?.registry))
+    throw new Error('INVALID_BINANCE_CONFIGURATION');
   return createBinanceAdapterWithIo(options, createNetworkIo());
 }
 

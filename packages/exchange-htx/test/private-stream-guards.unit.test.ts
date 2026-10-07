@@ -14,8 +14,8 @@ describe('HTX private position observation races', () => {
     const r = await x.warm();
     const result = await x.adapter.subscribePositions({ instrumentId: x.symbol }, x.context());
     if (!result.ok) throw new Error();
-    x.permissions.verify.mockImplementation(() => {
-      x.options.registry.put(
+    x.permissions.verify.mockImplementation(async () => {
+      await x.options.registry.put(
         {
           ...r,
           instrument: { ...r.instrument, metadataVersion: 'next-meta' },

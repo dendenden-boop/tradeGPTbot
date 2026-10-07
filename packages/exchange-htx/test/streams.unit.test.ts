@@ -168,13 +168,15 @@ describe('HTX native WS handshake/heartbeat/observation boundary', () => {
     const result = await x.adapter.subscribeTicker({ instrumentId: x.symbol }, x.context());
     if (!result.ok) throw new Error();
     expect(
-      x.options.registry.put(
-        {
-          ...r,
-          instrument: { ...r.instrument, metadataVersion: 'replacement-meta' },
-          rules: { ...r.rules, version: 'replacement-rules' },
-        },
-        now,
+      (
+        await x.options.registry.put(
+          {
+            ...r,
+            instrument: { ...r.instrument, metadataVersion: 'replacement-meta' },
+            rules: { ...r.rules, version: 'replacement-rules' },
+          },
+          now,
+        )
       ).ok,
     ).toBe(true);
     x.emit({ ch: `market.${x.symbol}.detail`, ts: now, tick: { close: '50000' } });

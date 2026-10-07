@@ -7,7 +7,6 @@ import type {
   WritableInstrumentRegistry as CoreWritableInstrumentRegistry,
   NewOrder,
   RequestContext,
-  Result,
 } from '@ctp/exchange-core';
 import type { BinanceProfileId } from './profiles.js';
 import type { IoContext } from './io.js';
@@ -93,9 +92,7 @@ export interface BinanceOrderAdmissionPort {
   ): Promise<boolean>;
 }
 /** Compatibility name for explicit test/reference transport injection. */
-export interface WritableInstrumentRegistry extends CoreWritableInstrumentRegistry {
-  put(record: InstrumentRecord, now: number): Result<InstrumentRecord>;
-}
+export type WritableInstrumentRegistry = CoreWritableInstrumentRegistry;
 export interface BinanceAdapterOptions {
   readonly profileId: BinanceProfileId;
   readonly symbols: readonly string[];

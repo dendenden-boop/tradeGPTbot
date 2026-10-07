@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   capabilityRecordSchema,
   createExchangeAdapter,
+  isRuntimeInstrumentRegistry,
   immutable,
   operations,
   type ExchangeAdapter,
@@ -50,6 +51,7 @@ const configuration = z.strictObject({
   now: z.custom<() => number>((value) => typeof value === 'function').optional(),
 });
 export function createOkxAdapter(options: OkxAdapterOptions): ExchangeAdapter {
+  if (!isRuntimeInstrumentRegistry(options?.registry)) throw new Error('INVALID_OKX_CONFIGURATION');
   return createOkxAdapterWithIo(options, createNetworkIo());
 }
 /** Internal test assembly is deliberately excluded from package exports. */

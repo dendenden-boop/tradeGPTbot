@@ -1,11 +1,12 @@
+import { createBinanceAdapterWithIo } from '../packages/exchange-binance/dist/adapter.js';
+import { createNetworkIo } from '../packages/exchange-binance/dist/io.js';
+// Bounded read-only diagnostic assembly; finite reference ports never reach a production factory.
+const createBinanceAdapter = (options) => createBinanceAdapterWithIo(options, createNetworkIo());
 import { createInstrumentRegistry } from '../packages/exchange-core/dist/index.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import {
-  createBinanceAdapter,
-  getBinanceProfile,
-} from '../packages/exchange-binance/dist/index.js';
+import { getBinanceProfile } from '../packages/exchange-binance/dist/index.js';
 
 // Manual read-only acceptance probe. Importing this module never starts network I/O.
 // Build @ctp/exchange-core and @ctp/exchange-binance before invoking the Node CLI.

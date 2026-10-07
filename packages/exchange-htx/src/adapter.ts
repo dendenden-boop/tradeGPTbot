@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   capabilityRecordSchema,
   createExchangeAdapter,
+  isRuntimeInstrumentRegistry,
   immutable,
   operations,
   type ExchangeAdapter,
@@ -46,6 +47,7 @@ const configuration = z.strictObject({
   now: z.custom<() => number>((x) => typeof x === 'function').optional(),
 });
 export function createHtxAdapter(options: HtxAdapterOptions): ExchangeAdapter {
+  if (!isRuntimeInstrumentRegistry(options?.registry)) throw new Error('INVALID_HTX_CONFIGURATION');
   return createHtxAdapterWithIo(options, createNetworkIo());
 }
 /** Internal fixture/loopback assembly is excluded from package exports. */

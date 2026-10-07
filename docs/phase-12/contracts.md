@@ -1,5 +1,7 @@
 # PHASE 12 contracts
 
+Current cross-phase [runtime InstrumentRegistry contract](runtime-instrument-registry.md) separates bounded observational metadata projections from authoritative PostgreSQL current reads and atomic durable version history. Its native acceptance is pending; it is not a completed Risk certificate or mutation grant.
+
 ## Durable UTC loss source
 
 createPostgresLossJournal requires a server-controlled PostgreSQL URL and an isolated ctp_risk_evidence_collector login. This role has only append_loss_batch/read_loss_checkpoint function authority. It has no table, policy, execution, Portfolio or monetary writer grants. Direct function callers face the same SQL role/input restrictions; factory checks do not stand in for SQL checks.

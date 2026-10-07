@@ -91,11 +91,20 @@ export function createPublicTransport(
         next = selected
           .map((row) => normalizeInstrument(row, endpoint.scope, response.receivedAt, observation))
           .sort((a, b) => a.record.instrument.id.localeCompare(b.record.instrument.id));
-      for (const n of next) {
-        const put = registry.put(n.record, response.receivedAt);
+      if (registry.putBatch) {
+        const put = await registry.putBatch(
+          next.map((item) => item.record),
+          response.receivedAt,
+          context,
+        );
         if (!put.ok)
           throw new HtxProtocolError(put.error.code === 'BUSY' ? 'BUSY' : 'INVALID_RESPONSE');
-      }
+      } else
+        for (const n of next) {
+          const put = await registry.put(n.record, response.receivedAt, context);
+          if (!put.ok)
+            throw new HtxProtocolError(put.error.code === 'BUSY' ? 'BUSY' : 'INVALID_RESPONSE');
+        }
       records = immutable(next.map((n) => n.record));
       admissions = new Map(next.map((n) => [n.record.instrument.id, n.admission]));
       lease = observation;

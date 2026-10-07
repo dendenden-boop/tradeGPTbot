@@ -172,12 +172,14 @@ describe.each(htxProfileIds)('HTX book snapshot ordering %s', (profile) => {
     b.emit('100');
     await b.data('100');
     expect(
-      b.x.options.registry.put(
-        {
-          instrument: { ...r.value.instrument, metadataVersion: 'replacement-meta' },
-          rules: { ...r.value.rules, version: 'replacement-rules' },
-        },
-        now,
+      (
+        await b.x.options.registry.put(
+          {
+            instrument: { ...r.value.instrument, metadataVersion: 'replacement-meta' },
+            rules: { ...r.value.rules, version: 'replacement-rules' },
+          },
+          now,
+        )
       ).ok,
     ).toBe(true);
     b.emit('100');
