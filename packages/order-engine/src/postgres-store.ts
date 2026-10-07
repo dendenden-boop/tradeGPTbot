@@ -100,7 +100,13 @@ export async function createPostgresOrderStore(options: {
         throw new Error('ORDER_ABORTED');
       }
       await p.query('BEGIN ISOLATION LEVEL READ COMMITTED');
-      if (b) await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+      if (b) {
+        await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+        await p.query('SELECT pg_advisory_xact_lock_shared(1129599058,12)');
+        await p.query("SELECT pg_advisory_xact_lock(hashtextextended('ctp:risk:'||$1::text,0))", [
+          b.tenantId,
+        ]);
+      }
       const value = await work(p);
       if (destroyed || c.signal.aborted) throw new Error('ORDER_ABORTED');
       await p.query('COMMIT');
