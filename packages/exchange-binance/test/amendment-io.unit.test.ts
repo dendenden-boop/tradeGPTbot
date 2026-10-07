@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { computeCommandHash, inPlaceAmendmentSchema } from '@ctp/exchange-core';
+import {
+  computeCommandHash,
+  inPlaceAmendmentSchema,
+  mutationOutcomeSchema,
+} from '@ctp/exchange-core';
 import { httpFixture, until } from './fixtures/io.js';
 import { createNetworkIo } from '../src/io.js';
 import { createRestClient } from '../src/client.js';
@@ -21,8 +25,8 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
   it.each(['ABORT', 'DEADLINE'] as const)(
     'settles %s after PUT, destroys socket, retains UNKNOWN and recovers read capacity',
     async (kind) => {
-      const t = Date.now(),
-        calls: string[] = [];
+      let t = Date.now();
+      const calls: string[] = [];
       const native = {
         ...order(),
         orderListId: '-1',
@@ -42,6 +46,10 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
           res.write('{');
         } else res.end(JSON.stringify(native));
       });
+      // Native evidence starts after the asynchronous listener setup, so a
+      // delayed fixture startup is not mistaken for a stale target admission.
+      t = Date.now();
+      native.updateTime = String(t - 10);
       const network = createNetworkIo();
       try {
         // Loopback profile override is an internal test injection, absent from production exports.
@@ -147,7 +155,15 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
             signal: controller.signal,
           },
         );
-        await received;
+        await Promise.race([
+          received,
+          pending.then((raw) => {
+            const outcome = mutationOutcomeSchema.parse(raw);
+            throw new Error(
+              `AMEND_FIXTURE_BEFORE_PUT_${outcome.kind}_${outcome.kind === 'ACCEPTED' ? 'ACK' : outcome.error.code}`,
+            );
+          }),
+        ]);
         const abortAt = Date.now();
         if (kind === 'ABORT') controller.abort();
         expect(await pending).toMatchObject({

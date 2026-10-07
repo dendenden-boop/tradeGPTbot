@@ -2,6 +2,8 @@
 
 PHASE 4–12 audit continues within PHASE 12. The PostgreSQL [runtime instrument registry](docs/phase-12/runtime-instrument-registry.md) is accepted on source 9cd86c3 / [CI 37629442514](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37629442514): 2776 unit / 41 HTTP per OS, 414 native PostgreSQL tests, eleven deployments, zero audit vulnerabilities and Docker smoke. Permanent metadata/rules anti-reuse survives 108000 identities and restart; production factories reject accidental reference injection. Complete Risk certificate/reservation/Portfolio/dispatch/AMEND integration remains required; **NOT READY FOR PHASE 13**, LIVE disabled.
 
+Cross-package PostgreSQL acquisition/role hardening on 64e039e is still undergoing acceptance: actual PostgreSQL passed 507/510 tests, including all 94 new role cases and lost-COMMIT recovery; three existing Auth compatibility/denial cases require follow-up. [Verification](docs/phase-12/verification.md) retains the failed run. New [supply-chain checks](docs/phase-12/supply-chain.md) produce secret-scan, license, SBOM and full vulnerability artifacts; CodeQL/native/OS/Docker acceptance is pending.
+
 Единый результат аудита фаз 0–3: [итоговый отчёт](docs/audit-phases-0-3.md) — находки, согласованность между этапами, проверенные версии и CI, эксплуатационные ограничения. Решение: **READY FOR PHASE 4**; готовность к production trading ещё не подтверждена.
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).

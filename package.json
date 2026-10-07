@@ -44,6 +44,8 @@
     "benchmark:auth": "node scripts/benchmark-auth.mjs",
     "docs:check": "node -e \"import('./scripts/check-docs.mjs').then(m => m.checkDocs()).then(console.log)\"",
     "audit:dependencies": "pnpm audit --audit-level=high",
+    "audit:secrets": "node scripts/scan-secrets.mjs",
+    "audit:supply-chain": "node scripts/security-reports.mjs",
     "test:okx": "vitest run --config vitest.unit.config.ts packages/exchange-okx --outputFile.json=test-results/exchange-okx.json",
     "probe:okx": "node scripts/probe-okx-public.mjs",
     "test:htx": "vitest run --config vitest.unit.config.ts packages/exchange-htx --outputFile.json=test-results/exchange-htx.json",

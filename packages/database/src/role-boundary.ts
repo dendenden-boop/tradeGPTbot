@@ -44,13 +44,21 @@ export function unsafePrivateRuntimePrivileges(group: 'ctp_api' | 'ctp_auth'): s
           'ctp_portfolio.hold_watermark',
         ]
       : [];
-  const signatures = functions.map((f) => `'${f}'::regprocedure::oid`).join(',');
+  // Catalog identity comparison works even for a rejected caller that has no
+  // USAGE on the expected function schema; regprocedure input casts can throw
+  // before returning the required role-denial result.
+  const signatures = functions.map((f) => `'${f}'`).join(',');
   const names = tables.map((t) => `'${t}'`).join(',');
   return `
     NOT EXISTS(SELECT 1 FROM pg_roles g WHERE g.rolname='${group}'
       AND NOT(g.rolcanlogin OR g.rolsuper OR g.rolbypassrls OR g.rolcreatedb OR g.rolcreaterole OR g.rolreplication))
     OR EXISTS(SELECT 1 FROM pg_roles x WHERE x.rolname<>current_user AND x.rolname<>'${group}'
-      AND pg_has_role(current_user,x.oid,'MEMBER'))
+      AND pg_has_role(current_user,x.oid,'MEMBER')
+      AND (x.rolcanlogin OR x.rolsuper OR x.rolbypassrls OR x.rolcreatedb OR x.rolcreaterole OR x.rolreplication
+        OR NOT pg_has_role(current_user,x.oid,'USAGE')
+        OR x.rolname IN('ctp_api','ctp_auth','ctp_auth_owner','ctp_signer','ctp_ingest','ctp_portfolio','ctp_execution',
+          'ctp_risk_operator','ctp_risk_control','ctp_risk_policy_operator','ctp_risk_policy_controller',
+          'ctp_risk_evidence_collector','ctp_market_snapshot','ctp_risk_snapshot_reader','ctp_instrument_registry')))
     OR EXISTS(SELECT 1 FROM pg_namespace n WHERE (n.nspname='public' OR left(n.nspname,4)='ctp_')
       AND (has_schema_privilege(current_user,n.oid,'CREATE') OR pg_has_role(current_user,n.nspowner,'MEMBER')))
     OR EXISTS(SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace
@@ -63,5 +71,5 @@ export function unsafePrivateRuntimePrivileges(group: 'ctp_api' | 'ctp_auth'): s
         OR has_any_column_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
     OR EXISTS(SELECT 1 FROM pg_proc f JOIN pg_namespace n ON n.oid=f.pronamespace
       WHERE left(n.nspname,4)='ctp_' AND has_function_privilege(current_user,f.oid,'EXECUTE')
-      ${signatures ? `AND f.oid NOT IN(${signatures})` : ''})`;
+      ${signatures ? `AND (n.nspname||'.'||f.proname||'('||replace(oidvectortypes(f.proargtypes),' ','')||')') NOT IN(${signatures})` : ''})`;
 }

@@ -45,6 +45,8 @@ jobs:
       - run: pnpm test:runtime
       - run: pnpm test:clean
       - run: pnpm audit:dependencies
+      - run: pnpm audit:secrets
+      - run: pnpm audit:supply-chain
       - name: Verify frozen install did not change the lockfile
         run: git diff --exit-code -- pnpm-lock.yaml
       - name: Upload sanitized check reports
