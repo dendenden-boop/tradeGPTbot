@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { computeCommandHash, inPlaceAmendmentSchema } from '@ctp/exchange-core';
+import {
+  computeCommandHash,
+  inPlaceAmendmentSchema,
+  mutationOutcomeSchema,
+} from '@ctp/exchange-core';
 import { httpFixture, until } from './fixtures/io.js';
 import { createNetworkIo } from '../src/io.js';
 import { createRestClient } from '../src/client.js';
@@ -153,8 +157,11 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
         );
         await Promise.race([
           received,
-          pending.then(() => {
-            throw new Error('AMEND_FIXTURE_ENDED_BEFORE_PUT');
+          pending.then((raw) => {
+            const outcome = mutationOutcomeSchema.parse(raw);
+            throw new Error(
+              `AMEND_FIXTURE_BEFORE_PUT_${outcome.kind}_${outcome.kind === 'ACCEPTED' ? 'ACK' : outcome.error.code}`,
+            );
           }),
         ]);
         const abortAt = Date.now();
