@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@ctp/exchange-core": "workspace:*",
+    "@ctp/portfolio": "workspace:*",
     "pg": "8.23.0",
     "zod": "4.5.4"
   },

@@ -24,6 +24,7 @@ const expectedMigrations = [
   '202610060001_risk_loss_journal',
   '202610060002_market_snapshots',
   '202610070001_deferred_transport_permit',
+  '202610070002_risk_portfolio_source',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -70,6 +71,7 @@ const policyOperatorPassword = randomBytes(24).toString('hex');
 const policyControllerPassword = randomBytes(24).toString('hex');
 const evidencePassword = randomBytes(24).toString('hex');
 const snapshotPassword = randomBytes(24).toString('hex');
+const riskSnapshotPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -84,6 +86,7 @@ const secrets = [
   policyControllerPassword,
   evidencePassword,
   snapshotPassword,
+  riskSnapshotPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -99,6 +102,7 @@ const policyOperatorRole = `ctp_p2_policy_operator_${suffix}`;
 const policyControllerRole = `ctp_p2_policy_controller_${suffix}`;
 const evidenceRole = `ctp_p2_evidence_${suffix}`;
 const snapshotRole = `ctp_p2_snapshot_${suffix}`;
+const riskSnapshotRole = `ctp_p2_risk_snapshot_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -182,6 +186,12 @@ const snapshotUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = snapshotRole;
   url.password = snapshotPassword;
+  return url.href;
+};
+const riskSnapshotUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = riskSnapshotRole;
+  url.password = riskSnapshotPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -287,6 +297,7 @@ try {
     [policyControllerRole, policyControllerPassword, 'ctp_risk_policy_controller'],
     [evidenceRole, evidencePassword, 'ctp_risk_evidence_collector'],
     [snapshotRole, snapshotPassword, 'ctp_market_snapshot'],
+    [riskSnapshotRole, riskSnapshotPassword, 'ctp_risk_snapshot_reader'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -557,7 +568,51 @@ try {
     )
   ).rows;
   assert.ok(priorAttempts.length > 0, 'Upgrade requires actual historical attempt evidence');
+  await cp(
+    path.join(
+      workspace,
+      'packages/database/prisma/migrations/202610070001_deferred_transport_permit',
+    ),
+    path.join(authPreviousMigrations, '202610070001_deferred_transport_permit'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  assert.equal(
+    (
+      await upgrade.query(
+        'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
+      )
+    ).rows[0].n,
+    14,
+  );
+  const portfolioAuthorityTables = [
+    'ctp_portfolio.book',
+    'ctp_portfolio.evidence',
+    'ctp_portfolio.hold_watermark',
+    'public.ledger_transaction',
+    'public.ledger_entry',
+    'public.risk_reservation',
+    'public.submission_attempt',
+  ];
+  const previousPortfolioAuthority = [];
+  for (const table of portfolioAuthorityTables)
+    previousPortfolioAuthority.push(
+      (
+        await upgrade.query(
+          `SELECT to_jsonb(t) AS evidence FROM ${table} t ORDER BY to_jsonb(t)::text`,
+        )
+      ).rows,
+    );
   await migrate(databases[1]);
+  for (const [index, table] of portfolioAuthorityTables.entries())
+    assert.deepEqual(
+      (
+        await upgrade.query(
+          `SELECT to_jsonb(t) AS evidence FROM ${table} t ORDER BY to_jsonb(t)::text`,
+        )
+      ).rows,
+      previousPortfolioAuthority[index],
+    );
   assert.deepEqual(
     (
       await upgrade.query(
@@ -870,6 +925,68 @@ try {
   } finally {
     await nonBypassSnapshots.close();
   }
+  const { createPostgresRiskPortfolioReader } =
+    await import('../packages/risk-engine/dist/index.js');
+  const { createPostgresPortfolioStore } = await import('../packages/portfolio/dist/index.js');
+  const sourceAccount = randomUUID(),
+    sourceConnection = randomUUID();
+  await ownerDatabase.query(
+    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE','TESTNET',$3,'global','SPOT','DISABLED','source-owner',now())`,
+    [sourceAccount, controlTenant, sourceAccount],
+  );
+  await ownerDatabase.query(
+    `INSERT INTO public.exchange_connection(id,"tenantId","accountId",mode,label,status,permissions,"updatedAt") VALUES($1,$2,$3,'TESTNET','source-owner','DISABLED','{}',now())`,
+    [sourceConnection, controlTenant, sourceAccount],
+  );
+  const sourcePortfolio = await createPostgresPortfolioStore({
+    connectionString: dbUrl(databases[2], false, false, false, false, true),
+    environment: 'test',
+  });
+  const nonBypassSource = await createPostgresRiskPortfolioReader({
+    connectionString: riskSnapshotUrl(databases[2]),
+    environment: 'test',
+  });
+  try {
+    const sourceBinding = {
+      tenantId: controlTenant,
+      accountId: sourceAccount,
+      connectionId: sourceConnection,
+      externalAccountId: sourceAccount,
+      mode: 'TESTNET',
+      walletId: 'primary',
+      scope: { exchange: 'BINANCE', region: 'global', market: 'SPOT', environment: 'TESTNET' },
+    };
+    await sourcePortfolio.apply(
+      sourceBinding,
+      {
+        type: 'SNAPSHOT',
+        id: randomUUID(),
+        timestamp: Date.now(),
+        proof: 'RECONCILED_HISTORY',
+        covered: [],
+        balances: [],
+        positions: [],
+      },
+      0,
+      policyIo(),
+    );
+    const source = await nonBypassSource.read(
+      {
+        tenantId: controlTenant,
+        targetAccountId: sourceAccount,
+        mode: 'TESTNET',
+        maxEvidenceAgeMs: 5000,
+      },
+      policyIo(),
+    );
+    assert.equal(source.books.length, 1);
+    assert.equal(source.books[0].state.status, 'RECONCILED');
+    assert.equal(source.accounts[0].id, sourceAccount);
+    assert.equal(source.books[0].revision, '1');
+  } finally {
+    await nonBypassSource.close();
+    await sourcePortfolio.close();
+  }
   assert.deepEqual(
     (await admin.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=$1', [ownerRole]))
       .rows,
@@ -907,6 +1024,7 @@ try {
         DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
         DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
         DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
+        DATABASE_RISK_SNAPSHOT_URL: riskSnapshotUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -1003,6 +1121,8 @@ try {
     marketSnapshotsNonBypassOwner: 'PASS',
     marketSnapshotsUpgradeFromPhase12: 'PASS',
     deferredPermitUpgradeFromPhase12: 'PASS',
+    riskPortfolioSourceNonBypassOwner: 'PASS',
+    riskPortfolioSourceUpgradeFromPhase12: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

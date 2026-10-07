@@ -7,3 +7,5 @@ export * from './evidence.js';
 export * from './coordinator.js';
 export * from './loss-journal.js';
 export * from './postgres-loss-journal.js';
+export * from './portfolio-source.js';
+export * from './postgres-portfolio-source.js';

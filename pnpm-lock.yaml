@@ -280,6 +280,9 @@ importers:
       '@ctp/exchange-core':
         specifier: workspace:*
         version: link:../exchange-core
+      '@ctp/portfolio':
+        specifier: workspace:*
+        version: link:../portfolio
       pg:
         specifier: 8.23.0
         version: 8.23.0
