@@ -181,6 +181,56 @@ it.each(['UPDATE(state)', 'TRIGGER', 'REFERENCES(state)'])(
   },
 );
 
+it('enters the API tenant transaction callback only after GLOBAL then tenant acquisition', async () => {
+  const tenant = randomUUID();
+  await admin.query(
+    'INSERT INTO public."user"(id,"emailNormalized","updatedAt") VALUES($1,$2,now())',
+    [tenant, tenant + '@example.invalid'],
+  );
+  const database = await createDatabase({
+    connectionString: required('DATABASE_RUNTIME_URL'),
+    environment: 'test',
+  });
+  const holder = await admin.connect();
+  let pending: Promise<unknown> | undefined,
+    entered = false;
+  try {
+    await holder.query('BEGIN');
+    await holder.query('SELECT pg_advisory_xact_lock_shared(1129599058,12)');
+    await holder.query("SELECT pg_advisory_xact_lock(hashtextextended('ctp:risk:'||$1::text,0))", [
+      tenant,
+    ]);
+    const pid = (await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!
+      .pid;
+    pending = database.withTenant(tenant, async () => {
+      entered = true;
+      return 1;
+    });
+    void pending.catch(() => {});
+    let blocked = false;
+    const deadline = Date.now() + 500;
+    while (!entered && !blocked && Date.now() < deadline) {
+      blocked = (
+        await admin.query<{ blocked: boolean }>(
+          "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event='advisory' AND $1=ANY(pg_blocking_pids(pid))) AS blocked",
+          [pid],
+        )
+      ).rows[0]!.blocked;
+      if (!blocked) await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(entered).toBe(false);
+    expect(blocked).toBe(true);
+    await holder.query('COMMIT');
+    await expect(pending).resolves.toBe(1);
+    expect(entered).toBe(true);
+  } finally {
+    await holder.query('ROLLBACK');
+    await pending?.catch(() => {});
+    holder.release();
+    await database.close();
+  }
+});
+
 it.each([
   [
     'private function',
