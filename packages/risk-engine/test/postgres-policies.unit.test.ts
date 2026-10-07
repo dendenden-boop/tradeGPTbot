@@ -47,6 +47,7 @@ vi.mock('pg', () => ({
         release: (destroy?: boolean) => {
           wire.released.push(destroy === true);
         },
+        on() {},
         once() {},
       });
     }
@@ -111,7 +112,9 @@ it('abort after COMMIT settling still produces no successful result', async () =
 it('unsafe SQL authority fails startup before policy publication', async () => {
   wire.safe = false;
   await expect(createPostgresPolicies(options)).rejects.toThrow('RISK_POLICY_ROLE_UNSAFE');
-  expect(wire.calls.some((sql) => sql.includes('update_user_policy'))).toBe(false);
+  expect(wire.calls.some((sql) => sql.startsWith('SELECT ctp_risk.update_user_policy('))).toBe(
+    false,
+  );
 });
 it('wrong authority and expired IO cannot publish a revision', async () => {
   const store = await createPostgresPolicies(options);

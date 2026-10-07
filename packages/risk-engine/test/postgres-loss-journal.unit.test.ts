@@ -18,6 +18,7 @@ vi.mock('pg', () => ({
     async end() {}
     connect() {
       return Promise.resolve({
+        on() {},
         once() {},
         release: (destroy?: boolean) => {
           wire.released.push(destroy === true);

@@ -18,6 +18,7 @@ vi.mock('pg', () => ({
     }
     connect() {
       return Promise.resolve({
+        on() {},
         once() {},
         query(sql: string) {
           if (sql === 'COMMIT') wire.abort?.abort();

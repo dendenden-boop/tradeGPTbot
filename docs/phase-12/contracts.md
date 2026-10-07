@@ -8,6 +8,12 @@ Market store/snapshots, Portfolio, Order and the four Risk source/control/policy
 
 Market/Portfolio success additionally requires an unexpired, nonaborted context after known COMMIT. An aborted or uncertain response does not prove rollback. Market recovers its durable checkpoint/outbox; Portfolio replays the exact permanent event and retains UNKNOWN collateral. Neither path blindly repeats a monetary effect or releases on a missing acknowledgement. Native response-loss acceptance is required separately from finite wire fixtures.
 
+Checked-out pg clients retain one owned error listener through connection loss and idle reuse. It prevents an unhandled driver event; the query still rejects, the failed client becomes unqueryable and is discarded. Raw driver errors are not logged or returned as authority.
+
+## Cross-phase SQL startup boundary
+
+Runtime identities require exactly their restricted NOLOGIN grouping role; MEMBER inspection includes noninherited grants that could permit SET ROLE. Superuser/BYPASSRLS/CREATEROLE/CREATEDB/replication and pg_* membership remain forbidden. Existing public table/column checks stay in place. All ctp_* namespaces participate in schema CREATE/ownership, table/column and exact callable-function checks, including later phase schemas. Allowed private tables/functions come only from factory-owned constants. A future function or private namespace is not implicitly admitted by an older factory. API retains its five private read tables, Auth its fifteen published authentication functions, and execution only dispatch_gate among private functions. Publisher/read ports retain their exact entrypoints. These startup checks add no grants or database mutation authority and do not substitute for direct SQL function/tenant/RLS checks.
+
 ## Durable UTC loss source
 
 createPostgresLossJournal requires a server-controlled PostgreSQL URL and an isolated ctp_risk_evidence_collector login. This role has only append_loss_batch/read_loss_checkpoint function authority. It has no table, policy, execution, Portfolio or monetary writer grants. Direct function callers face the same SQL role/input restrictions; factory checks do not stand in for SQL checks.

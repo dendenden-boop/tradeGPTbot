@@ -1,5 +1,7 @@
 # PHASE 12 dependencies and operation
 
+The cross-package PostgreSQL physical acquisition and SQL role-graph hardening adds no dependency, lock, role or migration. Existing server-controlled URLs/TLS and per-port transaction budgets remain. Physical acquisition owns four connections/four bounded waiters; startup inspects all ctp_* schemas and exact role/function authority. Deployments must keep restricted NOLOGIN grouping roles and separate runtime logins; unexpected additional membership/grants now reject startup instead of being ignored by an older phase guard. Full native/OS/Docker verification is recorded separately from local and serial probes.
+
 The durable UTC loss source reuses the existing pg/Zod/Core dependencies and frozen lock. Additive migration 202610060001_risk_loss_journal introduces three private ctp_risk tables with FORCE RLS, immutable history and a nondeletable monotonic head. Eleven published migrations remain unchanged. The isolated collector role has exact SQL function grants and no additional client, HTTP endpoint, Risk grant or money writer authority.
 
 ## Coordinator reconstruction dependency

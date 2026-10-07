@@ -1,4 +1,4 @@
-import { createPostgresConnections } from '@ctp/exchange-core';
+import { createPostgresConnections, postgresRoleBoundary } from '@ctp/exchange-core';
 import { createHash } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
@@ -97,7 +97,7 @@ export async function createPostgresMarketStore(options: {
         AND NOT has_any_column_privilege(current_user,'public.order_intent','SELECT,INSERT,UPDATE')
         AND NOT EXISTS(SELECT 1 FROM pg_roles inherited WHERE (inherited.rolsuper OR inherited.rolbypassrls OR inherited.rolcreaterole OR inherited.rolcreatedb OR inherited.rolreplication OR left(inherited.rolname,3)='pg_') AND pg_has_role(current_user,inherited.oid,'MEMBER'))
         AND NOT EXISTS(SELECT 1 FROM pg_class x JOIN pg_namespace n ON n.oid=x.relnamespace WHERE n.nspname='public' AND x.relkind IN ('r','p') AND x.relname NOT IN ('instrument','instrument_rule_version','capability_snapshot','candle','market_gap','market_checkpoint','subscription_assignment') AND (has_any_column_privilege(current_user,x.oid,'SELECT,INSERT,UPDATE,REFERENCES') OR has_table_privilege(current_user,x.oid,'DELETE,TRUNCATE,TRIGGER')))
-        AS safe FROM pg_roles r WHERE r.rolname=current_user`);
+        AND (${postgresRoleBoundary('ctp_ingest', [], ['ctp_market.partition', 'ctp_market.bar', 'ctp_market.event'])}) AS safe FROM pg_roles r WHERE r.rolname=current_user`);
       if (result.rows.length !== 1 || result.rows[0]?.safe !== true) throw new Error('ROLE_UNSAFE');
       await c.query('SELECT key,epoch,version,state,state_hash FROM ctp_market.partition LIMIT 0');
     });

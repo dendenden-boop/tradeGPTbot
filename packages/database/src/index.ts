@@ -12,7 +12,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool, type PoolClient } from 'pg';
 import { PrismaClient, Prisma } from './generated/client.js';
 import { DecimalInputError, validateDecimalArguments } from './decimal-guard.js';
-import { unsafeInheritedRolePrivileges } from './role-boundary.js';
+import { unsafeInheritedRolePrivileges, unsafePrivateRuntimePrivileges } from './role-boundary.js';
 
 export { decimalText, type DecimalKind } from './decimal.js';
 export type TenantTransaction = Parameters<
@@ -121,6 +121,7 @@ export async function createDatabase(options: {
           AND (has_any_column_privilege(current_user,c.oid,'SELECT,INSERT,UPDATE,REFERENCES')
             OR has_table_privilege(current_user,c.oid,'DELETE,TRUNCATE,TRIGGER')))
         OR ${Prisma.raw(unsafeInheritedRolePrivileges)}
+        OR (${Prisma.raw(unsafePrivateRuntimePrivileges('ctp_api'))})
         OR EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='public' AND c.relkind IN ('r','p')
             AND pg_has_role(current_user, c.relowner, 'MEMBER')) AS privileged

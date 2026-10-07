@@ -40,6 +40,7 @@ vi.mock('pg', () => {
     async connect() {
       let released = false;
       return {
+        on() {},
         once() {},
         async query(sql: string) {
           wire.queries.push(sql);

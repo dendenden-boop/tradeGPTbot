@@ -7,6 +7,7 @@ interface Io {
 }
 interface Client {
   release(destroy?: boolean): void;
+  on(event: 'error', listener: (error: Error) => void): unknown;
 }
 interface Pool<C extends Client> {
   readonly totalCount?: number;
@@ -25,6 +26,7 @@ export function createPostgresConnections(capacity = 4) {
   const cleanup = new WeakMap<Socket, () => void>();
   const pending = new Set<Promise<unknown>>();
   const waiting = new Set<() => void>();
+  const guarded = new WeakSet<Client>();
   let closed = false,
     connecting = 0;
   const available = <C extends Client>(pool: Pool<C>) =>
@@ -93,6 +95,13 @@ export function createPostgresConnections(capacity = 4) {
       operation = context.run({ io, created }, () => pool.connect());
       pending.add(operation);
       const client = await operation;
+      if (!guarded.has(client)) {
+        // pg removes its idle-pool error listener on checkout. The owned client
+        // still emits error after rejecting pending queries on connection loss.
+        // Query failure remains authoritative; do not expose raw driver errors.
+        client.on('error', () => {});
+        guarded.add(client);
+      }
       if (closed || io.signal.aborted || io.deadline <= Date.now()) {
         client.release(true);
         throw new Error('POSTGRES_CONNECTION_ABORTED');

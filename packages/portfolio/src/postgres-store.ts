@@ -1,4 +1,4 @@
-import { createPostgresConnections } from '@ctp/exchange-core';
+import { createPostgresConnections, postgresRoleBoundary } from '@ctp/exchange-core';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
@@ -148,7 +148,7 @@ export async function createPostgresPortfolioStore(options: {
       AND NOT EXISTS(SELECT 1 FROM pg_class x JOIN pg_namespace n ON n.oid=x.relnamespace WHERE n.nspname='public' AND x.relkind IN ('r','p') AND x.relname NOT IN ('exchange_account','exchange_connection','ledger_transaction','ledger_entry') AND (has_any_column_privilege(current_user,x.oid,'SELECT,INSERT,UPDATE,REFERENCES') OR has_table_privilege(current_user,x.oid,'DELETE,TRUNCATE,TRIGGER')))
       AND NOT has_table_privilege(current_user,'public.exchange_account','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AND NOT has_table_privilege(current_user,'public.exchange_connection','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER')
       AND NOT has_table_privilege(current_user,'public.ledger_transaction','UPDATE,DELETE,TRUNCATE,TRIGGER') AND NOT has_table_privilege(current_user,'public.ledger_entry','UPDATE,DELETE,TRUNCATE,TRIGGER')
-      AS safe FROM pg_roles r WHERE r.rolname=current_user`);
+      AND (${postgresRoleBoundary('ctp_portfolio', [], ['ctp_portfolio.book', 'ctp_portfolio.evidence', 'ctp_portfolio.outbox', 'ctp_portfolio.hold_watermark'])}) AS safe FROM pg_roles r WHERE r.rolname=current_user`);
       if (r.rows[0]?.safe !== true) throw new Error('ROLE_UNSAFE');
       await c.query('SELECT id FROM ctp_portfolio.book LIMIT 0');
     });

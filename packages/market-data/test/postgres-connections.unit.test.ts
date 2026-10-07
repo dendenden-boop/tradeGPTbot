@@ -7,6 +7,35 @@ const io = (signal = new AbortController().signal, ms = 1000) => ({
   signal,
   deadline: Date.now() + ms,
 });
+it('owns checked-out client error events through physical connection loss and refuses further queries', async () => {
+  const fixture = await postgresHandshakeFixture(),
+    physical = createPostgresConnections();
+  const pool = new Pool({
+    connectionString: fixture.connectionString,
+    max: 4,
+    stream: physical.stream,
+  });
+  pool.on('error', () => {});
+  let client: PoolClient | undefined;
+  try {
+    client = await physical.connect(pool, io());
+    expect(client.listenerCount('error')).toBe(1);
+    const ended = new Promise<void>((resolve) => client!.once('end', resolve));
+    fixture.disconnect();
+    await ended;
+    await expect(client.query('SELECT true AS safe')).rejects.toThrow();
+    client.release(true);
+    client = undefined;
+    expect(pool.totalCount).toBe(0);
+  } finally {
+    // Cleanup alone may add a listener; the assertion above tests the actual owner.
+    client?.on('error', () => {});
+    client?.release(true);
+    await physical.close();
+    await pool.end();
+    await fixture.close();
+  }
+});
 async function until(test: () => boolean) {
   for (let i = 0; i < 50 && !test(); i++) await wait(5);
   expect(test()).toBe(true);

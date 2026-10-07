@@ -5,7 +5,7 @@ import {
   type DatabaseOptions,
 } from './connection-options.js';
 import { unsafeAuthOwnerPrivileges } from './auth-role-boundary.js';
-import { unsafeInheritedRolePrivileges } from './role-boundary.js';
+import { unsafeInheritedRolePrivileges, unsafePrivateRuntimePrivileges } from './role-boundary.js';
 
 export interface AuthPrincipal {
   userId: string;
@@ -155,6 +155,7 @@ export async function createAuthDatabase(options: DatabaseOptions): Promise<Auth
               OR boundary.rolcreatedb OR boundary.rolreplication OR boundary.rolcanlogin
               OR EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member=boundary.oid)))
         AND NOT (${unsafeInheritedRolePrivileges})
+        AND NOT (${unsafePrivateRuntimePrivileges('ctp_auth')})
         AND NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='public' AND c.relkind IN ('r','p')
             AND (pg_has_role(current_user,c.relowner,'MEMBER')

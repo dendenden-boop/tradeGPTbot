@@ -25,6 +25,7 @@ vi.mock('pg', () => ({
         release(destroy?: boolean) {
           wire.released.push(destroy === true);
         },
+        on() {},
         once() {},
       };
     }

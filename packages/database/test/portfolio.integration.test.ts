@@ -380,6 +380,14 @@ it('legacy journal watermark backfill fails closed and requires newer trusted re
 it('retains a committed UNKNOWN hold after actual COMMIT acknowledgement loss, restart and exact replay without ledger duplication', async () => {
   const b = await fixture();
   await store.apply(b, snapshot(), 0, io());
+  const ledgerBefore = await admin.query(
+    'SELECT * FROM public.ledger_transaction WHERE "tenantId"=$1 ORDER BY id',
+    [b.tenantId],
+  );
+  const entriesBefore = await admin.query(
+    'SELECT * FROM public.ledger_entry WHERE "tenantId"=$1 ORDER BY id',
+    [b.tenantId],
+  );
   const event = {
     ...commitment('commit-response-loss', 1100),
     hold: { ...reservation, status: 'UNKNOWN' as const },
@@ -411,12 +419,19 @@ it('retains a committed UNKNOWN hold after actual COMMIT acknowledgement loss, r
       ).rejects.toThrow('EVIDENCE_CONFLICT');
       expect(
         (
-          await admin.query<{ n: number }>(
-            'SELECT count(*)::int n FROM public.ledger_transaction WHERE "tenantId"=$1',
+          await admin.query(
+            'SELECT * FROM public.ledger_transaction WHERE "tenantId"=$1 ORDER BY id',
             [b.tenantId],
           )
-        ).rows[0]?.n,
-      ).toBe(0);
+        ).rows,
+      ).toEqual(ledgerBefore.rows);
+      expect(
+        (
+          await admin.query('SELECT * FROM public.ledger_entry WHERE "tenantId"=$1 ORDER BY id', [
+            b.tenantId,
+          ])
+        ).rows,
+      ).toEqual(entriesBefore.rows);
       expect(
         (await restart.events(b, 200, io())).filter((e) => e.type === 'COMMITMENT'),
       ).toHaveLength(1);

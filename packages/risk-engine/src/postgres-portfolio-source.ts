@@ -1,4 +1,4 @@
-import { createPostgresConnections } from '@ctp/exchange-core';
+import { createPostgresConnections, postgresRoleBoundary } from '@ctp/exchange-core';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
 import {
@@ -115,7 +115,7 @@ export async function createPostgresRiskPortfolioReader(options: {
         AND NOT EXISTS(SELECT 1 FROM pg_namespace n WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND (has_schema_privilege(current_user,n.oid,'CREATE') OR pg_has_role(current_user,n.nspowner,'MEMBER')))
         AND NOT EXISTS(SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND t.relkind IN('r','p','v','m','f') AND (pg_has_role(current_user,t.relowner,'MEMBER') OR has_table_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES') OR has_any_column_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
         AND NOT EXISTS(SELECT 1 FROM pg_proc f JOIN pg_namespace n ON n.oid=f.pronamespace WHERE n.nspname='ctp_risk' AND has_function_privilege(current_user,f.oid,'EXECUTE') AND f.oid<>'ctp_risk.capture_portfolio(jsonb)'::regprocedure::oid)
-        AND has_function_privilege(current_user,'ctp_risk.capture_portfolio(jsonb)','EXECUTE') AS safe FROM pg_roles r WHERE r.rolname=current_user`);
+        AND has_function_privilege(current_user,'ctp_risk.capture_portfolio(jsonb)','EXECUTE') AND (${postgresRoleBoundary('ctp_risk_snapshot_reader', ['ctp_risk.capture_portfolio(jsonb)'])}) AS safe FROM pg_roles r WHERE r.rolname=current_user`);
         if (r.rows[0]?.safe !== true) throw new Error('RISK_PORTFOLIO_ROLE_UNSAFE');
       },
     );
