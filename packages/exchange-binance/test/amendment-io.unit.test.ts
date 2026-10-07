@@ -21,8 +21,8 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
   it.each(['ABORT', 'DEADLINE'] as const)(
     'settles %s after PUT, destroys socket, retains UNKNOWN and recovers read capacity',
     async (kind) => {
-      const t = Date.now(),
-        calls: string[] = [];
+      let t = Date.now();
+      const calls: string[] = [];
       const native = {
         ...order(),
         orderListId: '-1',
@@ -42,6 +42,10 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
           res.write('{');
         } else res.end(JSON.stringify(native));
       });
+      // Native evidence starts after the asynchronous listener setup, so a
+      // delayed fixture startup is not mistaken for a stale target admission.
+      t = Date.now();
+      native.updateTime = String(t - 10);
       const network = createNetworkIo();
       try {
         // Loopback profile override is an internal test injection, absent from production exports.
@@ -147,7 +151,12 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
             signal: controller.signal,
           },
         );
-        await received;
+        await Promise.race([
+          received,
+          pending.then(() => {
+            throw new Error('AMEND_FIXTURE_ENDED_BEFORE_PUT');
+          }),
+        ]);
         const abortAt = Date.now();
         if (kind === 'ABORT') controller.abort();
         expect(await pending).toMatchObject({
