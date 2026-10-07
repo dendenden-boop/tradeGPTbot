@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createPostgresPortfolioStore, type PortfolioStore, type Binding } from '@ctp/portfolio';
 import { binding, fill, snapshot } from '../../portfolio/test/fixtures.js';
+import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('Portfolio DB tests require isolated runner');
 const required = (name: string) => {
@@ -374,4 +375,56 @@ it('legacy journal watermark backfill fails closed and requires newer trusted re
   await expect(store.apply(b, commitment('resurrect', 1000), 1, io())).rejects.toThrow(
     'HOLD_CLOSED',
   );
+});
+
+it('retains a committed UNKNOWN hold after actual COMMIT acknowledgement loss, restart and exact replay without ledger duplication', async () => {
+  const b = await fixture();
+  await store.apply(b, snapshot(), 0, io());
+  const event = {
+    ...commitment('commit-response-loss', 1100),
+    hold: { ...reservation, status: 'UNKNOWN' as const },
+  };
+  const proxy = await registryCommitProxy(required('DATABASE_PORTFOLIO_URL'), 'PORTFOLIO');
+  let viaProxy: PortfolioStore | undefined;
+  try {
+    viaProxy = await createPostgresPortfolioStore({
+      connectionString: proxy.connectionString,
+      environment: 'test',
+    });
+    proxy.arm();
+    await expect(viaProxy.apply(b, event, 1, io())).rejects.toThrow();
+    expect(proxy.dropped()).toBe(1);
+    expect((await store.read(b, io())).state.holds).toEqual([event.hold]);
+    await viaProxy.close();
+    viaProxy = undefined;
+    const restart = await createPostgresPortfolioStore({
+      connectionString: required('DATABASE_PORTFOLIO_URL'),
+      environment: 'test',
+    });
+    try {
+      const replay = await restart.apply(b, event, 0, io());
+      expect(replay.duplicate).toBe(true);
+      expect(replay.checkpoint.revision).toBe(2);
+      expect(replay.checkpoint.state.holds).toEqual([event.hold]);
+      await expect(
+        restart.apply(b, { ...event, hold: { ...event.hold, amount: '99' } }, 2, io()),
+      ).rejects.toThrow('EVIDENCE_CONFLICT');
+      expect(
+        (
+          await admin.query<{ n: number }>(
+            'SELECT count(*)::int n FROM public.ledger_transaction WHERE "tenantId"=$1',
+            [b.tenantId],
+          )
+        ).rows[0]?.n,
+      ).toBe(0);
+      expect(
+        (await restart.events(b, 200, io())).filter((e) => e.type === 'COMMITMENT'),
+      ).toHaveLength(1);
+    } finally {
+      await restart.close();
+    }
+  } finally {
+    await viaProxy?.close();
+    await proxy.close();
+  }
 });

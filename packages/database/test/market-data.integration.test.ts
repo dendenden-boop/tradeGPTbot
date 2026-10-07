@@ -11,6 +11,7 @@ import {
   type MarketEvent,
 } from '@ctp/market-data';
 import { scope, tick } from '../../market-data/test/fixtures.js';
+import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('Market DB tests require the isolated runner');
 function required(name: string) {
@@ -49,6 +50,54 @@ const partition = async () => {
     row: await store.acquire(key, owner, createCandleState(scope, id, 0), context()),
   };
 };
+it('recovers the committed native checkpoint/outbox after actual COMMIT response loss without resending a mutation', async () => {
+  const p = await partition(),
+    state = structuredClone(p.row.state);
+  applyTrade(state, tick('commit-loss', 1, p.id));
+  applyCoverage(state, {
+    from: 0,
+    to: 30000,
+    cursor: 'commit-loss',
+    evidence: 'RECONCILED_TRADES',
+  });
+  const event: MarketEvent = {
+    id: randomUUID(),
+    key: p.key,
+    type: 'CANDLE_CLOSED',
+    bar: state.bars[0]!,
+    reason: null,
+  };
+  const proxy = await registryCommitProxy(required('DATABASE_INGEST_URL'), 'MARKET');
+  let viaProxy: MarketStore | undefined;
+  try {
+    viaProxy = await createPostgresMarketStore({
+      connectionString: proxy.connectionString,
+      environment: 'test',
+    });
+    proxy.arm();
+    await expect(
+      viaProxy.commit(p.key, p.owner, p.row, state, [event], context()),
+    ).rejects.toThrow();
+    expect(proxy.dropped()).toBe(1);
+    await viaProxy.close();
+    viaProxy = undefined;
+    const restart = await createPostgresMarketStore({
+      connectionString: required('DATABASE_INGEST_URL'),
+      environment: 'test',
+    });
+    try {
+      const recovered = await restart.acquire(p.key, p.owner, p.row.state, context());
+      expect(recovered.version).toBe(p.row.version + 1);
+      expect(recovered.state).toEqual(state);
+      expect(await restart.events(p.key, 200, context())).toEqual([event]);
+    } finally {
+      await restart.close();
+    }
+  } finally {
+    await viaProxy?.close();
+    await proxy.close();
+  }
+});
 describe('real PostgreSQL market persistence', () => {
   it('rejects a different archived payload with the same immutable revision', async () => {
     const p = await partition(),

@@ -1,3 +1,4 @@
+import { createPostgresConnections } from '@ctp/exchange-core';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
@@ -63,7 +64,9 @@ export async function createPostgresPortfolioStore(options: {
   } catch {
     throw new Error('PORTFOLIO_DATABASE_URL_INVALID');
   }
+  const physical = createPostgresConnections();
   const pool = new Pool({
+    stream: physical.stream,
     connectionString: options.connectionString,
     max: 4,
     connectionTimeoutMillis: 1000,
@@ -102,7 +105,7 @@ export async function createPostgresPortfolioStore(options: {
     context.signal.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, Math.min(context.deadline - Date.now(), 3000));
     try {
-      client = await pool.connect();
+      client = await physical.connect(pool, context);
       if (destroyed || context.signal.aborted) {
         client.release(true);
         client = undefined;
@@ -114,6 +117,8 @@ export async function createPostgresPortfolioStore(options: {
       const value = await work(client);
       if (destroyed || context.signal.aborted) throw new Error('PORTFOLIO_ABORTED');
       await client.query('COMMIT');
+      if (destroyed || context.signal.aborted || Date.now() >= context.deadline)
+        throw new Error('PORTFOLIO_ABORTED');
       return value;
     } catch (error) {
       if (client && !destroyed) await client.query('ROLLBACK').catch(() => {});
@@ -149,6 +154,7 @@ export async function createPostgresPortfolioStore(options: {
     });
   } catch {
     closed = true;
+    await physical.close();
     await pool.end();
     throw new Error('PORTFOLIO_DATABASE_ROLE_UNSAFE');
   }
@@ -379,6 +385,7 @@ export async function createPostgresPortfolioStore(options: {
         for (const c of connections) void c.end().catch(() => {});
       }, 500);
       try {
+        await physical.close();
         await pool.end();
       } finally {
         clearTimeout(timer);

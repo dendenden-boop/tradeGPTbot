@@ -1,3 +1,4 @@
+import { createPostgresConnections } from '@ctp/exchange-core';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
 import { controlScopeSchema, controlUpdateSchema, type ControlUpdate } from './controls.js';
@@ -59,7 +60,9 @@ export async function createPostgresControls(options: {
   } catch {
     throw new Error('RISK_CONTROL_DATABASE_URL');
   }
+  const physical = createPostgresConnections();
   const pool = new Pool({
+    stream: physical.stream,
     connectionString: options.connectionString,
     max: 4,
     connectionTimeoutMillis: 1000,
@@ -98,7 +101,7 @@ export async function createPostgresControls(options: {
     context.signal.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, Math.min(3000, context.deadline - Date.now()));
     try {
-      p = await pool.connect();
+      p = await physical.connect(pool, context);
       if (destroyed || context.signal.aborted) {
         p.release(true);
         p = undefined;
@@ -156,6 +159,7 @@ export async function createPostgresControls(options: {
     );
   } catch {
     closed = true;
+    await physical.close();
     await pool.end();
     throw new Error('RISK_CONTROL_ROLE_UNSAFE');
   }
@@ -206,6 +210,7 @@ export async function createPostgresControls(options: {
         for (const p of sockets) void p.end().catch(() => {});
       }, 500);
       try {
+        await physical.close();
         await pool.end();
       } finally {
         clearTimeout(timer);

@@ -1,3 +1,4 @@
+import { createPostgresConnections } from '@ctp/exchange-core';
 import { randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
@@ -55,7 +56,9 @@ export async function createPostgresOrderStore(options: {
   } catch {
     throw new Error('ORDER_DATABASE_URL_INVALID');
   }
+  const physical = createPostgresConnections();
   const pool = new Pool({
+    stream: physical.stream,
     connectionString: options.connectionString,
     max: 4,
     connectionTimeoutMillis: 1000,
@@ -90,7 +93,7 @@ export async function createPostgresOrderStore(options: {
     c.signal.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, Math.min(c.deadline - Date.now(), 3000));
     try {
-      p = await pool.connect();
+      p = await physical.connect(pool, c);
       if (destroyed || c.signal.aborted) {
         p.release(true);
         p = undefined;
@@ -154,6 +157,7 @@ export async function createPostgresOrderStore(options: {
     });
   } catch {
     closed = true;
+    await physical.close();
     await pool.end();
     throw new Error('ORDER_DATABASE_ROLE_UNSAFE');
   }
@@ -976,6 +980,7 @@ export async function createPostgresOrderStore(options: {
         for (const s of sockets) void s.end().catch(() => {});
       }, 500);
       try {
+        await physical.close();
         await pool.end();
       } finally {
         clearTimeout(timer);

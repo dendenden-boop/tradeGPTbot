@@ -1,6 +1,12 @@
 # PHASE 12 contracts
 
-Current cross-phase [runtime InstrumentRegistry contract](runtime-instrument-registry.md) separates bounded observational metadata projections from authoritative PostgreSQL current reads and atomic durable version history. Its native acceptance is pending; it is not a completed Risk certificate or mutation grant.
+Current cross-phase [runtime InstrumentRegistry contract](runtime-instrument-registry.md) separates bounded observational metadata projections from authoritative PostgreSQL current reads and atomic durable version history. Its complete native/OS/Docker acceptance is recorded in verification; it is not a completed Risk certificate or mutation grant.
+
+## PostgreSQL physical acquisition lifecycle
+
+Market store/snapshots, Portfolio, Order and the four Risk source/control/policy ports own their physical TCP stream before PostgreSQL authentication. Shared acquisition has four physical slots and four explicitly owned waiting slots, with an absolute acquisition bound of three seconds or the earlier caller deadline. Waiting callers do not enter pg's hidden queue. Abort destroys a connecting socket, rejects an owned waiting acquisition and prevents late publication. Handshake listeners/timers are detached on settlement so the original caller cannot destroy a subsequently reused idle connection. Close cancels owned waiters, destroys active/idle/connecting streams and waits for actual settlement. This helper has no SQL or monetary authority; existing transaction locks and privilege checks remain authoritative.
+
+Market/Portfolio success additionally requires an unexpired, nonaborted context after known COMMIT. An aborted or uncertain response does not prove rollback. Market recovers its durable checkpoint/outbox; Portfolio replays the exact permanent event and retains UNKNOWN collateral. Neither path blindly repeats a monetary effect or releases on a missing acknowledgement. Native response-loss acceptance is required separately from finite wire fixtures.
 
 ## Durable UTC loss source
 

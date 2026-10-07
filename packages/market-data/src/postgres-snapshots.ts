@@ -1,3 +1,4 @@
+import { createPostgresConnections } from '@ctp/exchange-core';
 import { createHash } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { z } from 'zod';
@@ -36,7 +37,9 @@ export async function createPostgresMarketSnapshots(options: {
   } catch {
     throw new Error('MARKET_EVIDENCE_DATABASE_URL');
   }
+  const physical = createPostgresConnections();
   const pool = new Pool({
+    stream: physical.stream,
     connectionString: options.connectionString,
     max: 4,
     connectionTimeoutMillis: 1000,
@@ -67,7 +70,7 @@ export async function createPostgresMarketSnapshots(options: {
     io.signal.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, Math.min(3000, io.deadline - Date.now()));
     try {
-      p = await pool.connect();
+      p = await physical.connect(pool, io);
       if (destroyed || io.signal.aborted) {
         p.release(true);
         p = undefined;
@@ -112,6 +115,7 @@ export async function createPostgresMarketSnapshots(options: {
     });
   } catch {
     closed = true;
+    await physical.close();
     await pool.end();
     throw new Error('MARKET_EVIDENCE_ROLE_UNSAFE');
   }
@@ -178,6 +182,7 @@ export async function createPostgresMarketSnapshots(options: {
       };
       const timer = setTimeout(destroy, 500);
       try {
+        await physical.close();
         await pool.end();
       } finally {
         clearTimeout(timer);

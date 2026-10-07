@@ -4,6 +4,7 @@ export * from './domain.js';
 export * from './errors.js';
 export * from './registry.js';
 export * from './runtime-registry.js';
+export * from './postgres-connections.js';
 export * from './operations.js';
 export * from './amendment.js';
 export * from './subscription.js';

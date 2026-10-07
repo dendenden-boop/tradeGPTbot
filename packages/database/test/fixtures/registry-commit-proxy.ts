@@ -2,7 +2,15 @@ import { createServer, createConnection, type Socket } from 'node:net';
 
 /** Native PostgreSQL fixture: suppress one acknowledged server COMMIT after a
  * publication. No query/result mocks; the real backend commits before response loss. */
-export async function registryCommitProxy(connectionString: string) {
+export async function registryCommitProxy(
+  connectionString: string,
+  effect: 'REGISTRY' | 'PORTFOLIO' | 'MARKET' = 'REGISTRY',
+) {
+  const marker = {
+    REGISTRY: 'SELECT ctp_registry.publish(',
+    PORTFOLIO: 'UPDATE ctp_portfolio.book SET state',
+    MARKET: 'UPDATE ctp_market.partition SET state',
+  }[effect];
   const target = new URL(connectionString),
     sockets = new Set<Socket>();
   if (target.hostname !== '127.0.0.1' || !/^\d+$/.test(target.port))
@@ -47,11 +55,7 @@ export async function registryCommitProxy(connectionString: string) {
         if (input.length < total) break;
         const frame = input.subarray(0, total);
         input = input.subarray(total);
-        if (
-          !startup &&
-          (frame[0] === 80 || frame[0] === 81) &&
-          frame.includes(Buffer.from('SELECT ctp_registry.publish('))
-        )
+        if (!startup && (frame[0] === 80 || frame[0] === 81) && frame.includes(Buffer.from(marker)))
           published = true;
         startup = false;
         back.write(frame);
