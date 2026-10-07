@@ -3,10 +3,12 @@ import { createWsPool } from './pool.js';
 import { feedKey, type CoverageProof } from './candles.js';
 import type { EngineOptions, FeedInput, FeedIntent, IoContext, PublicFeedPort } from './ports.js';
 export interface MetadataRefreshPort {
+  /** Abort/deadline must stop all I/O and settle within 250ms; never publish after abort. */
   refresh(intents: readonly FeedIntent[], context: IoContext): Promise<void>;
 }
 /** Bounded normalized replay plus evidence, not candles split from coarser history. */
 export interface TradeRecoveryPort {
+  /** Same physical abort/settlement contract as MetadataRefreshPort. */
   recover(
     intent: FeedIntent,
     checkpoint: ReturnType<ReturnType<typeof createMarketDataEngine>['snapshot']>,
@@ -33,8 +35,10 @@ export function createMarketDataWorker(
     engine = createMarketDataEngine(options),
     intents = new Map<string, { intent: FeedIntent; refs: number }>(),
     pending = new Set<string>(),
-    controller = new AbortController();
+    controller = new AbortController(),
+    operations = new Set<Promise<unknown>>();
   let closed = false,
+    unsafePort = false,
     lastMetadata = 0,
     lastLease = 0,
     cycling: Promise<void> | null = null,
@@ -58,18 +62,58 @@ export function createMarketDataWorker(
       pending.add(key);
     },
   });
-  const context = () => ({ signal: controller.signal, deadline: now() + 3000 });
-  async function bounded<T>(operation: () => Promise<T>): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+  async function bounded<T>(operation: (context: IoContext) => Promise<T>): Promise<T> {
+    if (closed) throw new Error('WORKER_CLOSED');
+    if (unsafePort) throw new Error('RECOVERY_PORT_UNSAFE');
+    if (operations.size >= 4) throw new Error('RECOVERY_OPERATION_CAPACITY');
+    const child = new AbortController(),
+      local = { signal: child.signal, deadline: now() + 3000 };
+    let reason: Error | undefined;
+    const abort = () => {
+      reason ??= new Error('WORKER_CLOSED');
+      child.abort();
+    };
+    controller.signal.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(() => {
+      reason ??= new Error('RECOVERY_DEADLINE');
+      child.abort();
+    }, 3000);
+    const task = Promise.resolve().then(() => {
+      if (child.signal.aborted) throw reason ?? new Error('RECOVERY_ABORTED');
+      return operation(local);
+    });
+    operations.add(task);
+    const settled = task
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .then(() => {
+        operations.delete(task);
+      });
+    let teardownTimer: ReturnType<typeof setTimeout> | undefined;
+    let stop!: () => void;
+    const physicalBoundary = new Promise<never>((_resolve, reject) => {
+      stop = () => {
+        // A broken injected port cannot permit accumulating detached operations.
+        teardownTimer = setTimeout(() => {
+          unsafePort = true;
+          reject(new Error('RECOVERY_PORT_DID_NOT_SETTLE'));
+        }, 250);
+      };
+      child.signal.addEventListener('abort', stop, { once: true });
+    });
     try {
-      return await Promise.race([
-        operation(),
-        new Promise<never>((_r, j) => {
-          timer = setTimeout(() => j(new Error('RECOVERY_DEADLINE')), 3000);
-        }),
-      ]);
+      const value = await Promise.race([task, physicalBoundary]);
+      await settled;
+      if (reason || child.signal.aborted || now() >= local.deadline)
+        throw reason ?? new Error('RECOVERY_DEADLINE');
+      return value;
     } finally {
       clearTimeout(timer);
+      clearTimeout(teardownTimer);
+      controller.signal.removeEventListener('abort', abort);
+      child.signal.removeEventListener('abort', stop);
     }
   }
   const worker = {
@@ -79,7 +123,7 @@ export function createMarketDataWorker(
         existing = intents.get(key);
       if (existing && existing.intent.profileId !== intent.profileId)
         throw new Error('PROFILE_CONFLICT');
-      await bounded(() => options.metadata.refresh([intent], context()));
+      await bounded((context) => options.metadata.refresh([intent], context));
       const retained = await engine.retain(intent.scope, intent.instrumentId, start);
       try {
         pool.retain(intent);
@@ -108,10 +152,10 @@ export function createMarketDataWorker(
       cycling = (async () => {
         if (now() - lastMetadata >= 15000) {
           try {
-            await bounded(() =>
+            await bounded((context) =>
               options.metadata.refresh(
                 [...intents.values()].map((x) => x.intent),
-                context(),
+                context,
               ),
             );
             lastMetadata = now();
@@ -126,8 +170,8 @@ export function createMarketDataWorker(
           const entry = intents.get(key);
           if (!entry) continue;
           try {
-            const result = await bounded(() =>
-              options.recovery.recover(entry.intent, engine.snapshot(key), context()),
+            const result = await bounded((context) =>
+              options.recovery.recover(entry.intent, engine.snapshot(key), context),
             );
             if (result.trades.length > 2048) throw new Error('RECOVERY_CAPACITY');
             for (const trade of result.trades)
@@ -169,7 +213,13 @@ export function createMarketDataWorker(
     snapshot: engine.snapshot,
     health: engine.health,
     metrics() {
-      return { engine: engine.metrics(), pool: pool.metrics(), pendingRecovery: pending.size };
+      return {
+        engine: engine.metrics(),
+        pool: pool.metrics(),
+        pendingRecovery: pending.size,
+        pendingOperations: operations.size,
+        unsafePort,
+      };
     },
     close(): Promise<void> {
       if (closing !== null) return closing;
@@ -179,6 +229,20 @@ export function createMarketDataWorker(
       closing = (async () => {
         await pool.close();
         if (cycling !== null) await cycling;
+        let teardownTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            Promise.allSettled([...operations]),
+            new Promise<void>((resolve) => {
+              teardownTimer = setTimeout(() => {
+                unsafePort = true;
+                resolve();
+              }, 250);
+            }),
+          ]);
+        } finally {
+          clearTimeout(teardownTimer);
+        }
         await engine.flush();
         await engine.close();
         intents.clear();

@@ -2,6 +2,8 @@
 
 ## Completion acceptance status
 
+The current [cross-phase hardening audit](cross-phase-audit.md) records confirmed RED defects and their bounded stream/physical timeout repairs. Its intermediate GREEN evidence does not replace complete PHASE 12 production acceptance; the audit and implementation continue through the full authority chain.
+
 The coordinator reconstruction/service protocol now checks all nine required source families, exact binding and current evidence, reconstructs exposure once per correlated order/reservation/hold and replays externally adjusted UTC loss/peak. Its tests use an explicit reference transaction store. This is a prerequisite, not completed production coordinator acceptance.
 
 The durable UTC loss journal is a server-only collector component. A new additive migration stores permanent immutable batches/event identities and a monotonic daily head with constant-size aggregates. It preserves the native UTC opening, external flow adjustment and peak through replay/restart; independent SQL checks protect direct function callers. Its isolated collector role cannot issue Risk decisions/reservations or write Portfolio/ledger. Native-history completeness and valuation must be established by the server collector before publishing; a coverage hash does not itself prove the history. Coordinator reconstruction now consumes these bounded checkpoints as well as reference event histories, verifying exact scope/day/freshness and current batch/sequence/coverage references. The physical certified source backend and atomic gateway remain mandatory before phase acceptance.

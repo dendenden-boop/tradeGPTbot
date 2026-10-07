@@ -1,5 +1,13 @@
 # PHASE 12 verification
 
+## Current PHASE 4–12 hardening work
+
+Fresh main baseline: 09b7be0a256cd4eba9558b5cb6b05fd0904d9e51, unchanged from origin/main after fetch on 7 October 2026. Full local baseline passed 2734 unit / 41 HTTP and all normal checks/deployments/audit (phase12-cross-phase-baseline-full.json). The [cross-phase audit](cross-phase-audit.md) records actual RED reproductions for stream history exhaustion, private equal-time conflict, Binance equal-sequence book conflict and worker physical HTTP timeout, followed by targeted GREEN.
+
+Full post-fix local regression passed at 12:18:20 UTC: format/docs/lint/typecheck, 2758 unit / 41 HTTP, build/db:validate/runtime, eleven clean deployments and zero-vulnerability audit. Twenty-four tests were added without deleting existing regressions. All fifteen published migrations and the frozen lock remain unchanged. Evidence: phase12-stream-worker-local-full.json and per-command logs. Exact runtime SHA/Ubuntu/Windows/native PostgreSQL/Docker CI evidence will be recorded after completion; previous CI is not substituted for current-source acceptance.
+
+This is ongoing hardening, not full PHASE 12 acceptance. Durable runtime registry, complete physical Risk certificate backend, atomic approve/reserve, Portfolio bridge, complete final current-state dispatch and durable native AMEND lifecycle remain required work. **NOT READY FOR PHASE 13**. Implementation continues; LIVE remains disabled and PHASE 13 is not started.
+
 ## Bounded UTC checkpoint consumption
 
 Baseline main ac74da7d7d5d7d23fa6758a362e3c0602695cadd passed full [CI 37442351522](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37442351522), completed at 09:32:39 UTC, 6 October 2026. Exact SHA/artifacts were verified at 09:34:08 UTC: all three Ubuntu/Windows/real-services jobs succeeded; 2574 unit / 41 HTTP per OS, 331 native PostgreSQL and three dependency lifecycle cases, 2949 distinct tests, eleven deployments, zero-vulnerability audits, Docker smoke and shutdown 316 ms. Evidence: phase12-loss-final-main-artifacts-verified.json and phase12-loss-ci-final-main/. This is an accepted descendant of 5882347, not full PHASE 12 completion.

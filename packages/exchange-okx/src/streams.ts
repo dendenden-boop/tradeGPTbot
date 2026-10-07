@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
-  decimalCompare,
+  createOrderObservationWindow,
   immutable,
   type InstrumentRecord,
-  type Order,
   type RequestContext,
   type StreamOperation,
 } from '@ctp/exchange-core';
@@ -116,7 +115,7 @@ export function createStreams(
         lastPositionTime = -1,
         lastPosition = '';
       const book = operation === 'subscribeOrderBook' ? createBookAssembler(record, depth) : null,
-        orders = new Map<string, Order>(),
+        orders = createOrderObservationWindow(),
         beforeAck: string[] = [];
       let beforeAckBytes = 0;
       const close = (): Promise<void> => {
@@ -244,20 +243,8 @@ export function createStreams(
               const x = object(row);
               if (x.instType !== endpoint.instType || x.instId !== symbol)
                 throw new OkxProtocolError('SCOPE_MISMATCH');
-              const current = privateTransport.normalizedOrder(row, record!.instrument.id),
-                previous = orders.get(current.exchangeOrderId!);
-              if (previous) {
-                if (
-                  current.updatedAt < previous.updatedAt ||
-                  decimalCompare(current.filledQuantity, previous.filledQuantity) < 0 ||
-                  (['FILLED', 'CANCELED', 'REJECTED', 'EXPIRED'].includes(previous.status) &&
-                    current.status !== previous.status)
-                )
-                  throw new OkxProtocolError('INVALID_RESPONSE');
-                if (JSON.stringify(current) === JSON.stringify(previous)) continue;
-              } else if (orders.size >= 64) throw new OkxProtocolError('BUSY');
-              orders.set(current.exchangeOrderId!, current);
-              onEvent(current);
+              const current = privateTransport.normalizedOrder(row, record!.instrument.id);
+              if (orders.observe(current)) onEvent(current);
             }
           } else {
             for (const row of rows) {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   immutable,
   operations,
@@ -110,6 +111,7 @@ export function createPublicStreams(
       let socketClosing: Promise<void> | undefined;
       let stopCode: 'ABORTED' | 'DEADLINE_EXCEEDED' | 'UNAVAILABLE' = 'UNAVAILABLE';
       let previousBook: string | undefined;
+      let previousBookHash = '';
       let complete!: () => void;
       const completion = new Promise<void>((resolve) => (complete = resolve));
       function release() {
@@ -208,14 +210,20 @@ export function createPublicStreams(
             )
               throw new BinanceProtocolError('INVALID_RESPONSE');
             const sequence = normalized.sourceSequence as string;
+            const fingerprint = createHash('sha256').update(JSON.stringify(raw)).digest('hex');
             if (previousBook !== undefined) {
               if (BigInt(sequence) < BigInt(previousBook))
                 throw new BinanceProtocolError('INVALID_RESPONSE');
-              if (sequence === previousBook) return;
+              if (sequence === previousBook) {
+                if (fingerprint !== previousBookHash)
+                  throw new BinanceProtocolError('INVALID_RESPONSE');
+                return;
+              }
               if (previous !== undefined && previous !== previousBook)
                 throw new BinanceProtocolError('INVALID_RESPONSE');
             }
             previousBook = sequence;
+            previousBookHash = fingerprint;
             onEvent(normalized);
           }
         } catch {

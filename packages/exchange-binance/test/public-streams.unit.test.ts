@@ -124,6 +124,25 @@ function futuresBook(u = '9223372036854775807', pu = '9223372036854775806') {
 
 describe('public streams protocol contracts', () => {
   it.each([false, true])(
+    'equal sequence with changed book requires resync (USD-M=%s)',
+    async (futures) => {
+      const f = setup(futures);
+      const unsubscribe = await f.subscribe('subscribeOrderBook', {
+        instrumentId: 'BTCUSDT',
+        depth: 20,
+      });
+      const payload = futures ? futuresBook() : book();
+      f.push(payload, 'btcusdt@depth20@100ms');
+      f.push(
+        futures ? { ...payload, b: [['99', '3']] } : { ...payload, bids: [['99', '3']] },
+        'btcusdt@depth20@100ms',
+      );
+      expect(f.gap).toHaveBeenCalledTimes(1);
+      expect(f.events).toHaveLength(1);
+      await unsubscribe();
+    },
+  );
+  it.each([false, true])(
     'normalizes exact ticker values and scoped URL (USD-M=%s)',
     async (futures) => {
       const f = setup(futures);

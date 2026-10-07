@@ -47,6 +47,7 @@
     "test:okx": "vitest run --config vitest.unit.config.ts packages/exchange-okx --outputFile.json=test-results/exchange-okx.json",
     "probe:okx": "node scripts/probe-okx-public.mjs",
     "test:htx": "vitest run --config vitest.unit.config.ts packages/exchange-htx --outputFile.json=test-results/exchange-htx.json",
+    "test:stream-lifecycle": "vitest run --config vitest.unit.config.ts packages/exchange-core/test/cross-adapter-stream-lifecycle.unit.test.ts packages/exchange-core/test/order-observations.unit.test.ts packages/exchange-binance/test/private-streams.unit.test.ts packages/exchange-binance/test/public-streams.unit.test.ts packages/market-data/test/worker-abort.unit.test.ts --outputFile.json=test-results/stream-lifecycle.json",
     "probe:htx": "node scripts/probe-htx-public.mjs"
   },
   "devDependencies": {

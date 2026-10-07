@@ -6,6 +6,7 @@ export * from './registry.js';
 export * from './operations.js';
 export * from './amendment.js';
 export * from './subscription.js';
+export * from './order-observations.js';
 export * from './time.js';
 export * from './adapter.js';
 export * from './storage-boundary.js';

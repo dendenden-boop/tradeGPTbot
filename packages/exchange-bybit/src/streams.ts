@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import {
-  decimalCompare,
+  createOrderObservationWindow,
   immutable,
   type InstrumentRecord,
-  type Order,
   type RequestContext,
   type StreamOperation,
 } from '@ctp/exchange-core';
@@ -101,7 +100,7 @@ export function createStreams(
         lastPosition = '',
         lastTickerTime = -1;
       const book = operation === 'subscribeOrderBook' ? createBookAssembler(record, depth) : null;
-      const orders = new Map<string, Order>();
+      const orders = createOrderObservationWindow();
       const beforeAck: string[] = [];
       let beforeAckBytes = 0;
       const close = (): Promise<void> => {
@@ -219,20 +218,8 @@ export function createStreams(
               const x = object(row);
               if (x.category !== endpoint.category) throw new BybitProtocolError('SCOPE_MISMATCH');
               if (x.symbol !== symbol) continue;
-              const current = privateTransport.normalizedOrder(row, record!.instrument.id),
-                previous = orders.get(current.exchangeOrderId!);
-              if (previous) {
-                if (
-                  current.updatedAt < previous.updatedAt ||
-                  decimalCompare(current.filledQuantity, previous.filledQuantity) < 0 ||
-                  (['FILLED', 'CANCELED', 'REJECTED', 'EXPIRED'].includes(previous.status) &&
-                    current.status !== previous.status)
-                )
-                  throw new BybitProtocolError('INVALID_RESPONSE');
-                if (JSON.stringify(current) === JSON.stringify(previous)) continue;
-              } else if (orders.size >= 64) throw new BybitProtocolError('BUSY');
-              orders.set(current.exchangeOrderId!, current);
-              onEvent(current);
+              const current = privateTransport.normalizedOrder(row, record!.instrument.id);
+              if (orders.observe(current)) onEvent(current);
             }
           } else {
             for (const row of array(event.data, 200)) {

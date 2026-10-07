@@ -174,6 +174,8 @@ pnpm test:smoke
 
 ## PHASE 12: durable native market evidence
 
+Текущий [cross-phase аудит PHASE 4–12](docs/phase-12/cross-phase-audit.md) фиксирует RED→GREEN исправления длительных stream subscriptions и физического abort Market Data. Это промежуточная проверка: полная Risk authority и durable AMEND ещё требуют реализации и приёмки. LIVE выключен, PHASE 13 не начата.
+
 Добавлен server-only PostgreSQL source для native ticker/book snapshots и GAP под существующей Market Data authority. Он сохраняет ordering watermark и permanent replay после рестарта, проверяет current DB rules и freshness и не даёт обновлённому ticker освежить неизменившийся book. Новая additive migration не меняет опубликованные migrations или financial writers. Проверки этого increment фиксируются в [PHASE 12 verification](docs/phase-12/verification.md).
 
 Это prerequisite для production coordinator. Полный PostgreSQL RiskSnapshot backend, atomic approve/reserve, Portfolio bridge/release/recovery, final current-policy/state gate и native AMEND ещё не приняты. **NOT READY FOR PHASE 13**. PHASE 13 не начата; LIVE disabled.

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  createOrderObservationWindow,
   accountScopeSchema,
   accountSnapshotSchema,
   idSchema,
@@ -344,6 +345,7 @@ export function createPrivateStreams(options: BinancePrivateStreamsOptions) {
       const queue: PendingEvent[] = [];
       const seen: string[] = [];
       const previous = new Map<string, number>();
+      const orders = createOrderObservationWindow();
       let draining = false;
 
       function release(): void {
@@ -451,7 +453,16 @@ export function createPrivateStreams(options: BinancePrivateStreamsOptions) {
             const startedAt = now();
             let values: readonly (Order | Position | AccountSnapshot)[];
             if (kind === 'subscribePrivateOrders') {
-              const orders = await bounded(() =>
+              if (
+                !orders.check(event.exchangeOrderId!, {
+                  time: event.transactionTime,
+                  fingerprint: createHash('sha256')
+                    .update(JSON.stringify(event.data))
+                    .digest('hex'),
+                })
+              )
+                continue;
+              const snapshots = await bounded(() =>
                 (snapshotOrders as NonNullable<typeof snapshotOrders>)(
                   event.data,
                   instrumentInput,
@@ -459,8 +470,9 @@ export function createPrivateStreams(options: BinancePrivateStreamsOptions) {
                 ),
               );
               if (!active) return;
-              if (!Array.isArray(orders) || orders.length !== 1) throw error('INVALID_RESPONSE');
-              values = orders.map((order) => orderSchema.parse(order));
+              if (!Array.isArray(snapshots) || snapshots.length !== 1)
+                throw error('INVALID_RESPONSE');
+              values = snapshots.map((order) => orderSchema.parse(order));
               const order = values[0] as Order;
               if (
                 order.instrumentId !== instrumentInput.instrumentId ||
@@ -509,6 +521,16 @@ export function createPrivateStreams(options: BinancePrivateStreamsOptions) {
             for (const value of values) {
               validScope(value);
               assertActive(localContext, now);
+              if (
+                kind === 'subscribePrivateOrders' &&
+                !orders.observe(value as Order, {
+                  time: event.transactionTime,
+                  fingerprint: createHash('sha256')
+                    .update(JSON.stringify(event.data))
+                    .digest('hex'),
+                })
+              )
+                continue;
               if (active) onEvent(immutable(value));
             }
           }

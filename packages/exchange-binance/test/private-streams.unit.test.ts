@@ -233,6 +233,49 @@ const accountEvent = (symbol = 'BTCUSDT', transactionTime = NOW - 20) => ({
 });
 
 describe('private stream authenticated session lifecycle', () => {
+  it('10000 terminal order identities do not force an artificial reconnect', async () => {
+    const f = setup();
+    await f.subscribe();
+    for (let i = 0; i < 10000; i++) {
+      const time = NOW - 10000 + i,
+        id = String(i + 1),
+        client = `Client${i}`;
+      f.snapshotOrders.mockResolvedValueOnce([
+        {
+          ...f.normalizedOrder,
+          exchangeOrderId: id,
+          clientOrderId: client,
+          createdAt: time - 1,
+          updatedAt: time,
+          status: 'FILLED',
+          filledQuantity: f.normalizedOrder.quantity,
+        },
+      ]);
+      f.push({
+        e: 'executionReport',
+        E: time,
+        T: time,
+        s: 'BTCUSDT',
+        i: id,
+        c: client,
+        X: 'FILLED',
+      });
+      for (let j = 0; j < 20 && f.events.length < i + 1 && f.gap.mock.calls.length === 0; j++)
+        await Promise.resolve();
+      expect(f.gap).not.toHaveBeenCalled();
+      expect(f.events).toHaveLength(i + 1);
+    }
+    expect(f.open).toHaveBeenCalledTimes(1);
+  }, 30000);
+  it('equal native order time with a changed notification requires resync', async () => {
+    const f = setup();
+    await f.subscribe();
+    f.push(orderEvent());
+    await until(() => f.events.length === 1);
+    f.push({ ...orderEvent(), X: 'CANCELED' });
+    await until(() => f.events.length > 1 || f.gap.mock.calls.length > 0);
+    expect(f.gap).toHaveBeenCalledTimes(1);
+  });
   it('uses modern Spot signature subscription and waits for the matching ACK', async () => {
     const f = setup();
     const unsubscribe = await f.subscribe();

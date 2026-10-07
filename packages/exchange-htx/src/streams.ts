@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import {
+  createOrderObservationWindow,
   type AccountScope,
   type InstrumentRecord,
   type RequestContext,
@@ -247,9 +248,12 @@ export function createStreams(
         lastPositionTime = -1,
         lastPositionHash = '';
       let lastBookVersion: bigint | null = null;
-      const seen = new Map<string, string>(),
-        orderTimes = new Map<string, number>(),
-        candles = new Map<number, { fingerprint: string; revision: number; complete: boolean }>();
+      const orders = createOrderObservationWindow(256),
+        trades = new Map<string, { hash: string; time: number }>();
+      let retiredTradeTime = -1,
+        lastTradeTime = -1;
+      let candle:
+        { openTime: number; fingerprint: string; revision: number; complete: boolean } | undefined;
       const assertRecord = () => {
         const current = currentRecord(symbol);
         if (
@@ -350,17 +354,6 @@ export function createStreams(
       }
       const fingerprint = (x: unknown) =>
         createHash('sha256').update(JSON.stringify(x)).digest('hex');
-      function unique(key: string, data: unknown) {
-        const hash = fingerprint(data),
-          previous = seen.get(key);
-        if (previous !== undefined) {
-          if (previous !== hash) throw new HtxProtocolError('INVALID_RESPONSE');
-          return false;
-        }
-        if (seen.size >= 256) throw new HtxProtocolError('BUSY');
-        seen.set(key, hash);
-        return true;
-      }
       async function readPrivate() {
         if (reading) return;
         reading = true;
@@ -406,13 +399,8 @@ export function createStreams(
                   endpoint.spot ? row.orderId : (row.order_id_str ?? row.order_id),
                 ),
                 time = exchangeTimestamp(endpoint.spot ? row.lastActTime : x.ts, now());
-              if (!unique(`${exchangeId}.${time}`, row)) continue;
-              const previous = orderTimes.get(exchangeId);
-              if (previous !== undefined && time < previous)
-                throw new HtxProtocolError('INVALID_RESPONSE');
-              if (orderTimes.size >= 256 && !orderTimes.has(exchangeId))
-                throw new HtxProtocolError('BUSY');
-              orderTimes.set(exchangeId, time);
+              const evidence = { time, fingerprint: fingerprint(row) };
+              if (!orders.check(exchangeId, evidence)) continue;
               const found = await privateTransport.lookup(
                 symbol,
                 { kind: 'EXCHANGE_ID', id: exchangeId },
@@ -422,7 +410,7 @@ export function createStreams(
               if (!active) return;
               if (found.kind !== 'FOUND' || !('order' in found))
                 throw new HtxProtocolError('UNAVAILABLE');
-              onEvent(found.order);
+              if (orders.observe(found.order, evidence)) onEvent(found.order);
             }
           }
         } catch {
@@ -527,7 +515,10 @@ export function createStreams(
               // Ordering must precede dedup: an old replay is a gap even if its payload was seen.
               if (lastBookVersion !== null && version < lastBookVersion)
                 throw new HtxProtocolError('INVALID_RESPONSE');
-              if (!unique('book.' + b.sourceSequence, x.tick)) return;
+              if (version === lastBookVersion) {
+                if (hash !== lastBookHash) throw new HtxProtocolError('INVALID_RESPONSE');
+                return;
+              }
             } else if (b.exchangeTime !== null && b.exchangeTime === lastBook) {
               if (hash !== lastBookHash) throw new HtxProtocolError('INVALID_RESPONSE');
               return;
@@ -539,19 +530,40 @@ export function createStreams(
             lastBookHash = hash;
             onEvent(b);
           } else if (operation === 'subscribeTrades') {
-            for (const row of array(object(x.tick).data, 100)) {
-              const t = normalizeTrade(row, r, now());
-              if (unique(t.tradeId, row)) onEvent(t);
+            const batch = array(object(x.tick).data, 100)
+              .map((row) => ({
+                tick: normalizeTrade(row, r, now()),
+                hash: fingerprint(row),
+              }))
+              .sort((a, b) => a.tick.exchangeTime - b.tick.exchangeTime);
+            for (const { tick: t, hash } of batch) {
+              const previous = trades.get(t.tradeId);
+              if (previous) {
+                if (previous.hash !== hash) throw new HtxProtocolError('INVALID_RESPONSE');
+                continue;
+              }
+              if (t.exchangeTime < lastTradeTime || t.exchangeTime <= retiredTradeTime)
+                throw new HtxProtocolError('INVALID_RESPONSE');
+              trades.set(t.tradeId, { hash, time: t.exchangeTime });
+              lastTradeTime = t.exchangeTime;
+              if (trades.size > 256) {
+                const first = trades.entries().next().value!;
+                retiredTradeTime = Math.max(retiredTradeTime, first[1].time);
+                trades.delete(first[0]);
+              }
+              onEvent(t);
             }
           } else {
             const c = normalizeCandle(x.tick, r, String(input.timeframe), now()),
               hash = fingerprint(c),
-              old = candles.get(c.openTime);
+              old = candle?.openTime === c.openTime ? candle : undefined;
+            if (candle && c.openTime < candle.openTime)
+              throw new HtxProtocolError('INVALID_RESPONSE');
             if (old?.fingerprint === hash) return;
             if (old?.complete) throw new HtxProtocolError('INVALID_RESPONSE');
-            if (candles.size >= 256 && !old) throw new HtxProtocolError('BUSY');
             const revision = old ? old.revision + 1 : 0;
-            candles.set(c.openTime, { fingerprint: hash, revision, complete: c.complete });
+            if (!Number.isSafeInteger(revision)) throw new HtxProtocolError('INVALID_RESPONSE');
+            candle = { openTime: c.openTime, fingerprint: hash, revision, complete: c.complete };
             onEvent({ ...c, revision });
           }
         } catch {
