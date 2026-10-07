@@ -2,8 +2,23 @@
 // Checking effective privileges also catches grants through otherwise harmless roles.
 export const unsafeAuthOwnerPrivileges = `
   has_database_privilege('ctp_auth_owner',current_database(),'TEMP,CREATE')
-  OR has_schema_privilege('ctp_auth_owner','public','CREATE')
-  OR has_schema_privilege('ctp_auth_owner','ctp_auth','CREATE')
+  OR EXISTS (
+    SELECT 1 FROM pg_namespace n WHERE (n.nspname='public' OR left(n.nspname,4)='ctp_')
+      AND (has_schema_privilege('ctp_auth_owner',n.oid,'CREATE')
+        OR pg_has_role('ctp_auth_owner',n.nspowner,'MEMBER'))
+  )
+  OR EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE left(n.nspname,4)='ctp_' AND c.relkind IN ('r','p','v','m','f')
+      AND (pg_has_role('ctp_auth_owner',c.relowner,'MEMBER')
+        OR has_table_privilege('ctp_auth_owner',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES')
+        OR has_any_column_privilege('ctp_auth_owner',c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))
+  )
+  OR EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE left(n.nspname,4)='ctp_' AND n.nspname<>'ctp_auth'
+      AND has_function_privilege('ctp_auth_owner',p.oid,'EXECUTE')
+  )
   OR EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped

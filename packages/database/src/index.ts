@@ -168,6 +168,10 @@ export async function createDatabase(options: {
         return await guardedClient.$transaction(
           async (transaction) => {
             await transaction.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+            // Acquire before caller SQL, including account/connection CRUD.
+            // Capture and final dispatch use the same GLOBAL -> tenant order.
+            await transaction.$executeRaw`SELECT pg_advisory_xact_lock_shared(1129599058,12)`;
+            await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('ctp:risk:'||${tenantId}::text,0))`;
             return operation(transaction);
           },
           {

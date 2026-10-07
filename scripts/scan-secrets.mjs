@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdirSync, writeFileSync, lstatSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  lstatSync,
+  openSync,
+  fstatSync,
+  readSync,
+  closeSync,
+  constants,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,7 +60,39 @@ export function scanRepository(root, git = 'git') {
       info = lstatSync(path);
     if (!info.isFile() || info.isSymbolicLink()) throw new Error('SECRET_SCAN_FILE_KIND');
     if (info.size > 4 * 1024 * 1024) throw new Error('SECRET_SCAN_FILE_CAPACITY');
-    return secretFindings(file, readFileSync(path));
+    const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    try {
+      // All content reads use this owned descriptor. Replacing the path or
+      // growing its contents cannot turn the pre-read size bound into a guess.
+      const opened = fstatSync(fd);
+      if (!opened.isFile() || opened.dev !== info.dev || opened.ino !== info.ino)
+        throw new Error('SECRET_SCAN_FILE_CHANGED');
+      if (opened.size > 4 * 1024 * 1024) throw new Error('SECRET_SCAN_FILE_CAPACITY');
+      if (
+        opened.size !== info.size ||
+        opened.mtimeMs !== info.mtimeMs ||
+        opened.ctimeMs !== info.ctimeMs
+      )
+        throw new Error('SECRET_SCAN_FILE_CHANGED');
+      const bytes = Buffer.alloc(opened.size + 1);
+      let used = 0;
+      while (used < bytes.length) {
+        const count = readSync(fd, bytes, used, bytes.length - used, null);
+        if (!count) break;
+        used += count;
+      }
+      const after = fstatSync(fd);
+      if (
+        used !== opened.size ||
+        after.size !== opened.size ||
+        after.mtimeMs !== opened.mtimeMs ||
+        after.ctimeMs !== opened.ctimeMs
+      )
+        throw new Error('SECRET_SCAN_FILE_CHANGED');
+      return secretFindings(file, bytes.subarray(0, used));
+    } finally {
+      closeSync(fd);
+    }
   });
   return {
     status: findings.length ? 'FAIL' : 'PASS',

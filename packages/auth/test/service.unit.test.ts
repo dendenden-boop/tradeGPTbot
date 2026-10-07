@@ -317,6 +317,25 @@ describe('auth service security boundaries', () => {
     expect(hasher.verify).not.toHaveBeenCalled();
     await service.close();
   });
+  it.each(['verify-email', 'users-me'] as const)(
+    'keeps %s database work behind the actual service limiter',
+    async (endpoint) => {
+      const { service, limiter, repository } = fixture();
+      limiter.consume.mockResolvedValue({ allowed: false, retryAfterMs: 60000 });
+      try {
+        await expect(
+          endpoint === 'verify-email'
+            ? service.verifyEmail(context, rawToken)
+            : service.authenticate(context, rawToken),
+        ).rejects.toMatchObject({ code: 'RATE_LIMITED', statusCode: 429 });
+        expect(limiter.consume).toHaveBeenCalledOnce();
+        expect(repository.verifyEmail).not.toHaveBeenCalled();
+        expect(repository.authenticate).not.toHaveBeenCalled();
+      } finally {
+        await service.close();
+      }
+    },
+  );
   it('fails closed on Redis failure and stores no IP or mailbox in rate keys', async () => {
     const { service, limiter } = fixture();
     await service.login(context, email, password);

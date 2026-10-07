@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,7 +56,7 @@ export function dependencyBom(inventory, lockfile) {
           'bom-ref': id,
           name: item.name,
           version,
-          purl: `pkg:npm/${item.name.replace('@', '%40')}@${version}`,
+          purl: `pkg:npm/${item.name.replaceAll('@', '%40')}@${version}`,
           licenses: [{ expression: license === 'MIT and ISC' ? 'MIT AND ISC' : license }],
         };
         if (components.has(id) && JSON.stringify(components.get(id)) !== JSON.stringify(component))
@@ -85,7 +85,8 @@ export function dependencyBom(inventory, lockfile) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const cli = process.env['npm_execpath'];
+  const launcher = process.env['npm_execpath'];
+  const cli = launcher ? realpathSync(launcher) : undefined;
   if (!cli || !/pnpm\.[cm]?js$/.test(cli)) throw new Error('PINNED_PNPM_REQUIRED');
   if (
     execFileSync(process.execPath, [cli, '--version'], {

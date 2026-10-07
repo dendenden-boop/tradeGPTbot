@@ -48,7 +48,10 @@ describe('native AMEND with actual underlying HTTP lifecycle', () => {
       });
       // Native evidence starts after the asynchronous listener setup, so a
       // delayed fixture startup is not mistaken for a stale target admission.
-      t = Date.now();
+      // A received observation is already in the past. Keep a small explicit
+      // receipt margin rather than manufacturing a target at the wall clock's
+      // exact current tick (Windows CI reproduced pre-PUT STALE_METADATA).
+      t = Date.now() - 100;
       native.updateTime = String(t - 10);
       const network = createNetworkIo();
       try {

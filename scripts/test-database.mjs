@@ -26,6 +26,7 @@ const expectedMigrations = [
   '202610070001_deferred_transport_permit',
   '202610070002_risk_portfolio_source',
   '202610070003_runtime_instrument_registry',
+  '202610070004_portfolio_capture_inventory',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -630,7 +631,36 @@ try {
     ).rows[0].n,
     15,
   );
+  await cp(
+    path.join(
+      workspace,
+      'packages/database/prisma/migrations/202610070003_runtime_instrument_registry',
+    ),
+    path.join(authPreviousMigrations, '202610070003_runtime_instrument_registry'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  assert.equal(
+    (
+      await upgrade.query(
+        'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
+      )
+    ).rows[0].n,
+    16,
+  );
+  const beforeCaptureDefinition = (
+    await upgrade.query(
+      "SELECT pg_get_functiondef('ctp_risk.capture_portfolio(jsonb)'::regprocedure) AS definition",
+    )
+  ).rows[0].definition;
+  assert.ok(!beforeCaptureDefinition.includes('inventory_ids'));
   await migrate(databases[1]);
+  const afterCaptureDefinition = (
+    await upgrade.query(
+      "SELECT pg_get_functiondef('ctp_risk.capture_portfolio(jsonb)'::regprocedure) AS definition",
+    )
+  ).rows[0].definition;
+  assert.ok(afterCaptureDefinition.includes('inventory_ids'));
   assert.equal(
     (await upgrade.query('SELECT count(*)::int n FROM ctp_registry.current_record')).rows[0].n,
     0,
@@ -1240,6 +1270,7 @@ try {
     instrumentRegistryFreshAndReset: 'PASS',
     instrumentRegistryUpgradeFromPhase12: 'PASS',
     instrumentRegistryNonBypassOwner: 'PASS',
+    portfolioCaptureInventoryUpgradeFromPublished16: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

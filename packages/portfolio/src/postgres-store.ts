@@ -114,6 +114,16 @@ export async function createPostgresPortfolioStore(options: {
       await client.query('BEGIN');
       if (binding)
         await client.query("SELECT set_config('app.tenant_id',$1,true)", [binding.tenantId]);
+      if (binding) {
+        // Capture and writers share GLOBAL -> tenant before touching accounts
+        // or attempting the book's INSERT ON CONFLICT. Otherwise that insert's
+        // FK lock can deadlock a capture that already holds the account row.
+        await client.query('SELECT pg_advisory_xact_lock_shared(1129599058,12)');
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('ctp:risk:'||$1::text,0))",
+          [binding.tenantId],
+        );
+      }
       const value = await work(client);
       if (destroyed || context.signal.aborted) throw new Error('PORTFOLIO_ABORTED');
       await client.query('COMMIT');

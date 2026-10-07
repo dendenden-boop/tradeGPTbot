@@ -69,6 +69,14 @@ export function unsafePrivateRuntimePrivileges(group: 'ctp_api' | 'ctp_auth'): s
       AND t.relkind IN('r','p','v','m','f')
       AND (has_table_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES')
         OR has_any_column_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
+    ${
+      names
+        ? `OR EXISTS(SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace
+      WHERE (n.nspname||'.'||t.relname) IN(${names}) AND t.relkind IN('r','p','v','m','f')
+      AND (has_table_privilege(current_user,t.oid,'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES')
+        OR has_any_column_privilege(current_user,t.oid,'INSERT,UPDATE,REFERENCES')))`
+        : ''
+    }
     OR EXISTS(SELECT 1 FROM pg_proc f JOIN pg_namespace n ON n.oid=f.pronamespace
       WHERE left(n.nspname,4)='ctp_' AND has_function_privilege(current_user,f.oid,'EXECUTE')
       ${signatures ? `AND (n.nspname||'.'||f.proname||'('||replace(oidvectortypes(f.proargtypes),' ','')||')') NOT IN(${signatures})` : ''})`;
