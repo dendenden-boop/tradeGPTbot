@@ -96,7 +96,7 @@ export async function createPostgresOrderStore(options: {
         p = undefined;
         throw new Error('ORDER_ABORTED');
       }
-      await p.query('BEGIN');
+      await p.query('BEGIN ISOLATION LEVEL READ COMMITTED');
       if (b) await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
       const value = await work(p);
       if (destroyed || c.signal.aborted) throw new Error('ORDER_ABORTED');
@@ -134,6 +134,14 @@ export async function createPostgresOrderStore(options: {
           WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk')
             AND (has_schema_privilege(current_user,n.oid,'CREATE') OR pg_has_role(current_user,n.nspowner,'MEMBER'))) AS safe`);
       if (functions.rows[0]?.safe !== true) throw new Error('ORDER_ROLE_UNSAFE');
+      const permitPrivileges = await p.query<{ safe: boolean }>(`SELECT
+        has_column_privilege(current_user,'public.submission_attempt','permitConsumedAt','UPDATE')
+        AND NOT has_function_privilege(current_user,'ctp_execution.deferred_permit_insert()','EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM pg_attribute a
+          WHERE a.attrelid='public.submission_attempt'::regclass AND a.attnum>0 AND NOT a.attisdropped
+            AND has_column_privilege(current_user,a.attrelid,a.attnum,'UPDATE')
+            AND a.attname NOT IN('status','permitConsumedAt','transportStartedAt','responseReceivedAt','resolvedAt','responseCode','evidenceHash')) AS safe`);
+      if (permitPrivileges.rows[0]?.safe !== true) throw new Error('ORDER_ROLE_UNSAFE');
       const privileges = await p.query<{ safe: boolean }>(`SELECT NOT EXISTS(
         SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND t.relkind IN('r','p','v','m','f') AND (
           (t.oid NOT IN('public.exchange_account'::regclass,'public.exchange_connection'::regclass,'public.instrument'::regclass,'public.instrument_rule_version'::regclass,'public.capability_snapshot'::regclass,'public.account_state_version'::regclass,'public.risk_decision'::regclass,'public.risk_reservation'::regclass,'public.ledger_transaction'::regclass,'public.order_intent'::regclass,'public.order'::regclass,'public.order_event'::regclass,'public.submission_attempt'::regclass,'public.fill'::regclass,'public.fee'::regclass,'public.outbox_event'::regclass,'ctp_portfolio.book'::regclass,'ctp_portfolio.evidence'::regclass,'ctp_execution.command'::regclass,'ctp_execution.progress'::regclass,'ctp_execution.evidence'::regclass,'ctp_execution.fill_adoption'::regclass) AND (has_table_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES') OR has_any_column_privilege(current_user,t.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
@@ -624,7 +632,7 @@ export async function createPostgresOrderStore(options: {
           s = await apply(p, s, { type: 'APPROVE' }, `approve:${intentId}`);
         const attemptId = randomUUID();
         await p.query(
-          `INSERT INTO public.submission_attempt(id,"tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","reservationId","workerId","commandHash","permitConsumedAt","deadlineAt") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::bigint,$11,'order-engine',$12,now(),to_timestamp($13::double precision/1000))`,
+          `INSERT INTO public.submission_attempt(id,"tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","reservationId","workerId","commandHash","permitConsumedAt","permitProtocolVersion","deadlineAt") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::bigint,$11,'order-engine',$12,NULL,2,to_timestamp($13::double precision/1000))`,
           [
             attemptId,
             b.tenantId,
@@ -664,8 +672,8 @@ export async function createPostgresOrderStore(options: {
       return tx(b, c, async (p) => {
         await owner(p, b, true);
         const s = await read(p, b, claim.state.id, true);
-        const proof = await p.query(
-          `SELECT t.id FROM public.submission_attempt t JOIN ctp_execution.command k ON k."tenantId"=t."tenantId" AND k."intentId"=t."intentId" WHERE t."tenantId"=$1 AND t.id=$2 AND t."orderId"=$3 AND t."intentId"=$4 AND t.operation=$5 AND t."commandHash"=$6 AND k.command=$7 AND (extract(epoch from t."deadlineAt")*1000)::bigint=$8::bigint`,
+        const proof = await p.query<{ transportStartedAt: Date | null }>(
+          `SELECT t.id,t."transportStartedAt" FROM public.submission_attempt t JOIN ctp_execution.command k ON k."tenantId"=t."tenantId" AND k."intentId"=t."intentId" WHERE t."tenantId"=$1 AND t.id=$2 AND t."orderId"=$3 AND t."intentId"=$4 AND t.operation=$5 AND t."commandHash"=$6 AND k.command=$7 AND (extract(epoch from t."deadlineAt")*1000)::bigint=$8::bigint`,
           [
             b.tenantId,
             claim.attemptId,
@@ -696,7 +704,9 @@ export async function createPostgresOrderStore(options: {
               : outcome.kind === 'UNKNOWN'
                 ? 'UNKNOWN'
                 : 'REJECTED',
-            outcome.kind,
+            outcome.kind === 'DEFINITIVELY_REJECTED' && proof.rows[0]?.transportStartedAt === null
+              ? 'NOT_SENT'
+              : outcome.kind,
             bytes(hash(outcome)),
             b.tenantId,
             claim.attemptId,
@@ -950,7 +960,7 @@ export async function createPostgresOrderStore(options: {
             draftSchema.parse(JSON.parse(row.draft) as unknown),
           );
           const consumed = await p.query(
-            'UPDATE public.submission_attempt SET "transportStartedAt"=clock_timestamp() WHERE "tenantId"=$1 AND id=$2 AND "transportStartedAt" IS NULL AND status=\'DISPATCHING\' AND "deadlineAt">clock_timestamp() AND to_timestamp($3::double precision/1000)>clock_timestamp()',
+            'UPDATE public.submission_attempt SET "transportStartedAt"=stamp.at,"permitConsumedAt"=CASE WHEN "permitProtocolVersion"=2 THEN stamp.at ELSE "permitConsumedAt" END FROM (SELECT date_trunc(\'milliseconds\',clock_timestamp()) AS at) stamp WHERE "tenantId"=$1 AND id=$2 AND "transportStartedAt" IS NULL AND ("permitProtocolVersion"=1 OR "permitConsumedAt" IS NULL) AND status=\'DISPATCHING\' AND "deadlineAt">clock_timestamp() AND to_timestamp($3::double precision/1000)>clock_timestamp()',
             [b.tenantId, a.dispatchAttemptId, a.expiresAt],
           );
           return consumed.rowCount === 1;

@@ -23,6 +23,7 @@ const expectedMigrations = [
   '202610050004_risk_policies',
   '202610060001_risk_loss_journal',
   '202610060002_market_snapshots',
+  '202610070001_deferred_transport_permit',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -542,7 +543,37 @@ try {
   const priorLossHeads = (
     await upgrade.query('SELECT * FROM ctp_risk.loss_head ORDER BY "tenantId",mode,asset,day')
   ).rows;
+  // The new permit protocol must preserve every historical timestamp and command at
+  // the exact published thirteen-migration boundary, including unresolved attempts.
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/202610060002_market_snapshots'),
+    path.join(authPreviousMigrations, '202610060002_market_snapshots'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  const priorAttempts = (
+    await upgrade.query(
+      'SELECT to_jsonb(t) AS evidence FROM public.submission_attempt t ORDER BY id',
+    )
+  ).rows;
+  assert.ok(priorAttempts.length > 0, 'Upgrade requires actual historical attempt evidence');
   await migrate(databases[1]);
+  assert.deepEqual(
+    (
+      await upgrade.query(
+        `SELECT to_jsonb(t)-'permitProtocolVersion' AS evidence FROM public.submission_attempt t ORDER BY id`,
+      )
+    ).rows,
+    priorAttempts,
+  );
+  assert.equal(
+    (
+      await upgrade.query(
+        'SELECT count(*)::int n FROM public.submission_attempt WHERE "permitProtocolVersion"<>1',
+      )
+    ).rows[0].n,
+    0,
+  );
   assert.deepEqual(
     (await upgrade.query('SELECT * FROM ctp_risk.loss_batch ORDER BY "tenantId",id')).rows,
     priorLossBatches,
@@ -971,6 +1002,7 @@ try {
     marketSnapshotsFreshAndResetMissing: 'PASS',
     marketSnapshotsNonBypassOwner: 'PASS',
     marketSnapshotsUpgradeFromPhase12: 'PASS',
+    deferredPermitUpgradeFromPhase12: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

@@ -19,7 +19,7 @@ import {
 import { createPostgresPortfolioStore, type PortfolioStore } from '@ctp/portfolio';
 import { state, native } from '../../order-engine/test/fixtures.js';
 import { binding as portfolioBinding, snapshot, fill } from '../../portfolio/test/fixtures.js';
-import { instrument, rules } from '../../exchange-core/test/fixtures/adapter.js';
+import { instrument, rules, capabilities } from '../../exchange-core/test/fixtures/adapter.js';
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('Order tests require isolated runner');
 const required = (key: string) => {
@@ -584,12 +584,12 @@ it.each(['USER', 'CONNECTION', 'GLOBAL', 'OPEN', 'HALF_OPEN'] as const)(
       ).toBe(false);
       expect(
         (
-          await admin.query<{ started: Date | null }>(
-            'SELECT "transportStartedAt" AS started FROM submission_attempt WHERE id=$1',
+          await admin.query<{ started: Date | null; consumed: Date | null }>(
+            'SELECT "transportStartedAt" AS started,"permitConsumedAt" AS consumed FROM submission_attempt WHERE id=$1',
             [c.attemptId],
           )
-        ).rows[0]?.started,
-      ).toBeNull();
+        ).rows[0],
+      ).toEqual({ started: null, consumed: null });
       const restarted = await open();
       try {
         expect(
@@ -616,6 +616,237 @@ it.each(['USER', 'CONNECTION', 'GLOBAL', 'OPEN', 'HALF_OPEN'] as const)(
             state: 'RUNNING',
           }),
         ]);
+    }
+  },
+);
+it('durable attempt stays unconsumed across restart and definitive pretransport rejection', async () => {
+  const { b, draft } = await fixture(),
+    s = await store.create(b, draft, io()),
+    g = await grant(s),
+    c = await store.begin(b, s.id, s.intentId, g, io());
+  if (!c) throw new Error('No claim');
+  const evidence = async () =>
+    (
+      await admin.query<{ consumed: Date | null; started: Date | null; code: string | null }>(
+        'SELECT "permitConsumedAt" AS consumed,"transportStartedAt" AS started,"responseCode" AS code FROM submission_attempt WHERE id=$1',
+        [c.attemptId],
+      )
+    ).rows[0];
+  expect(await evidence()).toEqual({ consumed: null, started: null, code: null });
+  const restarted = await open();
+  try {
+    expect(await restarted.begin(b, s.id, s.intentId, g, io())).toBeNull();
+    expect(await evidence()).toEqual({ consumed: null, started: null, code: null });
+    const rejected = await restarted.result(
+      b,
+      c,
+      { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+      io(),
+    );
+    expect(rejected.status).toBe('REJECTED');
+    expect(rejected.reconciliation).toBe('CONSISTENT');
+    expect(await evidence()).toEqual({ consumed: null, started: null, code: 'NOT_SENT' });
+    expect(
+      await restarted.result(
+        b,
+        c,
+        { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+        io(),
+      ),
+    ).toEqual(rejected);
+  } finally {
+    await restarted.close();
+  }
+});
+it('execution cannot change immutable attempt fields or fabricate a half-consumed permit', async () => {
+  const { b, draft } = await fixture(),
+    s = await store.create(b, draft, io()),
+    g = await grant(s),
+    c = await store.begin(b, s.id, s.intentId, g, io());
+  if (!c) throw new Error('No claim');
+  for (const update of [
+    '"permitConsumedAt"=clock_timestamp()',
+    '"transportStartedAt"=clock_timestamp()',
+    '"workerId"=\'forged\'',
+  ]) {
+    await expect(
+      admin.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
+    ).rejects.toMatchObject({ code: '23514' });
+  }
+});
+it('legacy protocol retains the published nonnull consumed timestamp invariant', async () => {
+  const { b, draft } = await fixture(),
+    s = await store.create(b, draft, io()),
+    g = await grant(s),
+    c = await store.begin(b, s.id, s.intentId, g, io());
+  if (!c) throw new Error('No claim');
+  await expect(
+    admin.query(
+      `INSERT INTO submission_attempt(id,"tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","reservationId","workerId","commandHash","permitConsumedAt","permitProtocolVersion","deadlineAt")
+     SELECT $1,"tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion"+1,operation,"permissionEpoch","reservationId",'legacy-probe',"commandHash",NULL,1,"deadlineAt" FROM submission_attempt WHERE id=$2`,
+      [randomUUID(), c.attemptId],
+    ),
+  ).rejects.toMatchObject({ code: '23514' });
+});
+it.each(['LEGACY', 'PRECONSUMED', 'WORKER'] as const)(
+  'execution cannot insert a %s attempt to bypass deferred consumption',
+  async (kind) => {
+    const { b, draft } = await fixture(),
+      s = await store.create(b, draft, io()),
+      g = await grant(s),
+      c = await store.begin(b, s.id, s.intentId, g, io());
+    if (!c) throw new Error('No claim');
+    const execution = new Pool({ connectionString: required('DATABASE_EXECUTION_URL'), max: 1 });
+    const p = await execution.connect();
+    try {
+      await p.query('BEGIN');
+      await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+      await expect(
+        p.query(
+          `INSERT INTO submission_attempt(id,"tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","reservationId","workerId","commandHash","permitConsumedAt","transportStartedAt","permitProtocolVersion","deadlineAt")
+         SELECT $1,"tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion"+1,operation,"permissionEpoch","reservationId",$2,"commandHash",
+           CASE WHEN $3='PRECONSUMED' THEN now() ELSE NULL END,CASE WHEN $3='PRECONSUMED' THEN now() ELSE NULL END,
+           CASE WHEN $3='LEGACY' THEN 1 ELSE 2 END,"deadlineAt" FROM submission_attempt WHERE id=$4`,
+          [randomUUID(), kind === 'WORKER' ? 'forged-worker' : 'order-engine', kind, c.attemptId],
+        ),
+      ).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await p.query('ROLLBACK');
+      p.release();
+      await execution.end();
+    }
+  },
+);
+it('durable pause after claim yields NOT_SENT with no native I/O or consumed permit', async () => {
+  const { b, draft } = await fixture(),
+    registry = createInstrumentRegistry({ capacity: 1 });
+  expect(
+    registry.put(
+      {
+        instrument: {
+          ...instrument,
+          id: draft.order.instrumentId,
+          exchangeSymbol: draft.order.instrumentId,
+        },
+        rules: {
+          ...rules,
+          instrumentId: draft.order.instrumentId,
+          effectiveAt: Date.now() - 1000,
+          expiresAt: Date.now() + 60000,
+        },
+      },
+      Date.now(),
+    ).ok,
+  ).toBe(true);
+  let calls = 0;
+  const account = {
+    tenantId: b.tenantId,
+    connectionId: b.connectionId,
+    externalAccountId: b.externalAccountId,
+  };
+  const adapter = createExchangeAdapter({
+    profile: b.profile,
+    account,
+    adapterVersion: 'v1',
+    registry,
+    capabilities: capabilities.map((c) => ({
+      ...c,
+      checkedAt: Date.now() - 1000,
+      expiresAt: Date.now() + 60000,
+    })),
+    authorization: { authorize: (...args) => store.authorize(...args) },
+    transport: {
+      request: () => {
+        calls++;
+        return Promise.reject(new Error('Transport must not run'));
+      },
+      subscribe: () => Promise.reject(new Error('No stream expected')),
+      disconnect: () => Promise.resolve(),
+    },
+    now: Date.now,
+  });
+  const engine = createOrderEngine({
+    binding: b,
+    registry,
+    adapter,
+    now: Date.now,
+    authorization: { check: () => Promise.resolve(true) },
+    risk: { approve: ({ state }) => grant(state) },
+    fills: { ingest: () => Promise.reject(new Error('No fill expected')) },
+    store: {
+      ...store,
+      async begin(...args) {
+        const claim = await store.begin(...args);
+        const p = await admin.connect();
+        try {
+          await p.query('BEGIN');
+          await p.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+          await p.query('SELECT ctp_risk.update_tenant($1::jsonb)', [
+            JSON.stringify({
+              scope: { kind: 'USER', tenantId: b.tenantId, targetId: b.tenantId },
+              kind: 'KILL_SWITCH',
+              key: 'kill',
+              state: 'PAUSED',
+              eventId: randomUUID(),
+              expectedEpoch: '0',
+              reason: 'TEST_PAUSE_AFTER_CLAIM',
+              evidenceHash: 'a'.repeat(64),
+            }),
+          ]);
+          await p.query('COMMIT');
+        } finally {
+          await p.query('ROLLBACK').catch(() => {});
+          p.release();
+        }
+        return claim;
+      },
+    },
+  });
+  try {
+    const s = await engine.create(draft);
+    const result = await engine.submit(s.id);
+    expect(result.status).toBe('REJECTED');
+    expect(result.reconciliation).toBe('CONSISTENT');
+    expect(calls).toBe(0);
+    expect(
+      (
+        await admin.query(
+          'SELECT "permitConsumedAt","transportStartedAt","responseCode" FROM submission_attempt WHERE "intentId"=$1',
+          [s.intentId],
+        )
+      ).rows,
+    ).toEqual([{ permitConsumedAt: null, transportStartedAt: null, responseCode: 'NOT_SENT' }]);
+    expect(
+      (await admin.query('SELECT status FROM risk_reservation WHERE "intentId"=$1', [s.intentId]))
+        .rows,
+    ).toEqual([{ status: 'ACTIVE' }]);
+  } finally {
+    await engine.close();
+    await adapter.disconnect();
+  }
+});
+it.each(['COLUMN', 'TRIGGER'] as const)(
+  'execution startup rejects extra permit %s authority',
+  async (kind) => {
+    const role = 'ctp_permit_probe_' + randomUUID().replaceAll('-', ''),
+      url = new URL(required('DATABASE_EXECUTION_URL'));
+    url.username = role;
+    url.password = randomUUID();
+    const extra =
+      kind === 'COLUMN'
+        ? 'UPDATE("permitProtocolVersion") ON public.submission_attempt'
+        : 'EXECUTE ON FUNCTION ctp_execution.deferred_permit_insert()';
+    await admin.query(
+      `CREATE ROLE "${role}" LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${url.password}'; GRANT ctp_execution TO "${role}"; GRANT ${extra} TO "${role}"`,
+    );
+    try {
+      await expect(
+        createPostgresOrderStore({ connectionString: url.href, environment: 'test' }),
+      ).rejects.toThrow('ORDER_DATABASE_ROLE_UNSAFE');
+    } finally {
+      await admin.query(
+        `REVOKE ${extra} FROM "${role}"; REVOKE ctp_execution FROM "${role}"; DROP ROLE "${role}"`,
+      );
     }
   },
 );
@@ -667,6 +898,24 @@ it('consumes an exact adapter permit once and rechecks permission before transpo
     store.authorize('createOrder', input, context),
   ]);
   expect(results.filter(Boolean)).toHaveLength(1);
+  const timestamps = (
+    await admin.query<{ consumed: Date; started: Date }>(
+      'SELECT "permitConsumedAt" AS consumed,"transportStartedAt" AS started FROM submission_attempt WHERE id=$1',
+      [c.attemptId],
+    )
+  ).rows[0]!;
+  expect(timestamps.consumed).toEqual(timestamps.started);
+  expect(timestamps.consumed).toBeInstanceOf(Date);
+  for (const update of [
+    '"permitConsumedAt"=NULL,"transportStartedAt"=NULL',
+    '"permitConsumedAt"=clock_timestamp(),"transportStartedAt"=clock_timestamp()',
+    '"permitProtocolVersion"=1',
+    "\"commandHash\"=decode(repeat('00',32),'hex')",
+  ]) {
+    await expect(
+      admin.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
+    ).rejects.toMatchObject({ code: '23514' });
+  }
   const delayed = await fixture(),
     delayedState = await store.create(delayed.b, delayed.draft, io()),
     delayedGrant = await grant(delayedState),
@@ -713,12 +962,12 @@ it('consumes an exact adapter permit once and rechecks permission before transpo
     ).toBe(false);
     expect(
       (
-        await admin.query<{ started: Date | null }>(
-          'SELECT "transportStartedAt" AS started FROM submission_attempt WHERE id=$1',
+        await admin.query<{ started: Date | null; consumed: Date | null }>(
+          'SELECT "transportStartedAt" AS started,"permitConsumedAt" AS consumed FROM submission_attempt WHERE id=$1',
           [delayedClaim.attemptId],
         )
-      ).rows[0]?.started,
-    ).toBeNull();
+      ).rows[0],
+    ).toEqual({ started: null, consumed: null });
   } finally {
     await admin.query(
       'DROP TRIGGER execution_test_permit_delay ON submission_attempt; DROP FUNCTION ctp_execution.test_permit_delay()',
