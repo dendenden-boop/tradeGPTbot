@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createAuthDatabase } from '@ctp/database';
-import { createPostgresPortfolioStore, type PortfolioStore } from '@ctp/portfolio';
+import { createAuthDatabase, createDatabase } from '@ctp/database';
+import {
+  canonical,
+  createState,
+  createPostgresPortfolioStore,
+  type PortfolioStore,
+} from '@ctp/portfolio';
 import { binding, snapshot } from '../../portfolio/test/fixtures.js';
 
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
@@ -35,7 +40,13 @@ afterAll(async () => {
   await admin.end();
 });
 
-it('keeps same-mode account inventory complete until the certified source transaction settles', async () => {
+it.each([
+  'ACCOUNT_INSERT',
+  'ACCOUNT_MODE',
+  'CONNECTION_INSERT',
+  'CONNECTION_UPDATE',
+  'BOOK_INSERT',
+] as const)('freezes %s until the certified source transaction settles', async (change) => {
   const b = {
     ...binding(),
     tenantId: randomUUID(),
@@ -62,6 +73,12 @@ it('keeps same-mode account inventory complete until the certified source transa
     signal: new AbortController().signal,
     deadline: Date.now() + 2500,
   });
+  const peer = randomUUID();
+  await admin.query(
+    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt")
+    VALUES($1,$2,'BINANCE','DEMO',$1::uuid::text,'global','SPOT','DISABLED','peer',now())`,
+    [peer, b.tenantId],
+  );
   const reader = await source.connect(),
     writer = await admin.connect();
   let pending: Promise<unknown> | undefined,
@@ -85,15 +102,37 @@ it('keeps same-mode account inventory complete until the certified source transa
       .pid;
     const wpid = (await writer.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!
       .pid;
-    pending = writer
-      .query(
-        `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt")
+    const mutations = {
+      ACCOUNT_INSERT: {
+        sql: `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt")
       VALUES($1,$2,'BINANCE','TESTNET',$1::uuid::text,'global','SPOT','DISABLED','peer',now())`,
-        [randomUUID(), b.tenantId],
-      )
-      .finally(() => {
-        finished = true;
-      });
+        values: [randomUUID(), b.tenantId],
+      },
+      ACCOUNT_MODE: {
+        sql: "UPDATE public.exchange_account SET mode='TESTNET' WHERE id=$1",
+        values: [peer],
+      },
+      CONNECTION_INSERT: {
+        sql: `INSERT INTO public.exchange_connection(id,"tenantId","accountId",mode,label,status,permissions,"updatedAt") VALUES($1,$2,$3,'TESTNET','peer','DISABLED','{}',now())`,
+        values: [randomUUID(), b.tenantId, b.accountId],
+      },
+      CONNECTION_UPDATE: {
+        sql: 'UPDATE public.exchange_connection SET "permissionsVersion"="permissionsVersion"+1 WHERE id=$1',
+        values: [b.connectionId],
+      },
+      BOOK_INSERT: {
+        sql: 'INSERT INTO ctp_portfolio.book("tenantId","accountId",mode,wallet,state,state_hash) VALUES($1,$2,\'TESTNET\',$3,$4,sha256(convert_to($4,\'UTF8\')))',
+        values: [
+          b.tenantId,
+          b.accountId,
+          'peer-wallet',
+          canonical(createState({ ...b, walletId: 'peer-wallet' })),
+        ],
+      },
+    };
+    pending = writer.query(mutations[change].sql, mutations[change].values).finally(() => {
+      finished = true;
+    });
     void pending.catch(() => {});
     let blockers: number[] = [];
     const deadline = Date.now() + 500;
@@ -115,6 +154,32 @@ it('keeps same-mode account inventory complete until the certified source transa
     writer.release();
   }
 });
+
+it.each(['UPDATE(state)', 'TRIGGER', 'REFERENCES(state)'])(
+  'API refuses %s on its private read table',
+  async (privilege) => {
+    const options = {
+      connectionString: required('DATABASE_RUNTIME_URL'),
+      environment: 'test' as const,
+    };
+    const baseline = await createDatabase(options);
+    await baseline.close();
+    await admin.query(`GRANT ${privilege} ON ctp_portfolio.book TO ctp_api`);
+    try {
+      let accepted = false;
+      try {
+        const db = await createDatabase(options);
+        accepted = true;
+        await db.close();
+      } catch {
+        /* Baseline is mandatory. */
+      }
+      expect(accepted).toBe(false);
+    } finally {
+      await admin.query(`REVOKE ${privilege} ON ctp_portfolio.book FROM ctp_api`);
+    }
+  },
+);
 
 it.each([
   [
