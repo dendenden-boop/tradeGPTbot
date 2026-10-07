@@ -1,15 +1,15 @@
-name: Native order lock reproduction
+name: Native order lock verification
 on:
   push:
-    branches: [codex/phase12-order-lock-red]
+    branches: [codex/phase12-order-lock-green]
 permissions:
   contents: read
 concurrency:
-  group: native-order-lock-red
+  group: native-order-lock-green
   cancel-in-progress: true
 jobs:
   reproduce:
-    name: Native PostgreSQL RED reproduction
+    name: Native PostgreSQL GREEN verification
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -29,8 +29,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-order-lock-red
+          name: native-order-lock-green
           path: test-results/
           if-no-files-found: error
           retention-days: 7
+
 
