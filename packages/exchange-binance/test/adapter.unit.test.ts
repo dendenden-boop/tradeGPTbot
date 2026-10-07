@@ -3,6 +3,8 @@ import {
   createInstrumentRegistry,
   capabilityRecordSchema,
   featureSchema,
+  computeCommandHash,
+  operations,
   type RequestContext,
 } from '@ctp/exchange-core';
 import { createBinanceAdapterWithIo } from '../src/adapter.js';
@@ -10,6 +12,7 @@ import type { BinanceAdapterOptions } from '../src/ports.js';
 import type { NetworkIo } from '../src/io.js';
 import { adapterProfile, getBinanceProfile } from '../src/profiles.js';
 import { NOW, exchangeInfo, spotSymbol, ticker } from './fixtures/public-data.js';
+import { ACCOUNT, INTENT_ID, INTERNAL_ORDER_ID, newOrder } from './fixtures/private-data.js';
 
 function options(): BinanceAdapterOptions {
   const profileId = 'binance-spot-testnet-v1';
@@ -58,6 +61,71 @@ function fixture(input: BinanceAdapterOptions = options()) {
   return { adapter, io, close, queue, requests, context, controller };
 }
 describe('Binance server composition and Exchange Core agreement', () => {
+  it('keeps native AMEND unavailable in production assembly until durable Engine/Risk acceptance', async () => {
+    const authorize = vi.fn(() => Promise.resolve(true)),
+      sandbox = vi.fn(() => Promise.resolve(true));
+    const configured = options();
+    const h = fixture({
+      ...configured,
+      capabilities: configured.capabilities.map((c) => ({
+        ...c,
+        profile: { ...c.profile, credentialRef: 'fixture-vault' },
+      })),
+      connection: { resolve: () => ({ account: ACCOUNT, credentialRef: 'fixture-vault' }) },
+      credentials: {
+        resolve: () =>
+          Promise.resolve({
+            profileId: 'binance-spot-testnet-v1',
+            account: ACCOUNT,
+            apiKey: 'fixture',
+            secret: 'fixture',
+          }),
+      },
+      authorization: { authorize },
+      sandboxAcceptance: { authorize: sandbox },
+    });
+    const command = operations.amendOrder.input.shape.command.parse({
+      semantics: 'IN_PLACE',
+      identity: { exchangeOrderId: 'PRESERVED', clientOrderId: 'REPLACED' },
+      locator: { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: '9' } },
+      target: {
+        internalOrderId: INTERNAL_ORDER_ID,
+        placeIntentId: INTENT_ID,
+        revision: '1',
+        observedAt: NOW,
+        nativeUpdatedAt: NOW,
+        current: newOrder(),
+        filledQuantity: '0.025',
+      },
+      replacement: {
+        ...newOrder(),
+        clientOrderId: 'fixture-amend-1',
+        size: { kind: 'BASE_QUANTITY', value: '0.075', asset: 'BTC' },
+      },
+    });
+    const input = {
+      command,
+      authorization: {
+        commandId: INTENT_ID,
+        dispatchAttemptId: INTERNAL_ORDER_ID,
+        profile: h.adapter.profile,
+        account: ACCOUNT,
+        issuedAt: NOW,
+        expiresAt: NOW + 1000,
+        commandHash: computeCommandHash('amendOrder', command, {
+          profile: h.adapter.profile,
+          account: ACCOUNT,
+        }),
+      },
+    };
+    expect(await h.adapter.amendOrder(input, h.context)).toMatchObject({
+      kind: 'DEFINITIVELY_REJECTED',
+      error: { code: 'UNSUPPORTED' },
+    });
+    expect(h.requests).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(sandbox).not.toHaveBeenCalled();
+  });
   it('intersects supplied capability evidence with implemented protocol support', () => {
     const h = fixture();
     for (const feature of [

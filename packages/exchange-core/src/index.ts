@@ -4,6 +4,7 @@ export * from './domain.js';
 export * from './errors.js';
 export * from './registry.js';
 export * from './operations.js';
+export * from './amendment.js';
 export * from './subscription.js';
 export * from './time.js';
 export * from './adapter.js';

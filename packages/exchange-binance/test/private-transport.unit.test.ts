@@ -30,6 +30,7 @@ function harness(
   futures = false,
   responses: FixtureResponse[] = [],
   clock: () => number = () => NOW,
+  amend = false,
 ) {
   const endpoint = getBinanceProfile(
     futures ? 'binance-usdm-testnet-v1' : 'binance-spot-testnet-v1',
@@ -85,7 +86,10 @@ function harness(
     signer,
     client,
     record: () => privateRecord(futures),
-    admission: () => normalizeBinanceAdmission(futures ? futuresSymbol() : spotSymbol()),
+    admission: () =>
+      normalizeBinanceAdmission(
+        futures ? futuresSymbol() : { ...spotSymbol(), amendAllowed: amend },
+      ),
     identities,
     orderAdmission,
     now: clock,
@@ -99,7 +103,10 @@ function harness(
     deadline: NOW + 1000,
     correlationId: 'fixture',
   };
-  function authorized(operation: 'createOrder' | 'cancelOrder' | 'setLeverage', command: unknown) {
+  function authorized(
+    operation: 'createOrder' | 'cancelOrder' | 'setLeverage' | 'amendOrder',
+    command: unknown,
+  ) {
     return {
       command,
       authorization: {
@@ -132,6 +139,347 @@ function harness(
 }
 const page = { instrumentId: 'BTCUSDT', limit: 2, cursor: null, queryId: 'q1' };
 const history = { ...page, from: NOW - 1000, to: NOW };
+
+function amendCommand() {
+  return {
+    semantics: 'IN_PLACE',
+    identity: { exchangeOrderId: 'PRESERVED', clientOrderId: 'REPLACED' },
+    locator: { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: order().orderId } },
+    target: {
+      internalOrderId: INTERNAL_ORDER_ID,
+      placeIntentId: INTENT_ID,
+      revision: '9007199254740993',
+      observedAt: NOW,
+      nativeUpdatedAt: NOW - 10,
+      current: newOrder(),
+      filledQuantity: '0.025',
+    },
+    replacement: {
+      ...newOrder(),
+      clientOrderId: 'fixture-amend-1',
+      size: { kind: 'BASE_QUANTITY', value: '0.075', asset: 'BTC' },
+    },
+  };
+}
+function amendTarget() {
+  return { ...order(), orderListId: '-1', icebergQty: '0', origQuoteOrderQty: '0', usedSor: false };
+}
+function amendAck() {
+  return {
+    transactTime: String(NOW),
+    executionId: '9007199254740993',
+    amendedOrder: {
+      symbol: 'BTCUSDT',
+      orderId: order().orderId,
+      orderListId: '-1',
+      origClientOrderId: 'fixture-order-1',
+      clientOrderId: 'fixture-amend-1',
+      price: '100',
+      qty: '0.075',
+      executedQty: '0.025',
+      preventedQty: '0',
+      quoteOrderQty: '0',
+      status: 'PARTIALLY_FILLED',
+      type: 'LIMIT',
+      timeInForce: 'GTC',
+      side: 'BUY',
+    },
+  };
+}
+
+describe('Binance explicit native in-place AMEND transport', () => {
+  it('preflights standalone native identity and sends a single signed cumulative reduction', async () => {
+    const h = harness(false, [{ data: amendTarget() }, { data: amendAck() }], () => NOW, true);
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({
+      kind: 'ACCEPTED',
+      ack: { status: 'ACKNOWLEDGED', exchangeId: order().orderId },
+    });
+    expect(h.calls.map((r) => [r.method, r.url.pathname])).toEqual([
+      ['GET', '/api/v3/order'],
+      ['PUT', '/api/v3/order/amend/keepPriority'],
+    ]);
+    expect(h.calls[1]!.url.searchParams.get('newQty')).toBe('0.075');
+    expect(h.calls[1]!.url.searchParams.get('newClientOrderId')).toBe('fixture-amend-1');
+    expect(h.calls[1]!.url.searchParams.get('orderId')).toBe(order().orderId);
+    expect(h.calls[1]!.url.searchParams.has('signature')).toBe(true);
+  });
+  it('denies missing native amend eligibility before private I/O', async () => {
+    const h = harness();
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'UNSUPPORTED' } });
+    expect(h.calls).toHaveLength(0);
+  });
+  it.each([
+    ['list coupling', { orderListId: '1' }],
+    ['missing standalone proof', { orderListId: undefined }],
+    ['iceberg', { icebergQty: '0.01' }],
+    ['SOR', { usedSor: true }],
+    ['trailing constraint', { trailingDelta: '10' }],
+    ['native ID replacement', { orderId: '9' }],
+    ['client identity replacement', { clientOrderId: 'another-order' }],
+    ['partial fill before preflight', { executedQty: '0.026' }],
+    ['changed native revision', { updateTime: String(NOW - 1) }],
+    ['changed price', { price: '101' }],
+    ['changed total quantity', { origQty: '0.09' }],
+    ['terminal native order', { status: 'FILLED' }],
+  ])('blocks %s before mutation dispatch', async (_name, change) => {
+    const h = harness(
+      false,
+      [{ data: { ...amendTarget(), ...(change as object) } }],
+      () => NOW,
+      true,
+    );
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED' });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET']);
+  });
+  it.each([
+    ['racing fill', { executedQty: '0.026' }],
+    ['native ID replaced', { orderId: '9' }],
+    ['unrelated request ID', { clientOrderId: 'another-amend' }],
+    ['partial quantity outcome', { qty: '0.074' }],
+    ['order list', { orderListId: '1' }],
+    ['terminal race', { status: 'FILLED' }],
+  ])('keeps %s UNKNOWN after dispatch without retry', async (_name, change) => {
+    const ack = amendAck();
+    const h = harness(
+      false,
+      [
+        { data: amendTarget() },
+        { data: { ...ack, amendedOrder: { ...ack.amendedOrder, ...(change as object) } } },
+      ],
+      () => NOW,
+      true,
+    );
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'UNKNOWN' });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET', 'PUT']);
+  });
+  it.each([
+    { status: 503, data: {} },
+    { status: 400, data: { code: '-1007' } },
+    { status: 400, data: { code: '-2010' } },
+    { failure: new Error('socket lost') },
+  ])('never retries an ambiguous native mutation outcome %#', async (response) => {
+    const h = harness(false, [{ data: amendTarget() }, response], () => NOW, true);
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'UNKNOWN' });
+    expect(h.calls).toHaveLength(2);
+  });
+  it('returns a known native parameter rejection without cancel/create fallback', async () => {
+    const h = harness(
+      false,
+      [{ data: amendTarget() }, { status: 400, data: { code: '-1013' } }],
+      () => NOW,
+      true,
+    );
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'INVALID_REQUEST' } });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET', 'PUT']);
+  });
+  it('rechecks admission after async order admission before sending a mutation', async () => {
+    const h = harness(false, [{ data: amendTarget() }], () => NOW, true);
+    let eligible = true;
+    const transport = createPrivateTransport({
+      ...h.options,
+      admission: () => normalizeBinanceAdmission({ ...spotSymbol(), amendAllowed: eligible }),
+    });
+    h.orderAdmission.validate.mockImplementationOnce(() => {
+      eligible = false;
+      return Promise.resolve(true);
+    });
+    expect(
+      await transport.request('amendOrder', h.authorized('amendOrder', amendCommand()), h.context),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'STALE_METADATA' } });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET']);
+  });
+  it('rechecks AMEND authorization expiry after async admission immediately before PUT', async () => {
+    let clock = NOW;
+    const h = harness(false, [{ data: amendTarget() }, { data: amendAck() }], () => clock, true);
+    h.orderAdmission.validate.mockImplementationOnce(() => {
+      clock = NOW + 1001;
+      return Promise.resolve(true);
+    });
+    expect(
+      await h.transport.request('amendOrder', h.authorized('amendOrder', amendCommand()), {
+        ...h.context,
+        deadline: NOW + 5000,
+      }),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET']);
+  });
+  it.each(['createOrder', 'cancelOrder'] as const)(
+    'rechecks existing %s permit after delayed rate/signing before native dispatch',
+    async (operation) => {
+      let clock = NOW;
+      const h = harness(false, [], () => clock);
+      h.limiter.reserve.mockImplementationOnce(() => {
+        clock = NOW + 1001;
+        return Promise.resolve(true);
+      });
+      const command =
+        operation === 'createOrder'
+          ? newOrder()
+          : { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: order().orderId } };
+      expect(
+        await h.transport.request(operation, h.authorized(operation, command), {
+          ...h.context,
+          deadline: NOW + 5000,
+        }),
+      ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+      expect(h.calls).toHaveLength(0);
+    },
+  );
+  it('denies absent dynamic admission rather than inventing filter budgets', async () => {
+    const h = harness(false, [], () => NOW, true);
+    const { orderAdmission: _unused, ...options } = h.options;
+    void _unused;
+    const t = createPrivateTransport(options);
+    expect(
+      await t.request('amendOrder', h.authorized('amendOrder', amendCommand()), h.context),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+    expect(h.calls).toHaveLength(0);
+  });
+  it('does not invoke transport for a corrupted authorization hash', async () => {
+    const h = harness(false, [], () => NOW, true),
+      input = h.authorized('amendOrder', amendCommand());
+    input.authorization.commandHash = '0'.repeat(64);
+    expect(await h.transport.request('amendOrder', input, h.context)).toMatchObject({
+      kind: 'DEFINITIVELY_REJECTED',
+      error: { code: 'AUTHORIZATION_REQUIRED' },
+    });
+    expect(h.calls).toHaveLength(0);
+  });
+  it('rejects a target outside the trusted internal order/PLACE identity mapping', async () => {
+    const h = harness(false, [], () => NOW, true);
+    h.identities.order.mockReturnValueOnce({
+      internalOrderId: '10000000-0000-4000-8000-000000000099',
+      intentId: INTENT_ID,
+    });
+    expect(
+      await h.transport.request(
+        'amendOrder',
+        h.authorized('amendOrder', amendCommand()),
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+    expect(h.calls).toHaveLength(0);
+  });
+  it('bounds hung dynamic AMEND admission on abort and never sends a late mutation', async () => {
+    const h = harness(false, [{ data: amendTarget() }], () => NOW, true);
+    const controller = new AbortController();
+    let ready!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    h.orderAdmission.validate.mockImplementationOnce(() => {
+      ready();
+      return new Promise<boolean>(() => {});
+    });
+    const result = h.transport.request('amendOrder', h.authorized('amendOrder', amendCommand()), {
+      ...h.context,
+      signal: controller.signal,
+    });
+    await entered;
+    controller.abort();
+    expect(await result).toMatchObject({
+      kind: 'DEFINITIVELY_REJECTED',
+      error: { code: 'ABORTED' },
+    });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET']);
+  });
+  it('bounds hung dynamic AMEND admission on deadline without dispatch', async () => {
+    const h = harness(false, [{ data: amendTarget() }], () => NOW, true);
+    h.orderAdmission.validate.mockImplementationOnce(() => new Promise<boolean>(() => {}));
+    expect(
+      await h.transport.request('amendOrder', h.authorized('amendOrder', amendCommand()), {
+        ...h.context,
+        deadline: NOW + 30,
+      }),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'DEADLINE_EXCEEDED' } });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET']);
+  });
+  it('does not dispatch a native AMEND on LIVE or derivatives profiles', async () => {
+    for (const id of ['binance-spot-live-v1', 'binance-usdm-testnet-v1'] as const) {
+      const h = harness(false, [], () => NOW, true),
+        endpoint = getBinanceProfile(id);
+      const binding = { ...h.options.binding, profileId: id };
+      const transport = createPrivateTransport({ ...h.options, endpoint, binding });
+      const context = { ...h.context, profile: adapterProfile(endpoint, binding.credentialRef) };
+      expect(
+        await transport.request('amendOrder', h.authorized('amendOrder', amendCommand()), context),
+      ).toMatchObject({
+        kind: 'DEFINITIVELY_REJECTED',
+        error: { code: id.includes('live') ? 'LIVE_DISABLED' : 'UNSUPPORTED' },
+      });
+      expect(h.calls).toHaveLength(0);
+    }
+  });
+  it('queries native causal amendment history after restart without resending mutation', async () => {
+    const rows = [
+      {
+        symbol: 'BTCUSDT',
+        orderId: order().orderId,
+        executionId: '9007199254740993',
+        origClientOrderId: 'fixture-order-1',
+        newClientOrderId: 'fixture-amend-1',
+        origQty: '0.1',
+        newQty: '0.075',
+        time: String(NOW),
+      },
+    ];
+    const h = harness(false, [{ data: rows }], () => NOW, true);
+    const restarted = createPrivateTransport(h.options);
+    const proof = await restarted.reconcileAmendment(amendCommand(), h.context);
+    expect(proof).toMatchObject({
+      kind: 'APPLIED_EVIDENCE',
+      evidence: { executionId: '9007199254740993', newQuantity: '0.075' },
+    });
+    expect(h.calls.map((r) => [r.method, r.url.pathname])).toEqual([
+      ['GET', '/api/v3/order/amendments'],
+    ]);
+    expect(proof).not.toHaveProperty('finalOutcome');
+  });
+  it('never interprets missing database amendment history as definitive rejection', async () => {
+    const h = harness(false, [{ data: [] }], () => NOW, true);
+    expect(await h.transport.reconcileAmendment(amendCommand(), h.context)).toEqual({
+      kind: 'INDETERMINATE',
+      reason: 'NO_CAUSAL_EVIDENCE',
+    });
+    expect(h.calls).toHaveLength(1);
+  });
+});
 
 describe('Binance signed private reads', () => {
   it('refreshBalances requires every changed futures asset to be present and current', async () => {
@@ -580,8 +928,10 @@ describe('mutation dispatch and UNKNOWN contract', () => {
       time += 6000;
       return Promise.resolve(true);
     });
+    const input = h.authorized('createOrder', newOrder());
+    input.authorization.expiresAt = NOW + 10_000;
     expect(
-      await h.transport.request('createOrder', h.authorized('createOrder', newOrder()), {
+      await h.transport.request('createOrder', input, {
         ...h.context,
         deadline: NOW + 20_000,
       }),

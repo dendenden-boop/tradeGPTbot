@@ -20,6 +20,7 @@ import {
 import { accountScopeSchema, adapterProfileSchema, idSchema, timestampSchema } from './scope.js';
 import { exchangeErrorSchema } from './errors.js';
 import type { Feature } from './scope.js';
+import { inPlaceAmendmentSchema } from './amendment.js';
 
 export const cursorSchema = z
   .string()
@@ -197,10 +198,7 @@ export const operations = Object.freeze({
     feature: 'CANCEL_ALL_ORDERS' as const,
     privateOperation: true,
   },
-  amendOrder: mutation(
-    authorized(z.strictObject({ locator: locatorQuery, replacement: newOrderSchema })),
-    'AMEND_ORDER',
-  ),
+  amendOrder: mutation(authorized(inPlaceAmendmentSchema), 'AMEND_ORDER'),
   setLeverage: mutation(
     authorized(z.strictObject({ instrumentId: idSchema, leverage: positiveAmountSchema })),
     'SET_LEVERAGE',

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   accountScopeSchema,
+  computeCommandHash,
   assetSchema,
   errorCodeSchema,
   immutable,
@@ -18,6 +19,7 @@ import type {
   MutationOperation,
   MutationOutcome,
   NewOrder,
+  InPlaceAmendment,
   ReadOperation,
   RequestContext,
 } from '@ctp/exchange-core';
@@ -39,6 +41,13 @@ import {
   serializeOrderLocator,
 } from './private-data.js';
 import { wireArray, wireId, wireInteger, wireObject } from './wire.js';
+import {
+  validateBinanceAmendment,
+  checkBinanceAmendmentTarget,
+  serializeBinanceAmendment,
+  checkBinanceAmendmentAck,
+  reconcileBinanceAmendmentHistory,
+} from './amendment.js';
 
 export interface BinancePrivateTransportOptions {
   readonly endpoint: BinanceEndpointProfile;
@@ -468,13 +477,20 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
       const parsed = operations[operation].input.safeParse(raw);
       if (!parsed.success) return rejected('INVALID_REQUEST');
       const input = immutable(parsed.data);
-      if (!['createOrder', 'cancelOrder', 'setLeverage'].includes(operation))
+      if (!['createOrder', 'cancelOrder', 'setLeverage', 'amendOrder'].includes(operation))
+        return rejected('UNSUPPORTED');
+      if (operation === 'amendOrder' && endpoint.id !== 'binance-spot-testnet-v1')
         return rejected('UNSUPPORTED');
       const command = wireObject(input.command);
-      const value = metadata(command.instrumentId),
+      const value = metadata(
+          operation === 'amendOrder'
+            ? wireObject(command.replacement).instrumentId
+            : command.instrumentId,
+        ),
         symbol = value.instrument.exchangeSymbol;
       let spec: RestSpec;
       let validatedOrder: NewOrder | null = null;
+      let validatedAmendment: InPlaceAmendment | null = null;
       let admissionFingerprint: string | null = null;
       if (operation === 'createOrder') {
         const order = operations.createOrder.input.parse(input).command;
@@ -505,6 +521,69 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
         if (admitted !== true) return rejected('AUTHORIZATION_REQUIRED');
         if (!spot) await accountInfo(context);
         spec = { ...serialized, method: 'POST', symbol };
+      } else if (operation === 'amendOrder') {
+        const amendment = validateBinanceAmendment(
+          command,
+          value,
+          admission(value.instrument.id),
+          endpoint,
+          now(),
+        );
+        validatedAmendment = amendment;
+        admissionFingerprint = JSON.stringify(admission(value.instrument.id));
+        const permit = input.authorization;
+        if (
+          permit.issuedAt > now() ||
+          permit.expiresAt <= now() ||
+          JSON.stringify(permit.account) !== JSON.stringify(account) ||
+          JSON.stringify(permit.profile) !== JSON.stringify(context.profile) ||
+          permit.commandHash !==
+            computeCommandHash('amendOrder', amendment, { profile: context.profile, account })
+        )
+          return rejected('AUTHORIZATION_REQUIRED');
+        const identity = requireIdentities().order(
+          account,
+          value.instrument.id,
+          amendment.locator.locator.id,
+          amendment.target.current.clientOrderId,
+        );
+        if (
+          identity.internalOrderId !== amendment.target.internalOrderId ||
+          identity.intentId !== amendment.target.placeIntentId
+        )
+          return rejected('AUTHORIZATION_REQUIRED');
+        if (!orderAdmission) return rejected('AUTHORIZATION_REQUIRED');
+        const native = await signed(
+          {
+            path: '/api/v3/order',
+            weight: 4,
+            symbol,
+            params: { symbol, orderId: amendment.locator.locator.id },
+          },
+          context,
+        );
+        checkBinanceAmendmentTarget(readResponse(native), amendment, symbol);
+        const exchangeAdmission = admission(value.instrument.id);
+        validatedOrder = amendment.replacement;
+        if (JSON.stringify(exchangeAdmission) !== admissionFingerprint)
+          return rejected('STALE_METADATA');
+        if (
+          (await boundedPort(
+            () =>
+              orderAdmission.validate(
+                endpoint.id,
+                account,
+                amendment.replacement,
+                value,
+                exchangeAdmission,
+                context,
+              ),
+            context,
+            now,
+          )) !== true
+        )
+          return rejected('AUTHORIZATION_REQUIRED');
+        spec = serializeBinanceAmendment(amendment, symbol);
       } else if (operation === 'cancelOrder') {
         const query = operations.cancelOrder.input.parse(input).command;
         spec = {
@@ -534,6 +613,8 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
         ...spec,
         onDispatch: () => {
           authority(context);
+          if (input.authorization.issuedAt > now() || input.authorization.expiresAt <= now())
+            throw new BinanceProtocolError('AUTHORIZATION_REQUIRED');
           const current = metadata(value.instrument.id);
           if (current.instrument.exchangeSymbol !== symbol)
             throw new BinanceProtocolError('SCOPE_MISMATCH');
@@ -550,6 +631,14 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
               throw new BinanceProtocolError('UNSUPPORTED');
             if (JSON.stringify(currentAdmission) !== admissionFingerprint)
               throw new BinanceProtocolError('STALE_METADATA');
+            if (validatedAmendment !== null)
+              validateBinanceAmendment(
+                validatedAmendment,
+                current,
+                currentAdmission,
+                endpoint,
+                now(),
+              );
           }
           assertActive(context, now);
           dispatched = true;
@@ -573,6 +662,19 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
         return unknown();
       }
       const data = wireObject(response.data);
+      if (operation === 'amendOrder') {
+        const c = operations.amendOrder.input.parse(input).command;
+        const proof = checkBinanceAmendmentAck(data, c, symbol, response.receivedAt);
+        return immutable({
+          kind: 'ACCEPTED',
+          ack: {
+            commandId: input.authorization.commandId,
+            status: 'ACKNOWLEDGED',
+            exchangeId: proof.exchangeOrderId,
+            receivedAt: response.receivedAt,
+          },
+        });
+      }
       if (data.symbol !== symbol) return unknown('INVALID_RESPONSE');
       let exchangeId: string | null;
       if (operation === 'setLeverage') {
@@ -609,6 +711,37 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
   }
 
   return Object.freeze({
+    /** Internal native history port. Missing history never proves a definitive no-effect outcome. */
+    async reconcileAmendment(raw: unknown, context: RequestContext) {
+      try {
+        authority(context);
+        const candidate = wireObject(raw);
+        const value = metadata(wireObject(candidate.replacement).instrumentId);
+        // Recovery does not require an old request's rules/observation to remain current.
+        // Schema and profile still restrict native identity; native history proves causality.
+        const c = operations.amendOrder.input.shape.command.parse(raw);
+        if (endpoint.id !== 'binance-spot-testnet-v1')
+          throw new BinanceProtocolError('UNSUPPORTED');
+        const symbol = value.instrument.exchangeSymbol;
+        const response = await signed(
+          {
+            path: '/api/v3/order/amendments',
+            weight: 4,
+            symbol,
+            params: { symbol, orderId: c.locator.locator.id, limit: '1000' },
+          },
+          context,
+        );
+        return reconcileBinanceAmendmentHistory(
+          readResponse(response),
+          c,
+          symbol,
+          response.receivedAt,
+        );
+      } catch (failure) {
+        throw readError(failure);
+      }
+    },
     /** Validate raw per-asset proof before aggregate wallet normalization hides row clocks. */
     async refreshBalances(
       event: Readonly<Record<string, unknown>>,

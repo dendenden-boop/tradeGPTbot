@@ -515,7 +515,11 @@ describe('authorization and capability boundaries', () => {
       const command =
         operation === 'createOrder'
           ? badOrder
-          : { ...operationFixtures.amendOrder.input.command, replacement: badOrder };
+          : {
+              ...operationFixtures.amendOrder.input.command,
+              target: { ...operationFixtures.amendOrder.input.command.target, filledQuantity: '0' },
+              replacement: { ...badOrder, clientOrderId: 'client-amend-bad-rules' },
+            };
       expect(
         await invoke(env.adapter, operation, signed(operation, { ...raw, command }), env.context()),
       ).toEqual(localFailure(operation, 'INVALID_REQUEST'));
@@ -523,6 +527,26 @@ describe('authorization and capability boundaries', () => {
     expect(env.request).not.toHaveBeenCalled();
     expect(env.authorize).not.toHaveBeenCalled();
   });
+  it.each(['STALE', 'FUTURE'] as const)(
+    'blocks %s AMEND target observation before authorization',
+    async (kind) => {
+      const env = setup(),
+        raw = operationFixtures.amendOrder.input;
+      const at = kind === 'STALE' ? NOW - 5001 : NOW + 1;
+      const input = signed('amendOrder', {
+        ...raw,
+        command: {
+          ...raw.command,
+          target: { ...raw.command.target, observedAt: at, nativeUpdatedAt: at - 1 },
+        },
+      });
+      expect(await env.adapter.amendOrder(input, env.context())).toEqual(
+        localFailure('amendOrder', 'STALE_METADATA'),
+      );
+      expect(env.authorize).not.toHaveBeenCalled();
+      expect(env.request).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['30000.03', '1000000.05'])(
     'validates the independent algo trigger against instrument price rules: %s',

@@ -379,7 +379,18 @@ export const operationFixtures: {
     {
       authorization: amendPermit,
       command: {
+        semantics: 'IN_PLACE',
+        identity: { exchangeOrderId: 'PRESERVED', clientOrderId: 'REPLACED' },
         locator: locatorQuery,
+        target: {
+          internalOrderId: order.internalOrderId,
+          placeIntentId: order.intentId,
+          revision: '1',
+          observedAt: NOW,
+          nativeUpdatedAt: order.updatedAt,
+          current: newOrder,
+          filledQuantity: order.filledQuantity,
+        },
         replacement: { ...newOrder, clientOrderId: 'client-amend-1' },
       },
     },

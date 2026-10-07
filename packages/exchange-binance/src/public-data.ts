@@ -39,6 +39,7 @@ export interface BinanceAdmission {
   readonly unsupportedFilters: readonly string[];
   readonly quoteOrderQtyMarketAllowed: boolean;
   readonly icebergAllowed: boolean;
+  readonly amendAllowed: boolean;
   readonly rawOrderTypes: readonly string[];
   readonly rawTimeInForce: readonly string[];
 }
@@ -245,6 +246,7 @@ function admission(raw: ObjectValue): BinanceAdmission {
     quoteOrderQtyMarketAllowed:
       raw.quoteOrderQtyMarketAllowed === undefined ? false : bool(raw.quoteOrderQtyMarketAllowed),
     icebergAllowed: raw.icebergAllowed === undefined ? false : bool(raw.icebergAllowed),
+    amendAllowed: raw.amendAllowed === undefined ? false : bool(raw.amendAllowed),
     rawOrderTypes: strings(raw.orderTypes),
     rawTimeInForce: raw.timeInForce === undefined ? [] : strings(raw.timeInForce),
   });

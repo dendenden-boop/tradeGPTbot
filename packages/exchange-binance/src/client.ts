@@ -106,7 +106,8 @@ export function createRestClient(
       const prefix = endpoint.scope.market === 'SPOT' ? '/api/v3/' : '/fapi/';
       if (
         !spec.path.startsWith(prefix) ||
-        !/^\/(?:api\/v3|fapi\/v[123])\/[A-Za-z]+(?:\/[A-Za-z0-9]+)?$/.test(spec.path)
+        (!/^\/(?:api\/v3|fapi\/v[123])\/[A-Za-z]+(?:\/[A-Za-z0-9]+)?$/.test(spec.path) &&
+          spec.path !== '/api/v3/order/amend/keepPriority')
       )
         throw new BinanceProtocolError('INVALID_REQUEST');
       const admission: BinanceRateRequest = immutable({

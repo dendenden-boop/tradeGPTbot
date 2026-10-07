@@ -97,6 +97,9 @@ describe('Binance REST admission and status contract', () => {
     '/api/v3/order?secret=x',
     'https://example.org/api/v3/order',
     '/fapi/v1/order',
+    '/api/v3/order/amend/other',
+    '/api/v3/order/amend/keepPriority/extra',
+    '/api/v3/order/amend/keepPriority?secret=x',
   ])('rejects route injection %s before rate/HTTP', async (path) => {
     const h = harness();
     await expect(h.client.call({ ...spec, path }, h.context)).rejects.toMatchObject({

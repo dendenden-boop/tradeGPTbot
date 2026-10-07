@@ -364,9 +364,9 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
         return 'INVALID_REQUEST';
     }
     if (operation === 'amendOrder') {
-      const command = object(input.command);
-      if (object(command.locator).instrumentId !== object(command.replacement).instrumentId)
-        return 'SCOPE_MISMATCH';
+      const command = operations.amendOrder.input.parse(input).command;
+      if (command.target.observedAt > current || current - command.target.observedAt > 5000)
+        return 'STALE_METADATA';
     }
     const authorized = entries(operation, input);
     if (
