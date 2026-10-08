@@ -651,7 +651,7 @@ it('native AMEND SQL weighted average agrees with canonical Portfolio half-even 
     expect(native.rows[0]!.value).toBe(ratio(amount, '1', quantity));
   }
 });
-it.each(['NULL_TIME', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
+it.each(['NULL_TIME', 'NUMERIC_ID', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
   'direct execution SQL cannot bypass AMEND %s application authority',
   async (kind) => {
     const f = await dispatchedAmendment(),
@@ -670,10 +670,11 @@ it.each(['NULL_TIME', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
         ).rejects.toMatchObject({ code: '42501' });
       else {
         const proof = structuredClone(f.proof) as unknown as {
-          evidence: { evidence: { time: unknown } };
+          evidence: { evidence: { time: unknown; executionId: unknown } };
           order: { account: { externalAccountId: string } };
         };
         if (kind === 'NULL_TIME') proof.evidence.evidence.time = null;
+        else if (kind === 'NUMERIC_ID') proof.evidence.evidence.executionId = 1;
         else proof.order.account.externalAccountId = 'foreign';
         await expect(
           client.query('SELECT ctp_execution.apply_amendment($1::jsonb)', [
