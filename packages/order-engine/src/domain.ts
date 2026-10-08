@@ -7,6 +7,7 @@ import {
   newOrderSchema,
   orderSchema,
   mutationOutcomeSchema,
+  amendmentEvidenceSchema,
   nonNegativeAmountSchema,
   positiveAmountSchema,
   decimalCompare,
@@ -67,6 +68,11 @@ export const nativeAmendTargetSchema = z.strictObject({
   receivedAt: timestampSchema,
 });
 export type NativeAmendTarget = z.infer<typeof nativeAmendTargetSchema>;
+export const amendmentResolutionSchema = z.strictObject({
+  evidence: amendmentEvidenceSchema,
+  order: orderSchema,
+  nativeReceivedAt: timestampSchema,
+});
 export interface StoredAmendment {
   state: OrderState;
   intentId: string;
@@ -233,6 +239,14 @@ export interface OrderStore {
     binding: OrderBinding,
     claim: DispatchClaim,
     outcome: unknown,
+    context: IoContext,
+  ): Promise<OrderState>;
+  /** Correlated history and current native evidence; ACK/absence never authorizes resolution. */
+  resolveAmendment(
+    binding: OrderBinding,
+    id: string,
+    attemptId: string,
+    proof: unknown,
     context: IoContext,
   ): Promise<OrderState>;
   observe(

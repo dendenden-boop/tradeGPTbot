@@ -32,6 +32,9 @@ export function memoryStore(currentRule = () => 'v1') {
     return structuredClone(s);
   };
   const store: OrderStore = {
+    async resolveAmendment() {
+      throw new Error('ORDER_AMEND_APPLICATION_UNPROVED');
+    },
     async findCreate(b, d) {
       const k = keys.get(`${b.tenantId}:${d.key}`);
       if (!k) return null;
