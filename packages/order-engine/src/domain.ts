@@ -9,6 +9,7 @@ import {
   mutationOutcomeSchema,
   nonNegativeAmountSchema,
   positiveAmountSchema,
+  decimalCompare,
   type InPlaceAmendment,
 } from '@ctp/exchange-core';
 import { canonical } from '@ctp/portfolio';
@@ -88,30 +89,60 @@ export const statusSchema = z.enum([
   'RECONCILIATION_REQUIRED',
 ]);
 export type OrderStatus = z.infer<typeof statusSchema>;
-export const stateSchema = z.strictObject({
-  id: z.uuid(),
-  intentId: z.uuid(),
-  binding: bindingSchema,
-  draft: draftSchema,
-  command: newOrderSchema,
-  status: statusSchema,
-  reconciliation: z.enum(['REQUIRED', 'CONSISTENT']),
-  version: z.number().int().min(0).max(2147483646),
-  exchangeOrderId: idSchema.nullable(),
-  filledQuantity: nonNegativeAmountSchema,
-  executedQuantity: nonNegativeAmountSchema,
-  executionNotional: nonNegativeAmountSchema,
-  averageFillPrice: positiveAmountSchema.nullable(),
-  lastNativeStatus: statusSchema.nullable(),
-  lastExchangeAt: timestampSchema.nullable(),
-  lastObservationHash: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/)
-    .nullable(),
-  activeAttemptId: z.uuid().nullable(),
-  activeOperation: z.enum(['PLACE', 'CANCEL']).nullable(),
-  createdAt: timestampSchema,
-});
+export const stateSchema = z
+  .strictObject({
+    id: z.uuid(),
+    intentId: z.uuid(),
+    binding: bindingSchema,
+    draft: draftSchema,
+    command: newOrderSchema,
+    /** Derived from durable causal applications; the original PLACE stays immutable. */
+    effectiveCommand: newOrderSchema.optional(),
+    status: statusSchema,
+    reconciliation: z.enum(['REQUIRED', 'CONSISTENT']),
+    version: z.number().int().min(0).max(2147483646),
+    exchangeOrderId: idSchema.nullable(),
+    filledQuantity: nonNegativeAmountSchema,
+    executedQuantity: nonNegativeAmountSchema,
+    executionNotional: nonNegativeAmountSchema,
+    averageFillPrice: positiveAmountSchema.nullable(),
+    lastNativeStatus: statusSchema.nullable(),
+    lastExchangeAt: timestampSchema.nullable(),
+    lastObservationHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
+    activeAttemptId: z.uuid().nullable(),
+    activeOperation: z.enum(['PLACE', 'CANCEL', 'AMEND']).nullable(),
+    createdAt: timestampSchema,
+  })
+  .superRefine((s, c) => {
+    const effective = s.effectiveCommand;
+    if (effective === undefined) return;
+    const original = s.command;
+    if (
+      s.binding.mode !== 'TESTNET' ||
+      s.binding.profile.exchange !== 'BINANCE' ||
+      s.binding.profile.market !== 'SPOT' ||
+      original.type !== 'LIMIT' ||
+      effective.type !== 'LIMIT' ||
+      original.timeInForce !== 'GTC' ||
+      effective.timeInForce !== 'GTC' ||
+      original.reduceOnly ||
+      effective.reduceOnly ||
+      original.trigger !== null ||
+      effective.trigger !== null ||
+      effective.instrumentId !== original.instrumentId ||
+      effective.side !== original.side ||
+      effective.limitPrice !== original.limitPrice ||
+      effective.clientOrderId === original.clientOrderId ||
+      original.size.kind !== 'BASE_QUANTITY' ||
+      effective.size.kind !== 'BASE_QUANTITY' ||
+      effective.size.asset !== original.size.asset ||
+      decimalCompare(effective.size.value, original.size.value) >= 0
+    )
+      c.addIssue({ code: 'custom', message: 'ORDER_EFFECTIVE_SCOPE' });
+  });
 export type OrderState = z.infer<typeof stateSchema>;
 export const grantSchema = z.strictObject({
   decisionId: z.uuid(),
@@ -128,12 +159,12 @@ export const eventSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('APPROVE') }),
   z.strictObject({
     type: z.literal('DISPATCH'),
-    operation: z.enum(['PLACE', 'CANCEL']),
+    operation: z.enum(['PLACE', 'CANCEL', 'AMEND']),
     attemptId: z.uuid(),
   }),
   z.strictObject({
     type: z.literal('RESULT'),
-    operation: z.enum(['PLACE', 'CANCEL']),
+    operation: z.enum(['PLACE', 'CANCEL', 'AMEND']),
     attemptId: z.uuid(),
     outcome: mutationOutcomeSchema,
   }),
@@ -151,7 +182,7 @@ export interface DispatchClaim {
   state: OrderState;
   intentId: string;
   attemptId: string;
-  operation: 'PLACE' | 'CANCEL';
+  operation: 'PLACE' | 'CANCEL' | 'AMEND';
   commandHash: string;
   command: unknown;
   expiresAt: number;

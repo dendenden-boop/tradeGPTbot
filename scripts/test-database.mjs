@@ -39,6 +39,7 @@ const expectedMigrations = [
   '202610080009_immutable_amend_intent',
   '202610080010_native_identity_authority',
   '202610080011_certified_native_controls',
+  '202610080012_native_amend_dispatch',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;

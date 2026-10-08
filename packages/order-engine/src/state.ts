@@ -18,6 +18,7 @@ export const terminal = (s: string) => ['FILLED', 'CANCELED', 'REJECTED', 'EXPIR
 export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderState {
   const s = stateSchema.parse(input),
     e = eventSchema.parse(raw);
+  const current = s.effectiveCommand ?? s.command;
   if (e.type === 'APPROVE') {
     if (s.status !== 'CREATED') throw new Error('ORDER_TRANSITION');
     s.status = 'RISK_APPROVED';
@@ -30,13 +31,27 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
           s.activeAttemptId !== null
     )
       throw new Error('ORDER_TRANSITION');
-    s.status = e.operation === 'PLACE' ? 'SUBMITTING' : 'CANCEL_PENDING';
+    s.status =
+      e.operation === 'PLACE'
+        ? 'SUBMITTING'
+        : e.operation === 'CANCEL'
+          ? 'CANCEL_PENDING'
+          : s.status;
     s.reconciliation = 'REQUIRED';
     s.activeAttemptId = e.attemptId;
     s.activeOperation = e.operation;
   } else if (e.type === 'RESULT') {
     // Positive causal exchange evidence may settle an attempt before its late HTTP response.
     if (s.activeAttemptId !== e.attemptId) return s;
+    const knownAmendRejection =
+      e.operation === 'AMEND' &&
+      e.outcome.kind === 'DEFINITIVELY_REJECTED' &&
+      ['SUBMITTED', 'PARTIALLY_FILLED'].includes(s.status) &&
+      s.status === s.lastNativeStatus &&
+      s.lastExchangeAt !== null &&
+      s.filledQuantity === s.executedQuantity &&
+      (s.executedQuantity === '0' ||
+        s.averageFillPrice === parseDecimal(ratio(s.executionNotional, '1', s.executedQuantity)));
     if (e.outcome.kind === 'ACCEPTED') {
       if (
         s.exchangeOrderId !== null &&
@@ -45,7 +60,13 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
       )
         throw new Error('ORDER_SCOPE');
       s.exchangeOrderId = e.outcome.ack.exchangeId ?? s.exchangeOrderId;
-      if (!terminal(s.status)) s.status = e.operation === 'PLACE' ? 'SUBMITTED' : 'CANCEL_PENDING';
+      if (!terminal(s.status))
+        s.status =
+          e.operation === 'PLACE'
+            ? 'SUBMITTED'
+            : e.operation === 'CANCEL'
+              ? 'CANCEL_PENDING'
+              : s.status;
     } else {
       if (!terminal(s.status))
         s.status =
@@ -53,14 +74,16 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
             ? 'UNKNOWN'
             : e.operation === 'PLACE'
               ? 'REJECTED'
-              : 'RECONCILIATION_REQUIRED';
+              : knownAmendRejection
+                ? s.status
+                : 'RECONCILIATION_REQUIRED';
       if (e.outcome.kind === 'DEFINITIVELY_REJECTED') {
         s.activeAttemptId = null;
         s.activeOperation = null;
       }
     }
     s.reconciliation =
-      e.operation === 'PLACE' && e.outcome.kind === 'DEFINITIVELY_REJECTED'
+      (e.operation === 'PLACE' && e.outcome.kind === 'DEFINITIVELY_REJECTED') || knownAmendRejection
         ? 'CONSISTENT'
         : 'REQUIRED';
   } else if (e.type === 'NATIVE') {
@@ -73,16 +96,16 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
       o.account.externalAccountId !== b.externalAccountId ||
       o.internalOrderId !== s.id ||
       o.intentId !== s.intentId ||
-      o.clientOrderId !== s.command.clientOrderId ||
-      o.instrumentId !== s.command.instrumentId ||
-      o.side !== s.command.side ||
-      o.type !== s.command.type ||
-      (s.command.type === 'LIMIT' &&
-        (s.command.limitPrice === null ||
+      o.clientOrderId !== current.clientOrderId ||
+      o.instrumentId !== current.instrumentId ||
+      o.side !== current.side ||
+      o.type !== current.type ||
+      (current.type === 'LIMIT' &&
+        (current.limitPrice === null ||
           o.price.state !== 'AVAILABLE' ||
-          decimalCompare(o.price.value, s.command.limitPrice) !== 0)) ||
+          decimalCompare(o.price.value, current.limitPrice) !== 0)) ||
       o.quantityUnit !== 'BASE' ||
-      o.quantity !== s.command.size.value ||
+      o.quantity !== current.size.value ||
       o.exchangeOrderId === null ||
       (s.exchangeOrderId !== null && s.exchangeOrderId !== o.exchangeOrderId) ||
       o.createdAt < s.createdAt ||
@@ -122,13 +145,17 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
     s.lastObservationHash = fp;
     s.lastNativeStatus = next;
     s.status = next;
-    if ((s.activeOperation === 'PLACE' && o.status !== 'UNKNOWN') || terminal(next)) {
+    if (
+      s.activeOperation !== 'AMEND' &&
+      ((s.activeOperation === 'PLACE' && o.status !== 'UNKNOWN') || terminal(next))
+    ) {
       s.activeAttemptId = null;
       s.activeOperation = null;
     } else if (s.activeOperation === 'CANCEL') s.status = 'CANCEL_PENDING';
     s.reconciliation =
       o.status !== 'UNKNOWN' &&
       s.activeOperation !== 'CANCEL' &&
+      s.activeOperation !== 'AMEND' &&
       s.filledQuantity === s.executedQuantity &&
       (s.executedQuantity === '0' ||
         s.averageFillPrice === parseDecimal(ratio(s.executionNotional, '1', s.executedQuantity)))
@@ -137,7 +164,7 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
   } else if (e.type === 'EXECUTION') {
     const qty = decimalAdd(s.executedQuantity, e.quantity);
     if (
-      decimalCompare(qty, s.command.size.value) > 0 ||
+      decimalCompare(qty, current.size.value) > 0 ||
       (terminal(s.status) && decimalCompare(qty, s.filledQuantity) > 0)
     )
       throw new Error('ORDER_FILL_BOUND');
@@ -145,7 +172,7 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
     s.executionNotional = decimalAdd(s.executionNotional, decimalMultiply(e.quantity, e.price));
     if (decimalCompare(qty, s.filledQuantity) > 0) s.filledQuantity = qty;
     if (!terminal(s.status) && s.activeOperation !== 'CANCEL' && s.lastNativeStatus !== 'UNKNOWN')
-      s.status = qty === s.command.size.value ? 'FILLED' : 'PARTIALLY_FILLED';
+      s.status = qty === current.size.value ? 'FILLED' : 'PARTIALLY_FILLED';
     if (
       s.lastExchangeAt === null ||
       s.averageFillPrice === null ||
