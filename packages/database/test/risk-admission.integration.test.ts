@@ -22,6 +22,7 @@ import {
   type PostgresPolicies,
 } from '@ctp/risk-engine';
 import { seedRiskCertification } from './fixtures/risk-certification.js';
+import { order as nativeOrderFixture } from '../../exchange-core/test/fixtures/adapter.js';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { binding as portfolioBinding, snapshot } from '../../portfolio/test/fixtures.js';
 import {
@@ -125,6 +126,148 @@ async function open() {
   handles.push(port);
   return port;
 }
+async function bridgeFixture(dispatch = true) {
+  const f = await fixture(),
+    port = await open();
+  const grant = await port.approve(f.input, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.created.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_BRIDGE_CLAIM');
+  if (dispatch) {
+    const account = {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    };
+    expect(
+      await orders.authorize(
+        'createOrder',
+        {
+          command: claim.command,
+          authorization: {
+            commandId: claim.intentId,
+            commandHash: claim.commandHash,
+            dispatchAttemptId: claim.attemptId,
+            profile: f.key.binding.profile,
+            account,
+            issuedAt: Date.now(),
+            expiresAt: grant.expiresAt,
+          },
+        },
+        { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+      ),
+    ).toBe(true);
+  }
+  const book = (
+    await admin.query<{ id: string }>('SELECT id FROM ctp_portfolio.book WHERE "accountId"=$1', [
+      f.key.binding.accountId,
+    ])
+  ).rows[0]!.id;
+  return { ...f, grant, claim, book };
+}
+async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
+  const reservation = (
+    await admin.query<{ status: string; amount: string }>(
+      'SELECT status,amount::text FROM public.risk_reservation WHERE id=$1',
+      [f.grant.reservationId],
+    )
+  ).rows[0]!;
+  const book = (
+    await admin.query<{ state: string; revision: number }>(
+      'SELECT state,revision FROM ctp_portfolio.book WHERE id=$1',
+      [f.book],
+    )
+  ).rows[0]!;
+  const watermark = (
+    await admin.query<{ released: boolean; unknown: boolean }>(
+      'SELECT released,unknown FROM ctp_portfolio.hold_watermark WHERE book=$1 AND "holdId"=$2',
+      [f.book, f.grant.reservationId],
+    )
+  ).rows[0]!;
+  return {
+    reservation,
+    book,
+    watermark,
+    state: JSON.parse(book.state) as { holds: { id: string; status: string; amount: string }[] },
+  };
+}
+it('reservation bridge retains UNKNOWN collateral across restart and releases once after authoritative native cancel', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const unknown = await bridgeState(f);
+  expect(unknown.reservation.status).toBe('UNRESOLVED');
+  expect(unknown.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, status: 'UNKNOWN', amount: '5.005' }),
+  ]);
+  expect(unknown.watermark).toEqual({ released: false, unknown: true });
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  expect((await restarted.read(f.key.binding, f.created.id, io())).status).toBe('UNKNOWN');
+  const native = {
+    ...nativeOrderFixture,
+    account: {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    },
+    scope: f.risk.record.instrument.scope,
+    instrumentId: f.created.command.instrumentId,
+    clientOrderId: f.created.command.clientOrderId,
+    exchangeOrderId: 'bridge-' + f.created.id,
+    createdAt: f.created.createdAt,
+    updatedAt: Date.now(),
+    status: 'CANCELED',
+    quantity: f.created.command.size.value,
+    filledQuantity: '0',
+    averageFillPrice: { state: 'UNAVAILABLE', reason: 'NO_EXECUTIONS' },
+    fees: [],
+  };
+  await restarted.complete(f.key.binding, f.created.id, native, io());
+  const released = await bridgeState(f);
+  expect(released.reservation.status).toBe('RELEASED');
+  expect(released.state.holds).toEqual([]);
+  expect(released.watermark.released).toBe(true);
+  await restarted.complete(f.key.binding, f.created.id, native, io());
+  expect(await bridgeState(f)).toEqual(released);
+});
+it('reservation bridge definitive NOT_SENT releases the durable reservation and hold atomically', async () => {
+  const f = await bridgeFixture(false);
+  const outcome = { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } };
+  await orders.result(f.key.binding, f.claim, outcome, io());
+  const released = await bridgeState(f);
+  expect(released.reservation.status).toBe('RELEASED');
+  expect(released.state.holds).toEqual([]);
+  expect(released.watermark.released).toBe(true);
+  await orders.result(f.key.binding, f.claim, outcome, io());
+  expect(await bridgeState(f)).toEqual(released);
+});
+it('reservation bridge acknowledgement retains collateral until authoritative resolution', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    {
+      kind: 'ACCEPTED',
+      ack: {
+        commandId: f.created.intentId,
+        status: 'ACKNOWLEDGED',
+        exchangeId: 'bridge-' + f.created.id,
+        receivedAt: Date.now(),
+      },
+    },
+    io(),
+  );
+  const held = await bridgeState(f);
+  expect(held.reservation.status).toBe('ACTIVE');
+  expect(held.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, status: 'RESERVED', amount: '5.005' }),
+  ]);
+  expect(held.watermark).toEqual({ released: false, unknown: false });
+});
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function secondInput(f: Fixture) {
   const { clientOrderId: omitted, ...order } = f.created.command;
