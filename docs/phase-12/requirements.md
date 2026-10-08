@@ -2,6 +2,8 @@
 
 ## Completion acceptance status
 
+Certified atomic PLACE admission passed full source CI 37737207007 on 8cdff7d: bounded native transaction, current independent SQL policy/rules/exposure guards, account and cross-account user races, permanent replay, actual Portfolio COMMITMENT/outbox and uncertain-COMMIT/no-grant recovery. It is a completed substrate increment, not phase acceptance. Durable reservation resolution/partial-fill accounting, final dispatch and full native AMEND remain mandatory below.
+
 The physical certification substrate passed native/full CI on 4a4a2c4 (37728746779). It captures current durable sources in one physical transaction and persists immutable certificate identities; native restart, replacement, missing evidence, abort/deadline, committed-response loss and non-BYPASSRLS owner cases passed. An unissued legacy pending order/reservation blocks certification. This does not close complete pending/UNKNOWN issued exposure or the atomic approval/Portfolio/final dispatch/AMEND chain below; those remain required before phase acceptance.
 
 The current [cross-phase hardening audit](cross-phase-audit.md) records confirmed RED defects and their bounded stream/physical timeout repairs. Its intermediate GREEN evidence does not replace complete PHASE 12 production acceptance; the audit and implementation continue through the full authority chain.

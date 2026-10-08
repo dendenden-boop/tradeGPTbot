@@ -12,3 +12,4 @@ export * from './postgres-portfolio-source.js';
 export * from './postgres-snapshot.js';
 export * from './snapshot-observations.js';
 export * from './postgres-observations.js';
+export * from './postgres-admission.js';

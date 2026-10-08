@@ -442,7 +442,13 @@ export function decodeRiskSnapshotCapture(
             ? market.asOf
             : kind === 'health'
               ? Math.min(...Object.values(observation.health).map((h) => h.asOf))
-              : portfolio.asOf;
+              : kind === 'exposure'
+                ? Math.min(
+                    portfolio.asOf,
+                    ...observation.fx.map((fx) => fx.asOf),
+                    ...observation.marks.map((mark) => mark.asOf),
+                  )
+                : portfolio.asOf;
       result[kind] = {
         value,
         reference: { id, revision: rev, hash: contentHash, asOf: at, complete: true },
