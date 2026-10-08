@@ -176,6 +176,10 @@ it('populated published 19 upgrades without rewriting proof and recovers legacy 
     ),
     claim = await orders.begin(b, s.id, s.intentId, grant, io());
   if (!claim) throw new Error('UPGRADE_CLAIM_REQUIRED');
+  await admin.query(
+    'UPDATE public.exchange_account SET "clientIdHighWatermark"=$2::bigint WHERE id=$1',
+    [b.accountId, '9007199254740993'],
+  );
   // No network operation: UNKNOWN is deliberately conservative crash evidence.
   await orders.result(b, claim, { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } }, io());
   const native = {
@@ -256,6 +260,14 @@ it('populated published 19 upgrades without rewriting proof and recovers legacy 
       )
     ).rows[0]?.status,
   ).toBe('UNRESOLVED');
+  expect(
+    (
+      await target.query<{ counter: string }>(
+        'SELECT "clientIdHighWatermark"::text AS counter FROM public.exchange_account WHERE id=$1',
+        [b.accountId],
+      )
+    ).rows[0]?.counter,
+  ).toBe('9007199254740993');
   expect(
     (
       await target.query<{ missing: boolean }>(
