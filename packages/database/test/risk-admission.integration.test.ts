@@ -489,6 +489,86 @@ it('an issued hold cannot become native-reflected through a standalone Portfolio
   ).rejects.toThrow();
   expect(await bridgeState(f)).toEqual(held);
 });
+it('restart replays a legacy hash-only native observation into immutable full evidence and releases its issued UNKNOWN hold once', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const native = {
+    ...nativeOrderFixture,
+    account: {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    },
+    scope: f.risk.record.instrument.scope,
+    instrumentId: f.created.command.instrumentId,
+    clientOrderId: f.created.command.clientOrderId,
+    exchangeOrderId: 'legacy-' + f.created.id,
+    createdAt: f.created.createdAt,
+    updatedAt: Date.now(),
+    status: 'CANCELED',
+    quantity: f.created.command.size.value,
+    price: { state: 'AVAILABLE', value: f.created.command.limitPrice },
+    filledQuantity: '0',
+    averageFillPrice: { state: 'UNAVAILABLE', reason: 'NO_EXECUTIONS' },
+    fees: [],
+  };
+  const payload = canonical({ type: 'NATIVE', order: native });
+  const fingerprint = createHash('sha256').update(payload).digest();
+  // Seed the exact evidence-only representation published before migration 20.
+  // No authoritative_event existed in that version; no immutable row is changed.
+  const client = await admin.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.key.binding.tenantId]);
+    await client.query(
+      'INSERT INTO ctp_execution.evidence("tenantId","orderId",identity,fingerprint) VALUES($1,$2,$3,$4)',
+      [f.key.binding.tenantId, f.created.id, `native:${native.updatedAt}`, fingerprint],
+    );
+    await client.query(
+      'UPDATE public."order" SET status=\'CANCELED\',"reconciliationState"=\'CONSISTENT\',"exchangeOrderId"=$3,version=version+1,"lastExchangeAt"=to_timestamp($4::double precision/1000),"terminalAt"=now(),"updatedAt"=now() WHERE "tenantId"=$1 AND id=$2',
+      [f.key.binding.tenantId, f.created.id, native.exchangeOrderId, native.updatedAt],
+    );
+    await client.query(
+      'UPDATE ctp_execution.progress SET "nativeAt"=$3,"nativeHash"=$4,"nativeStatus"=\'CANCELED\' WHERE "tenantId"=$1 AND "orderId"=$2',
+      [
+        f.key.binding.tenantId,
+        f.created.id,
+        native.updatedAt,
+        createHash('sha256').update(canonical(native)).digest(),
+      ],
+    );
+    await client.query(
+      'UPDATE public.submission_attempt SET status=\'RECONCILED\',"resolvedAt"=now() WHERE "tenantId"=$1 AND id=$2',
+      [f.key.binding.tenantId, f.claim.attemptId],
+    );
+    await client.query('COMMIT');
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+  }
+  expect((await bridgeState(f)).reservation.status).toBe('UNRESOLVED');
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  await restarted.complete(f.key.binding, f.created.id, native, io());
+  const released = await bridgeState(f);
+  expect(released.reservation.status).toBe('RELEASED');
+  expect(released.state.holds).toEqual([]);
+  expect(
+    (
+      await admin.query(
+        'SELECT payload FROM ctp_execution.authoritative_event WHERE "tenantId"=$1 AND "orderId"=$2 AND identity=$3',
+        [f.key.binding.tenantId, f.created.id, `native:${native.updatedAt}`],
+      )
+    ).rows,
+  ).toEqual([{ payload }]);
+  await restarted.complete(f.key.binding, f.created.id, native, io());
+  expect(await bridgeState(f)).toEqual(released);
+});
 it('reservation bridge released tombstone rejects new commitment and ignores old commitment replay', async () => {
   const f = await bridgeFixture(false);
   await orders.result(
