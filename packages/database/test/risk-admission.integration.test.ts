@@ -25,7 +25,7 @@ import {
 import { seedRiskCertification } from './fixtures/risk-certification.js';
 import { order as nativeOrderFixture } from '../../exchange-core/test/fixtures/adapter.js';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
-import { binding as portfolioBinding, snapshot } from '../../portfolio/test/fixtures.js';
+import { binding as portfolioBinding, snapshot, fill } from '../../portfolio/test/fixtures.js';
 import {
   prepareRiskSnapshot,
   riskEvidenceHash,
@@ -178,6 +178,8 @@ async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
       [f.book],
     )
   ).rows[0]!;
+  book.revision = Number(book.revision);
+  if (!Number.isSafeInteger(book.revision)) throw new Error('INVALID_NATIVE_BOOK_REVISION');
   const watermark = (
     await admin.query<{ released: boolean; unknown: boolean }>(
       'SELECT released,unknown FROM ctp_portfolio.hold_watermark WHERE book=$1 AND "holdId"=$2',
@@ -388,6 +390,87 @@ it('reservation bridge durable histories and full execution evidence cannot be r
     await c.query('ROLLBACK');
     c.release();
   }
+});
+it('reservation bridge adjusts residual collateral only after adopted fill and reconciled native snapshot proof', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const b = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  const execution = fill({
+    id: randomUUID(),
+    timestamp: Date.now(),
+    internalOrderId: f.created.id,
+    instrumentId: f.created.command.instrumentId,
+    metadataVersion: f.risk.record.instrument.metadataVersion,
+    ruleVersion: f.created.command.ruleVersion,
+    quantity: '0.2',
+    price: '10',
+    native: {
+      fillId: randomUUID(),
+      identityScope: 'bridge-trades',
+      exchangeOrderId: 'bridge-' + f.created.id,
+    },
+  });
+  const initial = await portfolio.read(b, io());
+  const applied = await portfolio.apply(b, execution, initial.revision, io());
+  const native = {
+    ...nativeOrderFixture,
+    account: {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    },
+    scope: f.risk.record.instrument.scope,
+    instrumentId: f.created.command.instrumentId,
+    clientOrderId: f.created.command.clientOrderId,
+    exchangeOrderId: execution.native.exchangeOrderId,
+    createdAt: f.created.createdAt,
+    updatedAt: Date.now(),
+    status: 'PARTIALLY_FILLED',
+    quantity: f.created.command.size.value,
+    filledQuantity: '0.2',
+    averageFillPrice: { state: 'AVAILABLE', value: '10' },
+    fees: [],
+  };
+  await orders.observe(f.key.binding, f.created.id, native, io());
+  await orders.adopt(f.key.binding, f.created.id, f.book, execution.id, io());
+  expect((await bridgeState(f)).state.holds[0]?.amount).toBe('5.005');
+  await orders.complete(f.key.binding, f.created.id, native, io());
+  expect((await bridgeState(f)).state.holds[0]?.amount).toBe('5.005');
+  const checkpoint = await portfolio.read(b, io());
+  const confirmed = snapshot({
+    id: randomUUID(),
+    timestamp: Date.now(),
+    covered: [execution.id],
+    balances: applied.checkpoint.state.balances,
+    positions: [
+      {
+        instrumentId: f.created.command.instrumentId,
+        positionSide: 'NET',
+        bucket: 'CROSS',
+        base: 'BTC',
+        quote: 'USDT',
+        quantity: '0.2',
+        entryPrice: '10',
+      },
+    ],
+  });
+  await portfolio.apply(b, confirmed, checkpoint.revision, io());
+  const adjusted = await bridgeState(f);
+  expect(adjusted.reservation).toEqual({ status: 'ACTIVE', amount: '3.003' });
+  expect(adjusted.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, amount: '3.003', status: 'RESERVED' }),
+  ]);
+  expect(adjusted.watermark).toEqual({ released: false, unknown: false });
 });
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function secondInput(f: Fixture) {
