@@ -99,6 +99,23 @@ it('300 instruments survive 180 atomic refreshes, >100k permanent versions and r
     expect(result.value).toHaveLength(300);
     expect(registry.health().retained).toBe(300);
     if (refresh === 89) {
+      const recovery = await publisher.connect();
+      try {
+        await recovery.query('BEGIN');
+        await recovery.query("SET LOCAL plan_cache_mode='force_generic_plan'");
+        // The SQL component must fit the existing one-second physical recovery
+        // deadline even without a favorable custom plan or background ANALYZE.
+        await recovery.query("SET LOCAL statement_timeout='900ms'");
+        const recovered = await recovery.query<{ result: unknown[] }>(
+          'SELECT ctp_registry.read_current($1::jsonb,$2::jsonb) AS result',
+          [JSON.stringify(scope), JSON.stringify(ids)],
+        );
+        expect(recovered.rows[0]?.result).toHaveLength(300);
+        await recovery.query('COMMIT');
+      } finally {
+        await recovery.query('ROLLBACK').catch(() => {});
+        recovery.release();
+      }
       await registry.close();
       registry = await open(scope, ids);
     }
