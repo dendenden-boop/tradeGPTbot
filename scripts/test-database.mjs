@@ -38,6 +38,7 @@ const expectedMigrations = [
   '202610080008_require_certified_dispatch',
   '202610080009_immutable_amend_intent',
   '202610080010_native_identity_authority',
+  '202610080011_certified_native_controls',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -773,7 +774,17 @@ try {
     )
   ).rows[0].definition;
   assert.ok(afterCaptureDefinition.includes('inventory_ids'));
-  assert.equal(afterCaptureDefinition, published17Capture);
+  // Migration 29 adds exact durable hold-resolution proof. All prior inventory
+  // and locking guards must remain byte-identical in the deployed body.
+  const oldWatermark = "'released',w.released,'unknown',w.unknown)";
+  assert.equal(published17Capture.split(oldWatermark).length, 2);
+  assert.equal(
+    afterCaptureDefinition,
+    published17Capture.replace(
+      oldWatermark,
+      "'released',w.released,'unknown',w.unknown,'resolution',ctp_admission.hold_resolution_event(t,b.id,w.\"holdId\"))",
+    ),
+  );
   assert.equal(
     (await upgrade.query('SELECT count(*)::int n FROM ctp_certification.certificate_head')).rows[0]
       .n,

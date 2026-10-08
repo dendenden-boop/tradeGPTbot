@@ -13,6 +13,7 @@ import {
   instrumentSchema,
   tradingRulesSchema,
   newOrderSchema,
+  inPlaceAmendmentSchema,
   immutable,
   sameMarketScope,
   evaluateCapability,
@@ -191,13 +192,120 @@ export type RiskEvaluation =
   | { readonly kind: 'REJECTED'; readonly reasons: readonly string[] }
   | {
       readonly kind: 'EVALUATED';
-      readonly effect: 'INCREASE' | 'REDUCE';
+      readonly effect: 'INCREASE' | 'REDUCE' | 'RETAIN';
       readonly notional: string;
       readonly proposal: { readonly asset: string; readonly amount: string };
     };
 const reject = (code: string): RiskEvaluation => immutable({ kind: 'REJECTED', reasons: [code] });
 /** Server-only pure calculation. EVALUATED is not a durable RiskGrant or permission to dispatch. */
 export function evaluateRiskPolicy(raw: unknown): RiskEvaluation {
+  return evaluatePolicy(raw, false);
+}
+
+export const riskAmendmentRetentionSchema = z.strictObject({
+  orderId: z.uuid(),
+  placeIntentId: z.uuid(),
+  reservationId: z.uuid(),
+  accountId: z.uuid(),
+  mode: bindingSchema.shape.mode,
+  asset: idSchema,
+  amount: nonNegativeDecimalSchema,
+  status: z.enum(['ACTIVE', 'UNRESOLVED', 'RELEASED']),
+  orderRevision: z.string().regex(/^[1-9][0-9]{0,63}$/),
+  command: newOrderSchema,
+  filledQuantity: nonNegativeDecimalSchema,
+  exchangeOrderId: idSchema,
+  nativeUpdatedAt: timestampSchema,
+  nativeHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const amendmentInputSchema = z.strictObject({
+  evaluation: riskEvaluationInputSchema,
+  command: inPlaceAmendmentSchema,
+  retention: riskAmendmentRetentionSchema,
+});
+/** Pure retained-effect evaluation; this neither certifies its source nor issues
+ * a grant. Production SQL must independently bind/recheck the retained proof. */
+export function evaluateRiskAmendmentPolicy(raw: unknown): RiskEvaluation {
+  try {
+    return evaluateAmendment(raw);
+  } catch {
+    return reject('RISK_ARITHMETIC_UNPROVED');
+  }
+}
+
+function evaluateAmendment(raw: unknown): RiskEvaluation {
+  const parsed = amendmentInputSchema.safeParse(raw);
+  if (!parsed.success) return reject('RISK_INPUT');
+  const { evaluation: e, command: c, retention: r } = parsed.data;
+  const before = c.target.current,
+    after = c.replacement;
+  if (
+    e.binding.mode !== 'TESTNET' ||
+    e.binding.profile.exchange !== 'BINANCE' ||
+    e.binding.profile.market !== 'SPOT' ||
+    e.binding.profile.endpointProfileId !== 'binance-spot-testnet-v1' ||
+    before.type !== 'LIMIT' ||
+    before.timeInForce !== 'GTC' ||
+    before.reduceOnly ||
+    before.size.kind !== 'BASE_QUANTITY' ||
+    after.size.kind !== 'BASE_QUANTITY' ||
+    before.limitPrice !== after.limitPrice ||
+    cmp(after.size.value, before.size.value) >= 0
+  )
+    return reject('RISK_AMEND_UNSUPPORTED');
+  if (
+    r.status !== 'ACTIVE' ||
+    r.orderId !== c.target.internalOrderId ||
+    r.placeIntentId !== c.target.placeIntentId ||
+    r.accountId !== e.binding.accountId ||
+    r.mode !== e.binding.mode ||
+    r.orderRevision !== c.target.revision ||
+    r.exchangeOrderId !== c.locator.locator.id ||
+    r.nativeUpdatedAt !== c.target.nativeUpdatedAt ||
+    r.filledQuantity !== c.target.filledQuantity ||
+    JSON.stringify(r.command) !== JSON.stringify(before) ||
+    JSON.stringify(e.order) !== JSON.stringify(after) ||
+    c.target.observedAt > e.now ||
+    e.now - c.target.observedAt > Math.min(e.platform.maxEvidenceAgeMs, e.user.maxEvidenceAgeMs) ||
+    !e.snapshot.instrumentHasPendingEntry ||
+    e.snapshot.openOrders < 1
+  )
+    return reject('RISK_AMEND_TARGET');
+  const capability = e.capabilities.filter((v) => v.feature === 'AMEND_ORDER');
+  if (
+    capability.length !== 1 ||
+    !evaluateCapability({
+      profile: e.binding.profile,
+      record: capability[0],
+      feature: 'AMEND_ORDER',
+      now: e.now,
+      adapterVersion: e.adapterVersion,
+      instrumentId: after.instrumentId,
+      allowSynthetic: false,
+    }).allowed
+  )
+    return reject('RISK_CAPABILITY');
+  const base = after.side === 'SELL',
+    asset = base ? e.record.instrument.baseAsset : e.record.instrument.quoteAsset;
+  const remaining = sub(after.size.value, c.target.filledQuantity);
+  const principal = base ? remaining : mul(remaining, after.limitPrice!);
+  const required = add(principal, mul(principal, e.snapshot.market.maxFeeRate));
+  if (
+    r.asset !== asset ||
+    cmp(r.amount, required) < 0 ||
+    cmp(
+      e.snapshot.instrumentExposure,
+      mul(
+        mul(sub(before.size.value, c.target.filledQuantity), before.limitPrice!),
+        e.snapshot.market.quoteToValuation,
+      ),
+    ) < 0
+  )
+    return reject('RISK_AMEND_RESERVE_UNPROVED');
+  return evaluatePolicy(e, true);
+}
+
+function evaluatePolicy(raw: unknown, retained: boolean): RiskEvaluation {
   let parsed: RiskEvaluationInput;
   try {
     parsed = riskEvaluationInputSchema.parse(raw);
@@ -359,14 +467,15 @@ export function evaluateRiskPolicy(raw: unknown): RiskEvaluation {
         [s.accountExposure, p.maxAccountExposure, 'RISK_MAX_ACCOUNT_EXPOSURE'],
         [s.userExposure, p.maxUserExposure, 'RISK_MAX_USER_EXPOSURE'],
       ] as const)
-        if (cmp(add(current, notional), limit) > 0) return reject(code);
+        if (cmp(add(current, retained ? '0' : notional), limit) > 0) return reject(code);
       if (
         s.concurrentPositions +
-          (s.positionQuantity === '0' && !s.instrumentHasPendingEntry ? 1 : 0) >
+          (!retained && s.positionQuantity === '0' && !s.instrumentHasPendingEntry ? 1 : 0) >
         p.maxConcurrentPositions
       )
         return reject('RISK_MAX_CONCURRENT_POSITIONS');
-      if (s.openOrders + 1 > p.maxOpenOrders) return reject('RISK_MAX_OPEN_ORDERS');
+      if (s.openOrders + (retained ? 0 : 1) > p.maxOpenOrders)
+        return reject('RISK_MAX_OPEN_ORDERS');
       if (s.ordersInLastMinute + 1 > p.maxOrdersPerMinute) return reject('RISK_ORDER_FREQUENCY');
       if (
         !s.lossBaselineComplete ||
@@ -406,7 +515,7 @@ export function evaluateRiskPolicy(raw: unknown): RiskEvaluation {
     if (s.availableAsset !== asset) return reject('RISK_CURRENCY_UNPROVED');
     const principal = baseReserve ? qty : reducing ? '0' : nativeNotional,
       fee = mul(baseReserve ? qty : nativeNotional, m.maxFeeRate),
-      amount = add(principal, fee);
+      amount = retained ? '0' : add(principal, fee);
     const conversion = baseReserve
         ? mul(m.lowerExecutionPrice, m.quoteToValuation)
         : m.quoteToValuation,
@@ -415,8 +524,8 @@ export function evaluateRiskPolicy(raw: unknown): RiskEvaluation {
       return reject('RISK_AVAILABLE_BALANCE');
     return immutable({
       kind: 'EVALUATED',
-      effect: reducing ? 'REDUCE' : 'INCREASE',
-      notional,
+      effect: retained ? 'RETAIN' : reducing ? 'REDUCE' : 'INCREASE',
+      notional: retained ? '0' : notional,
       proposal: { asset, amount },
     });
   } catch {

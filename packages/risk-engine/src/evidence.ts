@@ -197,6 +197,22 @@ export const riskExposureEvidenceSchema = z.strictObject({
       }),
     )
     .max(10_000),
+  controls: z
+    .array(
+      z.strictObject({
+        id: idSchema,
+        intentId: idSchema,
+        orderId: idSchema,
+        primaryReservationId: idSchema,
+        accountId: z.uuid(),
+        asset: idSchema,
+        amount: nonNegativeDecimalSchema,
+        holdId: idSchema,
+        unknown: z.boolean(),
+      }),
+    )
+    .max(10_000)
+    .optional(),
 });
 export type RiskExposureEvidence = z.infer<typeof riskExposureEvidenceSchema>;
 /**
@@ -264,6 +280,33 @@ export function deriveRiskExposure(
         amount: add(holdTotals.get(key)?.amount ?? '0', h.amount),
       });
     }
+  }
+  const controls = e.controls ?? [];
+  for (const field of ['id', 'intentId', 'orderId', 'holdId'] as const)
+    unique(
+      controls.map((c) => c[field]),
+      'RISK_CONTROL_OVERLAP',
+    );
+  for (const c of controls) {
+    const primary = reservations.get(c.orderId),
+      hold = holds.get(c.holdId);
+    if (
+      !primary ||
+      !hold ||
+      c.id !== c.holdId ||
+      primary.id !== c.primaryReservationId ||
+      c.id === primary.id ||
+      c.accountId !== primary.accountId ||
+      c.asset !== primary.asset ||
+      c.accountId !== hold.accountId ||
+      c.asset !== hold.asset ||
+      c.amount !== '0' ||
+      hold.amount !== '0' ||
+      hold.reflected ||
+      (c.unknown && (!hold.unknown || !primary.unknown))
+    )
+      throw new Error('RISK_CONTROL_EVIDENCE');
+    holds.delete(c.holdId);
   }
   if (holds.size) throw new Error('RISK_HOLD_EVIDENCE');
   let instrumentExposure = '0',
