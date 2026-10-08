@@ -174,6 +174,84 @@ async function grant(
   );
   return { decisionId, reservationId, permissionEpoch: '0', expiresAt: Date.now() + 10000 };
 }
+it.each(['GATEWAY', 'DIRECT_SQL'] as const)(
+  'unissued legacy Risk rows cannot start transport through %s',
+  async (path) => {
+    const { b, draft } = await fixture(),
+      s = await store.create(b, draft, io()),
+      g = await grant(s),
+      claim = await store.begin(b, s.id, s.intentId, g, io());
+    if (!claim) throw new Error('Missing legacy fixture claim');
+    if (path === 'GATEWAY') {
+      const account = {
+        tenantId: b.tenantId,
+        connectionId: b.connectionId,
+        externalAccountId: b.externalAccountId,
+      };
+      expect(
+        await store.authorize(
+          'createOrder',
+          {
+            command: claim.command,
+            authorization: {
+              commandId: claim.intentId,
+              commandHash: claim.commandHash,
+              dispatchAttemptId: claim.attemptId,
+              profile: b.profile,
+              account,
+              issuedAt: Date.now(),
+              expiresAt: g.expiresAt,
+            },
+          },
+          { ...io(), profile: b.profile, account, correlationId: randomUUID() },
+        ),
+      ).toBe(false);
+    } else {
+      const writer = new Pool({
+        connectionString: required('DATABASE_EXECUTION_URL'),
+        max: 1,
+        query_timeout: 5000,
+      });
+      const transaction = await writer.connect();
+      try {
+        await transaction.query('BEGIN');
+        await transaction.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+        await expect(
+          transaction.query(
+            'UPDATE public.submission_attempt SET "transportStartedAt"=stamp.at,"permitConsumedAt"=stamp.at FROM (SELECT date_trunc(\'milliseconds\',clock_timestamp()) AS at) stamp WHERE "tenantId"=$1 AND id=$2',
+            [b.tenantId, claim.attemptId],
+          ),
+        ).rejects.toThrow('RISK_DISPATCH_ISSUANCE');
+      } finally {
+        await transaction.query('ROLLBACK');
+        transaction.release();
+        await writer.end();
+      }
+    }
+    expect(
+      (
+        await admin.query(
+          'SELECT "transportStartedAt","permitConsumedAt" FROM public.submission_attempt WHERE id=$1',
+          [claim.attemptId],
+        )
+      ).rows,
+    ).toEqual([{ transportStartedAt: null, permitConsumedAt: null }]);
+    const result = await store.result(
+      b,
+      claim,
+      { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+      io(),
+    );
+    expect(result.status).toBe('REJECTED');
+    expect(
+      (
+        await admin.query('SELECT "responseCode" FROM public.submission_attempt WHERE id=$1', [
+          claim.attemptId,
+        ])
+      ).rows,
+    ).toEqual([{ responseCode: 'NOT_SENT' }]);
+  },
+);
 function observation(s: OrderState, overrides: Record<string, unknown> = {}) {
   return orderSchema.parse({
     ...(native(s) as { type: 'NATIVE'; order: Order }).order,
