@@ -307,6 +307,159 @@ async function amendmentFixture() {
   };
   return { ...f, amendment, amendmentInput: input };
 }
+async function dispatchedAmendment() {
+  const f = await amendmentFixture();
+  const grant = await (await open()).approve(f.amendmentInput, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+  const account = f.native.account;
+  expect(
+    await orders.authorize(
+      'amendOrder',
+      {
+        command: claim.command,
+        authorization: {
+          commandId: claim.intentId,
+          commandHash: claim.commandHash,
+          dispatchAttemptId: claim.attemptId,
+          profile: f.key.binding.profile,
+          account,
+          issuedAt: Date.now(),
+          expiresAt: grant.expiresAt,
+        },
+      },
+      { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+    ),
+  ).toBe(true);
+  await orders.result(
+    f.key.binding,
+    claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  const appliedAt = Date.now();
+  const proof = {
+    evidence: {
+      kind: 'APPLIED_EVIDENCE' as const,
+      account,
+      scope: f.native.scope,
+      instrumentId: f.native.instrumentId,
+      receivedAt: appliedAt,
+      evidence: {
+        executionId: '9007199254740993',
+        time: appliedAt,
+        exchangeOrderId: f.native.exchangeOrderId!,
+        oldClientOrderId: f.native.clientOrderId!,
+        newClientOrderId: f.amendment.command.replacement.clientOrderId,
+        originalQuantity: f.created.command.size.value,
+        newQuantity: f.amendment.command.replacement.size.value,
+      },
+    },
+    order: orderSchema.parse({
+      ...f.native,
+      clientOrderId: f.amendment.command.replacement.clientOrderId,
+      quantity: f.amendment.command.replacement.size.value,
+      updatedAt: appliedAt,
+    }),
+    nativeReceivedAt: appliedAt,
+  };
+  return { ...f, grant, claim, proof };
+}
+function resolveAmendment(
+  store: OrderStore,
+  f: Awaited<ReturnType<typeof dispatchedAmendment>>,
+  proof: unknown = f.proof,
+) {
+  return (
+    store as unknown as {
+      resolveAmendment: (
+        binding: typeof f.key.binding,
+        id: string,
+        attemptId: string,
+        proof: unknown,
+        context: ReturnType<typeof io>,
+      ) => Promise<typeof f.target>;
+    }
+  ).resolveAmendment(f.key.binding, f.created.id, f.claim.attemptId, proof, io());
+}
+it('native AMEND causal application is durable, replays after restart and preserves original PLACE and single collateral effect', async () => {
+  const f = await dispatchedAmendment();
+  const resolved = await resolveAmendment(orders, f);
+  expect(resolved.command).toEqual(f.created.command);
+  expect(resolved.intentId).toBe(f.created.intentId);
+  expect(resolved).toMatchObject({
+    effectiveCommand: f.amendment.command.replacement,
+    status: 'SUBMITTED',
+    reconciliation: 'CONSISTENT',
+    activeAttemptId: null,
+    activeOperation: null,
+  });
+  expect(
+    (
+      await admin.query('SELECT status FROM public.submission_attempt WHERE id=$1', [
+        f.claim.attemptId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RECONCILED' }]);
+  expect(
+    (
+      await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+        f.grant.reservationId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RELEASED' }]);
+  const before = await bridgeState(f);
+  expect(before.reservation.amount).toBe('5.005');
+  expect(before.state.holds).toHaveLength(1);
+  const restart = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restart);
+  expect(await restart.read(f.key.binding, f.created.id, io())).toEqual(resolved);
+  expect(await resolveAmendment(restart, f)).toEqual(resolved);
+  expect(await bridgeState(f)).toEqual(before);
+  expect(
+    await restart.begin(f.key.binding, f.created.id, f.amendment.intentId, f.grant, io()),
+  ).toBeNull();
+  const journal = await admin.query<{ n: number }>(
+    'SELECT count(*)::integer n FROM ctp_execution.amendment_application WHERE "tenantId"=$1 AND "orderId"=$2',
+    [f.key.binding.tenantId, f.created.id],
+  );
+  expect(journal.rows[0]!.n).toBe(1);
+});
+it.each(['EMPTY', 'CLIENT', 'QUANTITY', 'ACCOUNT', 'FILL_RACE'] as const)(
+  'native AMEND %s causal ambiguity preserves UNKNOWN and collateral after restart',
+  async (kind) => {
+    const f = await dispatchedAmendment();
+    const proof: { evidence: unknown; order: typeof f.proof.order; nativeReceivedAt: number } =
+      structuredClone(f.proof);
+    if (kind === 'EMPTY')
+      proof.evidence = {
+        kind: 'INDETERMINATE',
+        reason: 'NO_CAUSAL_EVIDENCE',
+        account: f.native.account,
+        scope: f.native.scope,
+        instrumentId: f.native.instrumentId,
+        receivedAt: Date.now(),
+      };
+    else if (kind === 'CLIENT') proof.order.clientOrderId = 'foreign';
+    else if (kind === 'QUANTITY') proof.order.quantity = parseDecimal('0.3');
+    else if (kind === 'ACCOUNT') proof.order.account.externalAccountId = 'foreign';
+    else {
+      proof.order.filledQuantity = parseDecimal('0.45');
+      proof.order.averageFillPrice = { state: 'AVAILABLE', value: parseDecimal('10') };
+    }
+    const before = await bridgeState(f),
+      state = await orders.read(f.key.binding, f.created.id, io());
+    await expect(resolveAmendment(orders, f, proof)).rejects.toThrow(
+      'ORDER_AMEND_APPLICATION_UNPROVED',
+    );
+    const restart = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+    handles.push(restart);
+    expect(await restart.read(f.key.binding, f.created.id, io())).toEqual(state);
+    expect(await bridgeState(f)).toEqual(before);
+    expect(before.reservation).toEqual({ status: 'UNRESOLVED', amount: '5.005' });
+  },
+);
 it('certified native AMEND approval reserves only its zero delta and retains primary collateral across restart', async () => {
   const f = await amendmentFixture();
   const { target, before, amendment, amendmentInput: input } = f;
