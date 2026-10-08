@@ -71,6 +71,8 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
       o.account.tenantId !== b.tenantId ||
       o.account.connectionId !== b.connectionId ||
       o.account.externalAccountId !== b.externalAccountId ||
+      o.internalOrderId !== s.id ||
+      o.intentId !== s.intentId ||
       o.clientOrderId !== s.command.clientOrderId ||
       o.instrumentId !== s.command.instrumentId ||
       o.side !== s.command.side ||

@@ -68,6 +68,8 @@ export function native(
     type: 'NATIVE',
     order: {
       ...coreOrder,
+      internalOrderId: s.id,
+      intentId: s.intentId,
       account,
       scope,
       instrumentId: s.command.instrumentId,
