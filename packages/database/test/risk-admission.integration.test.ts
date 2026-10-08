@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { beforeAll, afterAll, expect, it } from 'vitest';
-import { computeCommandHash, parseDecimal } from '@ctp/exchange-core';
+import { computeCommandHash, parseDecimal, orderSchema } from '@ctp/exchange-core';
 import {
   canonical,
   bindingSchema as portfolioBindingSchema,
@@ -10,7 +10,11 @@ import {
   type PortfolioStore,
 } from '@ctp/portfolio';
 import { createPostgresOrderStore, type OrderStore } from '@ctp/order-engine';
-import { createPostgresMarketSnapshots, type DurableMarketSnapshots } from '@ctp/market-data';
+import {
+  createPostgresMarketSnapshots,
+  createPostgresInstrumentRegistry,
+  type DurableMarketSnapshots,
+} from '@ctp/market-data';
 import {
   createPostgresOrderRiskPort,
   createPostgresRiskObservations,
@@ -91,7 +95,7 @@ afterAll(async () => {
   for (const h of handles.splice(0)) await h.close();
   await admin.end();
 });
-async function fixture() {
+async function fixture(nativeAmend = false) {
   const f = await seedRiskCertification({
     admin,
     portfolio,
@@ -102,6 +106,7 @@ async function fixture() {
     loss,
     observer,
     registryOptions: options('DATABASE_INSTRUMENT_REGISTRY_URL'),
+    nativeAmend,
   });
   const commandHash = computeCommandHash('createOrder', f.created.command, {
     profile: f.key.binding.profile,
@@ -127,8 +132,8 @@ async function open() {
   handles.push(port);
   return port;
 }
-async function bridgeFixture(dispatch = true) {
-  const f = await fixture(),
+async function bridgeFixture(dispatch = true, nativeAmend = false) {
+  const f = await fixture(nativeAmend),
     port = await open();
   const grant = await port.approve(f.input, io());
   const claim = await orders.begin(f.key.binding, f.created.id, f.created.intentId, grant, io());
@@ -193,6 +198,281 @@ async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
     state: JSON.parse(book.state) as { holds: { id: string; status: string; amount: string }[] },
   };
 }
+async function reconciledBridge(nativeAmend = false) {
+  const f = await bridgeFixture(true, nativeAmend);
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const native = orderSchema.parse({
+    ...nativeOrderFixture,
+    internalOrderId: f.created.id,
+    intentId: f.created.intentId,
+    account: {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    },
+    scope: f.risk.record.instrument.scope,
+    instrumentId: f.created.command.instrumentId,
+    clientOrderId: f.created.command.clientOrderId,
+    exchangeOrderId: 'amend-' + f.created.id,
+    createdAt: f.created.createdAt,
+    updatedAt: Date.now(),
+    status: 'OPEN',
+    quantity: f.created.command.size.value,
+    price: { state: 'AVAILABLE', value: f.created.command.limitPrice },
+    filledQuantity: '0',
+    averageFillPrice: { state: 'UNAVAILABLE', reason: 'NO_EXECUTIONS' },
+    fees: [],
+  });
+  const target = await orders.complete(f.key.binding, f.created.id, native, io());
+  const pb = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  const checkpoint = await portfolio.read(pb, io());
+  expect(checkpoint.state.positions).toEqual([]);
+  await portfolio.apply(
+    pb,
+    snapshot({
+      id: randomUUID(),
+      timestamp: Date.now(),
+      balances: checkpoint.state.balances,
+      positions: [],
+    }),
+    checkpoint.revision,
+    io(),
+  );
+  const before = await bridgeState(f);
+  expect(before.reservation).toEqual({ status: 'ACTIVE', amount: '5.005' });
+  return { ...f, native, target, before };
+}
+it('certifies a native-resolved Portfolio hold with its durable resolution history across coordinator restart', async () => {
+  const f = await reconciledBridge();
+  const next = await secondInput(f);
+  const key = { ...f.key, intentId: next.intentId };
+  const store = await createPostgresRiskSnapshotStore(options('DATABASE_RISK_CERTIFICATION_URL'));
+  handles.push(store);
+  const first = await createRiskSnapshotCoordinator({ store, now: () => Date.now() }).certify(
+    key,
+    io(),
+  );
+  expect(first.projection.snapshot).toMatchObject({
+    instrumentExposure: '5',
+    availableAmount: '994.995',
+    openOrders: 1,
+    unknownExposure: false,
+  });
+  expect(await bridgeState(f)).toEqual(f.before);
+  const restarted = await createPostgresRiskSnapshotStore(
+    options('DATABASE_RISK_CERTIFICATION_URL'),
+  );
+  handles.push(restarted);
+  const current = await createRiskSnapshotCoordinator({
+    store: restarted,
+    now: () => Date.now(),
+  }).readCurrent(key, io());
+  expect(current.id).toBe(first.id);
+  expect(current.hash).toBe(first.hash);
+  expect(await bridgeState(f)).toEqual(f.before);
+});
+async function amendmentFixture() {
+  const f = await reconciledBridge(true);
+  const { native, target } = f;
+  const { clientOrderId: omitted, ...replacement } = target.command;
+  void omitted;
+  const amendment = await orders.amendIntent(
+    f.key.binding,
+    target.id,
+    {
+      key: randomUUID(),
+      expectedVersion: String(target.version),
+      dbRuleId: target.draft.dbRuleId,
+      replacement: { ...replacement, size: { ...replacement.size, value: parseDecimal('0.4') } },
+    },
+    { order: native, receivedAt: Date.now() },
+    io(),
+  );
+  const input = {
+    binding: f.key.binding,
+    state: { id: target.id },
+    intentId: amendment.intentId,
+    operation: 'AMEND' as const,
+    commandHash: amendment.commandHash,
+  };
+  return { ...f, amendment, amendmentInput: input };
+}
+it('certified native AMEND approval reserves only its zero delta and retains primary collateral across restart', async () => {
+  const f = await amendmentFixture();
+  const { target, before, amendment, amendmentInput: input } = f;
+  const ledgerCount = async () =>
+    (
+      await admin.query<{ n: number }>(
+        'SELECT count(*)::integer n FROM public.ledger_transaction WHERE "tenantId"=$1',
+        [f.key.binding.tenantId],
+      )
+    ).rows[0]!.n;
+  const previousLedger = await ledgerCount();
+  const port = await open();
+  const [first, second] = await Promise.all([port.approve(input, io()), port.approve(input, io())]);
+  expect(second).toEqual(first);
+  expect(first.reservationId).not.toBe(f.grant.reservationId);
+  expect(
+    (
+      await admin.query<{ amount: string; status: string }>(
+        'SELECT trim_scale(amount)::text amount,status FROM public.risk_reservation WHERE "tenantId"=$1 AND id=$2',
+        [f.key.binding.tenantId, first.reservationId],
+      )
+    ).rows,
+  ).toEqual([{ amount: '0', status: 'ACTIVE' }]);
+  const after = await bridgeState(f);
+  expect(after.reservation).toEqual(before.reservation);
+  expect(after.state.holds).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: f.grant.reservationId, amount: '5.005', status: 'RESERVED' }),
+      expect.objectContaining({ id: first.reservationId, amount: '0', status: 'RESERVED' }),
+    ]),
+  );
+  expect(after.state.holds).toHaveLength(2);
+  expect(await ledgerCount()).toBe(previousLedger);
+  const source = await createPostgresRiskSnapshotStore(options('DATABASE_RISK_CERTIFICATION_URL'));
+  handles.push(source);
+  const certificate = await createRiskSnapshotCoordinator({
+    store: source,
+    now: () => Date.now(),
+  }).certify({ ...f.key, intentId: amendment.intentId }, io());
+  expect(certificate.projection.snapshot).toMatchObject({
+    instrumentExposure: '5',
+    accountExposure: '5',
+    openOrders: 1,
+    availableAmount: '994.995',
+    unknownExposure: false,
+  });
+  expect(await bridgeState(f)).toEqual(after);
+  const restarted = await open();
+  expect(await restarted.approve(input, io())).toEqual(first);
+  expect(await bridgeState(f)).toEqual(after);
+  expect(await ledgerCount()).toBe(previousLedger);
+  await expect(restarted.approve({ ...input, commandHash: 'f'.repeat(64) }, io())).rejects.toThrow(
+    'RISK_ADMISSION_CONFLICT',
+  );
+  expect((await orders.read(f.key.binding, target.id, io())).command).toEqual(f.created.command);
+});
+it.each(['POLICY', 'RULES', 'PERMISSION', 'NATIVE_RACE'] as const)(
+  'AMEND admission rereads current %s and rejects without changing primary collateral',
+  async (kind) => {
+    const f = await amendmentFixture();
+    const before = await bridgeState(f);
+    if (kind === 'POLICY') {
+      await user.update(
+        {
+          scope: { kind: 'USER', tenantId: f.key.binding.tenantId },
+          mode: 'TESTNET',
+          eventId: randomUUID(),
+          expectedVersion: '1',
+          reason: 'ISOLATED_AMEND_CURRENT_POLICY',
+          limits: riskLimitsSchema.parse({ ...f.risk.user, maxOrderNotional: '1' }),
+        },
+        io(),
+      );
+    } else if (kind === 'RULES') {
+      const registry = await createPostgresInstrumentRegistry({
+        ...options('DATABASE_INSTRUMENT_REGISTRY_URL'),
+        scope: f.risk.record.instrument.scope,
+        instrumentIds: [f.key.instrumentId],
+      });
+      try {
+        expect(
+          (
+            await registry.putBatch(
+              [
+                {
+                  ...f.risk.record,
+                  instrument: { ...f.risk.record.instrument, metadataVersion: randomUUID() },
+                  rules: { ...f.risk.record.rules, version: randomUUID() },
+                },
+              ],
+              Date.now(),
+              io(),
+            )
+          ).ok,
+        ).toBe(true);
+      } finally {
+        await registry.close();
+      }
+    } else if (kind === 'PERMISSION') {
+      await admin.query(
+        'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+        [f.key.binding.accountId],
+      );
+    } else {
+      // A later authoritative observation invalidates the immutable target revision.
+      await orders.complete(
+        f.key.binding,
+        f.created.id,
+        orderSchema.parse({ ...f.native, updatedAt: f.native.updatedAt + 1 }),
+        io(),
+      );
+    }
+    const port = await open();
+    await expect(port.approve(f.amendmentInput, io())).rejects.toThrow();
+    expect(await bridgeState(f)).toEqual(before);
+    expect(
+      (
+        await admin.query('SELECT id FROM public.risk_reservation WHERE "tenantId"=$1', [
+          f.key.binding.tenantId,
+        ])
+      ).rows,
+    ).toEqual([{ id: f.grant.reservationId }]);
+  },
+);
+it('AMEND returns no grant on a real lost COMMIT response and recovers its zero delta across restart', async () => {
+  const f = await amendmentFixture();
+  const proxy = await registryCommitProxy(
+    options('DATABASE_RISK_ADMISSION_URL').connectionString,
+    'ADMISSION',
+  );
+  let port: Awaited<ReturnType<typeof createPostgresOrderRiskPort>> | undefined;
+  try {
+    port = await createPostgresOrderRiskPort({
+      connectionString: proxy.connectionString,
+      environment: 'test',
+    });
+    proxy.arm();
+    await expect(port.approve(f.amendmentInput, io())).rejects.toThrow(
+      'RISK_SNAPSHOT_STORE_FAILED',
+    );
+    expect(proxy.dropped()).toBe(1);
+    await port.close();
+    const after = await bridgeState(f);
+    expect(after.reservation).toEqual(f.before.reservation);
+    const restarted = await open();
+    const grant = await restarted.approve(f.amendmentInput, io());
+    expect(await restarted.approve(f.amendmentInput, io())).toEqual(grant);
+    expect(after.state.holds).toHaveLength(2);
+    expect(after.state.holds).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: grant.reservationId, amount: '0', status: 'RESERVED' }),
+      ]),
+    );
+    expect(await bridgeState(f)).toEqual(after);
+    expect(
+      (
+        await admin.query('SELECT id FROM public.risk_reservation WHERE "tenantId"=$1', [
+          f.key.binding.tenantId,
+        ])
+      ).rowCount,
+    ).toBe(2);
+  } finally {
+    await port?.close();
+    await proxy.close();
+  }
+});
 it.each(['internalOrderId', 'intentId'] as const)(
   'native SQL authority rejects conflicting %s without changing UNKNOWN collateral',
   async (field) => {

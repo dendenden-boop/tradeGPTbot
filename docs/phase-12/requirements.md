@@ -70,3 +70,9 @@ Every new production transport start must require an exact certified atomic issu
 ## Native evidence identity hardening
 
 Before enabling certified AMEND controls, normalized native evidence must bind the exact durable Order and original PLACE intent. A matching exchange/client locator cannot override a conflicting internal mapping. Require unit and real PostgreSQL regressions at both reducer and SQL-writer boundaries, retain UNKNOWN reservation/hold across rejection and restart, and use only an additive migration. Full OS/Docker acceptance is required; LIVE stays disabled.
+
+## Certified native control admission
+
+An unchanged-price Spot TESTNET LIMIT/GTC quantity decrease must use its actual immutable AMEND intent and current target proof. Atomic approval retains the primary PLACE collateral, independently proves coverage of remaining principal and the current maximum fee, and records a distinct zero-delta decision/reservation/Portfolio commitment. It must count the logical order and monetary exposure once. Exact replay/restart cannot add another commitment or ledger effect; uncertain COMMIT returns no grant. Current policy/rules/permission replacement and native target races must reject before issuance. This admission prerequisite does not enable transport, release collateral on ACK or accept the complete AMEND lifecycle.
+
+Portfolio certification must support an issued hold resolved through the private durable RESOLVE_COMMITMENT lifecycle. The exact event must agree with immutable Portfolio evidence, reservation state and the current hold watermark. A self-reported fingerprint or missing/conflicting resolution is insufficient authority. Legacy COMMITMENT histories and released tombstones remain valid under their existing contracts.
