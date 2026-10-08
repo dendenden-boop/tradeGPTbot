@@ -160,6 +160,50 @@ it.each(['instrument', 'rules'] as const)(
     expect((await current(scope))?.record.rules.version).toBe('B');
   },
 );
+it.each(['record', 'version'] as const)(
+  'bounded recovery rejects inconsistent immutable %s history',
+  async (kind) => {
+    const scope = scoped(),
+      registry = await open(scope),
+      original = record(scope),
+      inconsistent = { ...original, rules: { ...original.rules, tickSize: '0.1' } };
+    expect(await registry.put(original, Date.now(), io())).toMatchObject({ ok: true });
+    const transaction = await admin.connect();
+    try {
+      await transaction.query('BEGIN');
+      await transaction.query(
+        'INSERT INTO ctp_registry.record_revision(scope,id,revision,previous_revision,record) VALUES($1::jsonb,$2,2,1,$3::jsonb)',
+        [
+          JSON.stringify(scope),
+          original.instrument.id,
+          JSON.stringify(kind === 'version' ? inconsistent : original),
+        ],
+      );
+      await transaction.query(
+        'UPDATE ctp_registry.current_record SET record=$3::jsonb,revision=$4 WHERE scope=$1::jsonb AND id=$2',
+        [JSON.stringify(scope), original.instrument.id, JSON.stringify(inconsistent), 2],
+      );
+      await expect(
+        transaction.query('SELECT ctp_registry.read_current($1::jsonb,$2::jsonb)', [
+          JSON.stringify(scope),
+          JSON.stringify([original.instrument.id]),
+        ]),
+      ).rejects.toThrow('REGISTRY_HISTORY_INCOMPLETE');
+    } finally {
+      await transaction.query('ROLLBACK');
+      transaction.release();
+    }
+    expect(await current(scope)).toEqual({ revision: '1', record: original });
+    await registry.close();
+    const restart = await open(scope);
+    expect(
+      await restart.readCurrent(scope, original.instrument.id, Date.now(), io()),
+    ).toMatchObject({
+      ok: true,
+      value: original,
+    });
+  },
+);
 it('serializes concurrent exact duplicates across independent writers without duplicate history or revision growth', async () => {
   const scope = scoped(),
     a = record(scope),
