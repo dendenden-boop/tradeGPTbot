@@ -9,6 +9,7 @@ import {
   mutationOutcomeSchema,
   nonNegativeAmountSchema,
   positiveAmountSchema,
+  type InPlaceAmendment,
 } from '@ctp/exchange-core';
 import { canonical } from '@ctp/portfolio';
 export { canonical };
@@ -49,6 +50,29 @@ export const draftSchema = z.strictObject({
   order: orderDraftSchema,
 });
 export type OrderDraft = z.infer<typeof draftSchema>;
+/** A caller requests semantics; server composition supplies the fresh native target proof. */
+export const amendDraftSchema = z.strictObject({
+  key: idSchema,
+  expectedVersion: z
+    .string()
+    .regex(/^[1-9][0-9]{0,9}$/)
+    .refine((v) => BigInt(v) <= 2147483646n && BigInt(v).toString() === v),
+  dbRuleId: z.uuid(),
+  replacement: orderDraftSchema,
+});
+export type AmendDraft = z.infer<typeof amendDraftSchema>;
+export const nativeAmendTargetSchema = z.strictObject({
+  order: orderSchema,
+  receivedAt: timestampSchema,
+});
+export type NativeAmendTarget = z.infer<typeof nativeAmendTargetSchema>;
+export interface StoredAmendment {
+  state: OrderState;
+  intentId: string;
+  commandHash: string;
+  command: InPlaceAmendment;
+  dispatched: boolean;
+}
 export const statusSchema = z.enum([
   'CREATED',
   'RISK_APPROVED',
@@ -140,6 +164,20 @@ export interface OrderStore {
     context: IoContext,
   ): Promise<OrderState | null>;
   create(binding: OrderBinding, draft: OrderDraft, context: IoContext): Promise<OrderState>;
+  findAmend(
+    binding: OrderBinding,
+    id: string,
+    request: AmendDraft,
+    context: IoContext,
+  ): Promise<StoredAmendment | null>;
+  /** Permanent exact replay precedes target/current-rule admission. No transport permission. */
+  amendIntent(
+    binding: OrderBinding,
+    id: string,
+    request: AmendDraft,
+    evidence: NativeAmendTarget,
+    context: IoContext,
+  ): Promise<StoredAmendment>;
   read(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
   cancelIntent(
     binding: OrderBinding,

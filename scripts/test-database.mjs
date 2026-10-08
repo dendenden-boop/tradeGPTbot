@@ -36,6 +36,7 @@ const expectedMigrations = [
   '202610080006_legacy_native_evidence_recovery',
   '202610080007_bounded_registry_recovery',
   '202610080008_require_certified_dispatch',
+  '202610080009_immutable_amend_intent',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;

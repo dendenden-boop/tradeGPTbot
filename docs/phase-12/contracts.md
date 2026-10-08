@@ -6,6 +6,12 @@ The common getAmendmentEvidence operation accepts the immutable classified IN_PL
 
 Binance exposes the existing bounded signed amendment-history protocol through this common port for Spot TESTNET only. Saturated/inconsistent history rejects; empty history remains INDETERMINATE across transport recreation. The read performs no mutation admission or dispatch. Existing HTTP abort/deadline, queue and response-size bounds apply. Other profiles fail closed; production AMEND remains UNSUPPORTED until the durable intent/atomic Risk delta/hold/attempt/permit/fill-race/restart chain is accepted together.
 
+## Immutable amendment intent construction
+
+The server-only OrderStore accepts semantic key, expected durable revision, current DB rule identity and replacement fields. Native target evidence comes separately from the trusted adapter read, never from a user request. A fresh receipt of an unchanged idle order may retain its older native update time; the exact full native body must match the durable observation. Future/stale receipts, changed target, pending/UNKNOWN state, active attempt, LIVE/PAPER and unsupported semantic changes reject before allocation. The initial construction permits only Spot LIMIT/GTC cumulative quantity reduction at unchanged price, with preserved exchange identity and a new lossless server client counter.
+
+Authoritative findAmend and amendIntent exact replay precede current rules/target validation. Binding/order/request conflict rejects; exact replay returns the original intent, command/hash and client identity after restart or metadata replacement. A new stale request gets no bypass. Intent, immutable command, counter and outbox commit in one bounded GLOBAL → tenant → account → order transaction; outbox failure rolls them back. The original PLACE command/projection stays unchanged. Additive migration 27 permits this exact command shape and retains immutable history/scope. It grants no new SQL privilege. begin explicitly rejects AMEND; certified approval/final transport and native effective-state settlement remain required before enabling dispatch.
+
 Current cross-phase [runtime InstrumentRegistry contract](runtime-instrument-registry.md) separates bounded observational metadata projections from authoritative PostgreSQL current reads and atomic durable version history. Its complete native/OS/Docker acceptance is recorded in verification; it is not a completed Risk certificate or mutation grant.
 
 ## PostgreSQL physical acquisition lifecycle

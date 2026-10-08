@@ -6,6 +6,7 @@ import {
   orderSchema,
   createExchangeAdapter,
   createInstrumentRegistry,
+  parseDecimal,
   type Order,
 } from '@ctp/exchange-core';
 import {
@@ -15,6 +16,7 @@ import {
   type OrderState,
   type RiskGrant,
   hash,
+  amendDraftSchema,
 } from '@ctp/order-engine';
 import { createPostgresPortfolioStore, type PortfolioStore } from '@ctp/portfolio';
 import { createPostgresMarketSnapshots } from '@ctp/market-data';
@@ -1444,3 +1446,219 @@ it.each(['abort', 'deadline'] as const)(
     expect((await store.create(b, draft, io())).status).toBe('CREATED');
   },
 );
+
+it('persists an immutable native AMEND intent with permanent replay across rules replacement and restart', async () => {
+  const { b, draft } = await fixture();
+  const initial = await store.create(
+    b,
+    {
+      ...draft,
+      order: { ...draft.order, type: 'LIMIT', limitPrice: parseDecimal('100'), timeInForce: 'GTC' },
+    },
+    io(),
+  );
+  const proof = observation(initial, { price: { state: 'AVAILABLE', value: '100' } });
+  const claim = await store.begin(b, initial.id, initial.intentId, await grant(initial), io());
+  if (!claim) throw new Error('Missing historical fixture claim');
+  await store.result(b, claim, { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } }, io());
+  const target = await store.observe(b, initial.id, proof, io());
+  const request = {
+    key: randomUUID(),
+    expectedVersion: String(target.version),
+    dbRuleId: draft.dbRuleId,
+    replacement: { ...target.draft.order, size: { ...target.command.size, value: '5' } },
+  };
+  type StoredAmend = {
+    intentId: string;
+    commandHash: string;
+    command: {
+      target: { revision: string; placeIntentId: string; current: OrderState['command'] };
+      replacement: OrderState['command'];
+    };
+    state: OrderState;
+    dispatched: boolean;
+  };
+  type AmendPort = (
+    binding: OrderState['binding'],
+    orderId: string,
+    request: unknown,
+    evidence: { order: Order; receivedAt: number },
+    context: ReturnType<typeof io>,
+  ) => Promise<StoredAmend>;
+  const amend = Reflect.get(store, 'amendIntent') as AmendPort | undefined;
+  expect(amend).toBeTypeOf('function');
+  if (!amend) throw new Error('ORDER_DURABLE_AMEND_CONTRACT_MISSING');
+  const created = await amend(
+    b,
+    target.id,
+    request,
+    { order: proof, receivedAt: Date.now() },
+    io(),
+  );
+  expect(created.intentId).not.toBe(target.intentId);
+  expect(created.command.target).toMatchObject({
+    revision: request.expectedVersion,
+    placeIntentId: target.intentId,
+    current: target.command,
+  });
+  expect(created.command.replacement.clientOrderId).toBe('9007199254740994');
+  expect(created.command.replacement.size.value).toBe('5');
+  expect(created.state.command).toEqual(target.command);
+  expect(created.dispatched).toBe(false);
+  await expect(
+    amend(
+      b,
+      target.id,
+      { ...request, key: randomUUID(), expectedVersion: '1' },
+      { order: proof, receivedAt: Date.now() },
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_AMEND_TARGET');
+  await expect(
+    amend(b, target.id, { ...request, key: randomUUID() }, { order: proof, receivedAt: 0 }, io()),
+  ).rejects.toThrow('ORDER_AMEND_TARGET');
+  await expect(
+    amend(
+      b,
+      target.id,
+      { ...request, key: randomUUID() },
+      { order: { ...proof, clientOrderId: 'another-client' }, receivedAt: Date.now() },
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_AMEND_TARGET');
+  await admin.query(
+    `CREATE FUNCTION ctp_execution.test_amend_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."tenantId"='${b.tenantId}'::uuid AND NEW.payload->>'operation'='AMEND' THEN RAISE EXCEPTION 'ISOLATED_AMEND_OUTBOX_FAILURE'; END IF; RETURN NEW; END $$; CREATE TRIGGER execution_test_amend_fail BEFORE INSERT ON public.outbox_event FOR EACH ROW EXECUTE FUNCTION ctp_execution.test_amend_fail()`,
+  );
+  try {
+    await expect(
+      amend(
+        b,
+        target.id,
+        { ...request, key: randomUUID() },
+        { order: proof, receivedAt: Date.now() },
+        io(),
+      ),
+    ).rejects.toThrow('ORDER_STORE_FAILED');
+  } finally {
+    await admin.query(
+      'DROP TRIGGER execution_test_amend_fail ON public.outbox_event; DROP FUNCTION ctp_execution.test_amend_fail()',
+    );
+  }
+  const joined = await admin.query<{
+    operation: string;
+    target: string;
+    quantity: string;
+    client: string;
+    place: string;
+  }>(
+    `SELECT i.operation,i."targetOrderId" AS target,i.quantity::text,
+     c.command::jsonb->'replacement'->>'clientOrderId' AS client,
+     c.command::jsonb->'target'->>'placeIntentId' AS place
+     FROM public.order_intent i JOIN ctp_execution.command c ON c."tenantId"=i."tenantId" AND c."intentId"=i.id
+     WHERE i."tenantId"=$1 AND i.id=$2`,
+    [b.tenantId, created.intentId],
+  );
+  expect(joined.rows[0]).toEqual({
+    operation: 'AMEND',
+    target: target.id,
+    quantity: '5',
+    client: '9007199254740994',
+    place: target.intentId,
+  });
+  const replayed = await Promise.all(
+    [1, 2].map(() => amend(b, target.id, request, { order: proof, receivedAt: Date.now() }, io())),
+  );
+  expect(replayed.map((r) => r.intentId)).toEqual([created.intentId, created.intentId]);
+  await expect(
+    store.begin(
+      b,
+      target.id,
+      created.intentId,
+      {
+        decisionId: randomUUID(),
+        reservationId: randomUUID(),
+        permissionEpoch: '0',
+        expiresAt: Date.now() + 1000,
+      },
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_AMEND_NOT_ENABLED');
+  await expect(
+    amend(
+      b,
+      target.id,
+      {
+        ...request,
+        replacement: { ...request.replacement, size: { ...request.replacement.size, value: '4' } },
+      },
+      { order: proof, receivedAt: Date.now() },
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_IDEMPOTENCY_CONFLICT');
+  const rows = await admin.query<{
+    counter: string;
+    commands: string;
+    intents: string;
+    attempts: string;
+  }>(
+    `SELECT a."clientIdHighWatermark"::text AS counter,
+      (SELECT count(*)::text FROM ctp_execution.command WHERE "tenantId"=$1) AS commands,
+      (SELECT count(*)::text FROM public.order_intent WHERE "tenantId"=$1) AS intents,
+      (SELECT count(*)::text FROM public.submission_attempt WHERE "tenantId"=$1) AS attempts
+     FROM public.exchange_account a WHERE a."tenantId"=$1 AND a.id=$2`,
+    [b.tenantId, b.accountId],
+  );
+  expect(rows.rows[0]).toEqual({
+    counter: '9007199254740994',
+    commands: '2',
+    intents: '2',
+    attempts: '1',
+  });
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    draft.dbRuleId,
+  ]);
+  const newRule = randomUUID();
+  await admin.query(
+    `INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1,$2,2,true,now(),now(),$3,0.01,0.001,0.001,'{"version":"v2"}')`,
+    [newRule, draft.dbInstrumentId, Buffer.alloc(32, 2)],
+  );
+  const restarted = await open();
+  try {
+    const replay = Reflect.get(restarted, 'amendIntent') as AmendPort;
+    const durable = await restarted.findAmend(b, target.id, amendDraftSchema.parse(request), io());
+    expect(durable?.intentId).toBe(created.intentId);
+    expect(durable?.command).toEqual(created.command);
+    expect(
+      await restarted.findAmend(
+        b,
+        target.id,
+        amendDraftSchema.parse({ ...request, key: randomUUID() }),
+        io(),
+      ),
+    ).toBeNull();
+    const same = await replay(b, target.id, request, { order: proof, receivedAt: 0 }, io());
+    expect(same.intentId).toBe(created.intentId);
+    expect(same.commandHash).toBe(created.commandHash);
+    expect(same.command).toEqual(created.command);
+    await expect(
+      replay(
+        b,
+        target.id,
+        { ...request, key: randomUUID() },
+        { order: proof, receivedAt: Date.now() },
+        io(),
+      ),
+    ).rejects.toThrow('ORDER_METADATA');
+    expect((await restarted.read(b, target.id, io())).command).toEqual(target.command);
+  } finally {
+    await restarted.close();
+  }
+  expect(
+    (
+      await admin.query(
+        'SELECT "clientIdHighWatermark"::text AS counter FROM public.exchange_account WHERE id=$1',
+        [b.accountId],
+      )
+    ).rows[0],
+  ).toEqual({ counter: '9007199254740994' });
+});

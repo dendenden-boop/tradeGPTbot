@@ -13,13 +13,16 @@ import {
   type OrderState,
   type DispatchClaim,
   type OrderBinding,
+  type StoredAmendment,
 } from '../src/domain.js';
 import { reduceOrder } from '../src/state.js';
+import { prepareOrderAmendment } from '../src/amendment.js';
 import { state } from './fixtures.js';
 export function memoryStore(currentRule = () => 'v1') {
   const orders = new Map<string, OrderState>(),
     keys = new Map<string, { id: string; fp: string }>(),
     cancel = new Map<string, { intentId: string; fp: string; ruleVersion: string }>(),
+    amendments = new Map<string, { requestHash: string; result: StoredAmendment }>(),
     claims = new Map<string, DispatchClaim>(),
     consumed = new Set<string>();
   let counter = 0n;
@@ -55,6 +58,43 @@ export function memoryStore(currentRule = () => 'v1') {
     },
     async read(b, id) {
       return bind(b, id);
+    },
+    async findAmend(b, id, request) {
+      const previous = amendments.get(`${b.tenantId}:${request.key}`);
+      if (!previous) return null;
+      if (previous.requestHash !== hash({ binding: b, orderId: id, request }))
+        throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+      return structuredClone({ ...previous.result, state: bind(b, id) });
+    },
+    async amendIntent(b, id, request, evidence) {
+      const requestHash = hash({ binding: b, orderId: id, request }),
+        key = `${b.tenantId}:${request.key}`,
+        previous = amendments.get(key),
+        state = bind(b, id);
+      if (previous) {
+        if (previous.requestHash !== requestHash) throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+        return structuredClone({ ...previous.result, state });
+      }
+      const clientOrderId = (counter + 1n).toString();
+      const command = prepareOrderAmendment(state, request, evidence, clientOrderId, Date.now());
+      if (request.replacement.ruleVersion !== currentRule()) throw new Error('ORDER_METADATA');
+      const result: StoredAmendment = {
+        state,
+        intentId: randomUUID(),
+        command,
+        commandHash: computeCommandHash('amendOrder', command, {
+          profile: b.profile,
+          account: {
+            tenantId: b.tenantId,
+            connectionId: b.connectionId,
+            externalAccountId: b.externalAccountId,
+          },
+        }),
+        dispatched: false,
+      };
+      counter++;
+      amendments.set(key, { requestHash, result });
+      return structuredClone(result);
     },
     async cancelIntent(b, id, key) {
       const s = bind(b, id),
