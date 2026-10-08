@@ -41,6 +41,7 @@ const expectedMigrations = [
   '202610080011_certified_native_controls',
   '202610080012_native_amend_dispatch',
   '202610080013_native_amend_application',
+  '202610080014_native_amend_identity_type',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -1463,7 +1464,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       },
       secrets,
       echo: true,
-      timeoutMs: 180000,
+      // Whole serial suite budget; individual transaction/abort deadlines stay unchanged.
+      timeoutMs: 300000,
     },
   );
   const tests = JSON.parse(

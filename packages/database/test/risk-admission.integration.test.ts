@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { beforeAll, afterAll, expect, it } from 'vitest';
+import { beforeAll, afterEach, afterAll, expect, it } from 'vitest';
 import { computeCommandHash, parseDecimal, orderSchema } from '@ctp/exchange-core';
 import {
   canonical,
@@ -57,6 +57,7 @@ let portfolio: PortfolioStore,
   loss: Awaited<ReturnType<typeof createPostgresLossJournal>>,
   observer: Awaited<ReturnType<typeof createPostgresRiskObservations>>;
 const handles: { close(): Promise<void> }[] = [];
+let sharedHandleCount = 0;
 beforeAll(async () => {
   portfolio = await createPostgresPortfolioStore(options('DATABASE_PORTFOLIO_URL'));
   orders = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
@@ -91,6 +92,11 @@ beforeAll(async () => {
     },
     io(),
   );
+  sharedHandleCount = handles.length;
+});
+afterEach(async () => {
+  // Retain only the module-owned fixtures; each test owns every extra runtime pool.
+  for (const handle of handles.splice(sharedHandleCount)) await handle.close();
 });
 afterAll(async () => {
   for (const h of handles.splice(0)) await h.close();
@@ -651,7 +657,7 @@ it('native AMEND SQL weighted average agrees with canonical Portfolio half-even 
     expect(native.rows[0]!.value).toBe(ratio(amount, '1', quantity));
   }
 });
-it.each(['NULL_TIME', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
+it.each(['NULL_TIME', 'NUMERIC_ID', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
   'direct execution SQL cannot bypass AMEND %s application authority',
   async (kind) => {
     const f = await dispatchedAmendment(),
@@ -670,10 +676,11 @@ it.each(['NULL_TIME', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
         ).rejects.toMatchObject({ code: '42501' });
       else {
         const proof = structuredClone(f.proof) as unknown as {
-          evidence: { evidence: { time: unknown } };
+          evidence: { evidence: { time: unknown; executionId: unknown } };
           order: { account: { externalAccountId: string } };
         };
         if (kind === 'NULL_TIME') proof.evidence.evidence.time = null;
+        else if (kind === 'NUMERIC_ID') proof.evidence.evidence.executionId = 1;
         else proof.order.account.externalAccountId = 'foreign';
         await expect(
           client.query('SELECT ctp_execution.apply_amendment($1::jsonb)', [
