@@ -126,7 +126,12 @@ function trade(
 export function reducePortfolio(
   input: PortfolioState,
   raw: PortfolioEvent,
-  context: { now: () => number; holdWatermark?: HoldWatermark | null },
+  context: {
+    now: () => number;
+    holdWatermark?: HoldWatermark | null;
+    /** Server-supplied evidence from the durable reservation lifecycle, never event fields. */
+    resolutionEvidence?: { eventId: string; fingerprint: string };
+  },
 ): Reduction {
   const s = restorePortfolio(input),
     e = eventSchema.parse(raw),
@@ -134,15 +139,27 @@ export function reducePortfolio(
   const now = context.now();
   if (!Number.isSafeInteger(now) || e.timestamp > now) throw new Error('FUTURE_EVENT');
   let holdWatermark: HoldWatermark | undefined;
-  if (e.type === 'COMMITMENT' || e.type === 'RELEASE') {
+  if (e.type === 'COMMITMENT' || e.type === 'RELEASE' || e.type === 'RESOLVE_COMMITMENT') {
+    const resolving = e.type === 'RESOLVE_COMMITMENT';
+    if (resolving) {
+      const proof = context.resolutionEvidence;
+      if (
+        !proof ||
+        proof.eventId !== e.id ||
+        proof.fingerprint !== createHash('sha256').update(canonical(e)).digest('hex')
+      )
+        throw new Error('RESOLUTION_PROOF_REQUIRED');
+    }
     if (context.holdWatermark === undefined) throw new Error('HOLD_HISTORY_REQUIRED');
     const previous = context.holdWatermark;
     const fingerprint = createHash('sha256')
       .update(
         canonical(
-          e.type === 'COMMITMENT'
-            ? { type: e.type, hold: e.hold }
-            : { type: e.type, holdId: e.holdId, resolved: e.resolved },
+          e.type === 'RESOLVE_COMMITMENT'
+            ? { type: e.type, hold: e.hold, proofId: e.proofId, proofHash: e.proofHash }
+            : e.type === 'COMMITMENT'
+              ? { type: e.type, hold: e.hold }
+              : { type: e.type, holdId: e.holdId, resolved: e.resolved },
         ),
       )
       .digest('hex');
@@ -152,13 +169,25 @@ export function reducePortfolio(
       if (fingerprint !== previous.fingerprint) throw new Error('HOLD_VERSION_CONFLICT');
       return { state: s, postings, holdWatermark: previous, ignored: true };
     }
-    if (previous?.released && e.type === 'COMMITMENT') throw new Error('HOLD_CLOSED');
+    if (previous?.released && e.type !== 'RELEASE') throw new Error('HOLD_CLOSED');
+    if (resolving) {
+      const old = s.holds.find((h) => h.id === e.hold.id);
+      if (
+        !old ||
+        old.asset !== e.hold.asset ||
+        old.reflected !== e.hold.reflected ||
+        cmp(e.hold.amount, old.amount) > 0 ||
+        e.hold.status !== 'RESERVED'
+      )
+        throw new Error('RESOLUTION_SCOPE');
+    }
     if (
       previous?.unknown &&
+      !resolving &&
       (e.type === 'RELEASE' ? !e.resolved : fingerprint !== previous.fingerprint)
     )
       throw new Error('UNKNOWN_COMMITMENT');
-    const active = s.holds.find((h) => h.id === (e.type === 'COMMITMENT' ? e.hold.id : e.holdId));
+    const active = s.holds.find((h) => h.id === (e.type === 'RELEASE' ? e.holdId : e.hold.id));
     if (active && !previous) throw new Error('HOLD_HISTORY_REQUIRED');
     holdWatermark = {
       timestamp: e.timestamp,
@@ -188,10 +217,14 @@ export function reducePortfolio(
   };
   if (e.type === 'GAP') {
     s.status = 'GAP';
-  } else if (e.type === 'COMMITMENT') {
+  } else if (e.type === 'COMMITMENT' || e.type === 'RESOLVE_COMMITMENT') {
     const old = s.holds.findIndex((h) => h.id === e.hold.id);
     const previous = s.holds[old];
-    if (previous?.status === 'UNKNOWN' && canonical(previous) !== canonical(e.hold))
+    if (
+      e.type === 'COMMITMENT' &&
+      previous?.status === 'UNKNOWN' &&
+      canonical(previous) !== canonical(e.hold)
+    )
       throw new Error('UNKNOWN_COMMITMENT');
     if (old < 0) s.holds.push(e.hold);
     else s.holds[old] = e.hold;

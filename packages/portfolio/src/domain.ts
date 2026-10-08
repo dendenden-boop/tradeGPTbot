@@ -121,6 +121,13 @@ export const eventSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...baseEvent, type: z.literal('COMMITMENT'), hold: holdSchema }),
   z.strictObject({
     ...baseEvent,
+    type: z.literal('RESOLVE_COMMITMENT'),
+    hold: holdSchema,
+    proofId: idSchema,
+    proofHash: z.string().regex(/^[a-f0-9]{64}$/),
+  }),
+  z.strictObject({
+    ...baseEvent,
     type: z.literal('RELEASE'),
     holdId: idSchema,
     resolved: z.boolean(),

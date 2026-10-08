@@ -3,6 +3,29 @@ import { expect, it } from 'vitest';
 import { reduceOrder } from '../src/state.js';
 import { parseDecimal } from '@ctp/exchange-core';
 import { state, native } from './fixtures.js';
+it.each(['different', 'unavailable'] as const)(
+  'rejects %s native limit price before reconciling an immutable PLACE',
+  (kind) => {
+    const s = state();
+    s.command = {
+      ...s.command,
+      type: 'LIMIT',
+      limitPrice: parseDecimal('100'),
+      timeInForce: 'GTC',
+    };
+    const observation = native(s);
+    if (observation.type !== 'NATIVE') throw new Error('INVALID_FIXTURE');
+    const price =
+      kind === 'different'
+        ? { state: 'AVAILABLE' as const, value: parseDecimal('101') }
+        : { state: 'UNAVAILABLE' as const, reason: 'NOT_PROVIDED' as const };
+    const apply = () => reduceOrder(s, { ...observation, order: { ...observation.order, price } });
+    // Core rejects an unavailable LIMIT price before projection. A different valid
+    // price must additionally fail the immutable PLACE scope comparison.
+    if (kind === 'different') expect(apply).toThrow('ORDER_SCOPE');
+    else expect(apply).toThrow();
+  },
+);
 it('persists explicit submit state before external action', () =>
   expect(
     reduceOrder(reduceOrder(state(), { type: 'APPROVE' }), {

@@ -248,6 +248,8 @@ export async function createPostgresPortfolioStore(options: {
         event = eventSchema.parse(raw),
         payload = canonical(event),
         fingerprint = digest(payload);
+      // Only the SQL reservation bridge can write this evidence and matching Risk state.
+      if (event.type === 'RESOLVE_COMMITMENT') throw new Error('RESOLUTION_PROOF_REQUIRED');
       if (
         !Number.isSafeInteger(expectedRevision) ||
         expectedRevision < 0 ||

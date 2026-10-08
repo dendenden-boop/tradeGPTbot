@@ -99,6 +99,25 @@ it('300 instruments survive 180 atomic refreshes, >100k permanent versions and r
     expect(result.value).toHaveLength(300);
     expect(registry.health().retained).toBe(300);
     if (refresh === 89) {
+      const recovery = await publisher.connect();
+      try {
+        for (const planMode of ['force_custom_plan', 'force_generic_plan'] as const) {
+          await recovery.query('BEGIN');
+          await recovery.query(`SET LOCAL plan_cache_mode='${planMode}'`);
+          // Both SQL plans must fit the existing one-second physical recovery
+          // deadline without depending on a favorable background ANALYZE.
+          await recovery.query("SET LOCAL statement_timeout='900ms'");
+          const recovered = await recovery.query<{ result: unknown[] }>(
+            'SELECT ctp_registry.read_current($1::jsonb,$2::jsonb) AS result',
+            [JSON.stringify(scope), JSON.stringify(ids)],
+          );
+          expect(recovered.rows[0]?.result).toHaveLength(300);
+          await recovery.query('COMMIT');
+        }
+      } finally {
+        await recovery.query('ROLLBACK').catch(() => {});
+        recovery.release();
+      }
       await registry.close();
       registry = await open(scope, ids);
     }
@@ -139,6 +158,50 @@ it.each(['instrument', 'rules'] as const)(
     expect(await restart.put(reuse, Date.now(), io())).toMatchObject({ ok: false });
     expect((await current(scope))?.revision).toBe('2');
     expect((await current(scope))?.record.rules.version).toBe('B');
+  },
+);
+it.each(['record', 'version'] as const)(
+  'bounded recovery rejects inconsistent immutable %s history',
+  async (kind) => {
+    const scope = scoped(),
+      registry = await open(scope),
+      original = record(scope),
+      inconsistent = { ...original, rules: { ...original.rules, tickSize: '0.1' } };
+    expect(await registry.put(original, Date.now(), io())).toMatchObject({ ok: true });
+    const transaction = await admin.connect();
+    try {
+      await transaction.query('BEGIN');
+      await transaction.query(
+        'INSERT INTO ctp_registry.record_revision(scope,id,revision,previous_revision,record) VALUES($1::jsonb,$2,2,1,$3::jsonb)',
+        [
+          JSON.stringify(scope),
+          original.instrument.id,
+          JSON.stringify(kind === 'version' ? inconsistent : original),
+        ],
+      );
+      await transaction.query(
+        'UPDATE ctp_registry.current_record SET record=$3::jsonb,revision=$4 WHERE scope=$1::jsonb AND id=$2',
+        [JSON.stringify(scope), original.instrument.id, JSON.stringify(inconsistent), 2],
+      );
+      await expect(
+        transaction.query('SELECT ctp_registry.read_current($1::jsonb,$2::jsonb)', [
+          JSON.stringify(scope),
+          JSON.stringify([original.instrument.id]),
+        ]),
+      ).rejects.toThrow('REGISTRY_HISTORY_INCOMPLETE');
+    } finally {
+      await transaction.query('ROLLBACK');
+      transaction.release();
+    }
+    expect(await current(scope)).toEqual({ revision: '1', record: original });
+    await registry.close();
+    const restart = await open(scope);
+    expect(
+      await restart.readCurrent(scope, original.instrument.id, Date.now(), io()),
+    ).toMatchObject({
+      ok: true,
+      value: original,
+    });
   },
 );
 it('serializes concurrent exact duplicates across independent writers without duplicate history or revision growth', async () => {

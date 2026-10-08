@@ -29,6 +29,13 @@ const expectedMigrations = [
   '202610070004_portfolio_capture_inventory',
   '202610070005_risk_snapshot_certification',
   '202610080001_atomic_risk_admission',
+  '202610080002_risk_reservation_lifecycle',
+  '202610080003_risk_residual_collateral',
+  '202610080004_current_risk_dispatch',
+  '202610080005_issued_hold_authority',
+  '202610080006_legacy_native_evidence_recovery',
+  '202610080007_bounded_registry_recovery',
+  '202610080008_require_certified_dispatch',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -101,7 +108,12 @@ const secrets = [
   admissionPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
-const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
+const databases = [
+  `ctp_p2_fresh_${suffix}`,
+  `ctp_p2_upgrade_${suffix}`,
+  `ctp_p2_owner_${suffix}`,
+  `ctp_p2_lifecycle_${suffix}`,
+];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
 const authRole = `ctp_p2_auth_${suffix}`;
@@ -1326,7 +1338,82 @@ try {
   );
   assert.equal(admissionOwner.success, true);
   assert.equal(admissionOwner.numPendingTests, 0);
-  assert.ok(admissionOwner.numPassedTests >= 13);
+  assert.ok(admissionOwner.numPassedTests >= 28);
+
+  // Restore a genuinely populated published-19 format before applying any
+  // lifecycle migration. The acceptance fixture uses actual atomic issuance;
+  // neither its certificates nor its reservations are empty placeholders.
+  const lifecyclePrior = await mkdtemp(path.join(workspace, '.cache', 'db-lifecycle-upgrade-'));
+  const lifecycleMigrations = path.join(lifecyclePrior, 'migrations');
+  await mkdir(lifecycleMigrations);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/migration_lock.toml'),
+    path.join(lifecycleMigrations, 'migration_lock.toml'),
+  );
+  for (const migration of expectedMigrations.slice(0, 19))
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', migration),
+      path.join(lifecycleMigrations, migration),
+      { recursive: true },
+    );
+  const lifecycleConfig = path.join(lifecyclePrior, 'prisma.config.ts');
+  await writeFile(
+    lifecycleConfig,
+    `import { defineConfig } from ${JSON.stringify(databaseRequire.resolve('prisma/config'))};
+export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packages/database/prisma/schema.prisma'))},migrations:{path:${JSON.stringify(lifecycleMigrations)}},datasource:{url:process.env.DATABASE_MIGRATION_URL}});\n`,
+  );
+  await migrate(databases[3], lifecycleConfig);
+  await admin.query(`REVOKE ALL ON DATABASE ${identifier(databases[3])} FROM PUBLIC`);
+  await admin.query(
+    `GRANT CONNECT ON DATABASE ${identifier(databases[3])} TO ${identifier(executionRole)}`,
+  );
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.upgrade.config.ts',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[0]),
+        DATABASE_PHASE12_UPGRADE_URL: dbUrl(databases[3]),
+        DATABASE_PHASE12_UPGRADE_EXECUTION_URL: dbUrl(
+          databases[3],
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+        ),
+        DATABASE_PORTFOLIO_URL: dbUrl(databases[0], false, false, false, false, true),
+        DATABASE_EXECUTION_URL: dbUrl(databases[0], false, false, false, false, false, true),
+        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[0], true),
+        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
+        DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
+        DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[0]),
+        DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
+        DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const lifecycleUpgrade = JSON.parse(
+    await readFile(
+      new URL('../test-results/risk-lifecycle-upgrade-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(lifecycleUpgrade.success, true);
+  assert.equal(lifecycleUpgrade.numPassedTests, 1);
+  assert.equal(lifecycleUpgrade.numPendingTests, 0);
 
   await run(
     process.execPath,
@@ -1469,6 +1556,7 @@ try {
     riskCertificationUpgradeFromPublished17: 'PASS',
     riskAdmissionUpgradeFromPublished18: 'PASS',
     riskAdmissionNonBypassOwner: 'PASS',
+    riskLifecyclePopulatedUpgradeFromPublished19: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

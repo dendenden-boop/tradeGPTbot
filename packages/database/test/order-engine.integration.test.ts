@@ -17,6 +17,14 @@ import {
   hash,
 } from '@ctp/order-engine';
 import { createPostgresPortfolioStore, type PortfolioStore } from '@ctp/portfolio';
+import { createPostgresMarketSnapshots } from '@ctp/market-data';
+import {
+  createPostgresOrderRiskPort,
+  createPostgresPolicies,
+  createPostgresLossJournal,
+  createPostgresRiskObservations,
+} from '@ctp/risk-engine';
+import { seedRiskCertification } from './fixtures/risk-certification.js';
 import { state, native } from '../../order-engine/test/fixtures.js';
 import { binding as portfolioBinding, snapshot, fill } from '../../portfolio/test/fixtures.js';
 import { instrument, rules, capabilities } from '../../exchange-core/test/fixtures/adapter.js';
@@ -174,6 +182,134 @@ async function grant(
   );
   return { decisionId, reservationId, permissionEpoch: '0', expiresAt: Date.now() + 10000 };
 }
+async function certifiedClaim() {
+  const options = (name: string) => ({
+    connectionString: required(name),
+    environment: 'test' as const,
+  });
+  const market = await createPostgresMarketSnapshots(options('DATABASE_MARKET_SNAPSHOT_URL')),
+    platform = await createPostgresPolicies({
+      ...options('DATABASE_RISK_POLICY_OPERATOR_URL'),
+      authority: 'PLATFORM',
+    }),
+    user = await createPostgresPolicies({
+      ...options('DATABASE_RISK_POLICY_CONTROLLER_URL'),
+      authority: 'USER',
+    }),
+    loss = await createPostgresLossJournal(options('DATABASE_RISK_EVIDENCE_URL')),
+    observer = await createPostgresRiskObservations(options('DATABASE_RISK_OBSERVATION_URL')),
+    risk = await createPostgresOrderRiskPort(options('DATABASE_RISK_ADMISSION_URL'));
+  try {
+    const f = await seedRiskCertification({
+        admin,
+        portfolio,
+        orders: store,
+        market,
+        platform,
+        user,
+        loss,
+        observer,
+        registryOptions: options('DATABASE_INSTRUMENT_REGISTRY_URL'),
+      }),
+      s = f.created,
+      b = s.binding,
+      commandHash = computeCommandHash('createOrder', s.command, {
+        profile: b.profile,
+        account: {
+          tenantId: b.tenantId,
+          connectionId: b.connectionId,
+          externalAccountId: b.externalAccountId,
+        },
+      }),
+      g = await risk.approve(
+        { binding: b, state: { id: s.id }, intentId: s.intentId, operation: 'PLACE', commandHash },
+        io(),
+      ),
+      c = await store.begin(b, s.id, s.intentId, g, io());
+    if (!c) throw new Error('Missing certified fixture claim');
+    return { b, draft: s.draft, s, g, c };
+  } finally {
+    await Promise.all([market, platform, user, loss, observer, risk].map((p) => p.close()));
+  }
+}
+it.each(['GATEWAY', 'DIRECT_SQL'] as const)(
+  'unissued legacy Risk rows cannot start transport through %s',
+  async (path) => {
+    const { b, draft } = await fixture(),
+      s = await store.create(b, draft, io()),
+      g = await grant(s),
+      claim = await store.begin(b, s.id, s.intentId, g, io());
+    if (!claim) throw new Error('Missing legacy fixture claim');
+    if (path === 'GATEWAY') {
+      const account = {
+        tenantId: b.tenantId,
+        connectionId: b.connectionId,
+        externalAccountId: b.externalAccountId,
+      };
+      expect(
+        await store.authorize(
+          'createOrder',
+          {
+            command: claim.command,
+            authorization: {
+              commandId: claim.intentId,
+              commandHash: claim.commandHash,
+              dispatchAttemptId: claim.attemptId,
+              profile: b.profile,
+              account,
+              issuedAt: Date.now(),
+              expiresAt: g.expiresAt,
+            },
+          },
+          { ...io(), profile: b.profile, account, correlationId: randomUUID() },
+        ),
+      ).toBe(false);
+    } else {
+      const writer = new Pool({
+        connectionString: required('DATABASE_EXECUTION_URL'),
+        max: 1,
+        query_timeout: 5000,
+      });
+      const transaction = await writer.connect();
+      try {
+        await transaction.query('BEGIN');
+        await transaction.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+        await expect(
+          transaction.query(
+            'UPDATE public.submission_attempt SET "transportStartedAt"=stamp.at,"permitConsumedAt"=stamp.at FROM (SELECT date_trunc(\'milliseconds\',clock_timestamp()) AS at) stamp WHERE "tenantId"=$1 AND id=$2',
+            [b.tenantId, claim.attemptId],
+          ),
+        ).rejects.toThrow('RISK_DISPATCH_ISSUANCE');
+      } finally {
+        await transaction.query('ROLLBACK');
+        transaction.release();
+        await writer.end();
+      }
+    }
+    expect(
+      (
+        await admin.query(
+          'SELECT "transportStartedAt","permitConsumedAt" FROM public.submission_attempt WHERE id=$1',
+          [claim.attemptId],
+        )
+      ).rows,
+    ).toEqual([{ transportStartedAt: null, permitConsumedAt: null }]);
+    const result = await store.result(
+      b,
+      claim,
+      { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+      io(),
+    );
+    expect(result.status).toBe('REJECTED');
+    expect(
+      (
+        await admin.query('SELECT "responseCode" FROM public.submission_attempt WHERE id=$1', [
+          claim.attemptId,
+        ])
+      ).rows,
+    ).toEqual([{ responseCode: 'NOT_SENT' }]);
+  },
+);
 function observation(s: OrderState, overrides: Record<string, unknown> = {}) {
   return orderSchema.parse({
     ...(native(s) as { type: 'NATIVE'; order: Order }).order,
@@ -659,19 +795,24 @@ it('durable attempt stays unconsumed across restart and definitive pretransport 
   }
 });
 it('execution cannot change immutable attempt fields or fabricate a half-consumed permit', async () => {
-  const { b, draft } = await fixture(),
-    s = await store.create(b, draft, io()),
-    g = await grant(s),
-    c = await store.begin(b, s.id, s.intentId, g, io());
+  const { b, c } = await certifiedClaim();
   if (!c) throw new Error('No claim');
   for (const update of [
     '"permitConsumedAt"=clock_timestamp()',
     '"transportStartedAt"=clock_timestamp()',
     '"workerId"=\'forged\'',
   ]) {
-    await expect(
-      admin.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
-    ).rejects.toMatchObject({ code: '23514' });
+    const transaction = await admin.connect();
+    try {
+      await transaction.query('BEGIN');
+      await transaction.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+      await expect(
+        transaction.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
+      ).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await transaction.query('ROLLBACK');
+      transaction.release();
+    }
   }
 });
 it('legacy protocol retains the published nonnull consumed timestamp invariant', async () => {
@@ -851,10 +992,7 @@ it.each(['COLUMN', 'TRIGGER'] as const)(
   },
 );
 it('consumes an exact adapter permit once and rechecks permission before transport', async () => {
-  const { b, draft } = await fixture(),
-    s = await store.create(b, draft, io()),
-    g = await grant(s),
-    c = await store.begin(b, s.id, s.intentId, g, io());
+  const { b, s, g, c } = await certifiedClaim();
   if (!c) throw new Error('No claim');
   const account = {
       tenantId: b.tenantId,
@@ -916,16 +1054,9 @@ it('consumes an exact adapter permit once and rechecks permission before transpo
       admin.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
     ).rejects.toMatchObject({ code: '23514' });
   }
-  const delayed = await fixture(),
-    delayedState = await store.create(delayed.b, delayed.draft, io()),
-    delayedGrant = await grant(delayedState),
-    delayedClaim = await store.begin(
-      delayed.b,
-      delayedState.id,
-      delayedState.intentId,
-      delayedGrant,
-      io(),
-    );
+  const delayed = await certifiedClaim(),
+    delayedState = delayed.s,
+    delayedClaim = delayed.c;
   if (!delayedClaim) throw new Error('No claim');
   // Statement trigger delays predicate evaluation after the transaction has begun.
   await admin.query(
