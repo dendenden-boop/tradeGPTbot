@@ -50,6 +50,10 @@ function fixture() {
     async request(op, raw) {
       if (op === 'createOrder') {
         const r = operations.createOrder.input.parse(raw);
+        const target = [...m.orders.values()].find(
+          (value) => value.command.clientOrderId === r.command.clientOrderId,
+        );
+        if (!target) throw new Error('ORDER_SCOPE');
         submits++;
         native.set(
           r.command.clientOrderId,
@@ -57,8 +61,8 @@ function fixture() {
             account,
             scope: instrument.scope,
             instrumentId: instrument.id,
-            internalOrderId: s.id,
-            intentId: s.intentId,
+            internalOrderId: target.id,
+            intentId: target.intentId,
             clientOrderId: r.command.clientOrderId,
             exchangeOrderId: 'remote-' + r.command.clientOrderId,
             side: r.command.side,

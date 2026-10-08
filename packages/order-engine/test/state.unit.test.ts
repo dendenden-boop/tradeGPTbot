@@ -3,6 +3,18 @@ import { expect, it } from 'vitest';
 import { reduceOrder } from '../src/state.js';
 import { parseDecimal } from '@ctp/exchange-core';
 import { state, native } from './fixtures.js';
+it.each(['internalOrderId', 'intentId'] as const)(
+  'rejects a conflicting native %s even when exchange/client identities match',
+  (field) => {
+    const s = state(),
+      evidence = native(s);
+    if (evidence.type !== 'NATIVE') throw new Error('INVALID_FIXTURE');
+    evidence.order.internalOrderId = s.id;
+    evidence.order.intentId = s.intentId;
+    evidence.order[field] = randomUUID();
+    expect(() => reduceOrder(s, evidence)).toThrow('ORDER_SCOPE');
+  },
+);
 it.each(['different', 'unavailable'] as const)(
   'rejects %s native limit price before reconciling an immutable PLACE',
   (kind) => {

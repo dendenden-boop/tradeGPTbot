@@ -184,6 +184,8 @@ it('populated published 19 upgrades without rewriting proof and recovers legacy 
   await orders.result(b, claim, { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } }, io());
   const native = {
     ...nativeFixture,
+    internalOrderId: s.id,
+    intentId: s.intentId,
     account: {
       tenantId: b.tenantId,
       connectionId: b.connectionId,

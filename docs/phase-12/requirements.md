@@ -66,3 +66,7 @@ The Binance native implementation is restricted to Spot TESTNET standalone LIMIT
 ## Populated lifecycle upgrade and mandatory issuance
 
 Every new production transport start must require an exact certified atomic issuance; historical/manual Risk rows cannot grant a fallback permit. Gateway and direct execution SQL paths must fail before consumption, preserving NOT_SENT on definitive pre-dispatch denial. Response/reconciliation of historical attempts remains possible without fabricating a new transport boundary. Positive one-use, permission and delayed-expiry tests must use production approval. Native populated published-19 upgrade acceptance must preserve certificate and issuance histories, UNKNOWN reservation/hold ownership, permanent keys and lossless client counters, then recover legacy full-body evidence exactly once after restart. All published migrations remain immutable.
+
+## Native evidence identity hardening
+
+Before enabling certified AMEND controls, normalized native evidence must bind the exact durable Order and original PLACE intent. A matching exchange/client locator cannot override a conflicting internal mapping. Require unit and real PostgreSQL regressions at both reducer and SQL-writer boundaries, retain UNKNOWN reservation/hold across rejection and restart, and use only an additive migration. Full OS/Docker acceptance is required; LIVE stays disabled.
