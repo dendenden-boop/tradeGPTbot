@@ -193,6 +193,90 @@ async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
     state: JSON.parse(book.state) as { holds: { id: string; status: string; amount: string }[] },
   };
 }
+it.each(['POLICY', 'HEALTH'] as const)(
+  'final issued dispatch refuses current %s replacement before consuming the transport permit',
+  async (kind) => {
+    const f = await bridgeFixture(false);
+    if (kind === 'POLICY') {
+      await user.update(
+        {
+          scope: { kind: 'USER', tenantId: f.key.binding.tenantId },
+          mode: 'TESTNET',
+          eventId: randomUUID(),
+          expectedVersion: '1',
+          reason: 'ISOLATED_FINAL_DISPATCH_REPLACEMENT',
+          limits: riskLimitsSchema.parse({ ...f.risk.user, maxOrderNotional: '1' }),
+        },
+        io(),
+      );
+    } else {
+      await observer.publish(
+        {
+          ...f.observationEvent,
+          id: randomUUID(),
+          expectedRevision: '1',
+          observation: {
+            ...f.observationEvent.observation,
+            health: {
+              ...f.observationEvent.observation.health,
+              privateStream: {
+                sourceId: randomUUID(),
+                asOf: Date.now(),
+                status: 'FAILED',
+              },
+            },
+          },
+        },
+        io(),
+      );
+    }
+    const account = {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    };
+    expect(
+      await orders.authorize(
+        'createOrder',
+        {
+          command: f.claim.command,
+          authorization: {
+            commandId: f.claim.intentId,
+            commandHash: f.claim.commandHash,
+            dispatchAttemptId: f.claim.attemptId,
+            profile: f.key.binding.profile,
+            account,
+            issuedAt: Date.now(),
+            expiresAt: f.grant.expiresAt,
+          },
+        },
+        { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+      ),
+    ).toBe(false);
+    expect(
+      (
+        await admin.query(
+          'SELECT "permitConsumedAt","transportStartedAt" FROM public.submission_attempt WHERE id=$1',
+          [f.claim.attemptId],
+        )
+      ).rows,
+    ).toEqual([{ permitConsumedAt: null, transportStartedAt: null }]);
+    await orders.result(
+      f.key.binding,
+      f.claim,
+      { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+      io(),
+    );
+    expect((await bridgeState(f)).reservation.status).toBe('RELEASED');
+    expect(
+      (
+        await admin.query('SELECT "responseCode" FROM public.submission_attempt WHERE id=$1', [
+          f.claim.attemptId,
+        ])
+      ).rows,
+    ).toEqual([{ responseCode: 'NOT_SENT' }]);
+  },
+);
 it('reservation bridge retains UNKNOWN collateral across restart and releases once after authoritative native cancel', async () => {
   const f = await bridgeFixture();
   await orders.result(
