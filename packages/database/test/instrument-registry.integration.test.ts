@@ -61,9 +61,10 @@ async function open(scope: MarketScope, ids = ['BTCUSDT']) {
       instrumentIds: ids,
     });
   } catch (cause) {
+    if (!(cause instanceof Error) || cause.message !== 'REGISTRY_RECOVERY_FAILED') throw cause;
     // Diagnose native recovery failures without retrying or granting readiness.
     const started = performance.now();
-    let diagnostic = 'READ_FAILED';
+    let diagnostic: string;
     try {
       const result = await publisher.query<{ result: unknown[] }>(
         'SELECT ctp_registry.read_current($1::jsonb,$2::jsonb) AS result',
