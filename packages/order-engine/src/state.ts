@@ -75,6 +75,10 @@ export function reduceOrder(input: OrderState, raw: OrderEngineEvent): OrderStat
       o.instrumentId !== s.command.instrumentId ||
       o.side !== s.command.side ||
       o.type !== s.command.type ||
+      (s.command.type === 'LIMIT' &&
+        (s.command.limitPrice === null ||
+          o.price.state !== 'AVAILABLE' ||
+          decimalCompare(o.price.value, s.command.limitPrice) !== 0)) ||
       o.quantityUnit !== 'BASE' ||
       o.quantity !== s.command.size.value ||
       o.exchangeOrderId === null ||

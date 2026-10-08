@@ -4,6 +4,7 @@ import { beforeAll, afterAll, expect, it } from 'vitest';
 import { computeCommandHash, parseDecimal } from '@ctp/exchange-core';
 import {
   canonical,
+  bindingSchema as portfolioBindingSchema,
   reducePortfolio,
   createPostgresPortfolioStore,
   type PortfolioStore,
@@ -22,8 +23,9 @@ import {
   type PostgresPolicies,
 } from '@ctp/risk-engine';
 import { seedRiskCertification } from './fixtures/risk-certification.js';
+import { order as nativeOrderFixture } from '../../exchange-core/test/fixtures/adapter.js';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
-import { binding as portfolioBinding, snapshot } from '../../portfolio/test/fixtures.js';
+import { binding as portfolioBinding, snapshot, fill } from '../../portfolio/test/fixtures.js';
 import {
   prepareRiskSnapshot,
   riskEvidenceHash,
@@ -125,6 +127,353 @@ async function open() {
   handles.push(port);
   return port;
 }
+async function bridgeFixture(dispatch = true) {
+  const f = await fixture(),
+    port = await open();
+  const grant = await port.approve(f.input, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.created.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_BRIDGE_CLAIM');
+  if (dispatch) {
+    const account = {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    };
+    expect(
+      await orders.authorize(
+        'createOrder',
+        {
+          command: claim.command,
+          authorization: {
+            commandId: claim.intentId,
+            commandHash: claim.commandHash,
+            dispatchAttemptId: claim.attemptId,
+            profile: f.key.binding.profile,
+            account,
+            issuedAt: Date.now(),
+            expiresAt: grant.expiresAt,
+          },
+        },
+        { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+      ),
+    ).toBe(true);
+  }
+  const book = (
+    await admin.query<{ id: string }>('SELECT id FROM ctp_portfolio.book WHERE "accountId"=$1', [
+      f.key.binding.accountId,
+    ])
+  ).rows[0]!.id;
+  return { ...f, grant, claim, book };
+}
+async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
+  const reservation = (
+    await admin.query<{ status: string; amount: string }>(
+      'SELECT status,trim_scale(amount)::text amount FROM public.risk_reservation WHERE id=$1',
+      [f.grant.reservationId],
+    )
+  ).rows[0]!;
+  const book = (
+    await admin.query<{ state: string; revision: number }>(
+      'SELECT state,revision FROM ctp_portfolio.book WHERE id=$1',
+      [f.book],
+    )
+  ).rows[0]!;
+  book.revision = Number(book.revision);
+  if (!Number.isSafeInteger(book.revision)) throw new Error('INVALID_NATIVE_BOOK_REVISION');
+  const watermark = (
+    await admin.query<{ released: boolean; unknown: boolean }>(
+      'SELECT released,unknown FROM ctp_portfolio.hold_watermark WHERE book=$1 AND "holdId"=$2',
+      [f.book, f.grant.reservationId],
+    )
+  ).rows[0]!;
+  return {
+    reservation,
+    book,
+    watermark,
+    state: JSON.parse(book.state) as { holds: { id: string; status: string; amount: string }[] },
+  };
+}
+it('reservation bridge retains UNKNOWN collateral across restart and releases once after authoritative native cancel', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const unknown = await bridgeState(f);
+  expect(unknown.reservation.status).toBe('UNRESOLVED');
+  expect(unknown.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, status: 'UNKNOWN', amount: '5.005' }),
+  ]);
+  expect(unknown.watermark).toEqual({ released: false, unknown: true });
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  expect((await restarted.read(f.key.binding, f.created.id, io())).status).toBe('UNKNOWN');
+  const native = {
+    ...nativeOrderFixture,
+    account: {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    },
+    scope: f.risk.record.instrument.scope,
+    instrumentId: f.created.command.instrumentId,
+    clientOrderId: f.created.command.clientOrderId,
+    exchangeOrderId: 'bridge-' + f.created.id,
+    createdAt: f.created.createdAt,
+    updatedAt: Date.now(),
+    status: 'CANCELED',
+    quantity: f.created.command.size.value,
+    price: { state: 'AVAILABLE', value: f.created.command.limitPrice },
+    filledQuantity: '0',
+    averageFillPrice: { state: 'UNAVAILABLE', reason: 'NO_EXECUTIONS' },
+    fees: [],
+  };
+  await restarted.complete(f.key.binding, f.created.id, native, io());
+  const released = await bridgeState(f);
+  expect(released.reservation.status).toBe('RELEASED');
+  expect(released.state.holds).toEqual([]);
+  expect(released.watermark.released).toBe(true);
+  await restarted.complete(f.key.binding, f.created.id, native, io());
+  expect(await bridgeState(f)).toEqual(released);
+});
+it('reservation bridge definitive NOT_SENT releases the durable reservation and hold atomically', async () => {
+  const f = await bridgeFixture(false);
+  const outcome = { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } };
+  await orders.result(f.key.binding, f.claim, outcome, io());
+  const released = await bridgeState(f);
+  expect(released.reservation.status).toBe('RELEASED');
+  expect(released.state.holds).toEqual([]);
+  expect(released.watermark.released).toBe(true);
+  await orders.result(f.key.binding, f.claim, outcome, io());
+  expect(await bridgeState(f)).toEqual(released);
+});
+it('reservation bridge acknowledgement retains collateral until authoritative resolution', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    {
+      kind: 'ACCEPTED',
+      ack: {
+        commandId: f.created.intentId,
+        status: 'ACKNOWLEDGED',
+        exchangeId: 'bridge-' + f.created.id,
+        receivedAt: Date.now(),
+      },
+    },
+    io(),
+  );
+  const held = await bridgeState(f);
+  expect(held.reservation.status).toBe('ACTIVE');
+  expect(held.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, status: 'RESERVED', amount: '5.005' }),
+  ]);
+  expect(held.watermark).toEqual({ released: false, unknown: false });
+});
+it('reservation bridge certifies bounded UNKNOWN exactly once and blocks dispatch until reconciliation', async () => {
+  const f = await bridgeFixture();
+  const outcome = { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } };
+  await orders.result(f.key.binding, f.claim, outcome, io());
+  const held = await bridgeState(f);
+  await orders.result(f.key.binding, f.claim, outcome, io());
+  expect(await bridgeState(f)).toEqual(held);
+  const input = await secondInput(f);
+  const store = await createPostgresRiskSnapshotStore(options('DATABASE_RISK_CERTIFICATION_URL'));
+  handles.push(store);
+  const certificate = await createRiskSnapshotCoordinator({ store, now: () => Date.now() }).certify(
+    { ...f.key, intentId: input.intentId },
+    io(),
+  );
+  expect(certificate.projection.snapshot).toMatchObject({
+    instrumentExposure: '5',
+    userExposure: '5',
+    openOrders: 1,
+    availableAmount: '994.995',
+    unknownExposure: false,
+  });
+  const restarted = await open();
+  const grant = await restarted.approve(input, io());
+  await expect(
+    orders.begin(f.key.binding, input.state.id, input.intentId, grant, io()),
+  ).rejects.toThrow('ORDER_RECONCILIATION_REQUIRED');
+  const current = await bridgeState(f);
+  expect(current.reservation).toEqual(held.reservation);
+  expect(current.state.holds.find((h) => h.id === f.grant.reservationId)).toEqual(
+    held.state.holds[0],
+  );
+});
+it('reservation bridge rejects standalone Portfolio release of active issued collateral', async () => {
+  const f = await bridgeFixture(false),
+    held = await bridgeState(f);
+  const b = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  await expect(
+    portfolio.apply(
+      b,
+      {
+        id: randomUUID(),
+        type: 'RELEASE',
+        holdId: f.grant.reservationId,
+        resolved: true,
+        timestamp: Date.now(),
+      },
+      held.book.revision,
+      io(),
+    ),
+  ).rejects.toThrow();
+  expect(await bridgeState(f)).toEqual(held);
+});
+it('reservation bridge released tombstone rejects new commitment and ignores old commitment replay', async () => {
+  const f = await bridgeFixture(false);
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+    io(),
+  );
+  const released = await bridgeState(f);
+  const b = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  const old = (
+    await admin.query<{ payload: string }>(
+      'SELECT payload FROM ctp_portfolio.evidence WHERE book=$1 AND id=$2',
+      [f.book, 'risk-reserve-' + f.grant.reservationId],
+    )
+  ).rows[0]!;
+  const event = JSON.parse(old.payload) as Parameters<PortfolioStore['apply']>[1];
+  expect(
+    (await portfolio.apply(b, { ...event, id: randomUUID() }, released.book.revision, io()))
+      .duplicate,
+  ).toBe(true);
+  expect(await bridgeState(f)).toEqual(released);
+  await expect(
+    portfolio.apply(
+      b,
+      { ...event, id: randomUUID(), timestamp: Date.now() },
+      released.book.revision,
+      io(),
+    ),
+  ).rejects.toThrow();
+  expect(await bridgeState(f)).toEqual(released);
+});
+it('reservation bridge durable histories and full execution evidence cannot be rewritten', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const c = await admin.connect();
+  try {
+    for (const sql of [
+      'UPDATE ctp_admission.lifecycle_revision SET status=\'ACTIVE\' WHERE "tenantId"=$1',
+      'DELETE FROM ctp_admission.lifecycle_revision WHERE "tenantId"=$1',
+      'DELETE FROM ctp_admission.lifecycle_head WHERE "tenantId"=$1',
+      'UPDATE ctp_execution.authoritative_event SET payload=\'{}\' WHERE "tenantId"=$1',
+    ]) {
+      await c.query('BEGIN');
+      await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.key.binding.tenantId]);
+      await expect(c.query(sql, [f.key.binding.tenantId])).rejects.toMatchObject({ code: '23514' });
+      await c.query('ROLLBACK');
+    }
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+  }
+});
+it('reservation bridge adjusts residual collateral only after adopted fill and reconciled native snapshot proof', async () => {
+  const f = await bridgeFixture();
+  await orders.result(
+    f.key.binding,
+    f.claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const b = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  const execution = fill({
+    id: randomUUID(),
+    timestamp: Date.now(),
+    internalOrderId: f.created.id,
+    instrumentId: f.created.command.instrumentId,
+    metadataVersion: f.risk.record.instrument.metadataVersion,
+    ruleVersion: f.created.command.ruleVersion,
+    quantity: '0.2',
+    price: '10',
+    native: {
+      fillId: randomUUID(),
+      identityScope: 'bridge-trades',
+      exchangeOrderId: 'bridge-' + f.created.id,
+    },
+  });
+  const initial = await portfolio.read(b, io());
+  const applied = await portfolio.apply(b, execution, initial.revision, io());
+  const native = {
+    ...nativeOrderFixture,
+    account: {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    },
+    scope: f.risk.record.instrument.scope,
+    instrumentId: f.created.command.instrumentId,
+    clientOrderId: f.created.command.clientOrderId,
+    exchangeOrderId: execution.native.exchangeOrderId,
+    createdAt: f.created.createdAt,
+    updatedAt: Date.now(),
+    status: 'PARTIALLY_FILLED',
+    quantity: f.created.command.size.value,
+    price: { state: 'AVAILABLE', value: f.created.command.limitPrice },
+    filledQuantity: '0.2',
+    averageFillPrice: { state: 'AVAILABLE', value: '10' },
+    fees: [],
+  };
+  await orders.observe(f.key.binding, f.created.id, native, io());
+  await orders.adopt(f.key.binding, f.created.id, f.book, execution.id, io());
+  expect((await bridgeState(f)).state.holds[0]?.amount).toBe('5.005');
+  await orders.complete(f.key.binding, f.created.id, native, io());
+  expect((await bridgeState(f)).state.holds[0]?.amount).toBe('5.005');
+  const checkpoint = await portfolio.read(b, io());
+  const confirmed = snapshot({
+    id: randomUUID(),
+    timestamp: Date.now(),
+    covered: [execution.id],
+    balances: applied.checkpoint.state.balances,
+    positions: [
+      {
+        instrumentId: f.created.command.instrumentId,
+        positionSide: 'NET',
+        bucket: 'CROSS',
+        base: 'BTC',
+        quote: 'USDT',
+        quantity: '0.2',
+        entryPrice: '10',
+      },
+    ],
+  });
+  await portfolio.apply(b, confirmed, checkpoint.revision, io());
+  const adjusted = await bridgeState(f);
+  expect(adjusted.reservation).toEqual({ status: 'ACTIVE', amount: '3.003' });
+  expect(adjusted.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, amount: '3.003', status: 'RESERVED' }),
+  ]);
+  expect(adjusted.watermark).toEqual({ released: false, unknown: false });
+});
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function secondInput(f: Fixture) {
   const { clientOrderId: omitted, ...order } = f.created.command;
