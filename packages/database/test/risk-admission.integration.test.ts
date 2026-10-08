@@ -193,6 +193,86 @@ async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
     state: JSON.parse(book.state) as { holds: { id: string; status: string; amount: string }[] },
   };
 }
+it.each(['internalOrderId', 'intentId'] as const)(
+  'native SQL authority rejects conflicting %s without changing UNKNOWN collateral',
+  async (field) => {
+    const f = await bridgeFixture();
+    await orders.result(
+      f.key.binding,
+      f.claim,
+      { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+      io(),
+    );
+    const before = await bridgeState(f);
+    const native = {
+      ...nativeOrderFixture,
+      internalOrderId: f.created.id,
+      intentId: f.created.intentId,
+      account: {
+        tenantId: f.key.binding.tenantId,
+        connectionId: f.key.binding.connectionId,
+        externalAccountId: f.key.binding.externalAccountId,
+      },
+      scope: f.risk.record.instrument.scope,
+      instrumentId: f.created.command.instrumentId,
+      clientOrderId: f.created.command.clientOrderId,
+      exchangeOrderId: 'identity-' + f.created.id,
+      createdAt: f.created.createdAt,
+      updatedAt: Date.now(),
+      status: 'CANCELED',
+      quantity: f.created.command.size.value,
+      price: { state: 'AVAILABLE', value: f.created.command.limitPrice },
+      filledQuantity: '0',
+      averageFillPrice: { state: 'UNAVAILABLE', reason: 'NO_EXECUTIONS' },
+      fees: [],
+      [field]: randomUUID(),
+    };
+    const payload = canonical({ type: 'NATIVE', order: native });
+    const fingerprint = createHash('sha256').update(payload).digest();
+    const pool = new Pool({ ...options('DATABASE_EXECUTION_URL'), max: 1 });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.key.binding.tenantId]);
+      await client.query('SELECT pg_advisory_xact_lock_shared(1129599058,12)');
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('ctp:risk:'||$1,0))", [
+        f.key.binding.tenantId,
+      ]);
+      await client.query(
+        'INSERT INTO ctp_execution.evidence("tenantId","orderId",identity,fingerprint) VALUES($1,$2,$3,$4)',
+        [f.key.binding.tenantId, f.created.id, `native:${native.updatedAt}`, fingerprint],
+      );
+      await expect(
+        client.query(
+          'INSERT INTO ctp_execution.authoritative_event("tenantId","orderId",identity,fingerprint,payload) VALUES($1,$2,$3,$4,$5)',
+          [
+            f.key.binding.tenantId,
+            f.created.id,
+            `native:${native.updatedAt}`,
+            fingerprint,
+            payload,
+          ],
+        ),
+      ).rejects.toMatchObject({ code: '23514', message: 'ORDER_NATIVE_IDENTITY_SCOPE' });
+    } finally {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+      await pool.end();
+    }
+    expect(await bridgeState(f)).toEqual(before);
+    const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+    handles.push(restarted);
+    expect((await restarted.read(f.key.binding, f.created.id, io())).status).toBe('UNKNOWN');
+    expect(
+      (
+        await admin.query(
+          'SELECT identity FROM ctp_execution.authoritative_event WHERE "tenantId"=$1 AND "orderId"=$2 AND identity=$3',
+          [f.key.binding.tenantId, f.created.id, `native:${native.updatedAt}`],
+        )
+      ).rowCount,
+    ).toBe(0);
+  },
+);
 it.each(['POLICY', 'HEALTH'] as const)(
   'final issued dispatch refuses current %s replacement before consuming the transport permit',
   async (kind) => {
@@ -342,6 +422,8 @@ it('reservation bridge retains UNKNOWN collateral across restart and releases on
   expect((await restarted.read(f.key.binding, f.created.id, io())).status).toBe('UNKNOWN');
   const native = {
     ...nativeOrderFixture,
+    internalOrderId: f.created.id,
+    intentId: f.created.intentId,
     account: {
       tenantId: f.key.binding.tenantId,
       connectionId: f.key.binding.connectionId,
@@ -501,6 +583,8 @@ it.each(['MATCH', 'DIFFERENT_PRICE'] as const)(
     );
     const native = {
       ...nativeOrderFixture,
+      internalOrderId: f.created.id,
+      intentId: f.created.intentId,
       account: {
         tenantId: f.key.binding.tenantId,
         connectionId: f.key.binding.connectionId,
@@ -687,6 +771,8 @@ it('reservation bridge adjusts residual collateral only after adopted fill and r
   const applied = await portfolio.apply(b, execution, initial.revision, io());
   const native = {
     ...nativeOrderFixture,
+    internalOrderId: f.created.id,
+    intentId: f.created.intentId,
     account: {
       tenantId: f.key.binding.tenantId,
       connectionId: f.key.binding.connectionId,
