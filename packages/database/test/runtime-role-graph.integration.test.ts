@@ -15,6 +15,7 @@ import {
   createPostgresRiskPortfolioReader,
   createPostgresRiskSnapshotStore,
   createPostgresRiskObservations,
+  createPostgresOrderRiskPort,
 } from '@ctp/risk-engine';
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('ISOLATED_ROLE_RUNNER_REQUIRED');
@@ -62,6 +63,7 @@ const cases: readonly [string, string, (options: Options) => Promise<Handle>][] 
   ['ctp_risk_snapshot_reader', 'DATABASE_RISK_SNAPSHOT_URL', createPostgresRiskPortfolioReader],
   ['ctp_risk_certifier', 'DATABASE_RISK_CERTIFICATION_URL', createPostgresRiskSnapshotStore],
   ['ctp_risk_observer', 'DATABASE_RISK_OBSERVATION_URL', createPostgresRiskObservations],
+  ['ctp_risk_admission', 'DATABASE_RISK_ADMISSION_URL', createPostgresOrderRiskPort],
   [
     'ctp_instrument_registry',
     'DATABASE_INSTRUMENT_REGISTRY_URL',
