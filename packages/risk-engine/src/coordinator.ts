@@ -49,6 +49,8 @@ export const riskSnapshotKeySchema = z.strictObject({
   dbInstrumentId: z.uuid(),
   dbRuleId: z.uuid(),
   dbCapabilityId: z.uuid(),
+  /** Required by the physical backend; reference fixtures remain compatible. */
+  intentId: z.uuid().optional(),
 });
 export type RiskSnapshotKey = z.infer<typeof riskSnapshotKeySchema>;
 const reference = z.strictObject({

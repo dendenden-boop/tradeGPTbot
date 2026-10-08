@@ -27,6 +27,7 @@ const expectedMigrations = [
   '202610070002_risk_portfolio_source',
   '202610070003_runtime_instrument_registry',
   '202610070004_portfolio_capture_inventory',
+  '202610070005_risk_snapshot_certification',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -75,6 +76,8 @@ const evidencePassword = randomBytes(24).toString('hex');
 const snapshotPassword = randomBytes(24).toString('hex');
 const riskSnapshotPassword = randomBytes(24).toString('hex');
 const registryPassword = randomBytes(24).toString('hex');
+const certificationPassword = randomBytes(24).toString('hex');
+const observationPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -91,6 +94,8 @@ const secrets = [
   snapshotPassword,
   riskSnapshotPassword,
   registryPassword,
+  certificationPassword,
+  observationPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -108,6 +113,8 @@ const evidenceRole = `ctp_p2_evidence_${suffix}`;
 const snapshotRole = `ctp_p2_snapshot_${suffix}`;
 const riskSnapshotRole = `ctp_p2_risk_snapshot_${suffix}`;
 const registryRole = `ctp_p2_registry_${suffix}`;
+const certificationRole = `ctp_p2_certification_${suffix}`;
+const observationRole = `ctp_p2_observation_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -203,6 +210,12 @@ const registryUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = registryRole;
   url.password = registryPassword;
+  return url.href;
+};
+const certificationUrl = (name, observer = false) => {
+  const url = new URL(dbUrl(name));
+  url.username = observer ? observationRole : certificationRole;
+  url.password = observer ? observationPassword : certificationPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -310,6 +323,8 @@ try {
     [snapshotRole, snapshotPassword, 'ctp_market_snapshot'],
     [riskSnapshotRole, riskSnapshotPassword, 'ctp_risk_snapshot_reader'],
     [registryRole, registryPassword, 'ctp_instrument_registry'],
+    [certificationRole, certificationPassword, 'ctp_risk_certifier'],
+    [observationRole, observationPassword, 'ctp_risk_observer'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -654,6 +669,29 @@ try {
     )
   ).rows[0].definition;
   assert.ok(!beforeCaptureDefinition.includes('inventory_ids'));
+  await cp(
+    path.join(
+      workspace,
+      'packages/database/prisma/migrations/202610070004_portfolio_capture_inventory',
+    ),
+    path.join(authPreviousMigrations, '202610070004_portfolio_capture_inventory'),
+    { recursive: true },
+  );
+  await migrate(databases[1], authPreviousConfig);
+  assert.equal(
+    (
+      await upgrade.query(
+        'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
+      )
+    ).rows[0].n,
+    17,
+  );
+  const published17Capture = (
+    await upgrade.query(
+      "SELECT pg_get_functiondef('ctp_risk.capture_portfolio(jsonb)'::regprocedure) AS definition",
+    )
+  ).rows[0].definition;
+  assert.ok(published17Capture.includes('inventory_ids'));
   await migrate(databases[1]);
   const afterCaptureDefinition = (
     await upgrade.query(
@@ -661,6 +699,17 @@ try {
     )
   ).rows[0].definition;
   assert.ok(afterCaptureDefinition.includes('inventory_ids'));
+  assert.equal(afterCaptureDefinition, published17Capture);
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int n FROM ctp_certification.certificate_head')).rows[0]
+      .n,
+    0,
+  );
+  assert.equal(
+    (await upgrade.query('SELECT count(*)::int n FROM ctp_certification.observation_head')).rows[0]
+      .n,
+    0,
+  );
   assert.equal(
     (await upgrade.query('SELECT count(*)::int n FROM ctp_registry.current_record')).rows[0].n,
     0,
@@ -1136,6 +1185,48 @@ try {
     7,
   );
 
+  // Run the complete physical certification contract against SECURITY DEFINER
+  // functions owned by the non-BYPASSRLS migration owner as well as the fresh DB.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/risk-certification.integration.test.ts',
+      '--outputFile.json=test-results/risk-certification-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
+        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
+        DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[2]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+        DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[2]),
+        DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
+        DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 120000,
+    },
+  );
+  const certificationOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/risk-certification-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(certificationOwner.success, true);
+  assert.equal(certificationOwner.numPendingTests, 0);
+  assert.ok(certificationOwner.numPassedTests >= 14);
+
   await run(
     process.execPath,
     [
@@ -1161,6 +1252,8 @@ try {
         DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
         DATABASE_RISK_SNAPSHOT_URL: riskSnapshotUrl(databases[0]),
         DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[0]),
+        DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[0]),
+        DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
@@ -1271,6 +1364,7 @@ try {
     instrumentRegistryUpgradeFromPhase12: 'PASS',
     instrumentRegistryNonBypassOwner: 'PASS',
     portfolioCaptureInventoryUpgradeFromPublished16: 'PASS',
+    riskCertificationUpgradeFromPublished17: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

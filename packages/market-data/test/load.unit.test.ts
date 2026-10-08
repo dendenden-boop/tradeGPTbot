@@ -18,6 +18,9 @@ it('300 unique instruments / 6000 real loopback frames / three physical sockets 
   const started = performance.now(),
     cpu = process.cpuUsage(),
     rssBefore = process.memoryUsage().rss;
+  // One deterministic native batch belongs to one candle per timeframe even
+  // when loopback delivery crosses a wall-clock candle boundary.
+  const batchExchangeTime = Date.now();
   let frames = 0,
     connections = 0,
     maxQueue = 0,
@@ -38,7 +41,7 @@ it('300 unique instruments / 6000 real loopback frames / three physical sockets 
               t: id,
               p: '10',
               q: '0.1',
-              T: Date.now(),
+              T: batchExchangeTime,
               m: false,
             }),
           );
@@ -119,6 +122,7 @@ it('300 unique instruments / 6000 real loopback frames / three physical sockets 
           latencyP50Ms: percentile(0.5),
           latencyP95Ms: percentile(0.95),
           latencyP99Ms: percentile(0.99),
+          latencyClock: 'deterministic native batch timestamp to local receipt',
           maxQueue,
           maxQueueBytes: maxBytes,
           metrics: engine.metrics(),

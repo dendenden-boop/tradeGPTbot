@@ -2,6 +2,8 @@
 
 ## Completion acceptance status
 
+The physical certification substrate passed native/full CI on 4a4a2c4 (37728746779). It captures current durable sources in one physical transaction and persists immutable certificate identities; native restart, replacement, missing evidence, abort/deadline, committed-response loss and non-BYPASSRLS owner cases passed. An unissued legacy pending order/reservation blocks certification. This does not close complete pending/UNKNOWN issued exposure or the atomic approval/Portfolio/final dispatch/AMEND chain below; those remain required before phase acceptance.
+
 The current [cross-phase hardening audit](cross-phase-audit.md) records confirmed RED defects and their bounded stream/physical timeout repairs. Its intermediate GREEN evidence does not replace complete PHASE 12 production acceptance; the audit and implementation continue through the full authority chain.
 
 The coordinator reconstruction/service protocol now checks all nine required source families, exact binding and current evidence, reconstructs exposure once per correlated order/reservation/hold and replays externally adjusted UTC loss/peak. Its tests use an explicit reference transaction store. This is a prerequisite, not completed production coordinator acceptance.
