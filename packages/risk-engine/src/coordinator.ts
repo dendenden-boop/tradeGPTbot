@@ -13,6 +13,7 @@ import {
 } from '@ctp/exchange-core';
 import { riskEvaluationInputSchema, intersectRiskLimits } from './policy.js';
 import { policyHeadSchema } from './policies.js';
+import { certificateDeadline } from './certificate-deadline.js';
 import { lossCheckpointSchema, consumeLossCheckpoint } from './loss-journal.js';
 import {
   riskExposureEvidenceSchema,
@@ -359,7 +360,12 @@ export function prepareRiskSnapshot(
         instrumentId: key.instrumentId,
         revision: identity.revision,
         sourceId: identity.id,
-        sourceAt: Math.min(...Object.values(s).map((x) => x.reference.asOf), p.sourceAt),
+        sourceAt: Math.min(
+          ...Object.values(s).map((x) => x.reference.asOf),
+          p.sourceAt,
+          market.fxAsOf,
+          ...s.exposure.value.positions.flatMap((position) => [position.at, position.fx.at]),
+        ),
         reconciledAt: p.reconciledAt,
         complete: true,
         valuationAsset: limits.valuationAsset,
@@ -408,7 +414,6 @@ export function createRiskSnapshotCoordinator(options: {
   };
   const verify = (raw: unknown, key: RiskSnapshotKey, now: number) => {
     const c = riskSnapshotCertificateSchema.parse(raw);
-    const limits = intersectRiskLimits(c.projection.platform.limits, c.projection.user.limits);
     if (
       !same(c.projection.key, key) ||
       c.hash !== riskEvidenceHash(c.projection) ||
@@ -417,7 +422,7 @@ export function createRiskSnapshotCoordinator(options: {
       c.createdAt > now ||
       c.createdAt < c.projection.snapshot.sourceAt ||
       c.expiresAt <= c.createdAt ||
-      c.expiresAt > c.projection.snapshot.sourceAt + limits.maxEvidenceAgeMs ||
+      c.expiresAt > certificateDeadline(c.projection, Number.MAX_SAFE_INTEGER) ||
       c.expiresAt <= now
     )
       throw new Error('RISK_CERTIFICATE_INVALID');
@@ -434,13 +439,12 @@ export function createRiskSnapshotCoordinator(options: {
         check(io);
         const now = options.now();
         const projection = prepareRiskSnapshot(raw, key, identity, now);
-        const limits = intersectRiskLimits(projection.platform.limits, projection.user.limits);
         const certificate = riskSnapshotCertificateSchema.parse({
           ...identity,
           hash: riskEvidenceHash(projection),
           projection,
           createdAt: now,
-          expiresAt: Math.min(io.deadline, projection.snapshot.sourceAt + limits.maxEvidenceAgeMs),
+          expiresAt: certificateDeadline(projection, io.deadline),
         });
         verify(certificate, key, now);
         check(io);
