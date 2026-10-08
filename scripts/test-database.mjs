@@ -40,6 +40,7 @@ const expectedMigrations = [
   '202610080010_native_identity_authority',
   '202610080011_certified_native_controls',
   '202610080012_native_amend_dispatch',
+  '202610080013_native_amend_application',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;

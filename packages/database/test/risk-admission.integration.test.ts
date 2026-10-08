@@ -6,6 +6,7 @@ import {
   canonical,
   bindingSchema as portfolioBindingSchema,
   reducePortfolio,
+  ratio,
   createPostgresPortfolioStore,
   type PortfolioStore,
 } from '@ctp/portfolio';
@@ -307,6 +308,395 @@ async function amendmentFixture() {
   };
   return { ...f, amendment, amendmentInput: input };
 }
+async function dispatchedAmendment() {
+  const f = await amendmentFixture();
+  const grant = await (await open()).approve(f.amendmentInput, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+  const account = f.native.account;
+  expect(
+    await orders.authorize(
+      'amendOrder',
+      {
+        command: claim.command,
+        authorization: {
+          commandId: claim.intentId,
+          commandHash: claim.commandHash,
+          dispatchAttemptId: claim.attemptId,
+          profile: f.key.binding.profile,
+          account,
+          issuedAt: Date.now(),
+          expiresAt: grant.expiresAt,
+        },
+      },
+      { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+    ),
+  ).toBe(true);
+  await orders.result(
+    f.key.binding,
+    claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  const appliedAt = Date.now();
+  const proof = {
+    evidence: {
+      kind: 'APPLIED_EVIDENCE' as const,
+      account,
+      scope: f.native.scope,
+      instrumentId: f.native.instrumentId,
+      receivedAt: appliedAt,
+      evidence: {
+        executionId: '9007199254740993',
+        time: appliedAt,
+        exchangeOrderId: f.native.exchangeOrderId!,
+        oldClientOrderId: f.native.clientOrderId,
+        newClientOrderId: f.amendment.command.replacement.clientOrderId,
+        originalQuantity: f.created.command.size.value,
+        newQuantity: f.amendment.command.replacement.size.value,
+      },
+    },
+    order: orderSchema.parse({
+      ...f.native,
+      clientOrderId: f.amendment.command.replacement.clientOrderId,
+      quantity: f.amendment.command.replacement.size.value,
+      updatedAt: appliedAt,
+    }),
+    nativeReceivedAt: appliedAt,
+  };
+  return { ...f, controlGrant: grant, claim, proof };
+}
+function resolveAmendment(
+  store: OrderStore,
+  f: Awaited<ReturnType<typeof dispatchedAmendment>>,
+  proof: unknown = f.proof,
+) {
+  return (
+    store as unknown as {
+      resolveAmendment: (
+        binding: typeof f.key.binding,
+        id: string,
+        attemptId: string,
+        proof: unknown,
+        context: ReturnType<typeof io>,
+      ) => Promise<typeof f.target>;
+    }
+  ).resolveAmendment(f.key.binding, f.created.id, f.claim.attemptId, proof, io());
+}
+it('native AMEND causal application is durable, replays after restart and preserves original PLACE and single collateral effect', async () => {
+  const f = await dispatchedAmendment();
+  const [resolved, duplicate] = await Promise.all([
+    resolveAmendment(orders, f),
+    resolveAmendment(orders, f),
+  ]);
+  expect(duplicate).toEqual(resolved);
+  expect(resolved.command).toEqual(f.created.command);
+  expect(resolved.intentId).toBe(f.created.intentId);
+  expect(resolved).toMatchObject({
+    effectiveCommand: f.amendment.command.replacement,
+    status: 'SUBMITTED',
+    reconciliation: 'CONSISTENT',
+    activeAttemptId: null,
+    activeOperation: null,
+  });
+  expect(
+    (
+      await admin.query('SELECT status FROM public.submission_attempt WHERE id=$1', [
+        f.claim.attemptId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RECONCILED' }]);
+  expect(
+    (
+      await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+        f.controlGrant.reservationId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RELEASED' }]);
+  const before = await bridgeState(f);
+  expect(before.reservation.amount).toBe('5.005');
+  expect(before.state.holds).toHaveLength(1);
+  const restart = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restart);
+  expect(await restart.read(f.key.binding, f.created.id, io())).toEqual(resolved);
+  expect(await resolveAmendment(restart, f)).toEqual(resolved);
+  expect(await bridgeState(f)).toEqual(before);
+  expect(
+    await restart.begin(f.key.binding, f.created.id, f.amendment.intentId, f.controlGrant, io()),
+  ).toBeNull();
+  const journal = await admin.query<{ n: number }>(
+    'SELECT count(*)::integer n FROM ctp_execution.amendment_application WHERE "tenantId"=$1 AND "orderId"=$2',
+    [f.key.binding.tenantId, f.created.id],
+  );
+  expect(journal.rows[0]!.n).toBe(1);
+  await expect(
+    resolveAmendment(restart, f, {
+      ...f.proof,
+      evidence: {
+        ...f.proof.evidence,
+        evidence: { ...f.proof.evidence.evidence, executionId: '9007199254740994' },
+      },
+    }),
+  ).rejects.toThrow('ORDER_EVIDENCE_CONFLICT');
+  expect(await bridgeState(f)).toEqual(before);
+  const pb = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  const checkpoint = await portfolio.read(pb, io());
+  await portfolio.apply(
+    pb,
+    snapshot({
+      id: randomUUID(),
+      timestamp: Date.now(),
+      balances: checkpoint.state.balances,
+      positions: [],
+    }),
+    checkpoint.revision,
+    io(),
+  );
+  const residual = await bridgeState(f);
+  expect(residual.reservation).toEqual({ status: 'ACTIVE', amount: '4.004' });
+  expect(residual.state.holds).toHaveLength(1);
+  const next = await secondInput(f);
+  const source = await createPostgresRiskSnapshotStore(options('DATABASE_RISK_CERTIFICATION_URL'));
+  handles.push(source);
+  const certificate = await createRiskSnapshotCoordinator({
+    store: source,
+    now: () => Date.now(),
+  }).certify({ ...f.key, intentId: next.intentId }, io());
+  expect(certificate.projection.snapshot).toMatchObject({
+    instrumentExposure: '4',
+    accountExposure: '4',
+    openOrders: 1,
+    availableAmount: '995.996',
+    unknownExposure: false,
+  });
+  expect((await restart.read(f.key.binding, f.created.id, io())).command).toEqual(
+    f.created.command,
+  );
+});
+it.each(['EMPTY', 'CLIENT', 'QUANTITY', 'ACCOUNT', 'FILL_RACE'] as const)(
+  'native AMEND %s causal ambiguity preserves UNKNOWN and collateral after restart',
+  async (kind) => {
+    const f = await dispatchedAmendment();
+    const proof: { evidence: unknown; order: typeof f.proof.order; nativeReceivedAt: number } =
+      structuredClone(f.proof);
+    if (kind === 'EMPTY')
+      proof.evidence = {
+        kind: 'INDETERMINATE',
+        reason: 'NO_CAUSAL_EVIDENCE',
+        account: f.native.account,
+        scope: f.native.scope,
+        instrumentId: f.native.instrumentId,
+        receivedAt: Date.now(),
+      };
+    else if (kind === 'CLIENT') proof.order.clientOrderId = 'foreign';
+    else if (kind === 'QUANTITY') proof.order.quantity = parseDecimal('0.3');
+    else if (kind === 'ACCOUNT')
+      proof.order.account = { ...proof.order.account, externalAccountId: 'foreign' };
+    else {
+      proof.order.filledQuantity = parseDecimal('0.45');
+      proof.order.averageFillPrice = { state: 'AVAILABLE', value: parseDecimal('10') };
+    }
+    const before = await bridgeState(f),
+      state = await orders.read(f.key.binding, f.created.id, io());
+    await expect(resolveAmendment(orders, f, proof)).rejects.toThrow(
+      'ORDER_AMEND_APPLICATION_UNPROVED',
+    );
+    const restart = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+    handles.push(restart);
+    expect(await restart.read(f.key.binding, f.created.id, io())).toEqual(state);
+    expect(await bridgeState(f)).toEqual(before);
+    expect(before.reservation).toEqual({ status: 'UNRESOLVED', amount: '5.005' });
+  },
+);
+it('native AMEND survives a real lost COMMIT response without a second causal application or collateral effect', async () => {
+  const f = await dispatchedAmendment();
+  const proxy = await registryCommitProxy(
+    options('DATABASE_EXECUTION_URL').connectionString,
+    'AMEND_APPLICATION',
+  );
+  const interrupted = await createPostgresOrderStore({
+    ...options('DATABASE_EXECUTION_URL'),
+    connectionString: proxy.connectionString,
+  });
+  handles.push(interrupted);
+  try {
+    proxy.arm();
+    await expect(resolveAmendment(interrupted, f)).rejects.toThrow(
+      /ORDER_(ABORTED|AMEND_APPLICATION_UNPROVED)/,
+    );
+    expect(proxy.dropped()).toBe(1);
+  } finally {
+    await interrupted.close();
+    await proxy.close();
+  }
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  const state = await restarted.read(f.key.binding, f.created.id, io());
+  expect(state).toMatchObject({
+    effectiveCommand: f.amendment.command.replacement,
+    activeAttemptId: null,
+    reconciliation: 'CONSISTENT',
+  });
+  const before = await bridgeState(f);
+  expect(await resolveAmendment(restarted, f)).toEqual(state);
+  expect(await bridgeState(f)).toEqual(before);
+  expect(
+    (
+      await admin.query<{ n: number }>(
+        'SELECT count(*)::integer n FROM ctp_execution.amendment_application WHERE "tenantId"=$1 AND "orderId"=$2',
+        [f.key.binding.tenantId, f.created.id],
+      )
+    ).rows[0]!.n,
+  ).toBe(1);
+});
+it('native AMEND racing adopted fills preserves the canonical 18-place weighted average and resolves only with exact fill coverage', async () => {
+  const f = await dispatchedAmendment();
+  const pb = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  const identities: string[] = [];
+  for (const [quantity, price] of [
+    ['0.01', '9'],
+    ['0.02', '10'],
+  ] as const) {
+    const execution = fill({
+      id: randomUUID(),
+      timestamp: Date.now(),
+      internalOrderId: f.created.id,
+      instrumentId: f.created.command.instrumentId,
+      metadataVersion: f.risk.record.instrument.metadataVersion,
+      ruleVersion: f.created.command.ruleVersion,
+      quantity,
+      price,
+      native: {
+        fillId: randomUUID(),
+        identityScope: 'amend-race-trades',
+        exchangeOrderId: f.native.exchangeOrderId!,
+      },
+    });
+    const checkpoint = await portfolio.read(pb, io());
+    await portfolio.apply(pb, execution, checkpoint.revision, io());
+    await orders.adopt(f.key.binding, f.created.id, f.book, execution.id, io());
+    identities.push(execution.id);
+  }
+  const at = Date.now();
+  const proof = {
+    ...f.proof,
+    nativeReceivedAt: at,
+    evidence: { ...f.proof.evidence, receivedAt: at },
+    order: orderSchema.parse({
+      ...f.proof.order,
+      updatedAt: at,
+      status: 'PARTIALLY_FILLED',
+      filledQuantity: '0.03',
+      averageFillPrice: { state: 'AVAILABLE', value: '9.666666666666666667' },
+    }),
+  };
+  const result = await resolveAmendment(orders, f, proof);
+  expect(result.reconciliation).toBe('CONSISTENT');
+  expect(result).toMatchObject({
+    status: 'PARTIALLY_FILLED',
+    reconciliation: 'CONSISTENT',
+    filledQuantity: '0.03',
+    executedQuantity: '0.03',
+    averageFillPrice: '9.666666666666666667',
+    activeAttemptId: null,
+  });
+  expect(result.command).toEqual(f.created.command);
+  expect((await bridgeState(f)).reservation.amount).toBe('5.005');
+  const checkpoint = await portfolio.read(pb, io());
+  await portfolio.apply(
+    pb,
+    snapshot({
+      id: randomUUID(),
+      timestamp: Date.now(),
+      covered: identities,
+      balances: checkpoint.state.balances,
+      positions: [
+        {
+          instrumentId: f.created.command.instrumentId,
+          positionSide: 'NET',
+          bucket: 'CROSS',
+          base: 'BTC',
+          quote: 'USDT',
+          quantity: '0.03',
+          entryPrice: '9.666666666666666667',
+        },
+      ],
+    }),
+    checkpoint.revision,
+    io(),
+  );
+  expect((await bridgeState(f)).reservation).toEqual({ status: 'ACTIVE', amount: '3.7037' });
+});
+it('native AMEND SQL weighted average agrees with canonical Portfolio half-even boundaries losslessly', async () => {
+  for (const [amount, quantity] of [
+    ['0.29', '0.03'],
+    ['2.000000000000000001', '2'],
+    ['2.000000000000000003', '2'],
+  ] as const) {
+    const native = await admin.query<{ value: string }>(
+      'SELECT trim_scale(ctp_execution.amendment_average($1::numeric,$2::numeric))::text value',
+      [amount, quantity],
+    );
+    expect(native.rows[0]!.value).toBe(ratio(amount, '1', quantity));
+  }
+});
+it.each(['NULL_TIME', 'NATIVE_SCOPE', 'HEAD_WRITE'] as const)(
+  'direct execution SQL cannot bypass AMEND %s application authority',
+  async (kind) => {
+    const f = await dispatchedAmendment(),
+      before = await bridgeState(f);
+    const clientPool = new Pool({ ...options('DATABASE_EXECUTION_URL'), max: 1 }),
+      client = await clientPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.tenant_id',$1,true)", [f.key.binding.tenantId]);
+      if (kind === 'HEAD_WRITE')
+        await expect(
+          client.query('INSERT INTO ctp_execution.amendment_head VALUES($1,$2,1)', [
+            f.key.binding.tenantId,
+            f.created.id,
+          ]),
+        ).rejects.toMatchObject({ code: '42501' });
+      else {
+        const proof = structuredClone(f.proof) as unknown as {
+          evidence: { evidence: { time: unknown } };
+          order: { account: { externalAccountId: string } };
+        };
+        if (kind === 'NULL_TIME') proof.evidence.evidence.time = null;
+        else proof.order.account.externalAccountId = 'foreign';
+        await expect(
+          client.query('SELECT ctp_execution.apply_amendment($1::jsonb)', [
+            canonical({
+              binding: f.key.binding,
+              orderId: f.created.id,
+              attemptId: f.claim.attemptId,
+              proof,
+            }),
+          ]),
+        ).rejects.toThrow('ORDER_AMEND_APPLICATION_UNPROVED');
+      }
+    } finally {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+      await clientPool.end();
+    }
+    expect(await bridgeState(f)).toEqual(before);
+    expect((await orders.read(f.key.binding, f.created.id, io())).activeAttemptId).toBe(
+      f.claim.attemptId,
+    );
+  },
+);
 it('certified native AMEND approval reserves only its zero delta and retains primary collateral across restart', async () => {
   const f = await amendmentFixture();
   const { target, before, amendment, amendmentInput: input } = f;

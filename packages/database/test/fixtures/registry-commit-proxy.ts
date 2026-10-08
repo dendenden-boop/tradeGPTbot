@@ -4,7 +4,13 @@ import { createServer, createConnection, type Socket } from 'node:net';
  * publication. No query/result mocks; the real backend commits before response loss. */
 export async function registryCommitProxy(
   connectionString: string,
-  effect: 'REGISTRY' | 'PORTFOLIO' | 'MARKET' | 'CERTIFICATE' | 'ADMISSION' = 'REGISTRY',
+  effect:
+    | 'REGISTRY'
+    | 'PORTFOLIO'
+    | 'MARKET'
+    | 'CERTIFICATE'
+    | 'ADMISSION'
+    | 'AMEND_APPLICATION' = 'REGISTRY',
 ) {
   const marker = {
     REGISTRY: 'SELECT ctp_registry.publish(',
@@ -12,6 +18,7 @@ export async function registryCommitProxy(
     MARKET: 'UPDATE ctp_market.partition SET state',
     CERTIFICATE: 'SELECT ctp_certification.insert_certificate(',
     ADMISSION: 'SELECT ctp_admission.persist(',
+    AMEND_APPLICATION: 'SELECT ctp_execution.apply_amendment(',
   }[effect];
   const target = new URL(connectionString),
     sockets = new Set<Socket>();
