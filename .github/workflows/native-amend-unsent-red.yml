@@ -1,15 +1,15 @@
-name: Native certification verification
+name: Native certification reproduction
 on:
   push:
-    branches: [codex/phase12-amend-causal-type-green]
+    branches: [codex/phase12-amend-unsent-red]
 permissions:
   contents: read
 concurrency:
-  group: native-amend-causal-type-green
+  group: native-amend-unsent-red
   cancel-in-progress: true
 jobs:
   reproduce:
-    name: Native PostgreSQL GREEN verification
+    name: Native PostgreSQL RED reproduction
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -25,11 +25,11 @@ jobs:
       - run: pnpm db:validate
       - run: pnpm build
       - run: pnpm test:integration
-      - name: Upload actual native verification evidence
+      - name: Upload actual native reproduction evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-amend-causal-type-green
+          name: native-amend-unsent-red
           path: test-results/
           if-no-files-found: error
           retention-days: 7
