@@ -17,6 +17,14 @@ import {
   hash,
 } from '@ctp/order-engine';
 import { createPostgresPortfolioStore, type PortfolioStore } from '@ctp/portfolio';
+import { createPostgresMarketSnapshots } from '@ctp/market-data';
+import {
+  createPostgresOrderRiskPort,
+  createPostgresPolicies,
+  createPostgresLossJournal,
+  createPostgresRiskObservations,
+} from '@ctp/risk-engine';
+import { seedRiskCertification } from './fixtures/risk-certification.js';
 import { state, native } from '../../order-engine/test/fixtures.js';
 import { binding as portfolioBinding, snapshot, fill } from '../../portfolio/test/fixtures.js';
 import { instrument, rules, capabilities } from '../../exchange-core/test/fixtures/adapter.js';
@@ -173,6 +181,56 @@ async function grant(
     [reservationId, b.tenantId, decisionId, intentId, b.accountId, budget],
   );
   return { decisionId, reservationId, permissionEpoch: '0', expiresAt: Date.now() + 10000 };
+}
+async function certifiedClaim() {
+  const options = (name: string) => ({
+    connectionString: required(name),
+    environment: 'test' as const,
+  });
+  const market = await createPostgresMarketSnapshots(options('DATABASE_MARKET_SNAPSHOT_URL')),
+    platform = await createPostgresPolicies({
+      ...options('DATABASE_RISK_POLICY_OPERATOR_URL'),
+      authority: 'PLATFORM',
+    }),
+    user = await createPostgresPolicies({
+      ...options('DATABASE_RISK_POLICY_CONTROLLER_URL'),
+      authority: 'USER',
+    }),
+    loss = await createPostgresLossJournal(options('DATABASE_RISK_EVIDENCE_URL')),
+    observer = await createPostgresRiskObservations(options('DATABASE_RISK_OBSERVATION_URL')),
+    risk = await createPostgresOrderRiskPort(options('DATABASE_RISK_ADMISSION_URL'));
+  try {
+    const f = await seedRiskCertification({
+        admin,
+        portfolio,
+        orders: store,
+        market,
+        platform,
+        user,
+        loss,
+        observer,
+        registryOptions: options('DATABASE_INSTRUMENT_REGISTRY_URL'),
+      }),
+      s = f.created,
+      b = s.binding,
+      commandHash = computeCommandHash('createOrder', s.command, {
+        profile: b.profile,
+        account: {
+          tenantId: b.tenantId,
+          connectionId: b.connectionId,
+          externalAccountId: b.externalAccountId,
+        },
+      }),
+      g = await risk.approve(
+        { binding: b, state: { id: s.id }, intentId: s.intentId, operation: 'PLACE', commandHash },
+        io(),
+      ),
+      c = await store.begin(b, s.id, s.intentId, g, io());
+    if (!c) throw new Error('Missing certified fixture claim');
+    return { b, draft: s.draft, s, g, c };
+  } finally {
+    await Promise.all([market, platform, user, loss, observer, risk].map((p) => p.close()));
+  }
 }
 it.each(['GATEWAY', 'DIRECT_SQL'] as const)(
   'unissued legacy Risk rows cannot start transport through %s',
@@ -929,10 +987,7 @@ it.each(['COLUMN', 'TRIGGER'] as const)(
   },
 );
 it('consumes an exact adapter permit once and rechecks permission before transport', async () => {
-  const { b, draft } = await fixture(),
-    s = await store.create(b, draft, io()),
-    g = await grant(s),
-    c = await store.begin(b, s.id, s.intentId, g, io());
+  const { b, s, g, c } = await certifiedClaim();
   if (!c) throw new Error('No claim');
   const account = {
       tenantId: b.tenantId,
@@ -994,16 +1049,9 @@ it('consumes an exact adapter permit once and rechecks permission before transpo
       admin.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
     ).rejects.toMatchObject({ code: '23514' });
   }
-  const delayed = await fixture(),
-    delayedState = await store.create(delayed.b, delayed.draft, io()),
-    delayedGrant = await grant(delayedState),
-    delayedClaim = await store.begin(
-      delayed.b,
-      delayedState.id,
-      delayedState.intentId,
-      delayedGrant,
-      io(),
-    );
+  const delayed = await certifiedClaim(),
+    delayedState = delayed.s,
+    delayedClaim = delayed.c;
   if (!delayedClaim) throw new Error('No claim');
   // Statement trigger delays predicate evaluation after the transaction has begun.
   await admin.query(
