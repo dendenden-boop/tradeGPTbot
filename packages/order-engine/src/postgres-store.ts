@@ -298,6 +298,16 @@ export async function createPostgresOrderStore(options: {
       );
     if (seen.rows[0]) {
       if (!seen.rows[0].fingerprint.equals(bytes(fp))) throw new Error('ORDER_EVIDENCE_CONFLICT');
+      if (event.type === 'NATIVE') {
+        // Older deployments persisted this exact immutable hash without its body.
+        // Revalidate native scope, then attach only the matching full evidence;
+        // identity/FK/hash constraints prohibit replacement or fabricated replay.
+        reduceOrder(s, event);
+        await p.query(
+          'INSERT INTO ctp_execution.authoritative_event("tenantId","orderId",identity,fingerprint,payload) VALUES($1,$2,$3,$4,$5) ON CONFLICT("tenantId","orderId",identity) DO NOTHING',
+          [s.binding.tenantId, s.id, identity, bytes(fp), canonical(event)],
+        );
+      }
       return s;
     }
     const next = reduceOrder(s, event);

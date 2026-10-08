@@ -33,6 +33,7 @@ const expectedMigrations = [
   '202610080003_risk_residual_collateral',
   '202610080004_current_risk_dispatch',
   '202610080005_issued_hold_authority',
+  '202610080006_legacy_native_evidence_recovery',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -1330,7 +1331,7 @@ try {
   );
   assert.equal(admissionOwner.success, true);
   assert.equal(admissionOwner.numPendingTests, 0);
-  assert.ok(admissionOwner.numPassedTests >= 26);
+  assert.ok(admissionOwner.numPassedTests >= 28);
 
   await run(
     process.execPath,
