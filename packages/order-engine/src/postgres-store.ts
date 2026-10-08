@@ -9,6 +9,7 @@ import {
   newOrderSchema,
   mutationOutcomeSchema,
   orderSchema,
+  inPlaceAmendmentSchema,
   decimalMultiply,
   parseDecimal,
 } from '@ctp/exchange-core';
@@ -27,8 +28,12 @@ import {
   type DispatchClaim,
   type OrderStore,
   type OrderEngineEvent,
+  amendDraftSchema,
+  type AmendDraft,
+  type NativeAmendTarget,
 } from './domain.js';
 import { reduceOrder, terminal } from './state.js';
+import { prepareOrderAmendment } from './amendment.js';
 const bytes = (value: string) => Buffer.from(value, 'hex');
 const market = (b: OrderBinding) => (b.profile.market === 'SPOT' ? 'SPOT' : 'PERPETUAL');
 export async function createPostgresOrderStore(options: {
@@ -354,7 +359,7 @@ export async function createPostgresOrderStore(options: {
     d: OrderDraft,
     intentId: string,
     cmd: unknown,
-    operation: 'PLACE' | 'CANCEL',
+    operation: 'PLACE' | 'CANCEL' | 'AMEND',
     target: string | null,
     fp: string,
   ) {
@@ -435,6 +440,32 @@ export async function createPostgresOrderStore(options: {
     if (!previous.requestHash.equals(bytes(hash({ binding: b, draft: d }))))
       throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
     return read(p, b, previous.id);
+  }
+  async function findAmend(p: PoolClient, b: OrderBinding, id: string, request: AmendDraft) {
+    const seen = await p.query<{
+      intentId: string;
+      requestHash: Buffer;
+      commandHash: Buffer;
+      command: string;
+      dispatched: boolean;
+    }>(
+      `SELECT c."intentId",c."requestHash",c."commandHash",c.command,
+       EXISTS(SELECT 1 FROM public.submission_attempt a WHERE a."tenantId"=c."tenantId" AND a."intentId"=c."intentId") AS dispatched
+       FROM ctp_execution.command c JOIN public.order_intent i ON i."tenantId"=c."tenantId" AND i.id=c."intentId"
+       WHERE i."tenantId"=$1 AND i.operation='AMEND' AND i."idempotencyKey"=$2`,
+      [b.tenantId, request.key],
+    );
+    const old = seen.rows[0];
+    if (!old) return null;
+    if (!old.requestHash.equals(bytes(hash({ binding: b, orderId: id, request }))))
+      throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+    return {
+      state: await read(p, b, id),
+      intentId: old.intentId,
+      commandHash: old.commandHash.toString('hex'),
+      command: inPlaceAmendmentSchema.parse(JSON.parse(old.command) as unknown),
+      dispatched: old.dispatched,
+    };
   }
   return Object.freeze({
     findCreate(rawB: OrderBinding, rawD: OrderDraft, c: IoContext) {
@@ -527,6 +558,76 @@ export async function createPostgresOrderStore(options: {
       return tx(b, c, async (p) => {
         await owner(p, b);
         return read(p, b, id);
+      });
+    },
+    findAmend(rawB: OrderBinding, id: string, rawRequest: AmendDraft, c: IoContext) {
+      const b = bindingSchema.parse(rawB),
+        request = amendDraftSchema.parse(rawRequest);
+      z.uuid().parse(id);
+      return tx(b, c, async (p) => {
+        await owner(p, b);
+        return findAmend(p, b, id, request);
+      });
+    },
+    amendIntent(
+      rawB: OrderBinding,
+      id: string,
+      rawRequest: AmendDraft,
+      evidence: NativeAmendTarget,
+      c: IoContext,
+    ) {
+      const b = bindingSchema.parse(rawB),
+        request = amendDraftSchema.parse(rawRequest);
+      z.uuid().parse(id);
+      const requestHash = hash({ binding: b, orderId: id, request });
+      return tx(b, c, async (p) => {
+        const account = await owner(p, b, true);
+        const old = await findAmend(p, b, id, request);
+        if (old) return old;
+        const state = await read(p, b, id, true);
+        if (account.status !== 'ACTIVE') throw new Error('ORDER_BINDING_DENIED');
+        if (BigInt(account.counter) >= 9223372036854775807n) throw new Error('ORDER_ID_EXHAUSTED');
+        const clientOrderId = (BigInt(account.counter) + 1n).toString();
+        const command = prepareOrderAmendment(state, request, evidence, clientOrderId, Date.now());
+        const draft = draftSchema.parse({
+          ...state.draft,
+          key: request.key,
+          dbRuleId: request.dbRuleId,
+          order: request.replacement,
+        });
+        await metadata(p, b, draft);
+        const intentId = randomUUID(),
+          commandHash = computeCommandHash('amendOrder', command, {
+            profile: b.profile,
+            account: {
+              tenantId: b.tenantId,
+              connectionId: b.connectionId,
+              externalAccountId: b.externalAccountId,
+            },
+          });
+        await p.query(
+          'UPDATE public.exchange_account SET "clientIdHighWatermark"=$1::bigint WHERE "tenantId"=$2 AND id=$3',
+          [clientOrderId, b.tenantId, b.accountId],
+        );
+        await insertIntent(p, b, draft, intentId, command, 'AMEND', id, commandHash);
+        await p.query(
+          `INSERT INTO ctp_execution.command("tenantId","intentId","orderId",binding,draft,command,operation,"requestHash","commandHash") VALUES($1,$2,$3,$4,$5,$6,'AMEND',$7,$8)`,
+          [
+            b.tenantId,
+            intentId,
+            id,
+            canonical(b),
+            canonical(draft),
+            canonical(command),
+            bytes(requestHash),
+            bytes(commandHash),
+          ],
+        );
+        await p.query(
+          `INSERT INTO public.outbox_event("tenantId","eventType","schemaVersion","aggregateType","aggregateId","aggregateVersion",payload,"occurredAt") VALUES($1,'OrderIntentCreated',1,'OrderIntent',$2,0,$3::jsonb,now())`,
+          [b.tenantId, intentId, canonical({ intentId, orderId: id, operation: 'AMEND' })],
+        );
+        return { state, intentId, commandHash, command, dispatched: false };
       });
     },
     cancelIntent(rawB: OrderBinding, id: string, key: string, c: IoContext) {
@@ -626,7 +727,7 @@ export async function createPostgresOrderStore(options: {
         );
         if (existing.rowCount) return null;
         const cr = await p.query<{
-          operation: 'PLACE' | 'CANCEL';
+          operation: 'PLACE' | 'CANCEL' | 'AMEND';
           command: string;
           commandHash: Buffer;
           draft: string;
@@ -636,6 +737,7 @@ export async function createPostgresOrderStore(options: {
         );
         const cmd = cr.rows[0];
         if (!cmd) throw new Error('ORDER_BINDING_DENIED');
+        if (cmd.operation === 'AMEND') throw new Error('ORDER_AMEND_NOT_ENABLED');
         if (cmd.operation === 'PLACE') {
           const blocked = await p.query(
             "SELECT id FROM public.\"order\" WHERE \"tenantId\"=$1 AND \"accountId\"=$2 AND mode=$3 AND id<>$4 AND (status IN('SUBMITTING','UNKNOWN','RECONCILIATION_REQUIRED','CANCEL_PENDING') OR (status<>'CREATED' AND \"reconciliationState\"<>'CONSISTENT')) LIMIT 1",
