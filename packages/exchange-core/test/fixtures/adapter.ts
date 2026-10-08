@@ -290,6 +290,21 @@ const secondLocator = {
   locator: { kind: 'EXCHANGE_ID', id: 'exchange-order-2' },
 };
 const algoQuery = { ...instrumentQuery, clientAlgoId: algo.clientAlgoId };
+const amendCommand = {
+  semantics: 'IN_PLACE',
+  identity: { exchangeOrderId: 'PRESERVED', clientOrderId: 'REPLACED' },
+  locator: locatorQuery,
+  target: {
+    internalOrderId: order.internalOrderId,
+    placeIntentId: order.intentId,
+    revision: '1',
+    observedAt: NOW,
+    nativeUpdatedAt: order.updatedAt,
+    current: newOrder,
+    filledQuantity: order.filledQuantity,
+  },
+  replacement: { ...newOrder, clientOrderId: 'client-amend-1' },
+};
 const page = (items: readonly unknown[]) => ({
   items,
   nextCursor: null,
@@ -378,23 +393,21 @@ export const operationFixtures: {
     'amendOrder',
     {
       authorization: amendPermit,
-      command: {
-        semantics: 'IN_PLACE',
-        identity: { exchangeOrderId: 'PRESERVED', clientOrderId: 'REPLACED' },
-        locator: locatorQuery,
-        target: {
-          internalOrderId: order.internalOrderId,
-          placeIntentId: order.intentId,
-          revision: '1',
-          observedAt: NOW,
-          nativeUpdatedAt: order.updatedAt,
-          current: newOrder,
-          filledQuantity: order.filledQuantity,
-        },
-        replacement: { ...newOrder, clientOrderId: 'client-amend-1' },
-      },
+      command: amendCommand,
     },
     accepted(amendPermit.commandId, order.exchangeOrderId),
+  ),
+  getAmendmentEvidence: fixture(
+    'getAmendmentEvidence',
+    { command: amendCommand },
+    {
+      account,
+      scope: instrument.scope,
+      instrumentId: instrument.id,
+      kind: 'INDETERMINATE',
+      reason: 'NO_CAUSAL_EVIDENCE',
+      receivedAt: NOW,
+    },
   ),
   setLeverage: fixture(
     'setLeverage',

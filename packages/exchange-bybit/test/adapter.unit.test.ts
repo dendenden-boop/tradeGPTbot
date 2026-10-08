@@ -390,6 +390,6 @@ describe('Bybit adapter security and native protocol integration', () => {
       expect(x.adapter.capabilities.find((c) => c.feature === feature)?.support).toBe(
         'UNSUPPORTED',
       );
-    expect(Object.keys(operations)).toHaveLength(33);
+    expect(Object.keys(operations)).toHaveLength(34);
   });
 });

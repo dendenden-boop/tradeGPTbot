@@ -4,6 +4,8 @@ PHASE 4–12 audit continues within PHASE 12. Combined issued PLACE lifecycle/cu
 
 Cross-package PostgreSQL acquisition/role/Auth compatibility and supply-chain hardening passed the full [main CI 37671860688](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37671860688); failed predecessor runs remain failures in [verification](docs/phase-12/verification.md). The latest admission run expands the role graph to 115 native cases. The [runtime registry](docs/phase-12/runtime-instrument-registry.md) preserves permanent anti-reuse/restart, and [supply-chain checks](docs/phase-12/supply-chain.md) keep secret scanning, license/SBOM/audit and CodeQL security-extended enabled. No production mutation or complete PHASE 12 gate is implied by these checks.
 
+The common read-only AMEND causal recovery port passed [CI 37773182640](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37773182640): **2882 unit / 41 HTTP** per OS, **3525 distinct cases**, native PostgreSQL and Docker. Exact identity/quantity/time/scope and lossless execution evidence survive rules replacement; absent history remains indeterminate. This recovery read grants no mutation permission. Production AMEND stays UNSUPPORTED until immutable intent, Risk delta, holds, attempt/permit and causal outcome/restart acceptance are complete.
+
 Единый результат аудита фаз 0–3: [итоговый отчёт](docs/audit-phases-0-3.md) — находки, согласованность между этапами, проверенные версии и CI, эксплуатационные ограничения. Решение: **READY FOR PHASE 4**; готовность к production trading ещё не подтверждена.
 
 Многопользовательская платформа ручной и автоматической торговли на Node.js / TypeScript, разрабатываемая по [плану PHASE 0–22](docs/phase-0/implementation-plan.md).

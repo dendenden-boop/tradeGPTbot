@@ -710,37 +710,45 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
     }
   }
 
-  return Object.freeze({
-    /** Internal native history port. Missing history never proves a definitive no-effect outcome. */
-    async reconcileAmendment(raw: unknown, context: RequestContext) {
-      try {
-        authority(context);
-        const candidate = wireObject(raw);
-        const value = metadata(wireObject(candidate.replacement).instrumentId);
-        // Recovery does not require an old request's rules/observation to remain current.
-        // Schema and profile still restrict native identity; native history proves causality.
-        const c = operations.amendOrder.input.shape.command.parse(raw);
-        if (endpoint.id !== 'binance-spot-testnet-v1')
-          throw new BinanceProtocolError('UNSUPPORTED');
-        const symbol = value.instrument.exchangeSymbol;
-        const response = await signed(
-          {
-            path: '/api/v3/order/amendments',
-            weight: 4,
-            symbol,
-            params: { symbol, orderId: c.locator.locator.id, limit: '1000' },
-          },
-          context,
-        );
-        return reconcileBinanceAmendmentHistory(
-          readResponse(response),
-          c,
+  async function amendmentEvidence(raw: unknown, context: RequestContext) {
+    try {
+      const account = authority(context);
+      if (endpoint.id !== 'binance-spot-testnet-v1') throw new BinanceProtocolError('UNSUPPORTED');
+      const candidate = wireObject(raw);
+      const value = metadata(wireObject(candidate.replacement).instrumentId);
+      // Recovery does not require an old request's rules/observation to remain current.
+      // Schema and profile still restrict native identity; native history proves causality.
+      const c = operations.amendOrder.input.shape.command.parse(raw);
+      const symbol = value.instrument.exchangeSymbol;
+      const response = await signed(
+        {
+          path: '/api/v3/order/amendments',
+          weight: 4,
           symbol,
-          response.receivedAt,
-        );
-      } catch (failure) {
-        throw readError(failure);
-      }
+          params: { symbol, orderId: c.locator.locator.id, limit: '1000' },
+        },
+        context,
+      );
+      return immutable({
+        ...reconcileBinanceAmendmentHistory(readResponse(response), c, symbol, response.receivedAt),
+        account,
+        scope: endpoint.scope,
+        instrumentId: c.locator.instrumentId,
+        receivedAt: response.receivedAt,
+      });
+    } catch (failure) {
+      throw readError(failure);
+    }
+  }
+  return Object.freeze({
+    /** Internal compatibility port; missing history never proves no effect. */
+    async reconcileAmendment(raw: unknown, context: RequestContext) {
+      const recovered = await amendmentEvidence(raw, context);
+      return immutable(
+        recovered.kind === 'APPLIED_EVIDENCE'
+          ? { kind: recovered.kind, evidence: recovered.evidence }
+          : { kind: recovered.kind, reason: recovered.reason },
+      );
     },
     /** Validate raw per-asset proof before aggregate wallet normalization hides row clocks. */
     async refreshBalances(
@@ -772,6 +780,10 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
         return immutable({ kind: 'RESULTS', outcomes });
       }
       try {
+        if (operation === 'getAmendmentEvidence') {
+          const parsed = operations.getAmendmentEvidence.input.parse(input);
+          return await amendmentEvidence(parsed.command, context);
+        }
         return await read(operation as ReadOperation, input, context);
       } catch (failure) {
         throw readError(failure);

@@ -20,7 +20,7 @@ import {
 import { accountScopeSchema, adapterProfileSchema, idSchema, timestampSchema } from './scope.js';
 import { exchangeErrorSchema } from './errors.js';
 import type { Feature } from './scope.js';
-import { inPlaceAmendmentSchema } from './amendment.js';
+import { inPlaceAmendmentSchema, amendmentEvidenceSchema } from './amendment.js';
 
 export const cursorSchema = z
   .string()
@@ -172,6 +172,12 @@ export const operations = Object.freeze({
   getPositions: read(instrumentPageQuery, pageSchema(positionSchema), 'ACCOUNT_READ', true),
   getOpenOrders: read(instrumentPageQuery, pageSchema(orderSchema), 'ORDER_READ', true),
   getOrder: read(locatorQuery, orderLookupSchema, 'ORDER_READ', true),
+  getAmendmentEvidence: read(
+    z.strictObject({ command: inPlaceAmendmentSchema }),
+    amendmentEvidenceSchema,
+    'ORDER_READ',
+    true,
+  ),
   getOrderHistory: read(historyQuery, pageSchema(orderSchema), 'ORDER_READ', true),
   getTrades: read(historyQuery, pageSchema(fillSchema), 'ORDER_READ', true),
   getSymbols: read(pageQuery, pageSchema(instrumentSchema), 'PUBLIC_READ'),

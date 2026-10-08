@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { decimalCompare, nonNegativeAmountSchema } from './decimal.js';
+import { decimalCompare, nonNegativeAmountSchema, positiveAmountSchema } from './decimal.js';
 import { newOrderSchema } from './domain.js';
-import { idSchema, timestampSchema } from './scope.js';
+import { accountScopeSchema, marketScopeSchema, idSchema, timestampSchema } from './scope.js';
 
 /** Server-built target evidence. Parsing proves shape/semantics, never source authority. */
 export const inPlaceAmendmentSchema = z
@@ -53,3 +53,32 @@ export const inPlaceAmendmentSchema = z
       ctx.addIssue({ code: 'custom', message: 'INVALID_NATIVE_AMENDMENT' });
   });
 export type InPlaceAmendment = z.infer<typeof inPlaceAmendmentSchema>;
+
+const recovered = {
+  account: accountScopeSchema,
+  scope: marketScopeSchema,
+  instrumentId: idSchema,
+  receivedAt: timestampSchema,
+};
+/** Causal application evidence only. Missing history never proves no effect. */
+export const amendmentEvidenceSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    ...recovered,
+    kind: z.literal('APPLIED_EVIDENCE'),
+    evidence: z.strictObject({
+      executionId: idSchema,
+      time: timestampSchema,
+      exchangeOrderId: idSchema,
+      oldClientOrderId: idSchema,
+      newClientOrderId: idSchema,
+      originalQuantity: positiveAmountSchema,
+      newQuantity: positiveAmountSchema,
+    }),
+  }),
+  z.strictObject({
+    ...recovered,
+    kind: z.literal('INDETERMINATE'),
+    reason: z.literal('NO_CAUSAL_EVIDENCE'),
+  }),
+]);
+export type AmendmentEvidence = z.infer<typeof amendmentEvidenceSchema>;
