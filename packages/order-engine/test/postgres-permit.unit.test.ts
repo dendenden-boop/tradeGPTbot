@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/require-await -- Finite SQL wire fixtures. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createPostgresOrderStore } from '../src/postgres-store.js';
+import { randomUUID } from 'node:crypto';
+import { computeCommandHash } from '@ctp/exchange-core';
+import { state } from './fixtures.js';
 const wire = vi.hoisted(() => ({
   permitSafe: true,
   calls: [] as string[],
@@ -57,4 +60,52 @@ it('unsafe deferred permit authority closes the store before any execution write
   expect(wire.calls).toContain('ROLLBACK');
   expect(wire.calls.some((sql) => /^(INSERT|UPDATE)/.test(sql))).toBe(false);
   expect(wire.released).toEqual([false]);
+});
+it('final authorization acquires GLOBAL then exclusive tenant before the control gate can acquire a weaker lock', async () => {
+  const store = await createPostgresOrderStore(options);
+  try {
+    wire.calls = [];
+    const s = state();
+    const account = {
+      tenantId: s.binding.tenantId,
+      connectionId: s.binding.connectionId,
+      externalAccountId: s.binding.externalAccountId,
+    };
+    const profile = s.binding.profile;
+    await store.authorize(
+      'createOrder',
+      {
+        command: s.command,
+        authorization: {
+          commandId: s.intentId,
+          dispatchAttemptId: randomUUID(),
+          commandHash: computeCommandHash('createOrder', s.command, { profile, account }),
+          account,
+          profile,
+          issuedAt: Date.now(),
+          expiresAt: Date.now() + 1000,
+        },
+      },
+      {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2000,
+        profile,
+        account,
+        correlationId: randomUUID(),
+      },
+    );
+    const gate = wire.calls.findIndex((sql) => sql.includes('ctp_risk.dispatch_gate'));
+    expect(gate).toBeGreaterThan(0);
+    const beforeGate = wire.calls.slice(0, gate);
+    const global = beforeGate.findIndex((sql) =>
+      sql.includes('pg_advisory_xact_lock_shared(1129599058,12)'),
+    );
+    const tenant = beforeGate.findIndex((sql) =>
+      sql.includes("pg_advisory_xact_lock(hashtextextended('ctp:risk:'"),
+    );
+    expect(global).toBeGreaterThan(0);
+    expect(tenant).toBeGreaterThan(global);
+  } finally {
+    await store.close();
+  }
 });

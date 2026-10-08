@@ -84,7 +84,9 @@ try {
   await run(process.execPath, ['scripts/test-database.mjs'], {
     ...options,
     echo: true,
-    timeoutMs: 300000,
+    // Includes native owner repeats, upgrades, the full DB suite and paced
+    // authentication recovery. Their individual physical guards remain bounded.
+    timeoutMs: 600000,
     env: {
       ...test.env,
       NODE_ENV: 'test',

@@ -923,6 +923,10 @@ export async function createPostgresOrderStore(options: {
           return false;
         return await tx(null, context, async (p) => {
           await p.query("SELECT set_config('app.tenant_id',$1,true)", [a.account.tenantId]);
+          await p.query('SELECT pg_advisory_xact_lock_shared(1129599058,12)');
+          await p.query("SELECT pg_advisory_xact_lock(hashtextextended('ctp:risk:'||$1::text,0))", [
+            a.account.tenantId,
+          ]);
           const gate = await p.query<{ allowed: boolean }>(
             'SELECT ctp_risk.dispatch_gate($1::uuid,$2::uuid) AS allowed',
             [a.account.tenantId, a.account.connectionId],
