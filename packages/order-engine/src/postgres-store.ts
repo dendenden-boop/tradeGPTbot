@@ -225,7 +225,7 @@ export async function createPostgresOrderStore(options: {
     executed: string;
     notional: string;
     attemptId: string | null;
-    operation: 'PLACE' | 'CANCEL' | null;
+    operation: 'PLACE' | 'CANCEL' | 'AMEND' | null;
   };
   async function read(
     p: PoolClient,
@@ -737,7 +737,14 @@ export async function createPostgresOrderStore(options: {
         );
         const cmd = cr.rows[0];
         if (!cmd) throw new Error('ORDER_BINDING_DENIED');
-        if (cmd.operation === 'AMEND') throw new Error('ORDER_AMEND_NOT_ENABLED');
+        if (
+          cmd.operation === 'AMEND' &&
+          (b.mode !== 'TESTNET' ||
+            b.profile.exchange !== 'BINANCE' ||
+            b.profile.market !== 'SPOT' ||
+            b.profile.endpointProfileId !== 'binance-spot-testnet-v1')
+        )
+          throw new Error('ORDER_AMEND_NOT_ENABLED');
         if (cmd.operation === 'PLACE') {
           const blocked = await p.query(
             "SELECT id FROM public.\"order\" WHERE \"tenantId\"=$1 AND \"accountId\"=$2 AND mode=$3 AND id<>$4 AND (status IN('SUBMITTING','UNKNOWN','RECONCILIATION_REQUIRED','CANCEL_PENDING') OR (status<>'CREATED' AND \"reconciliationState\"<>'CONSISTENT')) LIMIT 1",
@@ -1012,7 +1019,12 @@ export async function createPostgresOrderStore(options: {
     },
     async authorize(operation: unknown, input: unknown, raw: unknown): Promise<boolean> {
       try {
-        if (operation !== 'createOrder' && operation !== 'cancelOrder') return false;
+        if (
+          operation !== 'createOrder' &&
+          operation !== 'cancelOrder' &&
+          operation !== 'amendOrder'
+        )
+          return false;
         const req = operations[operation].input.parse(input),
           a = authorizationSchema.parse(req.authorization),
           context = z
@@ -1048,7 +1060,7 @@ export async function createPostgresOrderStore(options: {
             binding: string;
             orderId: string;
             intentId: string;
-            operation: 'PLACE' | 'CANCEL';
+            operation: 'PLACE' | 'CANCEL' | 'AMEND';
             draft: string;
           }>(
             `SELECT c.binding,c."orderId",c."intentId",c.operation,c.draft FROM ctp_execution.command c JOIN public.submission_attempt t ON t."tenantId"=c."tenantId" AND t."intentId"=c."intentId" WHERE t."tenantId"=$1 AND t.id=$2 AND c."intentId"=$3 AND t.status='DISPATCHING' AND t."commandHash"=$4 AND t."transportStartedAt" IS NULL AND t."deadlineAt">now() AND t."deadlineAt">=to_timestamp($5::double precision/1000)`,
@@ -1061,7 +1073,15 @@ export async function createPostgresOrderStore(options: {
             ],
           );
           const row = r.rows[0];
-          if (!row || row.operation !== (operation === 'createOrder' ? 'PLACE' : 'CANCEL'))
+          if (
+            !row ||
+            row.operation !==
+              (operation === 'createOrder'
+                ? 'PLACE'
+                : operation === 'cancelOrder'
+                  ? 'CANCEL'
+                  : 'AMEND')
+          )
             return false;
           const b = bindingSchema.parse(JSON.parse(row.binding) as unknown);
           await owner(p, b, true);

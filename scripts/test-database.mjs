@@ -39,6 +39,7 @@ const expectedMigrations = [
   '202610080009_immutable_amend_intent',
   '202610080010_native_identity_authority',
   '202610080011_certified_native_controls',
+  '202610080012_native_amend_dispatch',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -1336,6 +1337,7 @@ try {
         DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
         DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
         DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+        DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
         DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[2]),
       },
       secrets,

@@ -181,6 +181,8 @@ export function createOrderEngine(options: {
     let outcome,
       dispatched = false;
     try {
+      // The server service stays fail-closed until causal settlement is accepted.
+      if (claim.operation === 'AMEND') throw new Error('ORDER_AMEND_NOT_ENABLED');
       await auth(claim.operation === 'PLACE' ? 'SUBMIT' : 'CANCEL', c);
       check(c);
       const authorization = {
