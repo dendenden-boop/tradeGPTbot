@@ -363,6 +363,272 @@ it('certified native AMEND approval reserves only its zero delta and retains pri
   );
   expect((await orders.read(f.key.binding, target.id, io())).command).toEqual(f.created.command);
 });
+it('expired unused AMEND control releases only zero delta and cannot exhaust the next native control slot', async () => {
+  const f = await amendmentFixture();
+  const port = await open();
+  const old = await port.approve(f.amendmentInput, io());
+  await new Promise((resolve) => setTimeout(resolve, Math.max(1, old.expiresAt - Date.now() + 25)));
+  const { clientOrderId: omitted, ...replacement } = f.target.command;
+  void omitted;
+  const next = await orders.amendIntent(
+    f.key.binding,
+    f.created.id,
+    {
+      key: randomUUID(),
+      expectedVersion: String(f.target.version),
+      dbRuleId: f.target.draft.dbRuleId,
+      replacement: { ...replacement, size: { ...replacement.size, value: parseDecimal('0.3') } },
+    },
+    { order: f.native, receivedAt: Date.now() },
+    io(),
+  );
+  const grant = await port.approve(
+    { ...f.amendmentInput, intentId: next.intentId, commandHash: next.commandHash },
+    io(),
+  );
+  expect(grant.reservationId).not.toBe(old.reservationId);
+  expect(
+    (
+      await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+        old.reservationId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RELEASED' }]);
+  const after = await bridgeState(f);
+  expect(after.reservation).toEqual(f.before.reservation);
+  expect(after.state.holds).toHaveLength(2);
+  expect(after.state.holds).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: f.grant.reservationId, amount: '5.005', status: 'RESERVED' }),
+      expect.objectContaining({ id: grant.reservationId, amount: '0', status: 'RESERVED' }),
+    ]),
+  );
+  await expect(port.approve(f.amendmentInput, io())).rejects.toThrow('RISK_ADMISSION_EXPIRED');
+  expect(await bridgeState(f)).toEqual(after);
+  expect(
+    (
+      await admin.query(
+        'SELECT id FROM public.submission_attempt WHERE "tenantId"=$1 AND operation=\'AMEND\'',
+        [f.key.binding.tenantId],
+      )
+    ).rowCount,
+  ).toBe(0);
+});
+it.each(['ACK', 'UNKNOWN'] as const)(
+  'native AMEND has a durable one-use attempt and retains primary collateral after %s across restart',
+  async (kind) => {
+    const f = await amendmentFixture();
+    const grant = await (await open()).approve(f.amendmentInput, io());
+    const claim = await orders.begin(
+      f.key.binding,
+      f.created.id,
+      f.amendment.intentId,
+      grant,
+      io(),
+    );
+    if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+    expect(claim.operation).toBe('AMEND');
+    expect(claim.command).toEqual(f.amendment.command);
+    expect(claim.state.command).toEqual(f.created.command);
+    const account = {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    };
+    const input = {
+      command: claim.command,
+      authorization: {
+        commandId: claim.intentId,
+        commandHash: claim.commandHash,
+        dispatchAttemptId: claim.attemptId,
+        profile: f.key.binding.profile,
+        account,
+        issuedAt: Date.now(),
+        expiresAt: grant.expiresAt,
+      },
+    };
+    const context = {
+      ...io(),
+      profile: f.key.binding.profile,
+      account,
+      correlationId: randomUUID(),
+    };
+    expect(await orders.authorize('amendOrder', input, context)).toBe(true);
+    expect(await orders.authorize('amendOrder', input, context)).toBe(false);
+    const result =
+      kind === 'ACK'
+        ? {
+            kind: 'ACCEPTED' as const,
+            ack: {
+              commandId: claim.intentId,
+              status: 'ACKNOWLEDGED' as const,
+              exchangeId: f.native.exchangeOrderId,
+              receivedAt: Date.now(),
+            },
+          }
+        : { kind: 'UNKNOWN' as const, error: { code: 'UNAVAILABLE' as const } };
+    const state = await orders.result(f.key.binding, claim, result, io());
+    expect(state.activeAttemptId).toBe(claim.attemptId);
+    expect(state.activeOperation).toBe('AMEND');
+    expect(state.reconciliation).toBe('REQUIRED');
+    expect((await bridgeState(f)).reservation.amount).toBe('5.005');
+    if (kind === 'UNKNOWN') {
+      expect((await bridgeState(f)).reservation.status).toBe('UNRESOLVED');
+      expect((await bridgeState(f)).state.holds).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: f.grant.reservationId,
+            status: 'UNKNOWN',
+            amount: '5.005',
+          }),
+          expect.objectContaining({ id: grant.reservationId, status: 'UNKNOWN', amount: '0' }),
+        ]),
+      );
+    }
+    const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+    handles.push(restarted);
+    expect(await restarted.read(f.key.binding, f.created.id, io())).toEqual(state);
+    expect(
+      await restarted.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io()),
+    ).toBeNull();
+    await expect(restarted.complete(f.key.binding, f.created.id, f.native, io())).rejects.toThrow(
+      'ORDER_HISTORY_REQUIRED',
+    );
+    expect((await bridgeState(f)).reservation.amount).toBe('5.005');
+  },
+);
+it.each(['POLICY', 'PERMISSION', 'NATIVE_RACE', 'HEALTH', 'PAUSE', 'DEADLINE'] as const)(
+  'AMEND final %s replacement is NOT_SENT and releases only the zero control commitment',
+  async (kind) => {
+    const f = await amendmentFixture();
+    const grant = await (await open()).approve(f.amendmentInput, io());
+    const claim = await orders.begin(
+      f.key.binding,
+      f.created.id,
+      f.amendment.intentId,
+      grant,
+      io(),
+    );
+    if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+    if (kind === 'POLICY')
+      await user.update(
+        {
+          scope: { kind: 'USER', tenantId: f.key.binding.tenantId },
+          mode: 'TESTNET',
+          eventId: randomUUID(),
+          expectedVersion: '1',
+          reason: 'ISOLATED_AMEND_FINAL_POLICY',
+          limits: riskLimitsSchema.parse({ ...f.risk.user, maxOrderNotional: '1' }),
+        },
+        io(),
+      );
+    else if (kind === 'PERMISSION') {
+      await admin.query(
+        'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+        [f.key.binding.accountId],
+      );
+    } else if (kind === 'NATIVE_RACE') {
+      await orders.observe(
+        f.key.binding,
+        f.created.id,
+        orderSchema.parse({ ...f.native, updatedAt: f.native.updatedAt + 1 }),
+        io(),
+      );
+    } else if (kind === 'HEALTH') {
+      await observer.publish(
+        {
+          ...f.observationEvent,
+          id: randomUUID(),
+          expectedRevision: '1',
+          observation: {
+            ...f.observationEvent.observation,
+            health: {
+              ...f.observationEvent.observation.health,
+              privateStream: { sourceId: randomUUID(), asOf: Date.now(), status: 'FAILED' },
+            },
+          },
+        },
+        io(),
+      );
+    } else if (kind === 'PAUSE') {
+      const controller = await createPostgresControls({
+        ...options('DATABASE_RISK_CONTROL_URL'),
+        authority: 'TENANT',
+      });
+      handles.push(controller);
+      await controller.update(
+        {
+          scope: {
+            kind: 'CONNECTION',
+            tenantId: f.key.binding.tenantId,
+            targetId: f.key.binding.connectionId!,
+          },
+          kind: 'KILL_SWITCH',
+          key: 'kill',
+          state: 'PAUSED',
+          expectedEpoch: '0',
+          eventId: randomUUID(),
+          reason: 'ISOLATED_AMEND_FINAL_PAUSE',
+          evidenceHash: 'b'.repeat(64),
+        },
+        io(),
+      );
+    } else {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(1, grant.expiresAt - Date.now() + 25)),
+      );
+    }
+    const account = {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    };
+    expect(
+      await orders.authorize(
+        'amendOrder',
+        {
+          command: claim.command,
+          authorization: {
+            commandId: claim.intentId,
+            commandHash: claim.commandHash,
+            dispatchAttemptId: claim.attemptId,
+            profile: f.key.binding.profile,
+            account,
+            issuedAt: Date.now(),
+            expiresAt: grant.expiresAt,
+          },
+        },
+        { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+      ),
+    ).toBe(false);
+    const state = await orders.result(
+      f.key.binding,
+      claim,
+      { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+      io(),
+    );
+    expect(state.status).not.toBe('UNKNOWN');
+    expect(
+      (
+        await admin.query(
+          'SELECT "transportStartedAt","permitConsumedAt","responseCode" FROM public.submission_attempt WHERE id=$1',
+          [claim.attemptId],
+        )
+      ).rows,
+    ).toEqual([{ transportStartedAt: null, permitConsumedAt: null, responseCode: 'NOT_SENT' }]);
+    expect(
+      (
+        await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+          grant.reservationId,
+        ])
+      ).rows,
+    ).toEqual([{ status: 'RELEASED' }]);
+    const after = await bridgeState(f);
+    expect(after.reservation.amount).toBe('5.005');
+    expect(after.reservation.status).toBe('ACTIVE');
+    expect(after.state.holds).toHaveLength(1);
+  },
+);
 it.each(['POLICY', 'RULES', 'PERMISSION', 'NATIVE_RACE'] as const)(
   'AMEND admission rereads current %s and rejects without changing primary collateral',
   async (kind) => {
