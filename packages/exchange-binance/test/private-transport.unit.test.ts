@@ -471,6 +471,46 @@ describe('Binance explicit native in-place AMEND transport', () => {
     ]);
     expect(proof).not.toHaveProperty('finalOutcome');
   });
+  it('exposes causal AMEND evidence through the common read operation without mutation admission', async () => {
+    const h = harness(
+      false,
+      [
+        {
+          data: [
+            {
+              symbol: 'BTCUSDT',
+              orderId: order().orderId,
+              executionId: '9007199254740993',
+              origClientOrderId: 'fixture-order-1',
+              newClientOrderId: 'fixture-amend-1',
+              origQty: '0.1',
+              newQty: '0.075',
+              time: String(NOW),
+            },
+          ],
+        },
+      ],
+      () => NOW,
+      true,
+    );
+    const recovered = await h.transport.request(
+      'getAmendmentEvidence',
+      { command: amendCommand() },
+      h.context,
+    );
+    expect(recovered).toMatchObject({
+      kind: 'APPLIED_EVIDENCE',
+      account: h.context.account,
+      scope: h.options.endpoint.scope,
+      instrumentId: 'BTCUSDT',
+      receivedAt: NOW,
+      evidence: { executionId: '9007199254740993', newQuantity: '0.075' },
+    });
+    expect(h.calls.map((r) => [r.method, r.url.pathname])).toEqual([
+      ['GET', '/api/v3/order/amendments'],
+    ]);
+    expect(h.orderAdmission.validate).not.toHaveBeenCalled();
+  });
   it('never interprets missing database amendment history as definitive rejection', async () => {
     const h = harness(false, [{ data: [] }], () => NOW, true);
     expect(await h.transport.reconcileAmendment(amendCommand(), h.context)).toEqual({
@@ -479,6 +519,36 @@ describe('Binance explicit native in-place AMEND transport', () => {
     });
     expect(h.calls).toHaveLength(1);
   });
+  it('preserves indeterminate history on the common recovery port after restart', async () => {
+    const h = harness(false, [{ data: [] }], () => NOW, true);
+    const restarted = createPrivateTransport(h.options);
+    expect(
+      await restarted.request('getAmendmentEvidence', { command: amendCommand() }, h.context),
+    ).toEqual({
+      kind: 'INDETERMINATE',
+      reason: 'NO_CAUSAL_EVIDENCE',
+      account: h.context.account,
+      scope: h.options.endpoint.scope,
+      instrumentId: 'BTCUSDT',
+      receivedAt: NOW,
+    });
+    expect(h.calls.map((r) => r.method)).toEqual(['GET']);
+    expect(h.orderAdmission.validate).not.toHaveBeenCalled();
+  });
+  it.each(['binance-spot-live-v1', 'binance-usdm-testnet-v1'] as const)(
+    'does not invent causal evidence for unsupported %s history',
+    async (id) => {
+      const h = harness(false, [], () => NOW, true),
+        endpoint = getBinanceProfile(id),
+        binding = { ...h.options.binding, profileId: id },
+        transport = createPrivateTransport({ ...h.options, endpoint, binding }),
+        context = { ...h.context, profile: adapterProfile(endpoint, binding.credentialRef) };
+      await expect(
+        transport.request('getAmendmentEvidence', { command: amendCommand() }, context),
+      ).rejects.toMatchObject({ code: 'UNSUPPORTED' });
+      expect(h.calls).toHaveLength(0);
+    },
+  );
 });
 
 describe('Binance signed private reads', () => {

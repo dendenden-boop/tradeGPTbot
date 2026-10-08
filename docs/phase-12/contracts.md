@@ -1,5 +1,11 @@
 # PHASE 12 contracts
 
+## Read-only causal amendment recovery
+
+The common getAmendmentEvidence operation accepts the immutable classified IN_PLACE command and returns an account/market/instrument-bound result with the actual response receipt time. APPLIED_EVIDENCE binds the preserved exchange order, old/new client identities, original/new cumulative quantities, lossless execution identity and native application time. Core rejects mismatched scope, identity, quantity, future receipt/application and evidence predating the target native update. The read requires current scoped ORDER_READ evidence, not an AMEND mutation capability or a transport permit; permanent recovery remains possible after rules replacement. INDETERMINATE never proves absence, rejection, final order state or safe collateral release.
+
+Binance exposes the existing bounded signed amendment-history protocol through this common port for Spot TESTNET only. Saturated/inconsistent history rejects; empty history remains INDETERMINATE across transport recreation. The read performs no mutation admission or dispatch. Existing HTTP abort/deadline, queue and response-size bounds apply. Other profiles fail closed; production AMEND remains UNSUPPORTED until the durable intent/atomic Risk delta/hold/attempt/permit/fill-race/restart chain is accepted together.
+
 Current cross-phase [runtime InstrumentRegistry contract](runtime-instrument-registry.md) separates bounded observational metadata projections from authoritative PostgreSQL current reads and atomic durable version history. Its complete native/OS/Docker acceptance is recorded in verification; it is not a completed Risk certificate or mutation grant.
 
 ## PostgreSQL physical acquisition lifecycle

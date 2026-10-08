@@ -432,6 +432,24 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
     };
     if (!walk(output)) return false;
     const value = object(output);
+    if (operation === 'getAmendmentEvidence') {
+      const command = operations.getAmendmentEvidence.input.parse(input).command,
+        recovered = operations.getAmendmentEvidence.output.parse(output);
+      if (recovered.receivedAt > now()) return false;
+      if (recovered.kind === 'APPLIED_EVIDENCE') {
+        const e = recovered.evidence;
+        if (
+          e.exchangeOrderId !== command.locator.locator.id ||
+          e.oldClientOrderId !== command.target.current.clientOrderId ||
+          e.newClientOrderId !== command.replacement.clientOrderId ||
+          e.originalQuantity !== command.target.current.size.value ||
+          e.newQuantity !== command.replacement.size.value ||
+          e.time < command.target.nativeUpdatedAt ||
+          e.time > recovered.receivedAt
+        )
+          return false;
+      }
+    }
     if (
       Array.isArray(value.items) &&
       typeof input.from === 'number' &&
