@@ -32,6 +32,9 @@ export function memoryStore(currentRule = () => 'v1') {
     return structuredClone(s);
   };
   const store: OrderStore = {
+    async recoverUnsent() {
+      throw new Error('ORDER_DURABLE_RECOVERY_REQUIRED');
+    },
     async resolveAmendment() {
       throw new Error('ORDER_AMEND_APPLICATION_UNPROVED');
     },

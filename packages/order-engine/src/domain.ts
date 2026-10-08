@@ -216,6 +216,8 @@ export interface OrderStore {
     context: IoContext,
   ): Promise<StoredAmendment>;
   read(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
+  /** Recover only an expired protocol-2 AMEND whose durable transport boundary is absent. */
+  recoverUnsent(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
   cancelIntent(
     binding: OrderBinding,
     id: string,

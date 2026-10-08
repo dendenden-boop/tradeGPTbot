@@ -10,6 +10,7 @@ export async function registryCommitProxy(
     | 'MARKET'
     | 'CERTIFICATE'
     | 'ADMISSION'
+    | 'UNSENT_RECOVERY'
     | 'AMEND_APPLICATION' = 'REGISTRY',
 ) {
   const marker = {
@@ -18,6 +19,7 @@ export async function registryCommitProxy(
     MARKET: 'UPDATE ctp_market.partition SET state',
     CERTIFICATE: 'SELECT ctp_certification.insert_certificate(',
     ADMISSION: 'SELECT ctp_admission.persist(',
+    UNSENT_RECOVERY: "UPDATE public.submission_attempt SET status='REJECTED'",
     AMEND_APPLICATION: 'SELECT ctp_execution.apply_amendment(',
   }[effect];
   const target = new URL(connectionString),

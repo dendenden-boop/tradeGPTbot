@@ -1,11 +1,11 @@
 name: Native certification verification
 on:
   push:
-    branches: [codex/phase12-amend-causal-type-green]
+    branches: [codex/phase12-amend-unsent-green]
 permissions:
   contents: read
 concurrency:
-  group: native-amend-causal-type-green
+  group: native-amend-unsent-green
   cancel-in-progress: true
 jobs:
   reproduce:
@@ -29,7 +29,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-amend-causal-type-green
+          name: native-amend-unsent-green
           path: test-results/
           if-no-files-found: error
           retention-days: 7
