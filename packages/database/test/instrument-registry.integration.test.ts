@@ -52,12 +52,29 @@ function record(
   });
 }
 async function open(scope: MarketScope, ids = ['BTCUSDT']) {
-  const r = await createPostgresInstrumentRegistry({
-    connectionString: required('DATABASE_INSTRUMENT_REGISTRY_URL'),
-    environment: 'test',
-    scope,
-    instrumentIds: ids,
-  });
+  let r: Awaited<ReturnType<typeof createPostgresInstrumentRegistry>>;
+  try {
+    r = await createPostgresInstrumentRegistry({
+      connectionString: required('DATABASE_INSTRUMENT_REGISTRY_URL'),
+      environment: 'test',
+      scope,
+      instrumentIds: ids,
+    });
+  } catch (cause) {
+    // Diagnose native recovery failures without retrying or granting readiness.
+    const started = performance.now();
+    let diagnostic = 'READ_FAILED';
+    try {
+      const result = await publisher.query<{ result: unknown[] }>(
+        'SELECT ctp_registry.read_current($1::jsonb,$2::jsonb) AS result',
+        [JSON.stringify(scope), JSON.stringify(ids)],
+      );
+      diagnostic = `ROWS_${result.rows[0]?.result.length}_MS_${Math.ceil(performance.now() - started)}`;
+    } catch (error) {
+      diagnostic = error instanceof Error && 'code' in error ? String(error.code) : 'READ_FAILED';
+    }
+    throw new Error(`REGISTRY_NATIVE_RECOVERY_${diagnostic}`, { cause });
+  }
   handles.push(r);
   return r;
 }

@@ -35,6 +35,19 @@ it('never extends native evidence age at later capture time', () => {
     'RISK_SNAPSHOT_STALE',
   );
 });
+it('binds certificate source time to older native FX instead of refreshing it through newer Portfolio/Market receipts', () => {
+  const f = captureFixture();
+  f.observation.fx[0]!.asOf = f.now - 4800;
+  f.rehashObservation();
+  const sources = decodeRiskSnapshotCapture(f.raw, f.key, f.now);
+  const projection = prepareRiskSnapshot(
+    sources,
+    f.key,
+    { id: randomUUID(), revision: '1' },
+    f.now,
+  );
+  expect(projection.snapshot.sourceAt).toBe(f.observation.fx[0]!.asOf);
+});
 it('requires exact observed FX rather than guessing stablecoin parity', () => {
   const f = captureFixture();
   f.observation.fx[0]!.from = 'USDC';

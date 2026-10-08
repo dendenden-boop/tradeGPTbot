@@ -69,7 +69,10 @@ async function tenant() {
 beforeAll(async () => {
   operator = await open('PLATFORM');
   controller = await open('USER');
-  await operator.update(request({ kind: 'PLATFORM' }), io());
+  const head = await admin.query<{ version: string }>(
+    "SELECT version::text FROM ctp_risk.policy_head WHERE scope='PLATFORM' AND mode='TESTNET'",
+  );
+  await operator.update(request({ kind: 'PLATFORM' }, head.rows[0]?.version ?? '0'), io());
 });
 afterAll(async () => {
   await operator?.close();
