@@ -29,6 +29,7 @@ const expectedMigrations = [
   '202610070004_portfolio_capture_inventory',
   '202610070005_risk_snapshot_certification',
   '202610080001_atomic_risk_admission',
+  '202610080002_risk_reservation_lifecycle',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -1326,7 +1327,7 @@ try {
   );
   assert.equal(admissionOwner.success, true);
   assert.equal(admissionOwner.numPendingTests, 0);
-  assert.ok(admissionOwner.numPassedTests >= 13);
+  assert.ok(admissionOwner.numPassedTests >= 21);
 
   await run(
     process.execPath,
