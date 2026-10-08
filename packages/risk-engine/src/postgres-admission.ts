@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { immutable, newOrderSchema, sameMarketScope } from '@ctp/exchange-core';
+import { immutable, sameMarketScope } from '@ctp/exchange-core';
 import { canonical, reducePortfolio } from '@ctp/portfolio';
 import {
   openCertificationDatabase,
@@ -13,9 +13,14 @@ import {
   riskSnapshotCertificateSchema,
   type SnapshotIo,
 } from './coordinator.js';
-import { decodeRiskSnapshotCapture } from './snapshot-capture.js';
+import { decodeRiskSnapshotCapture, riskCapturedIntentSchema } from './snapshot-capture.js';
 import { decodeRiskPortfolioSource } from './portfolio-source.js';
-import { evaluateRiskPolicy, intersectRiskLimits } from './policy.js';
+import {
+  evaluateRiskPolicy,
+  evaluateRiskAmendmentPolicy,
+  riskAmendmentRetentionSchema,
+  intersectRiskLimits,
+} from './policy.js';
 import { certificateDeadline } from './certificate-deadline.js';
 
 const request = z.strictObject({
@@ -79,7 +84,8 @@ export async function createPostgresOrderRiskPort(options: CertificationDatabase
           riskEvidenceHash(current.key.binding) !== riskEvidenceHash(input.binding)
         )
           throw new Error('RISK_ADMISSION_CONFLICT');
-        if (input.operation !== 'PLACE') throw new Error('RISK_ADMISSION_OPERATION_UNSUPPORTED');
+        if (input.operation !== 'PLACE' && input.operation !== 'AMEND')
+          throw new Error('RISK_ADMISSION_OPERATION_UNSUPPORTED');
         const now = Date.now(),
           sources = decodeRiskSnapshotCapture(current.capture, current.key, now);
         const projection = prepareRiskSnapshot(
@@ -97,10 +103,19 @@ export async function createPostgresOrderRiskPort(options: CertificationDatabase
           createdAt: now,
           expiresAt: certificateDeadline(projection, io.deadline),
         });
-        const sourceIntent = z
-          .object({ intent: z.object({ command: newOrderSchema }) })
-          .parse(current.capture).intent.command;
-        const evaluation = evaluateRiskPolicy({
+        const captured = z
+          .object({
+            intent: riskCapturedIntentSchema,
+            retention: riskAmendmentRetentionSchema.optional(),
+          })
+          .parse(current.capture);
+        if (captured.intent.operation !== input.operation)
+          throw new Error('RISK_ADMISSION_CONFLICT');
+        const sourceIntent =
+          captured.intent.operation === 'PLACE'
+            ? captured.intent.command
+            : captured.intent.command.replacement;
+        const calculation = {
           now,
           binding: projection.snapshot.binding,
           order: sourceIntent,
@@ -110,7 +125,15 @@ export async function createPostgresOrderRiskPort(options: CertificationDatabase
           platform: projection.platform.limits,
           user: projection.user.limits,
           snapshot: projection.snapshot,
-        });
+        };
+        const evaluation =
+          captured.intent.operation === 'PLACE'
+            ? evaluateRiskPolicy(calculation)
+            : evaluateRiskAmendmentPolicy({
+                evaluation: calculation,
+                command: captured.intent.command,
+                retention: captured.retention,
+              });
         if (evaluation.kind === 'REJECTED')
           throw new Error(evaluation.reasons[0] ?? 'RISK_ADMISSION_DENIED');
         const rawPortfolio = z.object({ portfolio: z.unknown() }).parse(current.capture).portfolio;

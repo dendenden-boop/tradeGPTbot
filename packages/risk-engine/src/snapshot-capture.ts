@@ -7,6 +7,7 @@ import {
   tickerSchema,
   orderBookSchema,
   newOrderSchema,
+  inPlaceAmendmentSchema,
   decimalAdd,
   decimalMultiply,
   decimalCompare,
@@ -23,7 +24,7 @@ import {
 } from './coordinator.js';
 import { decodeRiskPortfolioSource } from './portfolio-source.js';
 import { policyHeadSchema } from './policies.js';
-import { intersectRiskLimits } from './policy.js';
+import { intersectRiskLimits, riskAmendmentRetentionSchema } from './policy.js';
 import { lossCheckpointSchema } from './loss-journal.js';
 import { riskNativeObservationSchema } from './snapshot-observations.js';
 
@@ -45,6 +46,10 @@ const publication = z.strictObject({
   ticker: tickerSchema,
   book: orderBookSchema,
 });
+export const riskCapturedIntentSchema = z.discriminatedUnion('operation', [
+  z.strictObject({ id: z.uuid(), operation: z.literal('PLACE'), command: newOrderSchema }),
+  z.strictObject({ id: z.uuid(), operation: z.literal('AMEND'), command: inPlaceAmendmentSchema }),
+]);
 const capture = z.strictObject({
   key: riskSnapshotKeySchema,
   capturedAt: timestampSchema,
@@ -59,11 +64,8 @@ const capture = z.strictObject({
     value: riskSnapshotSourcesSchema.shape.metadata.shape.value,
     revision,
   }),
-  intent: z.strictObject({
-    id: z.uuid(),
-    operation: z.enum(['PLACE', 'CANCEL', 'AMEND']),
-    command: newOrderSchema,
-  }),
+  intent: riskCapturedIntentSchema,
+  retention: riskAmendmentRetentionSchema.optional(),
   connection: z.strictObject({
     id: z.uuid(),
     accountId: z.uuid(),
@@ -91,6 +93,7 @@ const capture = z.strictObject({
   exposure: riskSnapshotSourcesSchema.shape.exposure.shape.value.pick({
     orders: true,
     reservations: true,
+    controls: true,
   }),
   ordersInLastMinute: z.number().int().nonnegative().max(1000000),
 });
@@ -110,6 +113,26 @@ export function decodeRiskSnapshotCapture(
   try {
     const key = riskSnapshotKeySchema.parse(rawKey),
       e = capture.parse(raw);
+    const intendedOrder =
+      e.intent.operation === 'PLACE' ? e.intent.command : e.intent.command.replacement;
+    if (e.intent.operation === 'PLACE' ? e.retention !== undefined : e.retention === undefined)
+      throw new Error('RISK_SNAPSHOT_INTENT');
+    if (e.intent.operation === 'AMEND') {
+      const r = e.retention!,
+        c = e.intent.command;
+      if (
+        r.orderId !== c.target.internalOrderId ||
+        r.placeIntentId !== c.target.placeIntentId ||
+        r.accountId !== key.binding.accountId ||
+        r.mode !== key.binding.mode ||
+        r.orderRevision !== c.target.revision ||
+        r.exchangeOrderId !== c.locator.locator.id ||
+        r.filledQuantity !== c.target.filledQuantity ||
+        r.nativeUpdatedAt !== c.target.nativeUpdatedAt ||
+        !equal(r.command, c.target.current)
+      )
+        throw new Error('RISK_SNAPSHOT_INTENT');
+    }
     if (
       !key.intentId ||
       !equal(e.key, key) ||
@@ -236,8 +259,8 @@ export function decodeRiskSnapshotCapture(
       native.p.key.instrumentId !== key.instrumentId ||
       !sameMarketScope(native.p.key.scope, key.binding.profile) ||
       !equal(native.p.record, e.metadata.value.record) ||
-      e.intent.command.instrumentId !== key.instrumentId ||
-      e.intent.command.ruleVersion !== native.p.record.rules.version
+      intendedOrder.instrumentId !== key.instrumentId ||
+      intendedOrder.ruleVersion !== native.p.record.rules.version
     )
       throw new Error('RISK_SNAPSHOT_METADATA');
     const positions: RiskSnapshotSources['exposure']['value']['positions'] = [];
@@ -307,7 +330,7 @@ export function decodeRiskSnapshotCapture(
     }
     const target = native.p.record.instrument;
     const availableAsset =
-      key.binding.profile.market === 'SPOT' && e.intent.command.side === 'SELL'
+      key.binding.profile.market === 'SPOT' && intendedOrder.side === 'SELL'
         ? target.baseAsset
         : (target.settlementAsset ?? target.quoteAsset);
     const balance = book.state.balances.find((b) => b.asset === availableAsset);

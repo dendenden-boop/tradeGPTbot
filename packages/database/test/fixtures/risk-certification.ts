@@ -28,6 +28,7 @@ interface FixturePorts {
   loss: Awaited<ReturnType<typeof createPostgresLossJournal>>;
   observer: Awaited<ReturnType<typeof createPostgresRiskObservations>>;
   registryOptions: { connectionString: string; environment: 'test' };
+  nativeAmend?: boolean;
 }
 const io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2500 });
 export async function seedRiskCertification(ports: FixturePorts, missing?: 'OBSERVATION' | 'LOSS') {
@@ -40,6 +41,10 @@ export async function seedRiskCertification(ports: FixturePorts, missing?: 'OBSE
     f = captureFixture(identities),
     i = f.risk.record.instrument,
     r = f.risk.record.rules;
+  if (ports.nativeAmend) {
+    // Test-owned capability evidence; production profile dispatch stays disabled.
+    f.risk.capabilities.push({ ...f.risk.capabilities[0]!, feature: 'AMEND_ORDER' });
+  }
   f.key.instrumentId = f.key.dbInstrumentId;
   i.id = f.key.instrumentId;
   i.exchangeSymbol = i.id;

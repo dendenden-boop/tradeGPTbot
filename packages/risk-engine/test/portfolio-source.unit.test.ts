@@ -45,6 +45,7 @@ function fixture() {
           fingerprint: string;
           released: boolean;
           unknown: boolean;
+          resolution?: string | null;
         }[],
       },
     ],
@@ -56,6 +57,85 @@ function fixture() {
   return { b, state, scope, raw, now, replace };
 }
 
+it('decodes a resolved hold from exact durable RESOLVE_COMMITMENT evidence', () => {
+  const f = fixture();
+  const hold = {
+    id: 'hold',
+    asset: 'USDT',
+    amount: '10',
+    status: 'RESERVED' as const,
+    reflected: false,
+  };
+  f.state.holds.push(hold);
+  f.replace();
+  const event = {
+    id: 'resolve',
+    timestamp: 1000,
+    type: 'RESOLVE_COMMITMENT',
+    hold,
+    proofId: 'reservation:2',
+    proofHash: 'a'.repeat(64),
+  };
+  const { id: omittedId, timestamp: omittedTime, ...semantics } = event;
+  void omittedId;
+  void omittedTime;
+  f.raw.books[0]!.holdWatermarks.push({
+    holdId: hold.id,
+    timestamp: '1000',
+    fingerprint: createHash('sha256').update(canonical(semantics)).digest('hex'),
+    released: false,
+    unknown: false,
+    resolution: canonical(event),
+  });
+  expect(decodeRiskPortfolioSource(f.raw, f.scope, f.now).books[0]!.state.holds).toEqual([hold]);
+});
+it.each(['HOLD', 'TIME', 'FINGERPRINT', 'KIND', 'MISSING'] as const)(
+  'rejects %s resolution evidence without weakening the durable watermark',
+  (kind) => {
+    const f = fixture(),
+      hold = {
+        id: 'hold',
+        asset: 'USDT',
+        amount: '10',
+        status: 'RESERVED' as const,
+        reflected: false,
+      };
+    f.state.holds.push(hold);
+    f.replace();
+    const event = {
+      id: 'resolve',
+      timestamp: 1000,
+      type: 'RESOLVE_COMMITMENT',
+      hold: { ...hold },
+      proofId: 'reservation:2',
+      proofHash: 'a'.repeat(64),
+    };
+    const { id: omittedId, timestamp: omittedTime, ...semantics } = event;
+    void omittedId;
+    void omittedTime;
+    const watermark = {
+      holdId: hold.id,
+      timestamp: '1000',
+      fingerprint: createHash('sha256').update(canonical(semantics)).digest('hex'),
+      released: false,
+      unknown: false,
+      resolution: canonical(event) as string | null,
+    };
+    if (kind === 'HOLD') {
+      event.hold.amount = '9';
+      watermark.resolution = canonical(event);
+    }
+    if (kind === 'TIME') {
+      event.timestamp = 999;
+      watermark.resolution = canonical(event);
+    }
+    if (kind === 'FINGERPRINT') watermark.fingerprint = 'b'.repeat(64);
+    if (kind === 'KIND') watermark.resolution = canonical({ ...event, type: 'COMMITMENT' });
+    if (kind === 'MISSING') watermark.resolution = null;
+    f.raw.books[0]!.holdWatermarks.push(watermark);
+    expect(() => decodeRiskPortfolioSource(f.raw, f.scope, f.now)).toThrow();
+  },
+);
 it('provides a physical Portfolio authority reader rather than accepting caller-owned Risk sources', () => {
   expect(risk).toHaveProperty('createPostgresRiskPortfolioReader', expect.any(Function));
 });

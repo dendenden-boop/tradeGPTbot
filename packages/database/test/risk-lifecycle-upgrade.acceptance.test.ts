@@ -81,10 +81,20 @@ const tableName = (table: string) => {
     .map((x) => `"${x}"`)
     .join('.');
 };
-async function rows(client: Pool | PoolClient, table: string, filter: string, values: string[]) {
+async function rows(
+  client: Pool | PoolClient,
+  table: string,
+  filter: string,
+  values: string[],
+  published19 = false,
+) {
+  const payload =
+    published19 && table === 'ctp_admission.issuance'
+      ? "to_jsonb(r)-'primaryReservationId'-'control'"
+      : 'to_jsonb(r)';
   return (
     await client.query<{ payload: string }>(
-      `SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]'::jsonb)::text AS payload FROM ${tableName(table)} r WHERE ${filter}`,
+      `SELECT COALESCE(jsonb_agg(${payload} ORDER BY ${payload}::text),'[]'::jsonb)::text AS payload FROM ${tableName(table)} r WHERE ${filter}`,
       values,
     )
   ).rows[0]!.payload;
@@ -293,9 +303,19 @@ it('populated published 19 upgrades without rewriting proof and recovers legacy 
     throw new Error('POPULATED_UPGRADE_DEPLOY_FAILED');
   }
   for (const table of tenantTables)
-    expect(await rows(target, table, 'r."tenantId"=$1::uuid', [b.tenantId])).toBe(
+    expect(await rows(target, table, 'r."tenantId"=$1::uuid', [b.tenantId], true)).toBe(
       before.get(table),
     );
+  // New nullable control columns must remain empty on every restored PLACE row;
+  // the comparison above still proves every published-19 field byte-for-byte.
+  expect(
+    (
+      await target.query<{ n: number }>(
+        'SELECT count(*)::integer n FROM ctp_admission.issuance WHERE "tenantId"=$1 AND ("primaryReservationId" IS NOT NULL OR control IS NOT NULL)',
+        [b.tenantId],
+      )
+    ).rows[0]?.n,
+  ).toBe(0);
   const restarted = await createPostgresOrderStore(
     options('DATABASE_PHASE12_UPGRADE_EXECUTION_URL'),
   );
@@ -344,7 +364,7 @@ it('populated published 19 upgrades without rewriting proof and recovers legacy 
     'public.ledger_entry',
     'public.exchange_account',
   ])
-    expect(await rows(target, table, 'r."tenantId"=$1::uuid', [b.tenantId])).toBe(
+    expect(await rows(target, table, 'r."tenantId"=$1::uuid', [b.tenantId], true)).toBe(
       before.get(table),
     );
 });

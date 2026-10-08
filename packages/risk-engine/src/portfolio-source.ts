@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { immutable, timestampSchema, idSchema, exchangeIdSchema } from '@ctp/exchange-core';
-import { canonical, restorePortfolio } from '@ctp/portfolio';
+import { canonical, restorePortfolio, eventSchema } from '@ctp/portfolio';
 import { policyModeSchema } from './policies.js';
 import { riskEvidenceHash } from './coordinator.js';
 
@@ -52,6 +52,7 @@ const envelope = z.strictObject({
               fingerprint: hash,
               released: z.boolean(),
               unknown: z.boolean(),
+              resolution: z.string().max(8192).nullable().optional(),
             }),
           )
           .max(1000),
@@ -113,14 +114,27 @@ export function decodeRiskPortfolioSource(raw: unknown, rawScope: RiskPortfolioS
         throw new Error('RISK_PORTFOLIO_HOLD_HISTORY');
       for (const hold of state.holds) {
         const h = b.holdWatermarks.find((h) => h.holdId === hold.id);
+        let semantics: unknown = { type: 'COMMITMENT', hold };
+        if (h?.resolution !== null && h?.resolution !== undefined) {
+          const parsed = eventSchema.safeParse(JSON.parse(h.resolution) as unknown);
+          if (
+            !parsed.success ||
+            parsed.data.type !== 'RESOLVE_COMMITMENT' ||
+            canonical(parsed.data.hold) !== canonical(hold) ||
+            BigInt(parsed.data.timestamp) !== BigInt(h.timestamp) ||
+            canonical(parsed.data) !== h.resolution
+          )
+            throw new Error('RISK_PORTFOLIO_HOLD_HISTORY');
+          const { id: omittedId, timestamp: omittedTime, ...value } = parsed.data;
+          void omittedId;
+          void omittedTime;
+          semantics = value;
+        }
         if (
           !h ||
           h.released ||
           BigInt(h.timestamp) > BigInt(now) ||
-          h.fingerprint !==
-            createHash('sha256')
-              .update(canonical({ type: 'COMMITMENT', hold }))
-              .digest('hex') ||
+          h.fingerprint !== createHash('sha256').update(canonical(semantics)).digest('hex') ||
           (h.unknown && hold.status !== 'UNKNOWN') ||
           (hold.status === 'UNKNOWN' && !h.unknown)
         )
