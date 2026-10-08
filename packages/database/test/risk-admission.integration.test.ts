@@ -459,6 +459,27 @@ it('reservation bridge rejects standalone Portfolio release of active issued col
   ).rejects.toThrow();
   expect(await bridgeState(f)).toEqual(held);
 });
+it('an issued hold cannot become native-reflected through a standalone Portfolio commitment without durable attribution', async () => {
+  const f = await bridgeFixture(false), held = await bridgeState(f);
+  const b = portfolioBindingSchema.parse({
+    ...portfolioBinding(),
+    tenantId: f.key.binding.tenantId,
+    accountId: f.key.binding.accountId,
+    connectionId: f.key.binding.connectionId,
+  });
+  await expect(
+    portfolio.apply(
+      b,
+      {
+        id: randomUUID(), type: 'COMMITMENT', timestamp: Date.now(),
+        hold: { id: f.grant.reservationId, asset: 'USDT', amount: '5.005', status: 'RESERVED', reflected: true },
+      },
+      held.book.revision,
+      io(),
+    ),
+  ).rejects.toThrow();
+  expect(await bridgeState(f)).toEqual(held);
+});
 it('reservation bridge released tombstone rejects new commitment and ignores old commitment replay', async () => {
   const f = await bridgeFixture(false);
   await orders.result(
