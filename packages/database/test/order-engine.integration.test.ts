@@ -795,19 +795,24 @@ it('durable attempt stays unconsumed across restart and definitive pretransport 
   }
 });
 it('execution cannot change immutable attempt fields or fabricate a half-consumed permit', async () => {
-  const { b, draft } = await fixture(),
-    s = await store.create(b, draft, io()),
-    g = await grant(s),
-    c = await store.begin(b, s.id, s.intentId, g, io());
+  const { b, c } = await certifiedClaim();
   if (!c) throw new Error('No claim');
   for (const update of [
     '"permitConsumedAt"=clock_timestamp()',
     '"transportStartedAt"=clock_timestamp()',
     '"workerId"=\'forged\'',
   ]) {
-    await expect(
-      admin.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
-    ).rejects.toMatchObject({ code: '23514' });
+    const transaction = await admin.connect();
+    try {
+      await transaction.query('BEGIN');
+      await transaction.query("SELECT set_config('app.tenant_id',$1,true)", [b.tenantId]);
+      await expect(
+        transaction.query(`UPDATE submission_attempt SET ${update} WHERE id=$1`, [c.attemptId]),
+      ).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await transaction.query('ROLLBACK');
+      transaction.release();
+    }
   }
 });
 it('legacy protocol retains the published nonnull consumed timestamp invariant', async () => {

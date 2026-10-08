@@ -582,16 +582,16 @@ describe('audit regression: durable delivery and dispatch identities', () => {
     });
   });
 
-  it('allows response and reconciliation lifecycle updates on a committed attempt', async () => {
+  it('allows response and reconciliation lifecycle updates without fabricating a transport boundary', async () => {
     const id = await committedAttempt();
     await transaction(async (client) => {
       const result = await client.query(
-        `UPDATE submission_attempt SET status='RECONCILED',"transportStartedAt"=now(),
+        `UPDATE submission_attempt SET status='RECONCILED',
          "responseReceivedAt"=now(),"resolvedAt"=now(),"responseCode"='FIXTURE',"evidenceHash"=$2
-         WHERE id=$1 RETURNING status`,
+         WHERE id=$1 RETURNING status,"transportStartedAt"`,
         [id, evidence],
       );
-      expect(result.rows).toEqual([{ status: 'RECONCILED' }]);
+      expect(result.rows).toEqual([{ status: 'RECONCILED', transportStartedAt: null }]);
     });
   });
 
