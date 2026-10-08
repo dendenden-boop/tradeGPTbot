@@ -1,11 +1,11 @@
 name: Native certification verification
 on:
   push:
-    branches: [codex/phase12-amend-dispatch-green]
+    branches: [codex/phase12-amend-dispatch-green-2]
 permissions:
   contents: read
 concurrency:
-  group: native-amend-dispatch-green
+  group: native-amend-dispatch-green-2
   cancel-in-progress: true
 jobs:
   reproduce:
@@ -29,7 +29,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-amend-dispatch-green
+          name: native-amend-dispatch-green-2
           path: test-results/
           if-no-files-found: error
           retention-days: 7

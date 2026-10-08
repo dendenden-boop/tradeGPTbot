@@ -1337,6 +1337,7 @@ try {
         DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
         DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
         DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+        DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
         DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[2]),
       },
       secrets,
