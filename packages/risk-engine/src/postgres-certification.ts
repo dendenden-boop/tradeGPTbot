@@ -9,9 +9,14 @@ export interface CertificationDatabaseOptions {
 /** Internal fixed-authority connection boundary; never exported through the package index. */
 export async function openCertificationDatabase(
   options: CertificationDatabaseOptions,
-  authority: 'CERTIFIER' | 'OBSERVER',
+  authority: 'CERTIFIER' | 'OBSERVER' | 'ADMISSION',
 ) {
-  const group = authority === 'CERTIFIER' ? 'ctp_risk_certifier' : 'ctp_risk_observer';
+  const group =
+    authority === 'CERTIFIER'
+      ? 'ctp_risk_certifier'
+      : authority === 'OBSERVER'
+        ? 'ctp_risk_observer'
+        : 'ctp_risk_admission';
   const functions =
     authority === 'CERTIFIER'
       ? [
@@ -20,7 +25,9 @@ export async function openCertificationDatabase(
           'ctp_certification.insert_certificate(jsonb,text)',
           'ctp_certification.read_certificate(jsonb)',
         ]
-      : ['ctp_certification.publish_observation(text)'];
+      : authority === 'OBSERVER'
+        ? ['ctp_certification.publish_observation(text)']
+        : ['ctp_admission.prepare(jsonb)', 'ctp_admission.persist(jsonb,text)'];
   try {
     z.strictObject({
       connectionString: z.string().max(4096),

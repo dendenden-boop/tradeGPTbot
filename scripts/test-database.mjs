@@ -28,6 +28,7 @@ const expectedMigrations = [
   '202610070003_runtime_instrument_registry',
   '202610070004_portfolio_capture_inventory',
   '202610070005_risk_snapshot_certification',
+  '202610080001_atomic_risk_admission',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -78,6 +79,7 @@ const riskSnapshotPassword = randomBytes(24).toString('hex');
 const registryPassword = randomBytes(24).toString('hex');
 const certificationPassword = randomBytes(24).toString('hex');
 const observationPassword = randomBytes(24).toString('hex');
+const admissionPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -96,6 +98,7 @@ const secrets = [
   registryPassword,
   certificationPassword,
   observationPassword,
+  admissionPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [`ctp_p2_fresh_${suffix}`, `ctp_p2_upgrade_${suffix}`, `ctp_p2_owner_${suffix}`];
@@ -115,6 +118,7 @@ const riskSnapshotRole = `ctp_p2_risk_snapshot_${suffix}`;
 const registryRole = `ctp_p2_registry_${suffix}`;
 const certificationRole = `ctp_p2_certification_${suffix}`;
 const observationRole = `ctp_p2_observation_${suffix}`;
+const admissionRole = `ctp_p2_admission_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -216,6 +220,12 @@ const certificationUrl = (name, observer = false) => {
   const url = new URL(dbUrl(name));
   url.username = observer ? observationRole : certificationRole;
   url.password = observer ? observationPassword : certificationPassword;
+  return url.href;
+};
+const admissionUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = admissionRole;
+  url.password = admissionPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -325,6 +335,7 @@ try {
     [registryRole, registryPassword, 'ctp_instrument_registry'],
     [certificationRole, certificationPassword, 'ctp_risk_certifier'],
     [observationRole, observationPassword, 'ctp_risk_observer'],
+    [admissionRole, admissionPassword, 'ctp_risk_admission'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -1254,6 +1265,7 @@ try {
         DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[0]),
         DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[0]),
         DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
+        DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
       },
       secrets,
