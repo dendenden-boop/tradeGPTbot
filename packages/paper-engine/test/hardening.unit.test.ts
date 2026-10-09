@@ -13,13 +13,21 @@ describe('Paper model precision and boundaries', () => {
     },
   );
 
-  it.each(['9223372036854775808', '-9223372036854775809', '-0', '01', '1e3', 1])(
-    'rejects invalid seed %s',
-    (seed) => {
-      const f = fixture();
-      expect(paperModelSchema.safeParse({ ...f.model, seed }).success).toBe(false);
-    },
-  );
+  it.each([
+    '9223372036854775808',
+    '-9223372036854775809',
+    '-0',
+    '01',
+    '1e3',
+    1,
+    '1\n',
+    '1\r\n',
+    '9223372036854775807\n',
+    '1 ',
+  ])('rejects invalid seed %s', (seed) => {
+    const f = fixture();
+    expect(paperModelSchema.safeParse({ ...f.model, seed }).success).toBe(false);
+  });
 
   it.each(['not-a-rate', 'secret-do-not-echo', '-1', '1e-3', '0.100000000000000001'])(
     'rejects unsupported rates without throwing from schema validation (%s)',
