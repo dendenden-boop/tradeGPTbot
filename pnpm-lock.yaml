@@ -256,6 +256,18 @@ importers:
         specifier: 8.23.1
         version: 8.23.1
 
+  packages/paper-engine:
+    dependencies:
+      '@ctp/exchange-core':
+        specifier: workspace:*
+        version: link:../exchange-core
+      decimal.js:
+        specifier: 10.6.0
+        version: 10.6.0
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+
   packages/portfolio:
     dependencies:
       '@ctp/exchange-core':
