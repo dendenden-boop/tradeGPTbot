@@ -44,6 +44,7 @@ const expectedMigrations = [
   '202610080014_native_amend_identity_type',
   '202610090001_native_amend_source_clock',
   '202610090002_certified_native_cancel',
+  '202610090003_paper_configuration',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -95,6 +96,7 @@ const registryPassword = randomBytes(24).toString('hex');
 const certificationPassword = randomBytes(24).toString('hex');
 const observationPassword = randomBytes(24).toString('hex');
 const admissionPassword = randomBytes(24).toString('hex');
+const paperConfigurationPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -114,6 +116,7 @@ const secrets = [
   certificationPassword,
   observationPassword,
   admissionPassword,
+  paperConfigurationPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [
@@ -139,6 +142,7 @@ const registryRole = `ctp_p2_registry_${suffix}`;
 const certificationRole = `ctp_p2_certification_${suffix}`;
 const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
+const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
   return `"${name}"`;
@@ -246,6 +250,12 @@ const admissionUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = admissionRole;
   url.password = admissionPassword;
+  return url.href;
+};
+const paperConfigurationUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperConfigurationRole;
+  url.password = paperConfigurationPassword;
   return url.href;
 };
 const migrate = async (name, selectedConfig = config, owner = false) => {
@@ -356,6 +366,7 @@ try {
     [certificationRole, certificationPassword, 'ctp_risk_certifier'],
     [observationRole, observationPassword, 'ctp_risk_observer'],
     [admissionRole, admissionPassword, 'ctp_risk_admission'],
+    [paperConfigurationRole, paperConfigurationPassword, 'ctp_paper_configuration'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -1359,6 +1370,39 @@ try {
   assert.equal(admissionOwner.numPendingTests, 0);
   assert.ok(admissionOwner.numPassedTests >= 28);
 
+  // The additive PAPER receipt must also work with a non-BYPASSRLS DDL owner.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-configuration.integration.test.ts',
+      '--outputFile.json=test-results/paper-configuration-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperConfigurationOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-configuration-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperConfigurationOwner.success, true);
+  assert.equal(paperConfigurationOwner.numPendingTests, 0);
+  assert.ok(paperConfigurationOwner.numPassedTests >= 30);
+
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -1463,6 +1507,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
         DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
       },
       secrets,
       echo: true,
@@ -1539,6 +1584,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     (await reset.query('SELECT count(*)::int n FROM ctp_registry.version_history')).rows[0].n,
     0,
   );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration')).rows[0].n,
+    0,
+  );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -1577,6 +1626,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     riskAdmissionUpgradeFromPublished18: 'PASS',
     riskAdmissionNonBypassOwner: 'PASS',
     riskLifecyclePopulatedUpgradeFromPublished19: 'PASS',
+    paperConfigurationNonBypassOwner: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

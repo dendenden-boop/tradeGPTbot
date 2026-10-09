@@ -8,6 +8,7 @@ import {
 } from '@ctp/market-data';
 import { createPostgresPortfolioStore } from '@ctp/portfolio';
 import { createPostgresOrderStore } from '@ctp/order-engine';
+import { createPostgresPaperConfiguration } from '@ctp/paper-engine/configuration';
 import {
   createPostgresControls,
   createPostgresPolicies,
@@ -33,6 +34,7 @@ afterAll(() => admin.end());
 type Options = { connectionString: string; environment: 'test' };
 type Handle = { close(): Promise<void> };
 const cases: readonly [string, string, (options: Options) => Promise<Handle>][] = [
+  ['ctp_paper_configuration', 'DATABASE_PAPER_CONFIGURATION_URL', createPostgresPaperConfiguration],
   ['ctp_api', 'DATABASE_RUNTIME_URL', createDatabase],
   ['ctp_auth', 'DATABASE_AUTH_URL', createAuthDatabase],
   ['ctp_ingest', 'DATABASE_INGEST_URL', createPostgresMarketStore],

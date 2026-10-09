@@ -381,9 +381,12 @@ try {
     path.join(directory, 'deployment-paper-engine'),
     String.raw`
     const paper=await import('@ctp/paper-engine');
+    const configuration=await import('@ctp/paper-engine/configuration');
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');
+    assert.equal(typeof configuration.createPostgresPaperConfiguration,'function');
+    await assert.rejects(configuration.createPostgresPaperConfiguration({connectionString:'https://example.invalid',environment:'test'}),/PAPER_CONFIGURATION_DATABASE_URL/);
     assert.throws(()=>paper.preparePaperFrame({}),/PAPER_EVIDENCE/);
     assert.throws(()=>paper.evaluatePaperOrder({}),/PAPER_INPUT/);
     for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);
@@ -391,6 +394,7 @@ try {
     assert.equal(existsSync('./src'),false);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/testing'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/model.js'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-configuration.js'));
   `,
     options,
   );

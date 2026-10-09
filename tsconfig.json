@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@ctp/paper-engine/configuration": ["./packages/paper-engine/src/configuration.ts"],
       "@ctp/paper-engine": ["./packages/paper-engine/src/index.ts"],
       "@ctp/risk-engine": ["./packages/risk-engine/src/index.ts"],
       "@ctp/order-engine": ["./packages/order-engine/src/index.ts"],
