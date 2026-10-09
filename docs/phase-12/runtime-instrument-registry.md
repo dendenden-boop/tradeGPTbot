@@ -1,6 +1,6 @@
 # Runtime InstrumentRegistry contract and verification
 
-Status: runtime component and bounded history recovery accepted within PHASE 12; complete phase acceptance remains pending. LIVE is disabled; this metadata service grants no order, Risk, credential or Portfolio authority. PHASE 13 is not started.
+Status: runtime component, bounded history recovery and the complete PHASE 12 authority chain are accepted; gate READY FOR PHASE 13. [Final acceptance](verification.md) supersedes the original component-only checkpoint below. LIVE is disabled; this metadata service grants no order, Risk, credential or Portfolio authority. PHASE 13 is not started.
 
 ## Boundary and storage
 

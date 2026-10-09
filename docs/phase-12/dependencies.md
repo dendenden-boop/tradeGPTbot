@@ -2,11 +2,19 @@
 
 Current accepted lineage has 34 immutable migrations and the unchanged frozen lock; later sections preserve dependency/rollout facts at their original checkpoints. The read-only Binance collateral observer adds no dependency, SQL grant, migration, monetary writer or transport authority. The user-approved conservative policy leaves positive native credit disabled; no native reflection publisher is installed. Full source/main verification remains separate from a dependency assessment.
 
+## Current accepted deployment
+
+**READY FOR PHASE 13**. LIVE remains disabled; PHASE 13 has not started. Native AMEND is supported only by Binance Spot TESTNET standalone LIMIT/GTC cumulative quantity decrease at unchanged price, with preserved native order ID and a new server client ID. Other profiles remain UNSUPPORTED. Conservative principal/fee/UNKNOWN holds remain; positive native credit is disabled. Real private exchange tests and production soak are not claimed. The PostgreSQL certified coordinator, atomic admission, Portfolio bridge, current-state gate and durable native controls are accepted together, rather than missing dependencies. No new external package, lockfile, role or migration is introduced by housekeeping. Preserve all 34 migrations and full durable heads/history/authority ownership on backup/restore. [Accepted CI](verification.md), [completion](completion.md), [main protection](housekeeping.md).
+
+## Historical dependency and rollout checkpoints
+
+The records below preserve original dependency changes, failed runs, rollout requirements and then-pending modules. Their old incomplete/NOT READY statuses are historical and superseded by current acceptance above; the original CI outcomes are not rewritten.
+
 The cross-package PostgreSQL physical acquisition and SQL role-graph hardening adds no dependency, lock, role or migration. Existing server-controlled URLs/TLS and per-port transaction budgets remain. Physical acquisition owns four connections/four bounded waiters; startup inspects all ctp_* schemas and exact role/function authority. Deployments must keep restricted NOLOGIN grouping roles and separate runtime logins; unexpected additional membership/grants now reject startup instead of being ignored by an older phase guard. Full native/OS/Docker verification is recorded separately from local and serial probes.
 
 The durable UTC loss source reuses the existing pg/Zod/Core dependencies and frozen lock. Additive migration 202610060001_risk_loss_journal introduces three private ctp_risk tables with FORCE RLS, immutable history and a nondeletable monotonic head. Eleven published migrations remain unchanged. The isolated collector role has exact SQL function grants and no additional client, HTTP endpoint, Risk grant or money writer authority.
 
-## Coordinator reconstruction dependency
+### Coordinator reconstruction dependency
 
 The accepted physical substrate adds migration 202610070005_risk_snapshot_certification after all seventeen published migrations, unchanged. It stores immutable certificate/identity/native-observation history and monotonic FORCE-RLS heads, with separate NOLOGIN certifier/observer groups and exact fixed function grants. Runtime logins have no private/public table or monetary writer privilege. It reuses existing pg/Core/Portfolio/Zod dependencies and the same frozen lock. Native/full CI proves exact published 17 -> 18 upgrade, retained financial history and runtime execution under a non-BYPASSRLS migration owner. Preserve complete heads/history/roles/function ownership together on backup/restore. This module does not issue Risk grants or authorize LIVE; native collector provenance and the rest of the atomic authority chain remain required.
 
@@ -36,31 +44,31 @@ The current-policy increment reuses the same dependencies and frozen lock. Addit
 
 createPostgresPolicies accepts server-controlled connectionString/environment/PLATFORM-or-USER authority. Production requires verify-full TLS; test requires loopback. These credentials and authorized tenant selection must come from server composition, never request body. The isolated native runner provisions DATABASE_RISK_POLICY_OPERATOR_URL and DATABASE_RISK_POLICY_CONTROLLER_URL; they are not public API configuration or exchange credentials. Fresh/reset leaves policy heads empty and GLOBAL PAUSED. Missing policy denies reads. Upgrade preserves existing control heads/events, client counters and Portfolio/ledger data. No automatic policy seed/resume or LIVE mutation is added.
 
-## Native Market Data persistence prerequisite
+### Native Market Data persistence prerequisite
 
 No dependency version or lockfile change. The Market Data package reuses pinned pg/Zod/Core. New additive migration 202610060002_market_snapshots installs public quote history/heads only inside ctp_market, isolated NOLOGIN ctp_market_snapshot and exact publisher/read SQL functions. All twelve previously published migrations remain unchanged. Public native data has no tenant principal; private financial FORCE RLS and all existing authority roles remain unchanged. Snapshot publishers cannot read credentials or write/read financial authority tables. The isolated native runner provisions DATABASE_MARKET_SNAPSHOT_URL; it is test configuration, not an HTTP input or exchange credential.
 
 Backup/restore must retain immutable native event identities, current heads, last ordering watermarks and function ownership/ACLs together. Fresh/reset has no quote evidence; upgrade neither fabricates it nor resumes GLOBAL controls. A separate non-BYPASSRLS DDL-owner database must exercise the runtime functions. This source is an explicit dependency of the future PostgreSQL RiskSnapshotStore; a cache or application-provided snapshot remains insufficient. Production native-feed composition and complete FX/health/Portfolio source integration remain acceptance blockers. LIVE stays disabled.
 
-## Deferred permit migration and rollout
+### Deferred permit migration and rollout
 
 Additive 202610070001_deferred_transport_permit follows the thirteen published migrations unchanged. It adds smallint permitProtocolVersion (legacy default 1), nullable permitConsumedAt, paired v2 timestamps, one-use immutable guards and one execution column UPDATE grant. No new role, Risk SQL function, library version, financial write or ledger effect. Fresh/reset and upgrade keep existing pause/policy safety. The native runner upgrades exactly from the thirteen-migration boundary and compares complete historical attempt rows with only the additive version excluded, then verifies all legacy versions remain 1.
 
 Stop/drain old execution workers before applying this migration and deploy the corresponding new Order Engine together: old code's claim-time timestamp insert is rejected, rather than silently admitted under the new protocol. Already durable legacy attempts retain evidence and must follow existing reconciliation/one-use recovery, never a fresh mutation retry. New runtime startup requires the exact deferred permit column privilege and rejects direct execution privilege on the insert guard or any extra attempt UPDATE column. The trigger function is revoked from PUBLIC; trigger invocation adds no callable authority. Full native concurrency/abort/deadline and both OS/Docker CI are required before acceptance of this increment. PHASE 12 remains NOT READY FOR PHASE 13.
 
-## Portfolio authority read port
+### Portfolio authority read port
 
 Additive migration 202610070002_risk_portfolio_source follows all fourteen published migrations unchanged. It adds one SECURITY DEFINER read function with pg_catalog search_path and revoked PUBLIC access, plus NOLOGIN/NOBYPASSRLS ctp_risk_snapshot_reader with only schema usage and that function's EXECUTE. Existing table/RLS/ledger/hold/permit semantics and authority grants remain unchanged. No new table, parallel accounting store or financial writer is introduced. The native runner provisions isolated DATABASE_RISK_SNAPSHOT_URL and proves exact fourteen-migration upgrade without changing historical books, evidence, watermarks, ledger, reservations or attempts, plus runtime use under a non-BYPASSRLS migration owner.
 
 Risk adds only a workspace dependency on the existing @ctp/portfolio decoder. The lockfile gains that three-line workspace link; no external version or integrity changes. Restore/backup continues to use Portfolio's existing durable history/watermarks and native account identities, not a new copied balance ledger. Source readiness is not certified Risk readiness. Complete coordinator composition and the other PHASE 12 production modules remain required; PHASE 13 is not started.
 
-## Explicit AMEND protocol
+### Explicit AMEND protocol
 
 No dependency, lockfile, role or migration change. All fifteen published migrations remain immutable. Core adds one explicit in-place command schema; unclassified legacy AMEND bodies fail admission. Previously accepted production adapters already expose AMEND as UNSUPPORTED. Binance uses existing server-controlled profiles, credential resolution/signing, limiter, native identity resolver, dynamic admission and bounded HTTP. Only the exact new native keep-priority path is added to internal route validation; arbitrary deeper paths remain rejected. Native parser/transport/history helpers are internal modules, absent from package exports. No caller URL, credentials, supplied tenant authority or transport authorization API is introduced.
 
 The eventual Engine rollout must preserve original PLACE plus all permanent client aliases, immutable AMEND intent/command, causal native amendment history and fill adoption. History replay is read-only and does not relax reservation/tombstone or UNKNOWN ownership. Production capability cannot be enabled until durable intent/Risk delta/Portfolio/attempt/final gate/recovery and an explicitly allowed private TESTNET profile are accepted together. No real mutation or new financial writer is enabled by this increment; PHASE 12 remains NOT READY FOR PHASE 13.
 
-## Draft atomic-admission persistence
+### Draft atomic-admission persistence
 
 Migration **202610080001_atomic_risk_admission** adds the isolated NOLOGIN ctp_risk_admission group and private immutable preparation/issuance histories with FORCE RLS. Runtime has function-only authority on prepare/persist; internal codecs/validators and all PUBLIC execution/table writes remain revoked. It extends certified capture through an additive replacement, preserving all published migrations 1–18. Permanent issuance restores order/reservation/hold ownership after restart; deleting history or replaying only account monetary totals is not a valid recovery.
 

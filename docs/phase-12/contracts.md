@@ -4,13 +4,21 @@ Current completion contract: Accepted runtime main **296972e7a428bfcb60227c84434
 
 The user-approved [native collateral policy](native-collateral-evidence.md) keeps positive native credit disabled. Aggregate locked balances and unchanged read-only order brackets do not establish per-order monetary provenance. Runtime continues to subtract the full local hold from native free/available and retains fee/UNKNOWN bounds. No second ledger effect or logical order exposure is added. Positive credit needs a future explicit proven exchange-side contract and separate durable/native acceptance; it is not a prerequisite to the phase gate under this approved conservative policy.
 
-## Read-only causal amendment recovery
+## Accepted production composition
+
+**READY FOR PHASE 13**. LIVE remains disabled; PHASE 13 has not started. Native AMEND is supported only by Binance Spot TESTNET standalone LIMIT/GTC cumulative quantity decrease at unchanged price, with preserved native order ID and a new server client ID. Other profiles remain UNSUPPORTED. Conservative principal/fee/UNKNOWN holds remain; positive native credit is disabled. Real private exchange tests and production soak are not claimed. createPostgresRiskSnapshotStore / createRiskSnapshotCoordinator and createPostgresOrderRiskPort supply the durable source→certificate→atomic reservation→Portfolio hold chain. OrderEngine PLACE/CANCEL/native AMEND owns immutable intents, permanent replay, pre-I/O attempts, final current-state permit and causal recovery. Approval and current dispatch use authoritative PostgreSQL state; no caller snapshot or reference registry grants permission. See [current Risk design](../risk-engine.md) and the [final review](final-authority-review.md).
+
+## Historical implementation checkpoints
+
+The following records preserve original increment scope, RED→GREEN requirements and then-pending acceptance. Their NOT READY/unsupported/missing-module statements describe those checkpoints, not current runtime. Current acceptance above and verification supersede those statuses.
+
+### Read-only causal amendment recovery
 
 The common getAmendmentEvidence operation accepts the immutable classified IN_PLACE command and returns an account/market/instrument-bound result with the actual response receipt time. APPLIED_EVIDENCE binds the preserved exchange order, old/new client identities, original/new cumulative quantities, lossless execution identity and native application time. Core rejects mismatched scope, identity, quantity, future receipt/application and evidence predating the target native update. The read requires current scoped ORDER_READ evidence, not an AMEND mutation capability or a transport permit; permanent recovery remains possible after rules replacement. INDETERMINATE never proves absence, rejection, final order state or safe collateral release.
 
 Binance exposes the existing bounded signed amendment-history protocol through this common port for Spot TESTNET only. Saturated/inconsistent history rejects; empty history remains INDETERMINATE across transport recreation. The read performs no mutation admission or dispatch. Existing HTTP abort/deadline, queue and response-size bounds apply. Other profiles fail closed; production AMEND remains UNSUPPORTED until the durable intent/atomic Risk delta/hold/attempt/permit/fill-race/restart chain is accepted together.
 
-## Immutable amendment intent construction
+### Immutable amendment intent construction
 
 The server-only OrderStore accepts semantic key, expected durable revision, current DB rule identity and replacement fields. Native target evidence comes separately from the trusted adapter read, never from a user request. A fresh receipt of an unchanged idle order may retain its older native update time; the exact full native body must match the durable observation. Future/stale receipts, changed target, pending/UNKNOWN state, active attempt, LIVE/PAPER and unsupported semantic changes reject before allocation. The initial construction permits only Spot LIMIT/GTC cumulative quantity reduction at unchanged price, with preserved exchange identity and a new lossless server client counter.
 
@@ -18,7 +26,7 @@ Authoritative findAmend and amendIntent exact replay precede current rules/targe
 
 Current cross-phase [runtime InstrumentRegistry contract](runtime-instrument-registry.md) separates bounded observational metadata projections from authoritative PostgreSQL current reads and atomic durable version history. Its complete native/OS/Docker acceptance is recorded in verification; it is not a completed Risk certificate or mutation grant.
 
-## PostgreSQL physical acquisition lifecycle
+### PostgreSQL physical acquisition lifecycle
 
 Market store/snapshots, Portfolio, Order and the four Risk source/control/policy ports own their physical TCP stream before PostgreSQL authentication. Shared acquisition has four physical slots and four explicitly owned waiting slots, with an absolute acquisition bound of three seconds or the earlier caller deadline. Waiting callers do not enter pg's hidden queue. Abort destroys a connecting socket, rejects an owned waiting acquisition and prevents late publication. Handshake listeners/timers are detached on settlement so the original caller cannot destroy a subsequently reused idle connection. Close cancels owned waiters, destroys active/idle/connecting streams and waits for actual settlement. This helper has no SQL or monetary authority; existing transaction locks and privilege checks remain authoritative.
 
@@ -26,7 +34,7 @@ Market/Portfolio success additionally requires an unexpired, nonaborted context 
 
 Checked-out pg clients retain one owned error listener through connection loss and idle reuse. It prevents an unhandled driver event; the query still rejects, the failed client becomes unqueryable and is discarded. Raw driver errors are not logged or returned as authority.
 
-## Cross-phase SQL startup boundary
+### Cross-phase SQL startup boundary
 
 Runtime identities require exactly their restricted NOLOGIN grouping role; MEMBER inspection includes noninherited grants that could permit SET ROLE. Superuser/BYPASSRLS/CREATEROLE/CREATEDB/replication and pg_* membership remain forbidden. Existing public table/column checks stay in place. All ctp_* namespaces participate in schema CREATE/ownership, table/column and exact callable-function checks, including later phase schemas. Allowed private tables/functions come only from factory-owned constants. A future function or private namespace is not implicitly admitted by an older factory. API retains its five private read tables, Auth its fifteen published authentication functions, and execution only dispatch_gate among private functions. Publisher/read ports retain their exact entrypoints. These startup checks add no grants or database mutation authority and do not substitute for direct SQL function/tenant/RLS checks.
 
@@ -34,7 +42,7 @@ API/Auth preserve their existing harmless inherited NOLOGIN custom-group compati
 
 Auth startup also inspects its SECURITY DEFINER owner's effective privileges across every later ctp_* schema: no schema CREATE/ownership, private table/column authority or cross-schema function EXECUTE. Its existing authentication function ownership and exact public column grants remain unchanged. API's five private tables are read-only allowlist entries; table/column INSERT/UPDATE/REFERENCES and DELETE/TRUNCATE/TRIGGER on those entries deny startup. Merely appearing in the read allowlist never admits a future write grant.
 
-## Durable UTC loss source
+### Durable UTC loss source
 
 createPostgresLossJournal requires a server-controlled PostgreSQL URL and an isolated ctp_risk_evidence_collector login. This role has only append_loss_batch/read_loss_checkpoint function authority. It has no table, policy, execution, Portfolio or monetary writer grants. Direct function callers face the same SQL role/input restrictions; factory checks do not stand in for SQL checks.
 
@@ -46,7 +54,7 @@ Immutable history lives in PostgreSQL; one current checkpoint is read without lo
 
 Coordinator reconstruction consumes either a reference UTC event history or the durable constant-size LossCheckpoint. For a checkpoint its source reference must exactly match batchId, lossless sequence and coveredThrough; the source content hash still covers the complete value. consumeLossCheckpoint requires the exact tenant/storage mode/valuation currency, current UTC midnight/day, a final mark within the effective policy freshness window and a peak at least equal to opening/current adjusted equity. It preserves the already adjusted current/peak and net realized result verbatim; external flows are never subtracted twice. A replacement durable loss head invalidates readCurrent across coordinator restart. The physical source transaction must read and verify the immutable checkpoint text/hash and current head, with all other source locks held; this pure consumption helper does not prove native history or manufacture a PostgreSQL certificate backend.
 
-## Coordinator reconstruction and required persistence boundary
+### Coordinator reconstruction and required persistence boundary
 
 createRiskSnapshotCoordinator takes an explicitly injected RiskSnapshotStore and a server clock. Its API accepts an exact server-authorized key, never a caller snapshot: tenant/account/storage mode/connection/native account/profile/instrument and DB rule/capability identities. Nine source families are mandatory: ownership inventory, policies, metadata, Portfolio/permission, exposure/holds, UTC loss journal, market/FX, controls and health. Each source has a durable identity/revision, content hash, verification time and completeness evidence. Hashes attest content only; the injected store must independently prove source authority and complete coverage.
 
@@ -58,7 +66,7 @@ deriveRiskExposure combines a pending order and its correlated active reservatio
 
 reconstructUtcLoss replays a complete UTC-day journal from an opening observation exactly at midnight. Permanent event identities, contiguous lossless integer sequences, nonregressing timestamps and a current equity mark after the last external flow are required. External deposits/withdrawals are signed FLOW events; adjusted equity at each EQUITY event is equity minus cumulative external flows, and adjusted peak is the maximum of those observations and opening equity. REALIZED events are already net of fees/funding in the valuation asset. Duplicate/conflicting IDs, sequence gaps, missing history, stale/future marks or scope/currency changes reject; no midday reanchoring or stablecoin parity is inferred. Restart reconstruction uses the same journal rather than a RAM peak. Completeness and native valuation/flow provenance still require the durable source collector; the pure replay cannot invent them.
 
-## Durable current policy authority
+### Durable current policy authority
 
 createPostgresPolicies is a server-only publisher/read service, separate from OrderRiskPort.approve. PLATFORM requires the isolated ctp_risk_policy_operator role; USER requires ctp_risk_policy_controller and server-authorized tenant selection. It exposes no HTTP endpoint, decision, reservation or transport permission. Each storage mode has its own platform and per-user immutable limits revisions; TESTNET never aliases DEMO. Limits are mandatory with no deployment preset, retain canonical decimal strings and have a SHA-256 hash of sorted canonical limits text. Current read requires both policies, verifies content hashes and rejects a different valuationAsset; intersectRiskLimits still enforces platform maxima/minimum protections.
 
@@ -68,7 +76,7 @@ Platform replacement takes the existing exclusive GLOBAL advisory lock. User rep
 
 This module persists policy authority only. It does not certify Portfolio/market/health/loss evidence or atomically reserve funds; those coordinator/gateway/Portfolio integrations and native AMEND remain incomplete acceptance requirements.
 
-## Trust and policy evaluation
+### Trust and policy evaluation
 
 Bindings, policies, capabilities, market state, accounting totals, loss baselines and classification come from authorized server composition. Strict schemas prove shape and scope, not authenticity. No client-provided snapshot can authorize an order. The pure evaluator returns EVALUATED or REJECTED with stable reason codes and a conservative reservation proposal; neither result contains a durable decision ID, reservation ID or transport permission. The PHASE 11 OrderRiskPort continues requiring an independently persisted RiskGrant.
 
@@ -90,11 +98,11 @@ Instrument exposure is a subset of the account's exposure to that base asset, wh
 
 Increasing risk requires all critical health checks closed/healthy, current metadata/capability, reconciled positions/balances and fresh complete valuation. Pauses and half-open circuits reject. Derivative reduction additionally requires native reduce-only capability, matching signed NET position, and quantity no greater than the position minus all competing reduction commitments. Unsupported Spot reduce-only, hedge, inverse and uncertain position evidence reject. Reduction is separately evaluated; it never exempts rules, auth, physical infrastructure, fee/collateral or liquidity safety.
 
-## Durable gateway required before acceptance
+### Durable gateway required before acceptance
 
 Evaluate-and-reserve must reread certified versions and permanent intent ownership inside stable SQL locks; pure EVALUATED is only an input to that transaction. The transaction owns aggregate risk budgets and immutable decision/reservation evidence, not Portfolio monetary postings. Release requires authoritative definitive evidence; UNKNOWN retains its reservation even after deadline. Final dispatch and pause updates share a durable ordering gate. An earlier policy result never permits bypassing permission revocation, changed rules or current pauses. Physical SQL abort, unknown commit and restart are explicit acceptance cases.
 
-## Durable controls and dispatch ordering increment
+### Durable controls and dispatch ordering increment
 
 The new SQL-owned ctp_risk schema separates GLOBAL operator authority from tenant USER/CONNECTION/STRATEGY authority. Neither role can mint risk grants, write Portfolio money or dispatch. Scope IDs are composed by authorized server code; accepting a UUID shape is not tenant authorization. There is no public HTTP control endpoint. Tenant writes require an exact current app.tenant_id, an owned existing scope and the tenant-controller role. Only the separate operator role can change global controls. Execution has function-only access to the final gate and no control-write authority.
 
@@ -106,7 +114,7 @@ Pause updates and final one-use transport permission share PostgreSQL transactio
 
 The PHASE 11 placement/cancellation gate conservatively rejects every mutation under any relevant pause/nonclosed circuit. It does not trust reduceOnly or infer whether cancellation removes protection. Because existing PHASE 11 commands have no strategy identity, any blocked strategy in the tenant also blocks these unclassified commands. Exact strategy classification, independently proved reductions/protective cancellation, current policy/state certification and AMEND remain acceptance work; no guessed exception is enabled. Existing public trading_pause and circuit_state records are additional conservative blockers, not silently ignored or rewritten.
 
-## AMEND semantic design
+### AMEND semantic design
 
 An amendment names one existing internal order, original placement identity, native identity, account/mode/profile/instrument and observed server revision. Original PLACE command remains immutable. Revised quantity means **total cumulative target quantity**, not unfilled remainder. New quantity must exceed proved executed quantity at evaluation; fills racing dispatch can still cause a terminal native result and require reconciliation. Changing side, instrument, account, position side, reduce-only intent or order type is a new order, not amendment.
 
@@ -118,7 +126,7 @@ Official sources reviewed 2026-10-05: [Bybit ordinary order amendment](https://b
 
 Rechecked 2026-10-06 against the official [Binance keep-priority FAQ](https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/faqs/order_amend_keep_priority.md): native in-place amendment permits quantity reduction, retains the order ID, requires symbol amendAllowed=true, can change clientOrderId and exposes amendment history. OCO amendment changes both legs. Therefore a future first accepted profile must prove standalone order identity and native eligibility, persist each new client identity and correlate history with its immutable AMEND intent. The current locator/replacement DTO alone cannot prove this lifecycle; AMEND remains UNSUPPORTED rather than silently dispatching a coupled or cancel/replace mutation.
 
-## PostgreSQL native ticker/book authority
+### PostgreSQL native ticker/book authority
 
 createPostgresMarketSnapshots is an explicitly composed server Market Data component. Its isolated ctp_market_snapshot login has exactly publish_snapshot(text,text) and read_snapshot(jsonb,integer), with no direct table/column authority, policy, financial, Portfolio, execution or credential access. Startup rejects inherited/direct extra functions, mixed roles, schema/table ownership and CREATE/TEMP. SQL independently checks the caller role and critical input constraints. URLs are server-controlled; production requires verify-full TLS, test loopback, and SQL/connection errors are sanitized.
 
@@ -128,7 +136,7 @@ Publication and read use bounded READ COMMITTED transactions, shared GLOBAL then
 
 Native snapshot inputs are bounded to 1 MiB and 1000 levels per side; reads load one current immutable row, not complete history. Native clocks/current rules must be fresh, nonfuture and within the caller's stricter 1..5000ms window. Missing, GAP, stale or metadata mismatch denies read. Permanent identity history stays in PostgreSQL; there is no TTL deletion that permits reuse. Abort/deadline destroys the underlying connection and uncertain COMMIT returns no receipt/result; recovery reuses the exact permanent event UUID without blind republishing under a new identity. This API returns public evidence only, never a Risk certificate, reservation, hold or transport permit. MARK/FX/health are not synthesized from LAST or stablecoin parity; the full coordinator backend must reject their absence.
 
-## Deferred permit evidence
+### Deferred permit evidence
 
 SubmissionAttempt.permitProtocolVersion=2 separates durable preparation from one-use final transport authorization. begin creates both permitConsumedAt and transportStartedAt as null. authorize uses explicit READ COMMITTED, existing GLOBAL/shared tenant gate locks followed by account/risk validation, then sets both timestamps to the same millisecond instant in the same transaction. A repeated permit cannot consume again. COMMIT must settle successfully before authorization returns true; uncertainty returns no authorization. The marker denotes the committed final authorization boundary, not proof that an HTTP request arrived at an exchange.
 
@@ -136,7 +144,7 @@ Definitive result plus a null durable transport boundary records responseCode=NO
 
 The additive migration changes nullability and installs the paired permit/immutable evidence guards; private FORCE RLS, financial authority and published SQL remain unchanged. Execution receives only the added permitConsumedAt UPDATE column. Startup rejects any other attempt UPDATE column or direct/inherited execution privilege on the insert trigger function. This does not implement the unfinished certified policy/state/health final gate or AMEND.
 
-## PostgreSQL Portfolio authority read port
+### PostgreSQL Portfolio authority read port
 
 createPostgresRiskPortfolioReader uses isolated ctp_risk_snapshot_reader credentials and only ctp_risk.capture_portfolio(jsonb). Its internal server selector is tenantId / exact mode / targetAccountId / policy-derived maxEvidenceAgeMs (1..5000). Authenticate/derive tenant ownership before constructing the selector; it is not an HTTP authorization API. The SQL function additionally requires matching transaction-local tenant context and native owned target account. Caller-supplied snapshot/source/complete fields are rejected. No direct financial, credentials, Portfolio table, control mutation or execution authority is granted.
 
@@ -150,7 +158,7 @@ Additive migration 202610070004_portfolio_capture_inventory replaces only the ca
 
 API withTenant acquires GLOBAL/shared then tenant/exclusive before invoking its transaction callback, so account/connection CRUD cannot acquire a row and subsequently wait on the Risk ordering gate. Its existing serializable isolation, tenant validation, pool/transaction deadlines, no automatic retries and exact SQL permissions remain. Native regression holds the tenant lock, requires a real advisory waiter and proves that no callback runs until release. This protects participating server writers; arbitrary administrative SQL is not a supported concurrent writer protocol, and caller-supplied tenant IDs remain unauthorized.
 
-## Explicit in-place AMEND wire contract
+### Explicit in-place AMEND wire contract
 
 Core operations.amendOrder now requires inPlaceAmendmentSchema. The previous unclassified locator/replacement accepted no native semantics/revision/fill evidence and is rejected by a RED-confirmed contract repair. Completed adapters previously kept this capability UNSUPPORTED; no supported PLACE/CANCEL behavior or published persistence changes. The command names semantics=IN_PLACE, identity.exchangeOrderId=PRESERVED, identity.clientOrderId=REPLACED, an EXCHANGE_ID locator and target.internalOrderId/placeIntentId/revision/observedAt/nativeUpdatedAt/current/filledQuantity. target.current is the observed effective order command, not a rewrite of the original durable PLACE. Replacement carries current ruleVersion and permanent server-generated client ID. Command hashing includes every target field and identity policy. Schema acceptance is not source certification or Risk authorization.
 
@@ -162,7 +170,7 @@ A valid native response yields ACKNOWLEDGED only. Wrong/coupled identities, quan
 
 Official native constraints rechecked 2026-10-07 in the [Binance keep-priority FAQ](https://raw.githubusercontent.com/binance/binance-spot-api-docs/master/faqs/order_amend_keep_priority.md) and [Spot REST trade/history contract](https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md). The production factory still forces AMEND_ORDER=UNSUPPORTED even if supplied capability evidence says SUPPORTED; explicit regression proves no authorization or HTTP call. The internal protocol is not exported as a mutation entrypoint. Durable Order Engine/Risk/Portfolio lifecycle and actual allowed TESTNET profile acceptance remain blockers. LIVE is disabled.
 
-## Physical certification transaction
+### Physical certification transaction
 
 createPostgresRiskSnapshotStore requires isolated server-controlled database options and an exact immutable intent scope. It accepts no source callback, caller snapshot, monetary proposal or Risk grant. READ COMMITTED uses GLOBAL shared -> tenant exclusive -> locked owned account/connection/book inventory and current policy/registry/capability/Market/loss/control heads. The codec validates original native clocks, exact TESTNET/DEMO scope, CASH collateral and explicit derivative MARK/FX/fee evidence. Missing, stale, GAP, mismatched or unissued pending exposure fails closed. Configuration receipt reuse does not extend native or certificate expiry.
 
@@ -170,7 +178,7 @@ Certificate/identity histories are immutable and monotonic through concurrent wr
 
 A RED-confirmed shared Binance expiry race is also repaired: the internal onDispatch callback rechecks authorization issuedAt/expiresAt after awaited dynamic admission/rate/signing, before the dispatched marker and network call. A permit whose validity window ended while waiting cannot dispatch PLACE/CANCEL/AMEND (or other existing mutations). This is an additional local time guard, not the unfinished durable current-policy/certificate/health gate. Proven pre-I/O expiry remains definitive rejection; post-I/O abort/deadline remains UNKNOWN and does not release collateral.
 
-## Atomic PostgreSQL admission contract under verification
+### Atomic PostgreSQL admission contract under verification
 
 The server-only createPostgresOrderRiskPort uses fixed prepare/persist functions and a single bounded physical transaction. A caller supplies immutable intent identifiers for an owned exact binding, never a snapshot/policy/proposal/URL/credential override. GLOBAL shared -> tenant exclusive -> owned sorted account/connection/book inventory precedes policy/rule/capability/native heads and account budget/reservation writes. Tenant serialization also covers same-mode user limits across accounts. SQL independently reconstructs current shared exposure and checks loss, native units, FX, rules, capabilities, health and collateral; a consistent payload hash is not authority.
 
@@ -178,13 +186,13 @@ One immutable decision, reservation, certificate/issuance and the actual Portfol
 
 These PLACE admission contracts passed native/full CI on 8cdff7d (37737207007). They do not enable CANCEL/AMEND, automatic release or the final current-state transport gate. Those integrations remain mandatory before phase acceptance.
 
-## Reservation lifecycle candidate contract
+### Reservation lifecycle candidate contract
 
 Additive migrations 20/21 synchronize an issued reservation with durable Order progress, attempts and full immutable execution evidence in the same PostgreSQL transaction. UNKNOWN retains its collateral. ACK alone cannot release it. Definitive NOT_SENT/rejection or consistent authoritative terminal evidence can release exactly once; adopted fills must be covered by the reconciled Portfolio snapshot. A durable release watermark prevents resurrection.
 
 Partial collateral reduction requires the exact native order, immutable original PLACE scope including its LIMIT price, complete adopted fill evidence and a reconciled snapshot covering that observation. It rounds the remaining original reservation upward at 18 decimal places. Missing proof retains the full original bound. RESOLVE_COMMITMENT references immutable lifecycle proof and updates reservation, budget, Portfolio hold, watermark, evidence and outbox together without a monetary ledger posting. Its event body cannot authorize itself; the public Portfolio apply path rejects it. Trusted historical resolution replay follows the durable watermark and cannot resurrect released collateral. Native reflected collateral attribution is not yet implemented by this candidate. Final current-state dispatch validation and native AMEND remain mandatory before PHASE 12 acceptance.
 
-## Issued PLACE final dispatch candidate
+### Issued PLACE final dispatch candidate
 
 Migration 22 validates the actual issued PLACE attempt at its first transport-boundary UPDATE. The immutable issuance and original certificate must match the active reservation, intent, account/mode/connection and command hash; expired proof cannot grant. Current policy, metadata/rules/capabilities, permission/connection, native health/Market/FX, UTC loss and control source replacement requires new evaluation and blocks the old attempt. Reconciled Portfolio economic state must still match its approved snapshot; additional issued holds are counted in current shared totals once. Rules/market validation excludes this logical effect when checking reduction/tier admission, while final shared limits include it exactly once. Missing/stale/conflicting proof denies.
 
@@ -194,19 +202,19 @@ The issued-hold authority candidate in migration 23 additionally requires the co
 
 Migration 24 and exact native replay repair an older hash-only evidence representation. A replay must match its permanent identity/fingerprint and pass current immutable native scope checks before a full body can be inserted once. The body has an FK to that exact legacy fingerprint; it cannot replace evidence or admit another semantic event. Availability of the full body participates in private lifecycle proof, so restart recovery can resolve a reservation without inventing another Order revision or monetary posting. Historical mismatching LIMIT prices remain blocked. Populated physical upgrade proof is still required in addition to this behavioral representation test.
 
-## Bounded registry recovery
+### Bounded registry recovery
 
 Additive migration 25 retains the exact read_current signature, role boundary, scope/input validation, sorted output and complete immutable history checks. One cursor captures the requested current records; each revision and each rules/instrument version is checked through its complete primary key. Work is bounded by the requested set (at most 300 instruments), rather than scanning the accumulated history. The response uses a bounded array. No permanent version is removed or reused, no authority is granted, and the existing one-second physical recovery deadline remains unchanged. Both custom and generic PostgreSQL plans must satisfy the component deadline; inconsistent record or version history must reject recovery.
 
-## Mandatory certified dispatch authority
+### Mandatory certified dispatch authority
 
 Additive migration 26 requires certified atomic issuance for every new transportStartedAt transition, including direct execution SQL. Historical Risk decision/reservation rows alone confer no transport authority. They remain immutable/recoverable evidence, and already-started historical attempts are not rewritten. Missing issuance rejects before permit consumption/start, so the gateway records NOT_SENT on definitive authorization denial. Issued PLACE still uses the complete current-source validator. CANCEL and AMEND cannot use legacy rows as a fallback; their certified lifecycle must be implemented before enabling them. The positive one-use and delayed-predicate expiry tests now use actual production atomic approval, rather than a manually inserted grant.
 
-## Native internal identity authority
+### Native internal identity authority
 
 Normalized native Order evidence must match the durable Order id and its original PLACE intent id, in addition to existing exchange/client/account/instrument identity checks. AMEND does not replace the original PLACE identity in this mapping. Contradictory mappings reject before advancing the native watermark or persisting evidence. Draft additive migration 28 enforces the same condition for direct SQL inserts, without granting execution of its private trigger function. Historical immutable native bodies are independently revalidated before terminal release or residual reduction; they cannot authorize collateral resolution through a conflicting internal mapping. Original evidence and released tombstones are never rewritten.
 
-## Retained native AMEND admission
+### Retained native AMEND admission
 
 The initial supported control is an unchanged-price Spot TESTNET LIMIT/GTC quantity decrease. Risk evaluates the current replacement against current rules/capabilities, market/FX/liquidity, health, loss, pauses and account/user limits. Its effect is explicitly RETAIN: additional exposure/open-order/principal delta is zero, while the primary issued PLACE reservation remains bound at its current conservative maximum until authoritative causal settlement. It is not reduceOnly permission. The existing reserve must prove coverage of the new remaining principal and current maximum fee; unsupported positive delta fails closed. Source-owned Order/version/PLACE intent/native clock/client/quantity and exact primary reservation/account/mode/asset evidence are required. Pure evaluation does not certify evidence or grant dispatch. Production SQL must independently reread and enforce the same proof within atomic admission; a separate zero-delta decision/reservation/Portfolio commitment cannot create a second monetary ledger or logical order effect. UNKNOWN control retains primary collateral; no ACK-only release.
 
@@ -214,7 +222,7 @@ Additive migration 29 captures the actual classified AMEND intent and rereads th
 
 The Portfolio source includes a resolution payload only when its private reader proves the latest financial lifecycle event against actual immutable Portfolio evidence, current reservation and watermark. The decoder independently validates exact RESOLVE_COMMITMENT type, canonical event, current hold, timestamp and watermark fingerprint. A partial index bounds the latest non-null lifecycle effect lookup; no historic event or anti-reuse identity is evicted. Public Portfolio writers gain no resolution authority and there is no new monetary posting.
 
-## Native control final gate candidate
+### Native control final gate candidate
 
 Draft additive migration 30 reuses the existing bounded transaction and GLOBAL -> tenant -> inventory/account/book -> Order/reservation ordering. The private final validator supports the actual immutable AMEND command, proving its own pending attempt and DISPATCH event before compensating exactly one Order revision in target comparison. All current source families, replacement rules/math, certificate expiry, controls, ownership and shared limits remain checked. There is no new execution grant on capture or validation functions. Both permit/start timestamps are consumed atomically once; restart never creates a second attempt.
 
@@ -222,7 +230,7 @@ Pending AMEND preserves the last known SUBMITTED/PARTIALLY_FILLED status and mar
 
 The pure causal application helper requires matching immutable old/new client/quantity/exchange identity, native application history, current native observation, actual receipt freshness and monotonic native time. Its optional effective command cannot change instrument/side/price/type/unit/reduce-only or reuse the original client identity. Original PLACE remains immutable. This pure helper provides no SQL evidence authority, durable application journal, Risk grant or production AMEND capability; those integrations remain mandatory.
 
-## Durable native causal application candidate
+### Durable native causal application candidate
 
 Draft additive migration 31 adds immutable FORCE-RLS application history and a monotonic bounded current head. One pinned SECURITY DEFINER entry point rereads the actual command, certified issuance, consumed attempt, original PLACE, current effective command and native progress under GLOBAL -> tenant -> account/book -> Order/attempt ordering. It requires exact native causal scope/client/quantity/execution identity, application time at or after the actual transport boundary, fresh receipts, matching normalized native Order and nonregressing cumulative fills. SQL NULL or ambiguous proof denies. Application identity lookup precedes current freshness on exact known cause replay, returning the current durable result without renewing evidence or changing state.
 
@@ -230,11 +238,11 @@ Journal/head, full native evidence, Order/progress projection, attempt RECONCILE
 
 Additive migration 32 closes the direct-SQL numeric identity coercion: native executionId must be an actual JSON string matching the durable scoped identity, including values above 2^53. The guard has no public/runtime EXECUTE grant; historical identities are never normalized or rewritten. An existing contradictory history makes migration validation fail closed. Canonical native weighted averages use exact rational div/mod with 18-place half-even rounding, agreeing with Portfolio at repeating and tie boundaries.
 
-## Durable unsent native control recovery candidate
+### Durable unsent native control recovery candidate
 
 OrderStore.recoverUnsent is server-only and derives its target from the current durable pending attempt. Within the bounded GLOBAL -> tenant -> account -> Order/attempt transaction it proves exact binding/command/hash, immutable DISPATCH body/fingerprint, protocol 2, deadline expiry by clock_timestamp and null permit/start/response/resolution. It records the existing definitive RESULT and permanent unsent GAP, updates the attempt to REJECTED/NOT_SENT and commits existing private Portfolio lifecycle effects together. Current native freshness is not inferred from absent dispatch: reconciliation stays REQUIRED and primary collateral retains its full conservative amount. The original PLACE and AMEND commands are immutable. Exact replay does nothing, and begin cannot resend the intent. Unexpired or possibly started attempts remain unchanged. No new SQL grant or migration is required; production service recovery composition and native/full acceptance remain pending.
 
-## Native AMEND service and source-clock candidate
+### Native AMEND service and source-clock candidate
 
 OrderEngine.amend authorizes AMEND and performs permanent exact lookup before current metadata admission. An already-dispatched exact replay returns the current durable result without another native lookup, Risk decision, identity or attempt. A conflicting semantic request rejects. New keys require current rules, one exact NATIVE capability, native target, immutable intent and actual atomic approval. Dispatch uses the exact stored AMEND command through the existing authorization gateway. ACK does not settle application. The server-only pendingAmendment lookup rereads actual owned binding/hash/account/mode/instrument and pending attempt status; it grants neither permission nor dispatch.
 
@@ -242,13 +250,13 @@ Reconciliation uses native exchange identity for pending/applied AMEND, captures
 
 Draft additive migration 33 replaces the comparison between exchange event time and local transport time with the immutable native target source time. Source time cannot regress. Equal native time may change hash/status only when the current private journal/head proves the exact owned Order revision, native hash/status and application timestamp. Arbitrary equal-time execution SQL remains denied. A causal event receives a permanent native:<time>:amend:<intent> identity; older published identities remain readable without rewriting history. The existing primary collateral coverage predicate gains an additional requirement that Portfolio snapshotAt reaches the actual nativeReceivedAt. All prior native/fill/Portfolio checks, authority locks, rounding, UNKNOWN retention and tombstones remain. No new grants or published migration changes are introduced. Native/full service/profile acceptance is pending; LIVE and production AMEND remain disabled.
 
-## Certified native CANCEL completion draft
+### Certified native CANCEL completion draft
 
 CANCEL remains its own immutable operation. The optional Core command target preserves prior locator wire calls; production certified admission requires a server-built frozen target with exact internal/PLACE identity, durable revision, effective command, fill quantity, native source time and actual fresh response receipt. New user intake contains only owned order ID and semantic key. Permanent durable findCancel/replay precedes native refresh, rules admission and transport; a changed binding/order rejects. A new target uses stable EXCHANGE_ID, including after AMEND client replacement. Original PLACE remains immutable.
 
 Initial certification is Binance Spot TESTNET LIMIT/GTC with exact native CANCEL capability. Current policies, rules, health, FX/liquidity, loss state, permissions, exposure and pauses remain mandatory. Admission adds one zero-amount control reservation/Portfolio commitment tied to the active primary reservation; it never adds a second order/notional or monetary posting. The final transaction rereads sources and frozen target before consuming the paired one-use permit/start boundary. ACK stays pending; ambiguous dispatch holds primary and control UNKNOWN through restart. Definitive pre-start rejection or expired protocol-2 recovery records NOT_SENT, releases only zero delta and retains primary collateral pending authoritative reconciliation. No blind resend or LIVE dispatch. Additive migration 34 supplies private fixed CANCEL checks; no runtime function grants are added and PUBLIC EXECUTE is revoked. CANCEL source acceptance is recorded in verification; exact promoted-main CI remains separate.
 
-## Candidate native Binance profile and final transport handoff
+### Candidate native Binance profile and final transport handoff
 
 The initial native AMEND profile is exclusively binance-spot-testnet-v1: standalone Spot LIMIT/GTC cumulative quantity reduction, unchanged price, preserved native order ID and a new permanent server client ID. Symbol amendAllowed, complete current known filters, owned identity and dynamic exchange admission are required. Missing connection/credentials/authorization/sandbox/identity/admission ports or synthetic capability evidence disables AMEND. All other Binance profiles remain UNSUPPORTED, including LIVE and DEMO. Capability evidence cannot enable an absent protocol or replace durable authority. Source/profile acceptance requires the full native/OS/Docker suite; no real exchange mutations were performed.
 
