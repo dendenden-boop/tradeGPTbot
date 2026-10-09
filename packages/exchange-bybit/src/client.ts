@@ -89,6 +89,7 @@ export interface RestSpec {
     context: IoContext,
   ) => Promise<Readonly<Record<string, string>>>;
   readonly onDispatch?: () => void;
+  readonly beforeDispatch?: () => Promise<boolean>;
   readonly symbol?: string;
 }
 export interface BybitResponse {
@@ -144,6 +145,9 @@ export function createRestClient(
           : await boundedPort(() => spec.sign!(payload, context), context, now);
       assertActive(context, now);
       if (now() < backoffUntil) throw new BybitProtocolError('RATE_LIMITED');
+      if (spec.beforeDispatch && (await boundedPort(spec.beforeDispatch, context, now)) !== true)
+        throw new BybitProtocolError('AUTHORIZATION_REQUIRED');
+      assertActive(context, now);
       spec.onDispatch?.();
       const response = await io.request(
         {

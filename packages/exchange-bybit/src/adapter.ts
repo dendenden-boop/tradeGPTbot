@@ -165,16 +165,8 @@ export function createBybitAdapterWithIo(raw: BybitAdapterOptions, io: NetworkIo
           (operation === 'createOrder' && !options.orderAdmission)
         )
           return false;
-        if (
-          (await boundedPort(
-            () => options.authorization!.authorize(operation, input, context),
-            context,
-            now,
-          )) !== true
-        )
-          return false;
         const request = wireObject(input);
-        return (
+        if (
           (await boundedPort(
             () =>
               options.sandboxAcceptance!.authorize(
@@ -185,15 +177,24 @@ export function createBybitAdapterWithIo(raw: BybitAdapterOptions, io: NetworkIo
               ),
             context,
             now,
+          )) !== true
+        )
+          return false;
+        return (
+          (await boundedPort(
+            () => options.authorization!.authorize(operation, input, context),
+            context,
+            now,
           )) === true
         );
       },
     },
     transport: {
-      async request(operation, input, context) {
+      dispatchAuthorization: ['createOrder', 'cancelOrder', 'setLeverage'],
+      async request(operation, input, context, dispatchGate) {
         return operations[operation].privateOperation ||
           (operation === 'testConnection' && account !== null)
-          ? privateTransport.request(operation, input, context)
+          ? privateTransport.request(operation, input, context, dispatchGate)
           : publicTransport.request(operation, input, context);
       },
       async subscribe(operation, input, context, onEvent, onGap) {

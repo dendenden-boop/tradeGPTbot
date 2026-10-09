@@ -1,15 +1,15 @@
-name: Native certification reproduction
+name: Native cross-adapter acceptance
 on:
   push:
-    branches: [codex/phase12-binance-profile-green]
+    branches: [codex/phase12-cross-adapter-dispatch-green]
 permissions:
   contents: read
 concurrency:
-  group: native-binance-profile-green
+  group: native-cross-adapter-dispatch-green
   cancel-in-progress: true
 jobs:
   reproduce:
-    name: Native PostgreSQL RED reproduction
+    name: Native PostgreSQL regression
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -25,11 +25,11 @@ jobs:
       - run: pnpm db:validate
       - run: pnpm build
       - run: pnpm test:integration
-      - name: Upload actual native reproduction evidence
+      - name: Upload native regression evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-binance-profile-green
+          name: native-cross-adapter-dispatch-green
           path: test-results/
           if-no-files-found: error
           retention-days: 7
