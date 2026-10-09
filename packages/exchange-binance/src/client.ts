@@ -37,6 +37,8 @@ export interface RestSpec {
     readonly params: Readonly<Record<string, string>>;
     readonly headers: Readonly<Record<string, string>>;
   }>;
+  /** Final durable authority after signing/limiter/read-only preparation, before HTTP handoff. */
+  readonly beforeDispatch?: () => Promise<boolean>;
 }
 export interface BinanceResponse {
   readonly status: number;
@@ -138,6 +140,9 @@ export function createRestClient(
             throw new BinanceProtocolError('INVALID_REQUEST');
           url.searchParams.append(key, value);
         }
+      assertActive(context, now);
+      if (spec.beforeDispatch && (await boundedPort(spec.beforeDispatch, context, now)) !== true)
+        throw new BinanceProtocolError('AUTHORIZATION_REQUIRED');
       assertActive(context, now);
       spec.onDispatch?.();
       const response = await io.request(

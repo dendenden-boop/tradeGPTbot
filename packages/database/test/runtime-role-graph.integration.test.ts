@@ -207,7 +207,7 @@ it('all runtime grouping roles plus signer/auth owner have restricted NOLOGIN at
 
 it('private functions expose no PUBLIC execution and pin every SECURITY DEFINER search path', async () => {
   const unsafe = await admin.query(
-    `SELECT n.nspname,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN('ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk','ctp_registry') AND (EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') OR (p.prosecdef AND NOT coalesce(p.proconfig @> ARRAY['search_path=pg_catalog'],false)))`,
+    `SELECT n.nspname,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE left(n.nspname,4)='ctp_' AND (EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') OR (p.prosecdef AND NOT coalesce(p.proconfig @> ARRAY['search_path=pg_catalog'],false)))`,
   );
   expect(unsafe.rows).toEqual([]);
 });

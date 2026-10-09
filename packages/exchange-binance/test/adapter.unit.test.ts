@@ -10,9 +10,20 @@ import {
 import { createBinanceAdapterWithIo } from '../src/adapter.js';
 import type { BinanceAdapterOptions } from '../src/ports.js';
 import type { NetworkIo } from '../src/io.js';
-import { adapterProfile, getBinanceProfile } from '../src/profiles.js';
+import {
+  adapterProfile,
+  getBinanceProfile,
+  binanceProfileIdSchema,
+  type BinanceProfileId,
+} from '../src/profiles.js';
 import { NOW, exchangeInfo, spotSymbol, ticker } from './fixtures/public-data.js';
-import { ACCOUNT, INTENT_ID, INTERNAL_ORDER_ID, newOrder } from './fixtures/private-data.js';
+import {
+  ACCOUNT,
+  INTENT_ID,
+  INTERNAL_ORDER_ID,
+  newOrder,
+  order as nativeOrder,
+} from './fixtures/private-data.js';
 
 function options(): BinanceAdapterOptions {
   const profileId = 'binance-spot-testnet-v1';
@@ -40,7 +51,7 @@ function options(): BinanceAdapterOptions {
 }
 function fixture(input: BinanceAdapterOptions = options()) {
   const queue: unknown[] = [];
-  const requests = vi.fn(() =>
+  const requests = vi.fn<NetworkIo['request']>(() =>
     Promise.resolve({
       status: 200,
       headers: {},
@@ -60,8 +71,174 @@ function fixture(input: BinanceAdapterOptions = options()) {
   };
   return { adapter, io, close, queue, requests, context, controller };
 }
+function lifecycleOptions(
+  profileId: BinanceProfileId = 'binance-spot-testnet-v1',
+): BinanceAdapterOptions {
+  const base = options();
+  const profile = adapterProfile(getBinanceProfile(profileId), 'fixture-vault');
+  return {
+    ...base,
+    profileId,
+    capabilities: base.capabilities.map((c) => ({ ...c, profile })),
+    connection: { resolve: () => ({ account: ACCOUNT, credentialRef: 'fixture-vault' }) },
+    credentials: {
+      resolve: () =>
+        Promise.resolve({ profileId, account: ACCOUNT, apiKey: 'fixture', secret: 'fixture' }),
+    },
+    authorization: { authorize: () => Promise.resolve(false) },
+    sandboxAcceptance: { authorize: () => Promise.resolve(false) },
+    orderAdmission: { validate: () => Promise.resolve(false) },
+    identities: {
+      order: () => ({ internalOrderId: INTERNAL_ORDER_ID, intentId: INTENT_ID }),
+      algo: () => ({ internalAlgoId: INTERNAL_ORDER_ID }),
+      fill: () => ({ internalOrderId: INTERNAL_ORDER_ID }),
+    },
+  };
+}
 describe('Binance server composition and Exchange Core agreement', () => {
-  it('keeps native AMEND unavailable in production assembly until durable Engine/Risk acceptance', async () => {
+  it.each([
+    'connection',
+    'credentials',
+    'authorization',
+    'sandboxAcceptance',
+    'identities',
+    'orderAdmission',
+  ] as const)(
+    'missing server %s port disables AMEND despite native capability evidence',
+    async (port) => {
+      const input = { ...lifecycleOptions() };
+      Reflect.deleteProperty(input, port);
+      const h = fixture(input);
+      expect(h.adapter.capabilities.find((c) => c.feature === 'AMEND_ORDER')?.support).toBe(
+        'UNSUPPORTED',
+      );
+      expect(h.requests).not.toHaveBeenCalled();
+      await h.adapter.disconnect();
+    },
+  );
+  it.each(binanceProfileIdSchema.options.filter((p) => p !== 'binance-spot-testnet-v1'))(
+    'keeps unaccepted native AMEND profile %s disabled',
+    async (profileId) => {
+      const h = fixture(lifecycleOptions(profileId));
+      expect(h.adapter.capabilities.find((c) => c.feature === 'AMEND_ORDER')?.support).toBe(
+        'UNSUPPORTED',
+      );
+      expect(h.requests).not.toHaveBeenCalled();
+      await h.adapter.disconnect();
+    },
+  );
+  it('does not treat synthetic capability evidence as native AMEND semantics', async () => {
+    const input = lifecycleOptions();
+    const h = fixture({
+      ...input,
+      capabilities: input.capabilities.map((c) =>
+        c.feature === 'AMEND_ORDER' ? { ...c, implementation: 'SYNTHETIC' as const } : c,
+      ),
+    });
+    expect(h.adapter.capabilities.find((c) => c.feature === 'AMEND_ORDER')?.support).toBe(
+      'UNSUPPORTED',
+    );
+    await h.adapter.disconnect();
+  });
+  it('exposes Spot TESTNET native AMEND only with all server lifecycle ports and blocks a denied final Risk permit', async () => {
+    const configured = options();
+    const h = fixture({
+      ...configured,
+      capabilities: configured.capabilities.map((c) => ({
+        ...c,
+        profile: { ...c.profile, credentialRef: 'fixture-vault' },
+      })),
+      connection: { resolve: () => ({ account: ACCOUNT, credentialRef: 'fixture-vault' }) },
+      credentials: {
+        resolve: () =>
+          Promise.resolve({
+            profileId: 'binance-spot-testnet-v1',
+            account: ACCOUNT,
+            apiKey: 'fixture',
+            secret: 'fixture',
+          }),
+      },
+      authorization: { authorize: () => Promise.resolve(false) },
+      sandboxAcceptance: { authorize: () => Promise.resolve(true) },
+      orderAdmission: { validate: () => Promise.resolve(true) },
+      identities: {
+        order: () => ({ internalOrderId: INTERNAL_ORDER_ID, intentId: INTENT_ID }),
+        algo: () => ({ internalAlgoId: INTERNAL_ORDER_ID }),
+        fill: () => ({ internalOrderId: INTERNAL_ORDER_ID }),
+      },
+    });
+    expect(h.adapter.capabilities.find((c) => c.feature === 'AMEND_ORDER')).toMatchObject({
+      support: 'SUPPORTED',
+      implementation: 'NATIVE',
+    });
+    expect(h.requests).not.toHaveBeenCalled();
+    h.queue.push(exchangeInfo([{ ...spotSymbol(), amendAllowed: true }]));
+    expect(
+      await h.adapter.getSymbols({ limit: 10, cursor: null, queryId: 'amend-warm' }, h.context),
+    ).toMatchObject({ ok: true });
+    const record = configured.registry.get(
+      getBinanceProfile('binance-spot-testnet-v1').scope,
+      'BTCUSDT',
+      NOW,
+    );
+    if (!record.ok) throw new Error('FIXTURE_METADATA_MISSING');
+    const current = { ...newOrder(), ruleVersion: record.value.rules.version };
+    const command = operations.amendOrder.input.shape.command.parse({
+      semantics: 'IN_PLACE',
+      identity: { exchangeOrderId: 'PRESERVED', clientOrderId: 'REPLACED' },
+      locator: { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: '9' } },
+      target: {
+        internalOrderId: INTERNAL_ORDER_ID,
+        placeIntentId: INTENT_ID,
+        revision: '1',
+        observedAt: NOW,
+        nativeUpdatedAt: NOW,
+        current,
+        filledQuantity: '0.025',
+      },
+      replacement: {
+        ...current,
+        clientOrderId: 'fixture-amend-1',
+        size: { kind: 'BASE_QUANTITY', value: '0.075', asset: 'BTC' },
+      },
+    });
+    h.queue.push(
+      { serverTime: String(NOW) },
+      {
+        ...nativeOrder(),
+        orderId: '9',
+        orderListId: '-1',
+        updateTime: String(NOW),
+        icebergQty: '0',
+        origQuoteOrderQty: '0',
+      },
+      { serverTime: String(NOW) },
+    );
+    expect(
+      await h.adapter.amendOrder(
+        {
+          command,
+          authorization: {
+            commandId: INTENT_ID,
+            dispatchAttemptId: INTERNAL_ORDER_ID,
+            profile: h.adapter.profile,
+            account: ACCOUNT,
+            issuedAt: NOW,
+            expiresAt: NOW + 1000,
+            commandHash: computeCommandHash('amendOrder', command, {
+              profile: h.adapter.profile,
+              account: ACCOUNT,
+            }),
+          },
+        },
+        h.context,
+      ),
+    ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+    expect(h.requests.mock.calls.some(([request]) => request.method === 'PUT')).toBe(false);
+    expect(h.requests).toHaveBeenCalledTimes(4);
+    await h.adapter.disconnect();
+  });
+  it('keeps native AMEND unavailable when owned identity and dynamic admission ports are missing', async () => {
     const authorize = vi.fn(() => Promise.resolve(true)),
       sandbox = vi.fn(() => Promise.resolve(true));
     const configured = options();

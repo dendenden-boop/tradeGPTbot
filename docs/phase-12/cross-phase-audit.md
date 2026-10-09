@@ -1,5 +1,13 @@
 # PHASE 4–12 cross-phase hardening audit
 
+## Current completion status — 9 October 2026
+
+The certified PostgreSQL source backend, atomic admission, Portfolio bridge, final current-state dispatch and durable AMEND service/recovery are implemented and accepted on main 1eb1d82. Later accepted source 0b3208dd includes certified CANCEL, one Binance Spot TESTNET native AMEND profile and cross-adapter final-handoff repair; full CI 37904894495/native 37904894325/CodeQL 37904894162 are green. Exact final-main acceptance remains separate. The [final authority review](final-authority-review.md) checks the complete cross-phase chain rather than inferring it from package tests.
+
+The user accepted [conservative collateral](native-collateral-evidence.md) as an explicit PHASE 12 limitation: full local hold remains; positive native credit stays disabled. The unproven monetary projection draft is excluded. Completion source b983c1c passed full CI 37924977819/native 37924977765/CodeQL 37924978037: 3033 unit / 41 HTTP per OS, 666 native PostgreSQL plus populated upgrade, owner repeats 14/95, audit zero. Exact final-main CI remains mandatory. LIVE is disabled, PHASE 13 not started, current gate NOT READY FOR PHASE 13.
+
+The sections below are historical findings and checkpoints from the audit started on 7 October. Statements about work missing at those checkpoints are superseded by this current status and exact-source chronology in verification.
+
 ## Scope and baseline
 
 This audit starts on fresh clean main 09b7be0a256cd4eba9558b5cb6b05fd0904d9e51, fetched on 7 October 2026. Current roadmap and PHASE 12 requirements/contracts/verification/dependencies/README were inspected. LIVE remains disabled and PHASE 13 is not started. Published migrations 1–15 are immutable.
@@ -30,7 +38,7 @@ Real metadata and recovery HTTP fixtures each execute three successive hung-requ
 
 Read-only GitHub legacy branch protection API returned HTTP 404 / Branch not protected for main on 7 October 2026; the effective branch rules API also returned an empty list. The current account has repository admin permission. Required Ubuntu, Windows and real-services/PostgreSQL/Docker checks and no direct bypass need repository administration configuration; this audit does not claim those protections exist or alter GitHub settings.
 
-The Runtime InstrumentRegistry acceptance is recorded below. Complete physical certified RiskSnapshotStore, atomic approve/reserve, Portfolio bridge, full final dispatch and durable AMEND lifecycle are still required work. SQL/Auth/units/crash/supply-chain and the separate final cross-phase review remain pending. This report is an in-progress audit, not a final acceptance report. **NOT READY FOR PHASE 13**; work continues within PHASE 12.
+At the 7 October checkpoint, registry acceptance preceded the still-pending physical Risk chain and SQL/Auth/units/crash/supply-chain reviews. Those modules were subsequently implemented and accepted as recorded above and in verification. This historical checkpoint was NOT READY FOR PHASE 13; it is not a claim that the current accepted substrate is absent.
 
 ## Current local regression
 

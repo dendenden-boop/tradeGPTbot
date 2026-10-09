@@ -26,6 +26,21 @@ import {
 import { NOW, spotSymbol, futuresSymbol } from './fixtures/public-data.js';
 
 type FixtureResponse = { status?: number; data?: unknown; failure?: Error };
+const collateralNative = () => ({
+  ...order(),
+  orderListId: '-1',
+  icebergQty: '0',
+  origQuoteOrderQty: '0',
+  isWorking: true,
+  selfTradePreventionMode: 'NONE',
+});
+const collateralBalance = () => ({
+  ...spotAccount(),
+  balances: [
+    { asset: 'USDT', free: '100.12', locked: '7.5' },
+    { asset: 'BTC', free: '1', locked: '0' },
+  ],
+});
 function harness(
   futures = false,
   responses: FixtureResponse[] = [],
@@ -137,6 +152,87 @@ function harness(
     authorized,
   };
 }
+
+it('collects exact native before/balance/after collateral evidence through signed read-only routes', async () => {
+  const h = harness(false, [
+    { data: collateralNative() },
+    { data: collateralBalance() },
+    { data: collateralNative() },
+  ]);
+  const collect = h.transport.collateralEvidence;
+  const evidence = await collect(
+    { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: '9223372036854775807' } },
+    h.context,
+  );
+  expect(evidence).toMatchObject({
+    protocol: 'BINANCE_SPOT_LIMIT_LOCK_V1',
+    before: {
+      order: { exchangeOrderId: '9223372036854775807', quantity: '0.1', filledQuantity: '0.025' },
+    },
+    after: { order: { exchangeOrderId: '9223372036854775807' } },
+    balances: {
+      balances: [
+        { asset: 'USDT', locked: '7.5' },
+        { asset: 'BTC', locked: '0' },
+      ],
+    },
+  });
+  expect(h.calls.map((c) => c.method)).toEqual(['GET', 'GET', 'GET']);
+  expect(h.calls.map((c) => new URL(c.url).pathname)).toEqual([
+    '/api/v3/order',
+    '/api/v3/account',
+    '/api/v3/order',
+  ]);
+});
+it('rejects a native fill or quantity change across the balance cut instead of crediting an incoherent hold', async () => {
+  const h = harness(false, [
+    { data: collateralNative() },
+    { data: collateralBalance() },
+    {
+      data: {
+        ...collateralNative(),
+        executedQty: '0.05',
+        cummulativeQuoteQty: '5',
+        updateTime: String(NOW),
+      },
+    },
+  ]);
+  const collect = h.transport.collateralEvidence;
+  await expect(
+    collect(
+      { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: '9223372036854775807' } },
+      h.context,
+    ),
+  ).rejects.toThrow('INVALID_RESPONSE');
+});
+it('canonicalizes native object key order without changing lossless financial or identity fields', async () => {
+  const h = harness(false, [
+    { data: collateralNative() },
+    { data: collateralBalance() },
+    { data: Object.fromEntries(Object.entries(collateralNative()).reverse()) },
+  ]);
+  const evidence = await h.transport.collateralEvidence(
+    { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: '9223372036854775807' } },
+    h.context,
+  );
+  expect(evidence.before.sourceHash).toBe(evidence.after.sourceHash);
+  expect(evidence.after.order.exchangeOrderId).toBe('9223372036854775807');
+});
+it('does not turn aggregate locked balances and unchanged native reads into a per-order monetary grant', async () => {
+  const h = harness(false, [
+    { data: collateralNative() },
+    { data: collateralBalance() },
+    { data: collateralNative() },
+  ]);
+  const evidence = await h.transport.collateralEvidence(
+    { instrumentId: 'BTCUSDT', locator: { kind: 'EXCHANGE_ID', id: '9223372036854775807' } },
+    h.context,
+  );
+  expect(Object.hasOwn(evidence, 'amount')).toBe(false);
+  expect(Object.hasOwn(evidence, 'grant')).toBe(false);
+  expect(Object.hasOwn(evidence, 'reservationId')).toBe(false);
+  expect(evidence.balances.balances[0]?.locked).toBe('7.5');
+});
 const page = { instrumentId: 'BTCUSDT', limit: 2, cursor: null, queryId: 'q1' };
 const history = { ...page, from: NOW - 1000, to: NOW };
 

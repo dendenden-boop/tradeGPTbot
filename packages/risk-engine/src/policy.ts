@@ -14,6 +14,7 @@ import {
   tradingRulesSchema,
   newOrderSchema,
   inPlaceAmendmentSchema,
+  operations,
   immutable,
   sameMarketScope,
   evaluateCapability,
@@ -223,6 +224,86 @@ const amendmentInputSchema = z.strictObject({
   command: inPlaceAmendmentSchema,
   retention: riskAmendmentRetentionSchema,
 });
+const cancellationInputSchema = z.strictObject({
+  evaluation: riskEvaluationInputSchema,
+  command: operations.cancelOrder.input.shape.command,
+  retention: riskAmendmentRetentionSchema,
+});
+/** Pure cancellation of an existing scoped native target. A zero control delta
+ * retains primary collateral until definitive native reconciliation. It is not
+ * a PLACE, synthetic AMEND, certificate or dispatch grant. */
+export function evaluateRiskCancelPolicy(raw: unknown): RiskEvaluation {
+  try {
+    const parsed = cancellationInputSchema.safeParse(raw);
+    if (!parsed.success) return reject('RISK_INPUT');
+    const { evaluation: e, command: c, retention: r } = parsed.data;
+    if (
+      e.binding.mode !== 'TESTNET' ||
+      e.binding.profile.exchange !== 'BINANCE' ||
+      e.binding.profile.market !== 'SPOT' ||
+      e.binding.profile.endpointProfileId !== 'binance-spot-testnet-v1' ||
+      r.command.type !== 'LIMIT' ||
+      r.command.timeInForce !== 'GTC' ||
+      r.command.reduceOnly
+    )
+      return reject('RISK_CANCEL_UNSUPPORTED');
+    if (
+      r.status !== 'ACTIVE' ||
+      r.accountId !== e.binding.accountId ||
+      r.mode !== e.binding.mode ||
+      c.instrumentId !== r.command.instrumentId ||
+      c.locator.kind !== 'EXCHANGE_ID' ||
+      c.locator.id !== r.exchangeOrderId ||
+      !c.target ||
+      c.target.internalOrderId !== r.orderId ||
+      c.target.placeIntentId !== r.placeIntentId ||
+      c.target.revision !== r.orderRevision ||
+      c.target.nativeUpdatedAt !== r.nativeUpdatedAt ||
+      c.target.filledQuantity !== r.filledQuantity ||
+      JSON.stringify(c.target.current) !== JSON.stringify(r.command) ||
+      c.target.observedAt > e.now ||
+      e.now - c.target.observedAt >
+        Math.min(e.platform.maxEvidenceAgeMs, e.user.maxEvidenceAgeMs) ||
+      r.nativeUpdatedAt > e.now ||
+      !e.snapshot.instrumentHasPendingEntry ||
+      e.snapshot.openOrders < 1 ||
+      JSON.stringify({ ...r.command, ruleVersion: e.record.rules.version }) !==
+        JSON.stringify(e.order) ||
+      cmp(r.filledQuantity, r.command.size.value) >= 0
+    )
+      return reject('RISK_CANCEL_TARGET');
+    const caps = e.capabilities.filter((v) => v.feature === 'CANCEL_ORDER');
+    if (
+      caps.length !== 1 ||
+      !evaluateCapability({
+        profile: e.binding.profile,
+        record: caps[0],
+        feature: 'CANCEL_ORDER',
+        now: e.now,
+        adapterVersion: e.adapterVersion,
+        instrumentId: c.instrumentId,
+        allowSynthetic: false,
+      }).allowed
+    )
+      return reject('RISK_CAPABILITY');
+    const base = r.command.side === 'SELL',
+      asset = base ? e.record.instrument.baseAsset : e.record.instrument.quoteAsset;
+    const remaining = sub(r.command.size.value, r.filledQuantity),
+      principal = base ? remaining : mul(remaining, r.command.limitPrice!);
+    if (
+      r.asset !== asset ||
+      cmp(r.amount, add(principal, mul(principal, e.snapshot.market.maxFeeRate))) < 0 ||
+      cmp(
+        e.snapshot.instrumentExposure,
+        mul(mul(remaining, r.command.limitPrice!), e.snapshot.market.quoteToValuation),
+      ) < 0
+    )
+      return reject('RISK_CANCEL_RESERVE_UNPROVED');
+    return evaluatePolicy(e, true);
+  } catch {
+    return reject('RISK_ARITHMETIC_UNPROVED');
+  }
+}
 /** Pure retained-effect evaluation; this neither certifies its source nor issues
  * a grant. Production SQL must independently bind/recheck the retained proof. */
 export function evaluateRiskAmendmentPolicy(raw: unknown): RiskEvaluation {

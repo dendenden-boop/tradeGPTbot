@@ -62,6 +62,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
     params?: Readonly<Record<string, string>>,
     body?: Readonly<Record<string, string | number | boolean>>,
     onDispatch?: () => void,
+    dispatchGate?: () => Promise<boolean>,
   ) {
     account();
     return pub.client.call(
@@ -71,6 +72,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
         ...(params === undefined ? {} : { params }),
         ...(body === undefined ? {} : { body }),
         ...(onDispatch === undefined ? {} : { onDispatch }),
+        ...(dispatchGate === undefined ? {} : { beforeDispatch: dispatchGate }),
         ...(params?.symbol === undefined && body?.symbol === undefined
           ? {}
           : { symbol: String(params?.symbol ?? body?.symbol) }),
@@ -137,6 +139,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
     operation: MutationOperation,
     raw: unknown,
     context: RequestContext,
+    dispatchGate?: () => Promise<boolean>,
   ): Promise<unknown> {
     const input = object(raw);
     if (operation === 'cancelAllOrders') {
@@ -266,13 +269,20 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
         };
         body = { category: 'linear', symbol, buyLeverage: leverage, sellLeverage: leverage };
       }
-      const response = await call(path, context, undefined, body, () => {
-        preDispatch();
-        assertActive(context, now);
-        if (now() >= evidence.permission.expiresAt || now() >= Number(authorization.expiresAt))
-          throw new BybitProtocolError('AUTHORIZATION_REQUIRED');
-        dispatched = true;
-      });
+      const response = await call(
+        path,
+        context,
+        undefined,
+        body,
+        () => {
+          preDispatch();
+          assertActive(context, now);
+          if (now() >= evidence.permission.expiresAt || now() >= Number(authorization.expiresAt))
+            throw new BybitProtocolError('AUTHORIZATION_REQUIRED');
+          dispatched = true;
+        },
+        dispatchGate,
+      );
       return outcome(
         response,
         authorization.commandId,
@@ -295,6 +305,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
       operation: ReadOperation | MutationOperation,
       raw: unknown,
       context: RequestContext,
+      dispatchGate?: () => Promise<boolean>,
     ): Promise<unknown> {
       const input = object(raw);
       if (
@@ -311,7 +322,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
           'cancelAllAlgoOrders',
         ].includes(operation)
       )
-        return mutation(operation as MutationOperation, input, context);
+        return mutation(operation as MutationOperation, input, context, dispatchGate);
       account();
       await syncTime(context);
       const evidence = await accountEvidence(context);

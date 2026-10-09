@@ -7,10 +7,35 @@ import type {
   WritableInstrumentRegistry as CoreWritableInstrumentRegistry,
   NewOrder,
   RequestContext,
+  AccountSnapshot,
+  Order,
+  AdapterProfile,
 } from '@ctp/exchange-core';
 import type { BinanceProfileId } from './profiles.js';
 import type { IoContext } from './io.js';
 import type { BinanceAdmission } from './public-data.js';
+
+/** Read-only native facts. A parsed DTO is not a Risk grant or a monetary writer. */
+export interface BinanceCollateralEvidence {
+  readonly protocol: 'BINANCE_SPOT_LIMIT_LOCK_V1';
+  readonly profile: AdapterProfile;
+  readonly account: AccountScope;
+  readonly metadataVersion: string;
+  readonly ruleVersion: string;
+  readonly before: {
+    readonly order: Order;
+    readonly receivedAt: number;
+    readonly sourceHash: string;
+    readonly working: true;
+  };
+  readonly balances: AccountSnapshot;
+  readonly after: {
+    readonly order: Order;
+    readonly receivedAt: number;
+    readonly sourceHash: string;
+    readonly working: true;
+  };
+}
 
 export interface BinanceRateRequest {
   readonly profileId: BinanceProfileId;

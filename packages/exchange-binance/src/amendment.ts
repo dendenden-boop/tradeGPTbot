@@ -106,6 +106,72 @@ export function checkBinanceAmendmentTarget(
     return fail('INVALID_REQUEST');
 }
 
+/** Read-only attribution eligibility is narrower than ordinary Order normalization.
+ * Unknown native constraint fields are not silently treated as supported. */
+export function checkBinanceCollateralOrder(raw: unknown, symbol: string): void {
+  try {
+    checkCollateralOrder(raw, symbol);
+  } catch {
+    fail('INVALID_RESPONSE');
+  }
+}
+function checkCollateralOrder(raw: unknown, symbol: string): void {
+  const n = wireObject(raw);
+  const known = new Set([
+    'symbol',
+    'orderId',
+    'orderListId',
+    'clientOrderId',
+    'price',
+    'origQty',
+    'executedQty',
+    'cummulativeQuoteQty',
+    'status',
+    'timeInForce',
+    'type',
+    'side',
+    'stopPrice',
+    'icebergQty',
+    'time',
+    'updateTime',
+    'isWorking',
+    'workingTime',
+    'origQuoteOrderQty',
+    'selfTradePreventionMode',
+    'usedSor',
+  ]);
+  if (
+    Object.keys(n).some((k) => !known.has(k)) ||
+    n.symbol !== symbol ||
+    (n.status !== 'NEW' && n.status !== 'PARTIALLY_FILLED') ||
+    n.type !== 'LIMIT' ||
+    n.timeInForce !== 'GTC' ||
+    n.isWorking !== true ||
+    n.selfTradePreventionMode !== 'NONE' ||
+    (n.side !== 'BUY' && n.side !== 'SELL') ||
+    wireId(n.orderListId) !== '-1' ||
+    canonicalDecimal(n.icebergQty) !== '0' ||
+    canonicalDecimal(n.origQuoteOrderQty) !== '0' ||
+    canonicalDecimal(n.stopPrice) !== '0' ||
+    (n.usedSor !== undefined && n.usedSor !== false)
+  )
+    return fail('INVALID_RESPONSE');
+  integerId(n.orderId);
+  if (
+    typeof n.clientOrderId !== 'string' ||
+    !clientId(n.clientOrderId) ||
+    decimalCompare(canonicalDecimal(n.price), parseDecimal('0')) <= 0 ||
+    decimalCompare(canonicalDecimal(n.origQty), canonicalDecimal(n.executedQty)) <= 0 ||
+    decimalCompare(canonicalDecimal(n.executedQty), parseDecimal('0')) < 0 ||
+    decimalCompare(canonicalDecimal(n.cummulativeQuoteQty), parseDecimal('0')) < 0 ||
+    wireInteger(n.time) > wireInteger(n.updateTime)
+  )
+    return fail('INVALID_RESPONSE');
+  timestampSchema.parse(wireInteger(n.time));
+  timestampSchema.parse(wireInteger(n.updateTime));
+  if (n.workingTime !== undefined) timestampSchema.parse(wireInteger(n.workingTime));
+}
+
 /** A serialization helper is not authorization. Only Core's one-use permit may reach I/O. */
 export function serializeBinanceAmendment(c: InPlaceAmendment, symbol: string): RestSpec {
   return immutable({

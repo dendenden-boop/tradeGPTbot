@@ -64,6 +64,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
     body?: Readonly<Record<string, string | number | boolean>>,
     onDispatch?: () => void,
     expTime?: number,
+    dispatchGate?: () => Promise<boolean>,
   ) {
     account();
     return pub.client.call(
@@ -73,6 +74,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
         ...(params === undefined ? {} : { params }),
         ...(body === undefined ? {} : { body }),
         ...(onDispatch === undefined ? {} : { onDispatch }),
+        ...(dispatchGate === undefined ? {} : { beforeDispatch: dispatchGate }),
         ...(expTime === undefined ? {} : { expTime }),
         ...(params?.instId === undefined && body?.instId === undefined
           ? {}
@@ -115,6 +117,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
     operation: MutationOperation,
     raw: unknown,
     context: RequestContext,
+    dispatchGate?: () => Promise<boolean>,
   ): Promise<unknown> {
     const input = object(raw);
     if (operation === 'cancelAllOrders') {
@@ -257,6 +260,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
           dispatched = true;
         },
         operation === 'createOrder' ? expTime : undefined,
+        dispatchGate,
       );
       return mutationOutcome(response, authorization.commandId, operation, body);
     } catch (error) {
@@ -273,6 +277,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
       operation: ReadOperation | MutationOperation,
       raw: unknown,
       context: RequestContext,
+      dispatchGate?: () => Promise<boolean>,
     ): Promise<unknown> {
       const input = object(raw);
       if (
@@ -289,7 +294,7 @@ export function createPrivateTransport(options: PrivateTransportOptions) {
           'cancelAllAlgoOrders',
         ].includes(operation)
       )
-        return mutation(operation as MutationOperation, input, context);
+        return mutation(operation as MutationOperation, input, context, dispatchGate);
       account();
       await syncTime(context);
       const evidence = await accountEvidence(context);

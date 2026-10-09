@@ -94,6 +94,7 @@ export interface RestSpec {
     context: IoContext,
   ) => Promise<Readonly<Record<string, string>>>;
   readonly onDispatch?: () => void;
+  readonly beforeDispatch?: () => Promise<boolean>;
   readonly symbol?: string;
   readonly expTime?: number;
 }
@@ -153,6 +154,9 @@ export function createRestClient(
       if (now() < backoffUntil) throw new OkxProtocolError('RATE_LIMITED');
       if (spec.expTime !== undefined && now() >= spec.expTime)
         throw new OkxProtocolError('DEADLINE_EXCEEDED');
+      if (spec.beforeDispatch && (await boundedPort(spec.beforeDispatch, context, now)) !== true)
+        throw new OkxProtocolError('AUTHORIZATION_REQUIRED');
+      assertActive(context, now);
       spec.onDispatch?.();
       const response = await io.request(
         {
