@@ -2,7 +2,7 @@
 
 ## Review boundary
 
-Reviewed on 9 October 2026 after the runtime repairs, against accepted source 0b3208dd92d6be5203432dfc781c3aa73c1f8ff6 and the conservative collateral observer candidate. The original audit starts at 09b7be0a256cd4eba9558b5cb6b05fd0904d9e51; current remote main is 1eb1d82bec15125a6159199c6f4cffb0bf3958e2. Source acceptance and exact promoted-main CI are separate. This review does not itself declare the phase gate.
+Reviewed on 9 October 2026 against complete accepted source b983c1c87aa21ac2725e22d6776d0290f2fc5ace and runtime main 296972e7a428bfcb60227c84434ab51debd519aa. The audit starts at 09b7be0a256cd4eba9558b5cb6b05fd0904d9e51. Accepted runtime main **296972e7a428bfcb60227c84434ab51debd519aa** passed [full CI 37927232601](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37927232601) and [CodeQL 37927232580](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37927232580). All Ubuntu/Windows/real-services jobs completed successfully; native PostgreSQL ran inside the real-services job, rather than a skipped substitute. Artifacts/logs were verified **2026-10-09T12:17:28.946Z**; CI completed **2026-10-09T12:16:49Z**. Full evidence is in [verification](verification.md) and [completion](completion.md).
 
 The user explicitly accepted conservative unreflected holds on 9 October. Positive native credit is disabled; the unproven partial-credit draft is excluded from runtime. See the [exchange-side evidence limitation](native-collateral-evidence.md).
 
@@ -45,4 +45,4 @@ Crash/restart/concurrency evidence includes permanent replay/conflict, cross-acc
 - The inspected GitHub branch-protection/rules APIs reported no protection. Required OS/native/Docker checks are executed and verified, but administrative enforcement/no-bypass is a manual operational requirement, not claimed as configured.
 - Password-only ADMIN/requiresMfa interactive login remains unavailable and fail-closed until a complete MFA flow is implemented.
 
-All remaining source/main CI, deployment, frozen-lock, published-migration and security evidence must be attached to verification before READY FOR PHASE 13. PHASE 13 is not started by this review.
+Complete source/main CI, deployment, frozen-lock, published-migration and security evidence is attached to verification. **READY FOR PHASE 13** under the explicitly approved conservative collateral limitation. LIVE remains disabled; PHASE 13 has not started. Positive native credit remains disabled; full principal/fee/UNKNOWN holds are retained.

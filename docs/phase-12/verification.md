@@ -1,12 +1,22 @@
 # PHASE 12 verification
 
-## Accepted completion source — exact main acceptance pending
+## Final accepted runtime — 9 October 2026
+
+Accepted runtime main **296972e7a428bfcb60227c84434ab51debd519aa** passed [full CI 37927232601](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37927232601) and [CodeQL 37927232580](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37927232580). All Ubuntu/Windows/real-services jobs completed successfully; native PostgreSQL ran inside the real-services job, rather than a skipped substitute. Artifacts/logs were verified **2026-10-09T12:17:28.946Z**; CI completed **2026-10-09T12:16:49Z**.
+
+**3033 unit / 41 HTTP per OS; 666 native PostgreSQL plus one populated published-19 upgrade; owner repeats 14/95; 3744 distinct cases; eleven clean deployments per OS; three dependency lifecycle cases; 46 authenticated Docker requests, 334ms shutdown.** No failures or skips; dependency audit is zero at every severity, secret/license/SBOM checks and CodeQL security-extended remain enabled. All 34 canonical migration objects and the frozen lock match.
+
+**READY FOR PHASE 13** under the explicitly approved conservative collateral limitation. LIVE remains disabled; PHASE 13 has not started. Positive native credit remains disabled; full principal/fee/UNKNOWN holds are retained. The [completion report](completion.md) lists confirmed findings, runtime commits, additive migrations and limits; the [final authority review](final-authority-review.md) covers the entire chain. Certified sources, atomic reservations, Portfolio holds, final dispatch, certified CANCEL and native AMEND lifecycle are accepted together. The conservative COLLATERAL case passed both ordinary and non-BYPASSRLS owner runs, preserving full hold/reservation/book/ledger through repeated observation and Portfolio restart. No native credit publisher, grant or migration 35 was added.
+
+Final report changes are documentation only. Publication is followed by a fresh full CI/CodeQL on that documentation HEAD; final handoff requires those runs to succeed and their artifacts to be verified. This file cites the already verified runtime, rather than claiming a future run result. The sections below are historical source/checkpoint chronology and do not change this runtime acceptance.
+
+## Historical accepted source — before main promotion
 
 Source **b983c1c87aa21ac2725e22d6776d0290f2fc5ace** passed [full CI 37924977819](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37924977819), completed **2026-10-09T11:54:52Z**, [native PostgreSQL 37924977765](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37924977765) and CodeQL 37924978037. Complete artifacts/logs verified **2026-10-09T11:55:54.671Z**: all Ubuntu/Windows/real-services jobs succeeded; **3033 unit / 41 HTTP** per OS; **666 native PostgreSQL plus one populated upgrade**, zero failures/skips; owner repeats **14/95**; eleven clean deployments per OS; three dependency lifecycle cases; **3744 distinct cases**; 46 Docker authenticated requests and 317ms shutdown. The conservative native COLLATERAL assembly case passed in both ordinary and non-BYPASSRLS-owner runs, retaining the full hold/reservation/book/ledger through repeated observation and Portfolio port restart. Full audit severity counts are zero; all 34 canonical migration objects and frozen lock match. Actual CodeQL alert query returns no open findings and preserves only the authorized dismissals.
 
 This accepts the complete runtime source and [final authority review](final-authority-review.md) with the explicitly approved conservative collateral limitation. No positive credit, additional migration or grant was introduced; the unproven draft is excluded. Certified CANCEL, initial Binance native AMEND and cross-adapter final handoff are included in this source. Exact promoted-main CI remains mandatory; current main is still 1eb1d82, gate **NOT READY FOR PHASE 13**, LIVE disabled, PHASE 13 not started.
 
-## Current completion candidate — 9 October 2026
+## Historical completion candidate — before source acceptance
 
 Remote/local main was reconfirmed as **1eb1d82bec15125a6159199c6f4cffb0bf3958e2**. Latest accepted source **0b3208dd92d6be5203432dfc781c3aa73c1f8ff6** has full CI/native/CodeQL acceptance recorded below. Its certified CANCEL/native profile/final-handoff repairs are not yet promoted to main. The [final authority review](final-authority-review.md) records the separate complete chain and direct-mutation/SQL review. Earlier sections below are historical checkpoints; descriptions of then-missing modules do not override the accepted current substrate.
 
@@ -16,7 +26,7 @@ Read-only observation RED contracts have 19 absent native eligibility-validator 
 
 Full local validation finished **2026-10-09T11:34:37.612Z**: format/docs/lint/typecheck, **3033 unit / 41 HTTP**, db:validate/build/runtime, eleven clean deployments, dependency audit zero (including the full audit JSON), secrets and supply-chain checks. Evidence: phase12-completion-local-full.json and command reports. CodeQL read-only review confirms alerts 1/8/9 fixed; only user-authorized 2–6 false positives and 7 used-in-tests are dismissed. No scanner/query/path suppression was introduced. Published migrations 1–34 and frozen lock remain unchanged. Full exact candidate/main CI remains required; current gate **NOT READY FOR PHASE 13**, LIVE disabled, PHASE 13 not started.
 
-## Current PHASE 4–12 hardening work
+## Historical initial PHASE 4–12 hardening work
 
 Fresh main baseline: 09b7be0a256cd4eba9558b5cb6b05fd0904d9e51, unchanged from origin/main after fetch on 7 October 2026. Full local baseline passed 2734 unit / 41 HTTP and all normal checks/deployments/audit (phase12-cross-phase-baseline-full.json). The [cross-phase audit](cross-phase-audit.md) records actual RED reproductions for stream history exhaustion, private equal-time conflict, Binance equal-sequence book conflict and worker physical HTTP timeout, followed by targeted GREEN.
 
