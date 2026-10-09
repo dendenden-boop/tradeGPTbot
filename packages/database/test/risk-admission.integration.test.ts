@@ -811,6 +811,204 @@ it('expired unused AMEND control releases only zero delta and cannot exhaust the
     ).rowCount,
   ).toBe(0);
 });
+type RecoveryStore = OrderStore & { recoverUnsent: OrderStore['read'] };
+it('expired undispatched AMEND recovers NOT_SENT once across restart without releasing primary collateral', async () => {
+  const f = await amendmentFixture();
+  const grant = await (await open()).approve(f.amendmentInput, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(1, grant.expiresAt - Date.now() + 25)),
+  );
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  const [first, second] = await Promise.all([
+    (restarted as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io()),
+    (orders as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io()),
+  ]);
+  expect(first).toEqual(second);
+  expect(first).toMatchObject({
+    activeAttemptId: null,
+    activeOperation: null,
+    reconciliation: 'REQUIRED',
+  });
+  expect(first.command).toEqual(f.created.command);
+  expect(
+    await (restarted as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io()),
+  ).toEqual(first);
+  const attempt = (
+    await admin.query<{
+      status: string;
+      responseCode: string;
+      permitConsumedAt: Date | null;
+      transportStartedAt: Date | null;
+    }>(
+      'SELECT status,"responseCode","permitConsumedAt","transportStartedAt" FROM public.submission_attempt WHERE id=$1',
+      [claim.attemptId],
+    )
+  ).rows[0];
+  expect(attempt).toEqual({
+    status: 'REJECTED',
+    responseCode: 'NOT_SENT',
+    permitConsumedAt: null,
+    transportStartedAt: null,
+  });
+  const after = await bridgeState(f);
+  expect(after.reservation.amount).toBe('5.005');
+  expect(after.state.holds).toEqual([
+    expect.objectContaining({ id: f.grant.reservationId, amount: '5.005' }),
+  ]);
+  expect(
+    (
+      await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+        grant.reservationId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RELEASED' }]);
+  expect(
+    await restarted.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io()),
+  ).toBeNull();
+  expect(
+    (
+      await admin.query(
+        'SELECT count(*)::integer n FROM ctp_execution.authoritative_event WHERE "tenantId"=$1 AND "orderId"=$2 AND identity=$3',
+        [f.key.binding.tenantId, f.created.id, `result:${claim.attemptId}`],
+      )
+    ).rows,
+  ).toEqual([{ n: 1 }]);
+  await expect(
+    (restarted as RecoveryStore).recoverUnsent(
+      { ...f.key.binding, accountId: randomUUID() },
+      f.created.id,
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_BINDING_DENIED');
+});
+it('unexpired undispatched AMEND cannot be recovered as NOT_SENT', async () => {
+  const f = await amendmentFixture();
+  const grant = await (await open()).approve(f.amendmentInput, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+  const before = await bridgeState(f);
+  expect(await (orders as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io())).toEqual(
+    claim.state,
+  );
+  expect(await bridgeState(f)).toEqual(before);
+});
+it('newer Order gap cannot permanently block expired unconsumed AMEND recovery', async () => {
+  const f = await amendmentFixture();
+  const grant = await (await open()).approve(f.amendmentInput, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+  await orders.gap(f.key.binding, f.created.id, io());
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(1, grant.expiresAt - Date.now() + 25)),
+  );
+  const result = await (orders as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io());
+  expect(result.activeAttemptId).toBeNull();
+  expect(result.reconciliation).toBe('REQUIRED');
+  expect((await bridgeState(f)).reservation.amount).toBe('5.005');
+});
+it('real lost COMMIT of AMEND unsent recovery preserves durable NOT_SENT and released zero hold across restart', async () => {
+  const f = await amendmentFixture();
+  const grant = await (await open()).approve(f.amendmentInput, io());
+  const claim = await orders.begin(f.key.binding, f.created.id, f.amendment.intentId, grant, io());
+  if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(1, grant.expiresAt - Date.now() + 25)),
+  );
+  const proxy = await registryCommitProxy(
+    options('DATABASE_EXECUTION_URL').connectionString,
+    'UNSENT_RECOVERY',
+  );
+  const interrupted = await createPostgresOrderStore({
+    connectionString: proxy.connectionString,
+    environment: 'test',
+  });
+  try {
+    proxy.arm();
+    await expect(
+      (interrupted as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io()),
+    ).rejects.toThrow();
+    expect(proxy.dropped()).toBe(1);
+  } finally {
+    await interrupted.close();
+    await proxy.close();
+  }
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  const durable = await restarted.read(f.key.binding, f.created.id, io());
+  expect(durable).toMatchObject({ activeAttemptId: null, reconciliation: 'REQUIRED' });
+  const before = await bridgeState(f);
+  expect(before.reservation.amount).toBe('5.005');
+  expect(before.state.holds).toHaveLength(1);
+  expect(
+    await (restarted as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io()),
+  ).toEqual(durable);
+  expect(await bridgeState(f)).toEqual(before);
+  expect(
+    (
+      await admin.query('SELECT status,"responseCode" FROM public.submission_attempt WHERE id=$1', [
+        claim.attemptId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'REJECTED', responseCode: 'NOT_SENT' }]);
+});
+it.each(['DISPATCHING', 'UNKNOWN'] as const)(
+  'expired started AMEND %s retains its attempt and both holds during unsent recovery',
+  async (kind) => {
+    const f = await amendmentFixture();
+    const grant = await (await open()).approve(f.amendmentInput, io());
+    const claim = await orders.begin(
+      f.key.binding,
+      f.created.id,
+      f.amendment.intentId,
+      grant,
+      io(),
+    );
+    if (!claim) throw new Error('MISSING_AMEND_CLAIM');
+    expect(
+      await orders.authorize(
+        'amendOrder',
+        {
+          command: claim.command,
+          authorization: {
+            commandId: claim.intentId,
+            commandHash: claim.commandHash,
+            dispatchAttemptId: claim.attemptId,
+            profile: f.key.binding.profile,
+            account: f.native.account,
+            issuedAt: Date.now(),
+            expiresAt: grant.expiresAt,
+          },
+        },
+        {
+          ...io(),
+          profile: f.key.binding.profile,
+          account: f.native.account,
+          correlationId: randomUUID(),
+        },
+      ),
+    ).toBe(true);
+    if (kind === 'UNKNOWN')
+      await orders.result(
+        f.key.binding,
+        claim,
+        { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+        io(),
+      );
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.max(1, grant.expiresAt - Date.now() + 25)),
+    );
+    const before = await bridgeState(f),
+      state = await orders.read(f.key.binding, f.created.id, io());
+    expect(
+      await (orders as RecoveryStore).recoverUnsent(f.key.binding, f.created.id, io()),
+    ).toEqual(state);
+    expect(await bridgeState(f)).toEqual(before);
+    expect(state.activeAttemptId).toBe(claim.attemptId);
+  },
+);
 it.each(['ACK', 'UNKNOWN'] as const)(
   'native AMEND has a durable one-use attempt and retains primary collateral after %s across restart',
   async (kind) => {

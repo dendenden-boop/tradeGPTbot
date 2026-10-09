@@ -803,6 +803,61 @@ export async function createPostgresOrderStore(options: {
         };
       });
     },
+    recoverUnsent(rawB: OrderBinding, id: string, c: IoContext) {
+      const b = bindingSchema.parse(rawB);
+      z.uuid().parse(id);
+      return tx(b, c, async (p) => {
+        await owner(p, b, true);
+        let s = await read(p, b, id, true);
+        const pending = await p.query<{ id: string }>(
+          `SELECT a.id FROM public.submission_attempt a JOIN ctp_execution.command k
+            ON k."tenantId"=a."tenantId" AND k."intentId"=a."intentId" AND k."orderId"=a."orderId"
+           WHERE a."tenantId"=$1 AND a."orderId"=$2 AND a.id=$3 AND a.operation='AMEND'
+            AND k.operation=a.operation AND k.binding=$4 AND a."commandHash"=k."commandHash"
+            AND a."accountId"=$5 AND a.mode=$6 AND a."instrumentId"=$7
+            AND a.status='DISPATCHING' AND a."permitProtocolVersion"=2
+            AND a."permitConsumedAt" IS NULL AND a."transportStartedAt" IS NULL
+            AND a."responseReceivedAt" IS NULL AND a."responseCode" IS NULL
+            AND a."resolvedAt" IS NULL AND a."deadlineAt"<=clock_timestamp()
+            AND a."operationVersion"<=$8 AND EXISTS(
+              SELECT 1 FROM ctp_execution.authoritative_event e WHERE e."tenantId"=a."tenantId"
+               AND e."orderId"=a."orderId" AND e.identity='dispatch:'||a.id::text
+               AND e.payload::jsonb=jsonb_build_object('type','DISPATCH','operation','AMEND','attemptId',a.id::text)
+               AND e.fingerprint=sha256(convert_to(e.payload,'UTF8')))
+            FOR UPDATE OF a`,
+          [
+            b.tenantId,
+            id,
+            s.activeAttemptId,
+            canonical(b),
+            b.accountId,
+            b.mode,
+            s.draft.dbInstrumentId,
+            s.version,
+          ],
+        );
+        const attempt = pending.rows[0];
+        if (!attempt) return s;
+        const outcome = {
+          kind: 'DEFINITIVELY_REJECTED' as const,
+          error: { code: 'AUTHORIZATION_REQUIRED' as const },
+        };
+        s = await apply(
+          p,
+          s,
+          { type: 'RESULT', operation: 'AMEND', attemptId: attempt.id, outcome },
+          `result:${attempt.id}`,
+        );
+        // Absence of dispatch proves NOT_SENT; it does not certify current native state.
+        s = await apply(p, s, { type: 'GAP' }, `unsent:${attempt.id}`);
+        await p.query(
+          `UPDATE public.submission_attempt SET status='REJECTED',"responseReceivedAt"=now(),
+           "resolvedAt"=now(),"responseCode"='NOT_SENT',"evidenceHash"=$1 WHERE "tenantId"=$2 AND id=$3`,
+          [bytes(hash(outcome)), b.tenantId, attempt.id],
+        );
+        return s;
+      });
+    },
     result(rawB: OrderBinding, claim: DispatchClaim, raw: unknown, c: IoContext) {
       const b = bindingSchema.parse(rawB),
         outcome = mutationOutcomeSchema.parse(raw);
