@@ -45,6 +45,7 @@ const expectedMigrations = [
   '202610090001_native_amend_source_clock',
   '202610090002_certified_native_cancel',
   '202610090003_paper_configuration',
+  '202610090004_paper_configuration_seal',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -124,6 +125,7 @@ const databases = [
   `ctp_p2_upgrade_${suffix}`,
   `ctp_p2_owner_${suffix}`,
   `ctp_p2_lifecycle_${suffix}`,
+  `ctp_p2_paper_upgrade_${suffix}`,
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
@@ -329,7 +331,7 @@ try {
   );
   for (const name of databases) {
     await admin.query(
-      `CREATE DATABASE ${identifier(name)}${name === databases[2] ? ` OWNER ${identifier(ownerRole)}` : ''}`,
+      `CREATE DATABASE ${identifier(name)}${name === databases[2] || name === databases[4] ? ` OWNER ${identifier(ownerRole)}` : ''}`,
     );
   }
   await migrate(databases[0]);
@@ -1403,6 +1405,99 @@ try {
   assert.equal(paperConfigurationOwner.numPendingTests, 0);
   assert.ok(paperConfigurationOwner.numPassedTests >= 30);
 
+  // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
+  // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
+  const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
+  const paperMigrations = path.join(paperPrior, 'migrations');
+  await mkdir(paperMigrations);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations/migration_lock.toml'),
+    path.join(paperMigrations, 'migration_lock.toml'),
+  );
+  for (const migration of expectedMigrations.slice(0, 35))
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', migration),
+      path.join(paperMigrations, migration),
+      { recursive: true },
+    );
+  const paperConfig = path.join(paperPrior, 'prisma.config.ts');
+  await writeFile(
+    paperConfig,
+    `import {defineConfig} from ${JSON.stringify(databaseRequire.resolve('prisma/config'))};
+export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packages/database/prisma/schema.prisma'))},migrations:{path:${JSON.stringify(paperMigrations)}},datasource:{url:process.env.DATABASE_MIGRATION_URL}});\n`,
+  );
+  await migrate(databases[4], paperConfig, true);
+  const paperUpgrade = connect(dbUrl(databases[4]));
+  const paperInput = {
+    id: randomUUID(),
+    owner: { tenantId: randomUUID(), accountId: randomUUID(), mode: 'PAPER' },
+    source: { exchange: 'BINANCE', region: 'global', market: 'SPOT', environment: 'LIVE' },
+    valuationAsset: 'USDT',
+    model: {
+      version: 'spot-l2-taker-v1',
+      seed: '9007199254740993',
+      takerFeeRate: '0.001',
+      maxSlippageRate: '0',
+      latencyMs: 100,
+      latencyJitterMs: 0,
+      participationRate: '0.5',
+      maxEvidenceAgeMs: 5000,
+    },
+  };
+  await paperUpgrade.query(
+    'INSERT INTO public."user"(id,"emailNormalized",status,"emailVerifiedAt","updatedAt") VALUES($1,$2,\'ACTIVE\',now(),now())',
+    [paperInput.owner.tenantId, `${paperInput.owner.tenantId}@example.invalid`],
+  );
+  await paperUpgrade.query(
+    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE','PAPER',$3,'global','SIMULATED','ACTIVE','paper-upgrade',now())`,
+    [paperInput.owner.accountId, paperInput.owner.tenantId, `paper:${paperInput.owner.accountId}`],
+  );
+  const { createPostgresPaperConfiguration } = await import(
+    pathToFileURL(path.join(workspace, 'packages/paper-engine/dist/configuration.js'))
+  );
+  const legacyPaperStore = await createPostgresPaperConfiguration({
+    connectionString: paperConfigurationUrl(databases[4]),
+    environment: 'test',
+  });
+  let legacyPaperReceipt;
+  try {
+    legacyPaperReceipt = await legacyPaperStore.register(paperInput, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+  } finally {
+    await legacyPaperStore.close();
+  }
+  await migrate(databases[4], config, true);
+  const sealedPaperStore = await createPostgresPaperConfiguration({
+    connectionString: paperConfigurationUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    assert.deepEqual(
+      await sealedPaperStore.read(paperInput.owner, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      legacyPaperReceipt,
+    );
+  } finally {
+    await sealedPaperStore.close();
+  }
+  assert.equal(
+    (await paperUpgrade.query('SELECT count(*)::int n FROM ctp_paper.configuration_seal')).rows[0]
+      .n,
+    1,
+  );
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        "SELECT count(*)::int n FROM pg_policies WHERE policyname IN('paper_seal_upgrade_read','paper_seal_upgrade_write')",
+      )
+    ).rows[0].n,
+    0,
+  );
+
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -1588,6 +1683,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration')).rows[0].n,
     0,
   );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration_seal')).rows[0].n,
+    0,
+  );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -1627,6 +1726,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     riskAdmissionNonBypassOwner: 'PASS',
     riskLifecyclePopulatedUpgradeFromPublished19: 'PASS',
     paperConfigurationNonBypassOwner: 'PASS',
+    paperConfigurationPopulatedUpgradeFromPublished35: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

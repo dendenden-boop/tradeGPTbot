@@ -188,7 +188,7 @@ pnpm test:smoke
 
 ## PHASE 12: принятый runtime
 
-**READY FOR PHASE 13**. LIVE remains disabled; PHASE 13 has not started. Native AMEND is supported only by Binance Spot TESTNET standalone LIMIT/GTC cumulative quantity decrease at unchanged price, with preserved native order ID and a new server client ID. Other profiles remain UNSUPPORTED. Conservative principal/fee/UNKNOWN holds remain; positive native credit is disabled. Real private exchange tests and production soak are not claimed. [Финальная приёмка](docs/phase-12/completion.md) включает certified CANCEL, native AMEND, final handoff и conservative collateral. [Защита main](docs/phase-12/housekeeping.md) подтверждена GitHub API; изменения проходят через PR и required checks.
+**READY FOR PHASE 13** is the accepted PHASE 12 handoff. LIVE remains disabled; PHASE 13 is in progress with its financial gateway still disabled and gate **NOT READY FOR PHASE 14**. Native AMEND is supported only by Binance Spot TESTNET standalone LIMIT/GTC cumulative quantity decrease at unchanged price, with preserved native order ID and a new server client ID. Other profiles remain UNSUPPORTED. Conservative principal/fee/UNKNOWN holds remain; positive native credit is disabled. Real private exchange tests and production soak are not claimed. [Финальная приёмка](docs/phase-12/completion.md) включает certified CANCEL, native AMEND, final handoff и conservative collateral. [Защита main](docs/phase-12/housekeeping.md) подтверждена GitHub API; изменения проходят через PR и required checks.
 
 ### Исторические increments до финальной приёмки
 

@@ -188,6 +188,13 @@ it.each(['UPDATE', 'DELETE', 'TRUNCATE'])(
           ? 'DELETE FROM ctp_paper.configuration WHERE id=$1'
           : 'TRUNCATE ctp_paper.configuration';
     await expect(admin.query(query, operation === 'TRUNCATE' ? [] : [c.id])).rejects.toThrow();
+    const sealQuery =
+      operation === 'UPDATE'
+        ? 'UPDATE ctp_paper.configuration_seal SET receipt_hash=receipt_hash WHERE id=$1'
+        : operation === 'DELETE'
+          ? 'DELETE FROM ctp_paper.configuration_seal WHERE id=$1'
+          : 'TRUNCATE ctp_paper.configuration_seal';
+    await expect(admin.query(sealQuery, operation === 'TRUNCATE' ? [] : [c.id])).rejects.toThrow();
   },
 );
 it.each([
@@ -344,3 +351,55 @@ it('four hung operations are bounded, excess work is BUSY and aborted slots beco
     lock.release();
   }
 });
+it.each(['receipt', 'request'] as const)(
+  'conflicting persisted %s cannot become a fresh model after restart',
+  async (part) => {
+    const c = await fixture(),
+      store = await open();
+    await store.register(c, io());
+    await store.close();
+    const row = (
+      await admin.query<{ receipt_text: string; request: unknown }>(
+        'SELECT receipt_text,request FROM ctp_paper.configuration WHERE id=$1',
+        [c.id],
+      )
+    ).rows[0];
+    if (!row) throw new Error('MISSING_CORRUPTION_FIXTURE');
+    const p = await admin.connect();
+    try {
+      await p.query('BEGIN');
+      await p.query("SET LOCAL session_replication_role='replica'");
+      await p.query(
+        part === 'receipt'
+          ? `UPDATE ctp_paper.configuration SET receipt_text=jsonb_set(receipt_text::jsonb,'{configuration,model,takerFeeRate}','"0.002"')::text WHERE id=$1`
+          : `UPDATE ctp_paper.configuration SET request=jsonb_set(request,'{model,takerFeeRate}','"0.002"') WHERE id=$1`,
+        [c.id],
+      );
+      await p.query('COMMIT');
+      const restarted = await open();
+      await expect(restarted.read(c.owner, io())).rejects.toThrow('PAPER_CONFIGURATION_CORRUPT');
+      if (part === 'receipt') {
+        // Coherent rewritten request/receipt must still disagree with the
+        // independent original seal; request equality alone is insufficient.
+        await p.query('BEGIN');
+        await p.query("SET LOCAL session_replication_role='replica'");
+        await p.query(
+          `UPDATE ctp_paper.configuration SET request=jsonb_set(request,'{model,takerFeeRate}','"0.002"') WHERE id=$1`,
+          [c.id],
+        );
+        await p.query('COMMIT');
+        await expect(restarted.read(c.owner, io())).rejects.toThrow('PAPER_CONFIGURATION_CORRUPT');
+      }
+    } finally {
+      await p.query('ROLLBACK');
+      await p.query('BEGIN');
+      await p.query("SET LOCAL session_replication_role='replica'");
+      await p.query(
+        'UPDATE ctp_paper.configuration SET receipt_text=$2,request=$3::jsonb WHERE id=$1',
+        [c.id, row.receipt_text, JSON.stringify(row.request)],
+      );
+      await p.query('COMMIT');
+      p.release();
+    }
+  },
+);
