@@ -357,6 +357,35 @@ export async function createPostgresOrderStore(options: {
     await publish(p, next, event.type, identity, fp, s.status);
     return next;
   }
+  async function observeNative(
+    p: PoolClient,
+    s: OrderState,
+    order: ReturnType<typeof orderSchema.parse>,
+  ) {
+    let identity = `native:${order.updatedAt}`;
+    if (s.effectiveCommand !== undefined) {
+      const event = { type: 'NATIVE' as const, order };
+      const qualified = await p.query<{ identity: string }>(
+        `SELECT e.identity FROM ctp_execution.amendment_head h JOIN ctp_execution.amendment_application j
+         USING("tenantId","orderId",sequence) JOIN ctp_execution.authoritative_event e
+          ON e."tenantId"=j."tenantId" AND e."orderId"=j."orderId"
+           AND e.identity='native:'||($3::bigint)::text||':amend:'||j."intentId"::text
+         WHERE h."tenantId"=$1 AND h."orderId"=$2 AND j."nativeHash"=$4 AND j.proof->'order'=$5::jsonb
+          AND e.fingerprint=$6 AND e.payload=$7`,
+        [
+          s.binding.tenantId,
+          s.id,
+          order.updatedAt,
+          bytes(hash(order)),
+          canonical(order),
+          bytes(hash(event)),
+          canonical(event),
+        ],
+      );
+      if (qualified.rows[0]) identity = qualified.rows[0].identity;
+    }
+    return apply(p, s, { type: 'NATIVE', order }, identity);
+  }
   async function insertIntent(
     p: PoolClient,
     b: OrderBinding,
@@ -803,6 +832,48 @@ export async function createPostgresOrderStore(options: {
         };
       });
     },
+    pendingAmendment(rawB: OrderBinding, id: string, c: IoContext) {
+      const b = bindingSchema.parse(rawB);
+      z.uuid().parse(id);
+      return tx(b, c, async (p) => {
+        await owner(p, b);
+        const state = await read(p, b, id);
+        if (state.activeOperation !== 'AMEND' || state.activeAttemptId === null) return null;
+        const rows = await p.query<{
+          id: string;
+          intentId: string;
+          command: string;
+          commandHash: Buffer;
+          expiresAt: string;
+        }>(
+          `SELECT a.id,a."intentId",k.command,k."commandHash",(extract(epoch FROM a."deadlineAt")*1000)::bigint::text AS "expiresAt"
+           FROM public.submission_attempt a JOIN ctp_execution.command k ON k."tenantId"=a."tenantId" AND k."intentId"=a."intentId" AND k."orderId"=a."orderId"
+           WHERE a."tenantId"=$1 AND a."orderId"=$2 AND a.id=$3 AND a.operation='AMEND' AND k.operation=a.operation
+            AND k.binding=$4 AND a."commandHash"=k."commandHash" AND a."accountId"=$5 AND a.mode=$6
+            AND a."instrumentId"=$7 AND a.status IN('DISPATCHING','ACKNOWLEDGED','UNKNOWN')`,
+          [
+            b.tenantId,
+            id,
+            state.activeAttemptId,
+            canonical(b),
+            b.accountId,
+            b.mode,
+            state.draft.dbInstrumentId,
+          ],
+        );
+        const row = rows.rows[0];
+        if (!row) throw new Error('ORDER_BINDING_DENIED');
+        return {
+          state,
+          intentId: row.intentId,
+          attemptId: row.id,
+          operation: 'AMEND' as const,
+          command: inPlaceAmendmentSchema.parse(JSON.parse(row.command) as unknown),
+          commandHash: row.commandHash.toString('hex'),
+          expiresAt: z.number().int().safe().parse(Number(row.expiresAt)),
+        };
+      });
+    },
     recoverUnsent(rawB: OrderBinding, id: string, c: IoContext) {
       const b = bindingSchema.parse(rawB);
       z.uuid().parse(id);
@@ -944,7 +1015,7 @@ export async function createPostgresOrderStore(options: {
         await owner(p, b, true);
         const s = await read(p, b, id, true);
         if (s.status === 'CREATED') throw new Error('ORDER_TRANSITION');
-        const n = await apply(p, s, { type: 'NATIVE', order }, `native:${order.updatedAt}`);
+        const n = await observeNative(p, s, order);
         if (
           n.lastExchangeAt !== s.lastExchangeAt &&
           order.status !== 'UNKNOWN' &&
@@ -973,7 +1044,7 @@ export async function createPostgresOrderStore(options: {
         let s = await read(p, b, id, true);
         if (order.updatedAt > Date.now() || s.status === 'CREATED')
           throw new Error('ORDER_HISTORY_REQUIRED');
-        s = await apply(p, s, { type: 'NATIVE', order }, `native:${order.updatedAt}`);
+        s = await observeNative(p, s, order);
         if (s.lastObservationHash !== hash(order)) throw new Error('ORDER_HISTORY_REQUIRED');
         const n = await apply(p, s, { type: 'COMPLETE' }, `complete:${s.version}`);
         await p.query(

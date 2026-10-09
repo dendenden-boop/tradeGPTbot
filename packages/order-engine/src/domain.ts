@@ -218,6 +218,12 @@ export interface OrderStore {
   read(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
   /** Recover only an expired protocol-2 AMEND whose durable transport boundary is absent. */
   recoverUnsent(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
+  /** Read the immutable pending native control; never grants a permit or retries dispatch. */
+  pendingAmendment(
+    binding: OrderBinding,
+    id: string,
+    context: IoContext,
+  ): Promise<DispatchClaim | null>;
   cancelIntent(
     binding: OrderBinding,
     id: string,

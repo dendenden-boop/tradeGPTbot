@@ -103,6 +103,31 @@ it('causal application establishes effective semantics while preserving the orig
   expect(resolved.reconciliation).toBe('CONSISTENT');
   expect(stateSchema.parse(JSON.parse(JSON.stringify(resolved)))).toEqual(resolved);
 });
+it.each(['CLOCK_OFFSET', 'SAME_MILLISECOND'] as const)(
+  'causal native AMEND %s uses source ordering rather than local receipt ordering',
+  (kind) => {
+    const f = fixture();
+    if (f.evidence.kind !== 'APPLIED_EVIDENCE') throw new Error('INVALID_FIXTURE');
+    const sourceTime = kind === 'CLOCK_OFFSET' ? 550 : 500;
+    f.evidence.evidence.time = sourceTime;
+    f.order.updatedAt = sourceTime;
+    const resolved = apply(f);
+    expect(resolved.lastExchangeAt).toBe(sourceTime);
+    expect(resolved.command).toEqual(f.pending.command);
+    expect(resolved.effectiveCommand?.clientOrderId).toBe('2');
+    expect(resolved.reconciliation).toBe('CONSISTENT');
+    expect(() =>
+      reduceOrder(resolved, {
+        type: 'NATIVE',
+        order: {
+          ...f.order,
+          filledQuantity: parseDecimal('1'),
+          averageFillPrice: { state: 'AVAILABLE', value: parseDecimal('100') },
+        },
+      }),
+    ).toThrow('ORDER_OBSERVATION_CONFLICT');
+  },
+);
 it.each([
   'EMPTY',
   'CLIENT',

@@ -130,7 +130,7 @@ export function applyOrderAmendment(
       proof.nativeReceivedAt > now ||
       now - proof.nativeReceivedAt > 5000 ||
       order.updatedAt > proof.nativeReceivedAt ||
-      evidence.evidence.time < command.target.observedAt ||
+      evidence.evidence.time < command.target.nativeUpdatedAt ||
       evidence.evidence.time > evidence.receivedAt ||
       evidence.evidence.time > order.updatedAt ||
       evidence.evidence.exchangeOrderId !== command.locator.locator.id ||
@@ -138,7 +138,7 @@ export function applyOrderAmendment(
       evidence.evidence.newClientOrderId !== command.replacement.clientOrderId ||
       evidence.evidence.originalQuantity !== before.size.value ||
       evidence.evidence.newQuantity !== command.replacement.size.value ||
-      (state.lastExchangeAt !== null && order.updatedAt <= state.lastExchangeAt)
+      (state.lastExchangeAt !== null && order.updatedAt < state.lastExchangeAt)
     )
       throw new Error();
     return reduceOrder(
@@ -147,6 +147,11 @@ export function applyOrderAmendment(
         effectiveCommand: command.replacement,
         activeAttemptId: null,
         activeOperation: null,
+        // Exact causal proof authorizes a distinct identity in the same millisecond.
+        // The returned native clock stays equal; no persisted watermark is reset.
+        ...(order.updatedAt === state.lastExchangeAt
+          ? { lastExchangeAt: null, lastObservationHash: null }
+          : {}),
       },
       { type: 'NATIVE', order },
     );
