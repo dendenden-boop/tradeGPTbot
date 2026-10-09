@@ -1,5 +1,11 @@
 # PHASE 12 verification
 
+## Accepted documentation main and housekeeping baseline — 9 October 2026
+
+Accepted documentation main **754c969dcbe9882417f8ff893b4c2fb96b1c5c3e** passed [CI 37929257903](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37929257903) and [CodeQL 37929257839](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37929257839); the runtime is identical to accepted main 296972e7a428bfcb60227c84434ab51debd519aa. Artifacts verified 2026-10-09T12:34:14.448Z: 3033 unit / 41 HTTP per OS, 666 native PostgreSQL plus populated upgrade, owner repeats 14/95, eleven clean deployments per OS, dependency audit zero and no open CodeQL findings. Docker authenticated smoke made 46 requests; shutdown was 285ms. All three full CI jobs succeeded with no failures/skips. This is the completed acceptance of the documentation publication previously described below as a future check; the runtime remained unchanged. **READY FOR PHASE 13**. LIVE remains disabled; PHASE 13 has not started. Native AMEND is supported only by Binance Spot TESTNET standalone LIMIT/GTC cumulative quantity decrease at unchanged price, with preserved native order ID and a new server client ID. Other profiles remain UNSUPPORTED. Conservative principal/fee/UNKNOWN holds remain; positive native credit is disabled. Real private exchange tests and production soak are not claimed.
+
+Housekeeping starts from this fresh clean main. [Housekeeping / main protection](housekeeping.md) records the API-confirmed configuration and documentation scope. Its own PR/main CI is verified before final handoff; historical runtime acceptance and RED→GREEN evidence below remain unchanged.
+
 ## Final accepted runtime — 9 October 2026
 
 Accepted runtime main **296972e7a428bfcb60227c84434ab51debd519aa** passed [full CI 37927232601](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37927232601) and [CodeQL 37927232580](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37927232580). All Ubuntu/Windows/real-services jobs completed successfully; native PostgreSQL ran inside the real-services job, rather than a skipped substitute. Artifacts/logs were verified **2026-10-09T12:17:28.946Z**; CI completed **2026-10-09T12:16:49Z**.

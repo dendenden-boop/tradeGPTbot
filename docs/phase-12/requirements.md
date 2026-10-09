@@ -31,17 +31,21 @@ The first implementation increment is pure policy evaluation plus the semantic A
 
 Tests/contracts precede implementation. New confirmed defects receive RED reproduction before repair. Published migrations remain immutable; any persistence addition uses a new migration and fresh/upgrade/RLS tests. Complete format/docs/lint/typecheck/unit/HTTP/build/schema/runtime/clean/audit, native PostgreSQL and Ubuntu/Windows/real-services CI are required. **READY FOR PHASE 13** requires every module above, including AMEND, rather than only a green pure-rule suite.
 
-## Durable native Market Data prerequisite
+## Historical implementation checkpoints
+
+The following records preserve original increment scope, RED→GREEN requirements and then-pending acceptance. Their NOT READY/unsupported/missing-module statements describe those checkpoints, not current runtime. Current acceptance above and verification supersede those statuses.
+
+### Durable native Market Data prerequisite
 
 The physical source backend requires a restart-safe Market Data authority, rather than a client-provided RiskSnapshot or volatile ticker/book cache. The new server-only PostgreSQL publisher persists bounded native snapshot pairs and GAP events under the existing ctp_market authority, with exact market/storage environment/instrument/current DB rule identities. Permanent event replay, lossless native ordering, current metadata checks and native clock freshness are mandatory. An unchanged book receipt cannot be refreshed by a newer ticker. This source has no Portfolio/accounting, grant, reservation or exchange mutation authority.
 
 This prerequisite alone does not complete the production RiskSnapshotStore: private Portfolio/permission/position-mode evidence, complete exposure, native valuation/FX/health and loss history provenance still require authoritative composition. Atomic approve/reserve, the Portfolio bridge/release, final current policy/state validation and at least one accepted native AMEND profile remain mandatory. Gate remains **NOT READY FOR PHASE 13** until all are accepted together; LIVE is disabled.
 
-## Deferred transport permit hardening
+### Deferred transport permit hardening
 
 A durable SubmissionAttempt is preparation, not transport permission. New Order Engine attempts must retain null permitConsumedAt/transportStartedAt through claim, restart and a blocked final gate. Known successful final authorization consumes both timestamps atomically once, after the existing GLOBAL → tenant → account/reservation checks. Historical attempts retain their original evidence and a separate legacy protocol version. Definitive rejection with no durable transport boundary records NOT_SENT; UNKNOWN is never inferred safe or released because its timestamp is missing. This fixes one ordering prerequisite; current policy/certificate/health validation and the other production acceptance modules remain mandatory.
 
-## Physical Portfolio source increment (not full coordinator acceptance)
+### Physical Portfolio source increment (not full coordinator acceptance)
 
 The PostgreSQL coordinator backend must use Portfolio's actual books and durable hold watermarks, never a supplied portfolio snapshot or a reconstructed parallel ledger. The new server-only Portfolio reader is one source port toward that backend. It must include every observed owned account in the exact storage mode, preserve disabled account status and native permission/reconciliation epochs, reject missing/unreconciled/stale/corrupt books and conflicting hold history, preserve UNKNOWN and perform no financial write or reservation release. TESTNET and DEMO remain distinct. No complete RiskSnapshot, RiskGrant or default healthy/permission state may be inferred from this port.
 
@@ -49,7 +53,7 @@ Its read transaction is bounded READ COMMITTED, GLOBAL shared lock -> tenant exc
 
 Native cross-phase audit subsequently reproduced account/connection/book inventory changes during an open capture transaction. The additive inventory repair requires GLOBAL -> tenant -> user/FK inventory -> sorted accounts across modes -> scoped connections -> books, with explicit capacities and participating financial writers acquiring GLOBAL/tenant before any book creation. Published migration 015 remains immutable; migration 017 strengthens the function body. Native race/release, direct-role security, unchanged financial upgrade and full CI are mandatory before accepting this repair.
 
-## Native AMEND protocol increment (not lifecycle acceptance)
+### Native AMEND protocol increment (not lifecycle acceptance)
 
 Restart reconciliation must use a common bounded read-only causal-evidence port, not a Binance-only internal helper or an inferred current quantity change. Exact immutable old/new client and quantity scope, application time and lossless execution identity are required. Rules replacement cannot erase recovery access; absence of history cannot resolve UNKNOWN. This prerequisite does not enable AMEND dispatch or replace the durable engine lifecycle.
 
@@ -59,37 +63,37 @@ The Core AMEND command must explicitly classify IN_PLACE, preserved exchange ord
 
 The Binance native implementation is restricted to Spot TESTNET standalone LIMIT/GTC quantity reduction at unchanged price, with native amendAllowed, all known filters, current metadata and dynamic server admission. Native preflight must match exact identity, total quantity, filled quantity and update time; coupled lists, iceberg/SOR and unsupported conditional orders deny. A raced/ambiguous mutation stays UNKNOWN without retry. Native amendment history provides correlated historical application evidence, never final order/fill/release authority or definitive absence. Production AMEND capability stays UNSUPPORTED until immutable intent, Risk delta, atomic holds, attempt/permit, fill-race and restart reconciliation are accepted together. Actual private exchange acceptance is NOT RUN; LIVE remains disabled.
 
-## Populated lifecycle upgrade and mandatory issuance
+### Populated lifecycle upgrade and mandatory issuance
 
 Every new production transport start must require an exact certified atomic issuance; historical/manual Risk rows cannot grant a fallback permit. Gateway and direct execution SQL paths must fail before consumption, preserving NOT_SENT on definitive pre-dispatch denial. Response/reconciliation of historical attempts remains possible without fabricating a new transport boundary. Positive one-use, permission and delayed-expiry tests must use production approval. Native populated published-19 upgrade acceptance must preserve certificate and issuance histories, UNKNOWN reservation/hold ownership, permanent keys and lossless client counters, then recover legacy full-body evidence exactly once after restart. All published migrations remain immutable.
 
-## Native evidence identity hardening
+### Native evidence identity hardening
 
 Before enabling certified AMEND controls, normalized native evidence must bind the exact durable Order and original PLACE intent. A matching exchange/client locator cannot override a conflicting internal mapping. Require unit and real PostgreSQL regressions at both reducer and SQL-writer boundaries, retain UNKNOWN reservation/hold across rejection and restart, and use only an additive migration. Full OS/Docker acceptance is required; LIVE stays disabled.
 
-## Certified native control admission
+### Certified native control admission
 
 An unchanged-price Spot TESTNET LIMIT/GTC quantity decrease must use its actual immutable AMEND intent and current target proof. Atomic approval retains the primary PLACE collateral, independently proves coverage of remaining principal and the current maximum fee, and records a distinct zero-delta decision/reservation/Portfolio commitment. It must count the logical order and monetary exposure once. Exact replay/restart cannot add another commitment or ledger effect; uncertain COMMIT returns no grant. Current policy/rules/permission replacement and native target races must reject before issuance. This admission prerequisite does not enable transport, release collateral on ACK or accept the complete AMEND lifecycle.
 
 Portfolio certification must support an issued hold resolved through the private durable RESOLVE_COMMITMENT lifecycle. The exact event must agree with immutable Portfolio evidence, reservation state and the current hold watermark. A self-reported fingerprint or missing/conflicting resolution is insufficient authority. Legacy COMMITMENT histories and released tombstones remain valid under their existing contracts.
 
-## Certified native control attempt and final gate
+### Certified native control attempt and final gate
 
 The accepted zero-delta AMEND approval must produce a durable attempt before any transport operation, with null permit/start timestamps. Final authorization independently rereads current sources and the exact pending AMEND target; the attempt's own DISPATCH revision may be accounted for only after proving its immutable dispatch event. Policy, permission, native target, health, pause or deadline changes must deny before I/O. Definitive NOT_SENT releases only the zero control commitment; primary collateral remains conservative. ACK and UNKNOWN retain the pending operation and cannot authorize another dispatch or resolve application from an unchanged order snapshot.
 
 An expired ACTIVE zero-delta control with no submission attempt may be durably released to permit another independently certified control. This exception must prove zero amount/notional/reduction and absence of every attempt in the same transaction. It never expires a primary reservation, UNKNOWN, or a control with a possibly dispatched attempt. Released tombstones and immutable evidence remain permanent. Complete native causal application/reconciliation is a separate prerequisite; production AMEND stays disabled until it is accepted.
 
-## Native causal application candidate
+### Native causal application candidate
 
 Durable resolution must correlate the exact consumed AMEND attempt/immutable intent with native application history and a current native Order. Its causal identity remains a lossless string scoped by tenant/account/mode/instrument/exchange order. Empty history, contradictory client/quantity/account, native regression and a filled quantity above the replacement deny. Application history, current effective command, Order progress, attempt resolution and zero-control release must commit together, with original PLACE fields unchanged. Permanent replay/restart cannot add a second application or monetary effect; an uncertain COMMIT returns no successful resolution result.
 
 Effective quantity/client are derived only from the immutable private application journal and bounded current head. Execution may read those records and invoke one fixed scoped function, but cannot insert/update/delete them directly. Current Risk exposure and future AMEND targets use this derived command. Primary collateral decreases only after existing full native/fill/Portfolio coverage proof; the denominator remains the original reserved quantity. This candidate does not enable dispatch or complete PHASE 12 acceptance.
 
-## Expired pre-start native control recovery
+### Expired pre-start native control recovery
 
 A crash after begin but before transport must not leave an expired AMEND permanently DISPATCHING. Recovery must prove the actual protocol-2 attempt, immutable command/dispatch event and absent permit/start/response boundaries against the database clock under the same authority locks. It records durable NOT_SENT once and releases only the zero control hold. It preserves primary collateral and requires current native reconciliation. Later Order revisions cannot invalidate the proof of absent dispatch. An unexpired, started, acknowledged or UNKNOWN attempt never receives this exception. Exact replay, concurrent recovery, restart and real lost COMMIT require PostgreSQL acceptance; no resend of the original intent is allowed.
 
-## Native AMEND service composition candidate
+### Native AMEND service composition candidate
 
 The server service must expose AMEND only through the classified immutable native contract, exact permanent idempotency, current native target, production atomic Risk approval, durable attempt and one-use authorization. Only the proven Binance Spot TESTNET unchanged-price LIMIT/GTC quantity decrease may be considered; an unsupported adapter/profile must reject before intent or Risk. Production capability enablement remains a separate acceptance prerequisite. Reconciliation must recover proven unsent attempts, retrieve the exact durable pending command, use exchange order identity and require causal native history before applying changed quantity/client. Missing history or conflicting fills retains uncertainty and both conservative reservations; there is no resend or fake cancel/create.
 
