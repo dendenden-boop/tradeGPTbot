@@ -35,6 +35,14 @@ export function memoryStore(currentRule = () => 'v1') {
     async recoverUnsent() {
       throw new Error('ORDER_DURABLE_RECOVERY_REQUIRED');
     },
+    async pendingAmendment(b, id, c) {
+      const state = await store.read(b, id, c);
+      const claim = [...claims.values()].find(
+        (v) =>
+          v.state.id === id && v.operation === 'AMEND' && v.attemptId === state.activeAttemptId,
+      );
+      return claim ? structuredClone({ ...claim, state }) : null;
+    },
     async resolveAmendment() {
       throw new Error('ORDER_AMEND_APPLICATION_UNPROVED');
     },

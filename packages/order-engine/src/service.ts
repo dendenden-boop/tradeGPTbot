@@ -5,6 +5,8 @@ import {
   sameMarketScope,
   validateOrderAgainstRules,
   mutationOutcomeSchema,
+  operations,
+  evaluateCapability,
   type ExchangeAdapter,
   type Fill,
   type InstrumentRegistry,
@@ -15,6 +17,8 @@ import {
   draftSchema,
   grantSchema,
   hash,
+  amendDraftSchema,
+  type AmendDraft,
   type OrderBinding,
   type OrderDraft,
   type OrderState,
@@ -23,12 +27,9 @@ import {
   type IoContext,
   type DispatchClaim,
 } from './domain.js';
+export type OrderAction = 'CREATE' | 'READ' | 'SUBMIT' | 'CANCEL' | 'AMEND' | 'RECONCILE';
 export interface OrderAuthorizationPort {
-  check(
-    binding: OrderBinding,
-    action: 'CREATE' | 'READ' | 'SUBMIT' | 'CANCEL' | 'RECONCILE',
-    context: IoContext,
-  ): Promise<boolean>;
+  check(binding: OrderBinding, action: OrderAction, context: IoContext): Promise<boolean>;
 }
 export interface OrderRiskPort {
   approve(
@@ -36,7 +37,7 @@ export interface OrderRiskPort {
       binding: OrderBinding;
       state: OrderState;
       intentId: string;
-      operation: 'PLACE' | 'CANCEL';
+      operation: 'PLACE' | 'CANCEL' | 'AMEND';
       commandHash: string;
     },
     context: IoContext,
@@ -135,13 +136,13 @@ export function createOrderEngine(options: {
       throw new Error('ORDER_METADATA');
     return hash(r.value);
   }
-  async function auth(action: 'CREATE' | 'READ' | 'SUBMIT' | 'CANCEL' | 'RECONCILE', c: IoContext) {
+  async function auth(action: OrderAction, c: IoContext) {
     if ((await options.authorization.check(b, action, c)) !== true)
       throw new Error('ORDER_AUTHORIZATION_DENIED');
     check(c);
   }
   async function operation<T>(
-    action: 'CREATE' | 'READ' | 'SUBMIT' | 'CANCEL' | 'RECONCILE',
+    action: OrderAction,
     work: (c: IoContext) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
@@ -177,13 +178,38 @@ export function createOrderEngine(options: {
     if (b.mode === 'LIVE') throw new Error('ORDER_LIVE_DISABLED');
     if (b.mode === 'PAPER') throw new Error('ORDER_PAPER_ENGINE_REQUIRED');
   }
+  function nativeAmend(instrumentId: string) {
+    const records = options.adapter.capabilities.filter(
+      (r) => r.feature === 'AMEND_ORDER' && hash(r.profile) === hash(b.profile),
+    );
+    if (
+      b.mode !== 'TESTNET' ||
+      b.profile.exchange !== 'BINANCE' ||
+      b.profile.market !== 'SPOT' ||
+      b.profile.endpointProfileId !== 'binance-spot-testnet-v1' ||
+      records.length !== 1
+    )
+      throw new Error('ORDER_AMEND_UNSUPPORTED');
+    const allowed = evaluateCapability({
+      profile: b.profile,
+      record: records[0],
+      feature: 'AMEND_ORDER',
+      instrumentId,
+      now: options.now(),
+      adapterVersion: options.adapter.adapterVersion,
+    });
+    if (!allowed.allowed || allowed.implementation !== 'NATIVE')
+      throw new Error('ORDER_AMEND_UNSUPPORTED');
+  }
   async function send(claim: DispatchClaim, c: IoContext): Promise<OrderState> {
     let outcome,
       dispatched = false;
     try {
-      // The server service stays fail-closed until causal settlement is accepted.
-      if (claim.operation === 'AMEND') throw new Error('ORDER_AMEND_NOT_ENABLED');
-      await auth(claim.operation === 'PLACE' ? 'SUBMIT' : 'CANCEL', c);
+      if (claim.operation === 'AMEND') nativeAmend(claim.state.command.instrumentId);
+      await auth(
+        claim.operation === 'PLACE' ? 'SUBMIT' : claim.operation === 'AMEND' ? 'AMEND' : 'CANCEL',
+        c,
+      );
       check(c);
       const authorization = {
         commandId: claim.intentId,
@@ -198,19 +224,18 @@ export function createOrderEngine(options: {
       outcome = mutationOutcomeSchema.parse(
         claim.operation === 'PLACE'
           ? await options.adapter.createOrder(
-              { authorization, command: claim.state.command },
+              operations.createOrder.input.parse({ authorization, command: claim.command }),
               context(c),
             )
-          : await options.adapter.cancelOrder(
-              {
-                authorization,
-                command: {
-                  instrumentId: claim.state.command.instrumentId,
-                  locator: { kind: 'CLIENT_ID', id: claim.state.command.clientOrderId },
-                },
-              },
-              context(c),
-            ),
+          : claim.operation === 'AMEND'
+            ? await options.adapter.amendOrder(
+                operations.amendOrder.input.parse({ authorization, command: claim.command }),
+                context(c),
+              )
+            : await options.adapter.cancelOrder(
+                operations.cancelOrder.input.parse({ authorization, command: claim.command }),
+                context(c),
+              ),
       );
     } catch {
       outcome = dispatched
@@ -230,21 +255,23 @@ export function createOrderEngine(options: {
     id: string,
     intentId: string,
     fp: string,
-    op: 'PLACE' | 'CANCEL',
+    op: 'PLACE' | 'CANCEL' | 'AMEND',
     c: IoContext,
     cancelVersion?: string,
+    decisionDraft?: OrderDraft,
   ) {
     mode();
     const s = await options.store.read(b, id, c);
-    const initial = metadata(s.draft, cancelVersion);
+    const admittedDraft = decisionDraft ?? s.draft;
+    const initial = metadata(admittedDraft, cancelVersion);
     const grant = grantSchema.parse(
       await options.risk.approve(
         { binding: b, state: s, intentId, operation: op, commandHash: fp },
         c,
       ),
     );
-    await auth(op === 'PLACE' ? 'SUBMIT' : 'CANCEL', c);
-    if (initial !== metadata(s.draft, cancelVersion)) throw new Error('ORDER_METADATA');
+    await auth(op === 'PLACE' ? 'SUBMIT' : op === 'AMEND' ? 'AMEND' : 'CANCEL', c);
+    if (initial !== metadata(admittedDraft, cancelVersion)) throw new Error('ORDER_METADATA');
     check(c);
     const claim = await options.store.begin(b, id, intentId, grant, c);
     if (claim === null) return options.store.read(b, id, c);
@@ -283,6 +310,60 @@ export function createOrderEngine(options: {
         signal,
       );
     },
+    amend(id: string, raw: AmendDraft, signal?: AbortSignal) {
+      return operation(
+        'AMEND',
+        async (c) => {
+          mode();
+          const request = amendDraftSchema.parse(raw);
+          const existing = await options.store.findAmend(b, id, request, c);
+          check(c);
+          if (existing?.dispatched) return existing.state;
+          const s = await options.store.read(b, id, c);
+          nativeAmend(s.command.instrumentId);
+          const replacementDraft = draftSchema.parse({
+            ...s.draft,
+            dbRuleId: request.dbRuleId,
+            order: request.replacement,
+          });
+          metadata(replacementDraft);
+          if (s.exchangeOrderId === null) throw new Error('ORDER_AMEND_TARGET');
+          const found = await options.adapter.getOrder(
+            {
+              instrumentId: s.command.instrumentId,
+              locator: { kind: 'EXCHANGE_ID', id: s.exchangeOrderId },
+            },
+            context(c),
+          );
+          check(c);
+          if (
+            !found.ok ||
+            found.value.kind !== 'FOUND' ||
+            found.value.order.updatedAt > options.now()
+          )
+            throw new Error('ORDER_AMEND_TARGET');
+          const intent = await options.store.amendIntent(
+            b,
+            id,
+            request,
+            { order: found.value.order, receivedAt: options.now() },
+            c,
+          );
+          check(c);
+          if (intent.dispatched) return intent.state;
+          return dispatch(
+            id,
+            intent.intentId,
+            intent.commandHash,
+            'AMEND',
+            c,
+            undefined,
+            replacementDraft,
+          );
+        },
+        signal,
+      );
+    },
     cancel(id: string, key: string, signal?: AbortSignal) {
       return operation(
         'CANCEL',
@@ -301,21 +382,48 @@ export function createOrderEngine(options: {
         async (c) => {
           mode();
           let s = await options.store.read(b, id, c);
+          const nativeControl = s.activeOperation === 'AMEND' || s.effectiveCommand !== undefined;
+          if (s.activeOperation === 'AMEND') s = await options.store.recoverUnsent(b, id, c);
+          const pending = nativeControl ? await options.store.pendingAmendment(b, id, c) : null;
           const lookup = () =>
             options.adapter.getOrder(
               {
                 instrumentId: s.command.instrumentId,
-                locator: { kind: 'CLIENT_ID', id: s.command.clientOrderId },
+                locator:
+                  nativeControl && s.exchangeOrderId !== null
+                    ? { kind: 'EXCHANGE_ID', id: s.exchangeOrderId }
+                    : { kind: 'CLIENT_ID', id: (s.effectiveCommand ?? s.command).clientOrderId },
               },
               context(c),
             );
           try {
             const found = await lookup();
+            const nativeReceivedAt = options.now();
             check(c);
             if (!found.ok || found.value.kind !== 'FOUND') return await options.store.gap(b, id, c);
             if (found.value.order.updatedAt > options.now())
               throw new Error('ORDER_HISTORY_REQUIRED');
-            s = await options.store.observe(b, id, found.value.order, c);
+            if (pending !== null) {
+              const history = await options.adapter.getAmendmentEvidence(
+                operations.getAmendmentEvidence.input.parse({ command: pending.command }),
+                context(c),
+              );
+              check(c);
+              if (!history.ok || history.value.kind !== 'APPLIED_EVIDENCE')
+                throw new Error('ORDER_HISTORY_REQUIRED');
+              await auth('RECONCILE', c);
+              s = await options.store.resolveAmendment(
+                b,
+                id,
+                pending.attemptId,
+                {
+                  evidence: history.value,
+                  order: found.value.order,
+                  nativeReceivedAt,
+                },
+                c,
+              );
+            } else s = await options.store.observe(b, id, found.value.order, c);
             const queryId = randomUUID(),
               to = options.now() + 1;
             let cursor: string | null = null;
@@ -410,6 +518,9 @@ const safe = new Set([
   'ORDER_HISTORY_REQUIRED',
   'ORDER_EXECUTION_PRICE_REQUIRED',
   'ORDER_ID_EXHAUSTED',
+  'ORDER_AMEND_TARGET',
+  'ORDER_AMEND_UNSUPPORTED',
+  'ORDER_AMEND_APPLICATION_UNPROVED',
 ]);
 function safeCode(e: unknown) {
   return e instanceof Error && safe.has(e.message) ? e.message : 'ORDER_STORE_FAILED';
