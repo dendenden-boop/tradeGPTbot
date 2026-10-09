@@ -21,6 +21,9 @@ PHASE 13 implements the canonical [Paper Engine roadmap](../phase-0/implementati
 
 1. Requirements/contracts and RED tests for a pure deterministic Spot L2 taker model. This is a calculation prerequisite, not a production Paper gateway or financial writer.
 2. Durable PAPER identity, account initialization, evidence/liquidity journal and isolated virtual ledger through additive schema authority. Prove replay, conservation, concurrency and restart.
+
+   The first persistence increment is immutable server-owned configuration for already provisioned PAPER accounts, separate from account creation/funding/reset and monetary authorization. Native role/restart/concurrency/lost-COMMIT acceptance is required; a configuration receipt alone does not complete this step.
+
 3. Certified PAPER snapshot and atomic Intent/Risk reservation integration; virtual dispatch and reconciliation, cancellation and supported conditional exits. Preserve native semantics and permissions.
 4. Real public-feed composition, Portfolio positions/PnL, bounded worker operation and complete cross-package acceptance.
 
