@@ -27,7 +27,11 @@ import type { BinanceBinding, BinanceSigner } from './auth.js';
 import { assertActive, BinanceProtocolError, boundedPort, readResponse } from './client.js';
 import type { BinanceRestClient, RestSpec } from './client.js';
 import type { BinanceEndpointProfile } from './profiles.js';
-import type { BinanceIdentityPort, BinanceOrderAdmissionPort } from './ports.js';
+import type {
+  BinanceIdentityPort,
+  BinanceOrderAdmissionPort,
+  BinanceCollateralEvidence,
+} from './ports.js';
 import type { BinanceAdmission } from './public-data.js';
 import {
   normalizeFill,
@@ -47,6 +51,7 @@ import {
   serializeBinanceAmendment,
   checkBinanceAmendmentAck,
   reconcileBinanceAmendmentHistory,
+  checkBinanceCollateralOrder,
 } from './amendment.js';
 
 export interface BinancePrivateTransportOptions {
@@ -759,6 +764,82 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
     ): Promise<AccountSnapshot> {
       try {
         return await balanceSnapshot(context, event);
+      } catch (failure) {
+        throw readError(failure);
+      }
+    },
+    /** Bracket a native account cut with an unchanged, explicitly working owned order. */
+    async collateralEvidence(
+      raw: unknown,
+      context: RequestContext,
+    ): Promise<BinanceCollateralEvidence> {
+      try {
+        const input = operations.getOrder.input.parse(raw),
+          account = authority(context);
+        if (endpoint.id !== 'binance-spot-testnet-v1' || input.locator.kind !== 'EXCHANGE_ID')
+          throw new BinanceProtocolError('UNSUPPORTED');
+        const value = metadata(input.instrumentId),
+          known = admission(input.instrumentId);
+        if (known.unsupportedFilters.length || value.rules.expiresAt <= now())
+          throw new BinanceProtocolError('STALE_METADATA');
+        const symbol = value.instrument.exchangeSymbol;
+        const observe = async () => {
+          const response = await signed(
+            {
+              path: '/api/v3/order',
+              weight: 4,
+              symbol,
+              params: { symbol, orderId: numericId(input.locator.id) },
+            },
+            context,
+          );
+          const native = readResponse(response);
+          checkBinanceCollateralOrder(native, symbol);
+          const order = normalizeOrder(native, value, account, requireIdentities());
+          if (order.exchangeOrderId !== input.locator.id) return invalidResponse();
+          return immutable({
+            order,
+            receivedAt: response.receivedAt,
+            sourceHash: createHash('sha256')
+              .update(
+                JSON.stringify(
+                  Object.fromEntries(
+                    Object.entries(wireObject(native)).sort(([a], [b]) => a.localeCompare(b)),
+                  ),
+                ),
+              )
+              .digest('hex'),
+            working: true as const,
+          });
+        };
+        const before = await observe(),
+          balances = await balanceSnapshot(context),
+          after = await observe();
+        if (
+          before.sourceHash !== after.sourceHash ||
+          JSON.stringify(before.order) !== JSON.stringify(after.order) ||
+          before.receivedAt > balances.receivedAt ||
+          balances.receivedAt > after.receivedAt ||
+          balances.asOf < after.order.updatedAt ||
+          after.receivedAt > now() ||
+          now() - before.receivedAt > 5000 ||
+          balances.freshness !== 'FRESH' ||
+          metadata(input.instrumentId).rules.version !== value.rules.version ||
+          metadata(input.instrumentId).instrument.metadataVersion !==
+            value.instrument.metadataVersion
+        )
+          return invalidResponse();
+        assertActive(context, now);
+        return immutable({
+          protocol: 'BINANCE_SPOT_LIMIT_LOCK_V1',
+          profile: context.profile,
+          account,
+          metadataVersion: value.instrument.metadataVersion,
+          ruleVersion: value.rules.version,
+          before,
+          balances,
+          after,
+        });
       } catch (failure) {
         throw readError(failure);
       }

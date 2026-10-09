@@ -25,6 +25,7 @@ import { createPublicStreams } from './public-streams.js';
 import { createPrivateTransport } from './private-transport.js';
 import { createPrivateStreams } from './private-streams.js';
 import { wireObject, wireId } from './wire.js';
+import { registerBinanceCollateralOwner } from './collateral-source.js';
 
 const port = <T>(methods: readonly string[]) =>
   z.custom<T>(
@@ -221,7 +222,7 @@ export function createBinanceAdapterWithIo(
   });
   const authorize = options.authorization?.authorize.bind(options.authorization);
   const sandbox = options.sandboxAcceptance?.authorize.bind(options.sandboxAcceptance);
-  return createExchangeAdapter({
+  const adapter = createExchangeAdapter({
     profile,
     account,
     capabilities,
@@ -281,4 +282,12 @@ export function createBinanceAdapterWithIo(
       },
     },
   });
+  registerBinanceCollateralOwner(adapter, {
+    runtime: isRuntimeInstrumentRegistry(registry),
+    readable:
+      account !== null && options.credentials !== undefined && options.identities !== undefined,
+    now,
+    collect: privateTransport.collateralEvidence,
+  });
+  return adapter;
 }

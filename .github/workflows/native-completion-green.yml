@@ -1,11 +1,11 @@
-name: Native cross-adapter acceptance
+name: Native phase 12 completion acceptance
 on:
   push:
-    branches: [codex/phase12-cross-adapter-dispatch-green]
+    branches: [codex/phase12-completion-green]
 permissions:
   contents: read
 concurrency:
-  group: native-cross-adapter-dispatch-green
+  group: native-completion-green
   cancel-in-progress: true
 jobs:
   reproduce:
@@ -29,7 +29,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-cross-adapter-dispatch-green
+          name: native-completion-green
           path: test-results/
           if-no-files-found: error
           retention-days: 7

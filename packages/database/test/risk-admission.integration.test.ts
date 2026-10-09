@@ -17,6 +17,7 @@ import {
   bindingSchema as portfolioBindingSchema,
   reducePortfolio,
   ratio,
+  valuePortfolio,
   createPostgresPortfolioStore,
   type PortfolioStore,
 } from '@ctp/portfolio';
@@ -44,6 +45,7 @@ import {
 } from '@ctp/risk-engine';
 import { seedRiskCertification } from './fixtures/risk-certification.js';
 import { createBinanceAdapterWithIo } from '../../exchange-binance/src/adapter.js';
+import { createBinanceCollateralSource } from '../../exchange-binance/src/collateral-source.js';
 import { adapterProfile, getBinanceProfile } from '../../exchange-binance/src/profiles.js';
 import { exchangeInfo, spotSymbol } from '../../exchange-binance/test/fixtures/public-data.js';
 import type { NetworkIo } from '../../exchange-binance/src/io.js';
@@ -942,7 +944,7 @@ async function serviceAmendFixture(kind: 'ACK' | 'UNKNOWN' | 'BLOCKED' | 'MISSIN
     current: () => current,
   };
 }
-it.each(['ACK', 'UNKNOWN', 'BLOCKED', 'PREFLIGHT_BLOCKED'] as const)(
+it.each(['ACK', 'UNKNOWN', 'BLOCKED', 'PREFLIGHT_BLOCKED', 'COLLATERAL'] as const)(
   'native Binance assembly %s uses PostgreSQL AMEND authority, holds and restart reconciliation',
   async (kind) => {
     const identities = {
@@ -993,6 +995,17 @@ it.each(['ACK', 'UNKNOWN', 'BLOCKED', 'PREFLIGHT_BLOCKED'] as const)(
             serverTime: String(Date.now()),
           };
         else if (url.pathname === '/api/v3/time') body = { serverTime: String(Date.now()) };
+        else if (url.pathname === '/api/v3/account')
+          body = {
+            accountType: 'SPOT',
+            canTrade: true,
+            permissions: ['SPOT'],
+            updateTime: String(Date.now()),
+            balances: [
+              { asset: 'USDT', free: '990', locked: '10' },
+              { asset: 'BTC', free: '0', locked: '0' },
+            ],
+          };
         else if (url.pathname === '/api/v3/order' && input.method === 'GET') {
           expect(url.searchParams.get('orderId')).toBe('9007199254740993123');
           expect(current).toBeDefined();
@@ -1190,9 +1203,12 @@ it.each(['ACK', 'UNKNOWN', 'BLOCKED', 'PREFLIGHT_BLOCKED'] as const)(
       price: '10',
       origQty: '1',
       executedQty: '0',
+      cummulativeQuoteQty: '0',
       stopPrice: '0',
       icebergQty: '0',
       origQuoteOrderQty: '0',
+      isWorking: true,
+      selfTradePreventionMode: 'NONE',
       time: String(f.created.createdAt),
       updateTime: String(Date.now()),
     };
@@ -1200,7 +1216,10 @@ it.each(['ACK', 'UNKNOWN', 'BLOCKED', 'PREFLIGHT_BLOCKED'] as const)(
       { instrumentId: symbol, locator: { kind: 'EXCHANGE_ID', id: '9007199254740993123' } },
       context(),
     );
-    expect(native).toMatchObject({ ok: true, value: { kind: 'FOUND' } });
+    expect(native, native.ok ? undefined : native.error.code).toMatchObject({
+      ok: true,
+      value: { kind: 'FOUND' },
+    });
     if (!native.ok || native.value.kind !== 'FOUND')
       throw new Error('NATIVE_PROFILE_ORDER_MISSING');
     const target = await store.complete(f.key.binding, f.created.id, native.value.order, io());
@@ -1217,6 +1236,77 @@ it.each(['ACK', 'UNKNOWN', 'BLOCKED', 'PREFLIGHT_BLOCKED'] as const)(
       before.revision,
       io(),
     );
+    if (kind === 'COLLATERAL') {
+      const checkpoint = await portfolio.read(pb, io());
+      await portfolio.apply(
+        pb,
+        snapshot({
+          id: randomUUID(),
+          timestamp: Date.now(),
+          balances: [{ asset: 'USDT', total: '1000', free: '990', locked: '10', available: '990' }],
+          positions: [],
+        }),
+        checkpoint.revision,
+        io(),
+      );
+      const beforeRead = await portfolio.read(pb, io());
+      const ledgerBefore = await admin.query(
+        'SELECT count(*)::text n FROM public.ledger_entry WHERE "tenantId"=$1',
+        [identities.tenantId],
+      );
+      const source = createBinanceCollateralSource(adapter);
+      handles.push(source);
+      const observation = await source.collect(
+        { instrumentId: symbol, locator: { kind: 'EXCHANGE_ID', id: '9007199254740993123' } },
+        io(),
+      );
+      expect(observation.before.order.internalOrderId).toBe(target.id);
+      expect(observation.after.sourceHash).toBe(observation.before.sourceHash);
+      expect(observation.balances.balances.find((b) => b.asset === 'USDT')?.locked).toBe('10');
+      expect(Object.hasOwn(observation, 'amount')).toBe(false);
+      await source.close();
+      const recoveredSource = createBinanceCollateralSource(adapter);
+      handles.push(recoveredSource);
+      expect(
+        (
+          await recoveredSource.collect(
+            { instrumentId: symbol, locator: { kind: 'EXCHANGE_ID', id: '9007199254740993123' } },
+            io(),
+          )
+        ).account,
+      ).toEqual(account);
+      const recoveredPortfolio = await createPostgresPortfolioStore(
+        options('DATABASE_PORTFOLIO_URL'),
+      );
+      handles.push(recoveredPortfolio);
+      const afterRead = await recoveredPortfolio.read(pb, io());
+      expect(afterRead).toEqual(beforeRead);
+      expect(
+        valuePortfolio([afterRead.state], [], {
+          quote: 'USDT',
+          now: Date.now(),
+          reconciledAfterRestart: true,
+        }).accounts[0]?.balances.find((b) => b.asset === 'USDT')?.spendable,
+      ).toBe('979.99');
+      expect(
+        (
+          await admin.query(
+            'SELECT count(*)::text n FROM public.ledger_entry WHERE "tenantId"=$1',
+            [identities.tenantId],
+          )
+        ).rows,
+      ).toEqual(ledgerBefore.rows);
+      expect(
+        (
+          await admin.query(
+            'SELECT trim_scale(amount)::text amount,status FROM public.risk_reservation WHERE id=$1',
+            [grant.reservationId],
+          )
+        ).rows[0],
+      ).toEqual({ amount: '10.01', status: 'ACTIVE' });
+      expect(sends).toBe(0);
+      return;
+    }
     const request = {
       key: randomUUID(),
       expectedVersion: String(target.version),
