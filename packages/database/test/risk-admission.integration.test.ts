@@ -10,7 +10,7 @@ import {
   createPostgresPortfolioStore,
   type PortfolioStore,
 } from '@ctp/portfolio';
-import { createPostgresOrderStore, type OrderStore } from '@ctp/order-engine';
+import { createPostgresOrderStore, type OrderStore, type DispatchClaim } from '@ctp/order-engine';
 import {
   createPostgresMarketSnapshots,
   createPostgresInstrumentRegistry,
@@ -373,6 +373,105 @@ async function dispatchedAmendment() {
   };
   return { ...f, controlGrant: grant, claim, proof };
 }
+type PendingStore = OrderStore & {
+  pendingAmendment(
+    binding: Parameters<OrderStore['read']>[0],
+    id: string,
+    context: Parameters<OrderStore['read']>[2],
+  ): Promise<DispatchClaim | null>;
+};
+it.each(['CLOCK_OFFSET', 'SAME_MILLISECOND'] as const)(
+  'durable AMEND %s accepts exact causal history without comparing exchange time to local transport clock',
+  async (kind) => {
+    const f = await dispatchedAmendment();
+    const sourceTime = f.native.updatedAt + (kind === 'CLOCK_OFFSET' ? 1 : 0);
+    f.proof.evidence.evidence.time = sourceTime;
+    f.proof.order.updatedAt = sourceTime;
+    const localStart = (
+      await admin.query<{ at: string }>(
+        'SELECT floor(extract(epoch FROM "transportStartedAt")*1000)::bigint::text AS at FROM public.submission_attempt WHERE id=$1',
+        [f.claim.attemptId],
+      )
+    ).rows[0]!.at;
+    expect(sourceTime).toBeLessThan(Number(localStart));
+    const resolved = await orders.resolveAmendment(
+      f.key.binding,
+      f.created.id,
+      f.claim.attemptId,
+      f.proof,
+      io(),
+    );
+    expect(resolved).toMatchObject({
+      lastExchangeAt: sourceTime,
+      activeAttemptId: null,
+      effectiveCommand: { size: { value: '0.4' } },
+    });
+    expect(resolved.command).toEqual(f.created.command);
+    expect(await orders.complete(f.key.binding, f.created.id, f.proof.order, io())).toEqual(
+      resolved,
+    );
+    const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+    handles.push(restarted);
+    expect(
+      await restarted.resolveAmendment(
+        f.key.binding,
+        f.created.id,
+        f.claim.attemptId,
+        f.proof,
+        io(),
+      ),
+    ).toEqual(resolved);
+    await expect(
+      restarted.observe(
+        f.key.binding,
+        f.created.id,
+        {
+          ...f.proof.order,
+          status: 'PARTIALLY_FILLED',
+          filledQuantity: '0.01',
+          averageFillPrice: { state: 'AVAILABLE', value: '10' },
+        },
+        io(),
+      ),
+    ).rejects.toThrow(/ORDER_OBSERVATION_CONFLICT|ORDER_EVIDENCE_CONFLICT/);
+    expect((await bridgeState(f)).reservation.amount).toBe('5.005');
+  },
+);
+it('server recovery reads exact pending AMEND command across restart without new Risk or transport authority', async () => {
+  const f = await dispatchedAmendment();
+  const before = await bridgeState(f);
+  const current = await (orders as PendingStore).pendingAmendment(
+    f.key.binding,
+    f.created.id,
+    io(),
+  );
+  expect(current).toMatchObject({
+    attemptId: f.claim.attemptId,
+    intentId: f.amendment.intentId,
+    operation: 'AMEND',
+    command: f.amendment.command,
+    commandHash: f.amendment.commandHash,
+    expiresAt: f.controlGrant.expiresAt,
+  });
+  expect(current?.state.command).toEqual(f.created.command);
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  expect(
+    await (restarted as PendingStore).pendingAmendment(f.key.binding, f.created.id, io()),
+  ).toEqual(current);
+  expect(await bridgeState(f)).toEqual(before);
+  await expect(
+    (restarted as PendingStore).pendingAmendment(
+      { ...f.key.binding, accountId: randomUUID() },
+      f.created.id,
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_BINDING_DENIED');
+  await orders.resolveAmendment(f.key.binding, f.created.id, f.claim.attemptId, f.proof, io());
+  expect(
+    await (restarted as PendingStore).pendingAmendment(f.key.binding, f.created.id, io()),
+  ).toBeNull();
+});
 function resolveAmendment(
   store: OrderStore,
   f: Awaited<ReturnType<typeof dispatchedAmendment>>,
