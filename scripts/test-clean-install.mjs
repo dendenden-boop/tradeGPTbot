@@ -125,6 +125,7 @@ try {
     'portfolio',
     'order-engine',
     'risk-engine',
+    'paper-engine',
   ]) {
     // Frozen install can verify release age via online attestation without caching
     // full registry metadata. Verify the exact derived graph before offline deploy.
@@ -376,6 +377,23 @@ try {
   `,
     options,
   );
+  await verifyDeployment(
+    path.join(directory, 'deployment-paper-engine'),
+    String.raw`
+    const paper=await import('@ctp/paper-engine');
+    const { existsSync }=await import('node:fs');
+    assert.equal(typeof paper.preparePaperFrame,'function');
+    assert.equal(typeof paper.evaluatePaperOrder,'function');
+    assert.throws(()=>paper.preparePaperFrame({}),/PAPER_EVIDENCE/);
+    assert.throws(()=>paper.evaluatePaperOrder({}),/PAPER_INPUT/);
+    for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);
+    assert.equal(existsSync('./test'),false);
+    assert.equal(existsSync('./src'),false);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/testing'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/model.js'));
+  `,
+    options,
+  );
   await report('clean-install', {
     status: 'PASS',
     startedAt,
@@ -396,6 +414,7 @@ try {
       '@ctp/portfolio',
       '@ctp/order-engine',
       '@ctp/risk-engine',
+      '@ctp/paper-engine',
     ],
     scope:
       'Fresh source copy without generated code, frozen offline install, workspace build, online policy verification of derived lockfiles, exact offline deployment, isolated API/database/exchange-core/Binance/Bybit/OKX/HTX production imports, native Argon2id and PostgreSQL WASM without dev tools, mail sink or database connections; test adapters/protocol fixtures and raw IO overrides excluded from deployment and package exports',
