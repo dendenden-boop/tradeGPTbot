@@ -93,8 +93,11 @@ function fixture() {
       if (op === 'cancelOrder') {
         const r = operations.cancelOrder.input.parse(raw);
         cancels++;
-        const n = native.get(r.command.locator.id);
-        if (n) native.set(n.clientOrderId, { ...n, status: 'CANCELED', updatedAt: clock() + 1 });
+        const n =
+          r.command.locator.kind === 'CLIENT_ID'
+            ? native.get(r.command.locator.id)
+            : [...native.values()].find((v) => v.exchangeOrderId === r.command.locator.id);
+        if (n) native.set(n.clientOrderId, { ...n, status: 'CANCELED', updatedAt: clock() });
         return {
           kind: 'ACCEPTED',
           ack: {
@@ -107,7 +110,10 @@ function fixture() {
       }
       if (op === 'getOrder') {
         const r = operations.getOrder.input.parse(raw),
-          n = native.get(r.locator.id);
+          n =
+            r.locator.kind === 'CLIENT_ID'
+              ? native.get(r.locator.id)
+              : [...native.values()].find((v) => v.exchangeOrderId === r.locator.id);
         return n
           ? { kind: 'FOUND', order: n }
           : { kind: 'INDETERMINATE', reason: 'NOT_AUTHORITATIVE' };
@@ -131,7 +137,7 @@ function fixture() {
     registry,
     transport,
     authorization: { authorize: (...args) => m.store.authorize(...args) },
-    now: () => clock() + 10,
+    now: clock,
   });
   const risk: OrderRiskPort = {
     async approve() {
@@ -159,7 +165,7 @@ function fixture() {
     registry,
     store: m.store,
     adapter,
-    now: () => clock() + 10,
+    now: clock,
   };
   const engine = createOrderEngine(options);
   cleaners.push(

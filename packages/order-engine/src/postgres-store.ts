@@ -35,6 +35,7 @@ import {
 } from './domain.js';
 import { reduceOrder, terminal } from './state.js';
 import { prepareOrderAmendment } from './amendment.js';
+import { prepareOrderCancellation } from './cancellation.js';
 const bytes = (value: string) => Buffer.from(value, 'hex');
 const market = (b: OrderBinding) => (b.profile.market === 'SPOT' ? 'SPOT' : 'PERPETUAL');
 export async function createPostgresOrderStore(options: {
@@ -500,6 +501,53 @@ export async function createPostgresOrderStore(options: {
       dispatched: old.dispatched,
     };
   }
+  async function findCancel(
+    p: PoolClient,
+    b: OrderBinding,
+    id: string,
+    key: string,
+    s: OrderState,
+  ) {
+    const seen = await p.query<{
+      intentId: string;
+      requestHash: Buffer;
+      commandHash: Buffer;
+      binding: string;
+      orderId: string;
+      draft: string;
+      dispatched: boolean;
+    }>(
+      'SELECT c."intentId",c."requestHash",c."commandHash",c.binding,c."orderId",c.draft,EXISTS(SELECT 1 FROM public.submission_attempt t WHERE t."tenantId"=c."tenantId" AND t."intentId"=c."intentId") AS dispatched FROM ctp_execution.command c JOIN public.order_intent i ON i."tenantId"=c."tenantId" AND i.id=c."intentId" WHERE i."tenantId"=$1 AND i.operation=\'CANCEL\' AND i."idempotencyKey"=$2',
+      [b.tenantId, key],
+    );
+    if (seen.rows[0]) {
+      const old = seen.rows[0];
+      const legacy = hash({
+        binding: b,
+        orderId: id,
+        command: {
+          instrumentId: s.command.instrumentId,
+          locator: { kind: 'CLIENT_ID', id: s.command.clientOrderId },
+        },
+      });
+      if (
+        old.binding !== canonical(b) ||
+        old.orderId !== id ||
+        (!old.requestHash.equals(bytes(hash({ binding: b, orderId: id, operation: 'CANCEL' }))) &&
+          !old.requestHash.equals(bytes(legacy)))
+      )
+        throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+      return {
+        state: s,
+        intentId: seen.rows[0].intentId,
+        commandHash: old.commandHash.toString('hex'),
+        ruleVersion: draftSchema.parse(JSON.parse(seen.rows[0].draft) as unknown).order.ruleVersion,
+        dispatched: seen.rows[0].dispatched,
+      };
+    }
+
+    return null;
+  }
   return Object.freeze({
     findCreate(rawB: OrderBinding, rawD: OrderDraft, c: IoContext) {
       const b = bindingSchema.parse(rawB),
@@ -663,17 +711,39 @@ export async function createPostgresOrderStore(options: {
         return { state, intentId, commandHash, command, dispatched: false };
       });
     },
-    cancelIntent(rawB: OrderBinding, id: string, key: string, c: IoContext) {
+    findCancel(rawB: OrderBinding, id: string, key: string, c: IoContext) {
+      const b = bindingSchema.parse(rawB);
+      idSchemaParse(key);
+      return tx(b, c, async (p) => {
+        await owner(p, b);
+        const s = await read(p, b, id);
+        return findCancel(p, b, id, key, s);
+      });
+    },
+    cancelIntent(
+      rawB: OrderBinding,
+      id: string,
+      key: string,
+      c: IoContext,
+      evidence?: NativeAmendTarget,
+    ) {
       const b = bindingSchema.parse(rawB);
       idSchemaParse(key);
       return tx(b, c, async (p) => {
         await owner(p, b, true);
         const s = await read(p, b, id, true);
-        const command = {
-            instrumentId: s.command.instrumentId,
-            locator: { kind: 'CLIENT_ID' as const, id: s.command.clientOrderId },
-          },
-          requestHash = hash({ binding: b, orderId: id, command }),
+        const old = await findCancel(p, b, id, key, s);
+        if (old) return old;
+        const command = evidence
+            ? prepareOrderCancellation(s, evidence, Date.now())
+            : {
+                instrumentId: s.command.instrumentId,
+                locator:
+                  s.exchangeOrderId === null
+                    ? { kind: 'CLIENT_ID' as const, id: s.command.clientOrderId }
+                    : { kind: 'EXCHANGE_ID' as const, id: s.exchangeOrderId },
+              },
+          requestHash = hash({ binding: b, orderId: id, operation: 'CANCEL' }),
           fp = computeCommandHash('cancelOrder', command, {
             profile: b.profile,
             account: {
@@ -682,38 +752,19 @@ export async function createPostgresOrderStore(options: {
               externalAccountId: b.externalAccountId,
             },
           });
-        const seen = await p.query<{
-          intentId: string;
-          requestHash: Buffer;
-          draft: string;
-          dispatched: boolean;
-        }>(
-          'SELECT c."intentId",c."requestHash",c.draft,EXISTS(SELECT 1 FROM public.submission_attempt t WHERE t."tenantId"=c."tenantId" AND t."intentId"=c."intentId") AS dispatched FROM ctp_execution.command c JOIN public.order_intent i ON i."tenantId"=c."tenantId" AND i.id=c."intentId" WHERE i."tenantId"=$1 AND i.operation=\'CANCEL\' AND i."idempotencyKey"=$2',
-          [b.tenantId, key],
-        );
-        if (seen.rows[0]) {
-          if (!seen.rows[0].requestHash.equals(bytes(requestHash)))
-            throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
-          return {
-            state: s,
-            intentId: seen.rows[0].intentId,
-            commandHash: fp,
-            ruleVersion: draftSchema.parse(JSON.parse(seen.rows[0].draft) as unknown).order
-              .ruleVersion,
-            dispatched: seen.rows[0].dispatched,
-          };
-        }
         const intentId = randomUUID();
         const current = await p.query<{ id: string; version: string }>(
           `SELECT id,rules->>'version' AS version FROM public.instrument_rule_version WHERE "instrumentId"=$1 AND "isCurrent" AND "effectiveAt"<=now()`,
           [s.draft.dbInstrumentId],
         );
         if (current.rowCount !== 1 || !current.rows[0]?.version) throw new Error('ORDER_METADATA');
+        const { clientOrderId: omitted, ...effectiveOrder } = s.effectiveCommand ?? s.command;
+        void omitted;
         const d = draftSchema.parse({
           ...s.draft,
           key,
           dbRuleId: current.rows[0].id,
-          order: { ...s.draft.order, ruleVersion: current.rows[0].version },
+          order: { ...effectiveOrder, ruleVersion: current.rows[0].version },
         });
         await insertIntent(p, b, d, intentId, command, 'CANCEL', id, fp);
         await p.query(
@@ -880,10 +931,10 @@ export async function createPostgresOrderStore(options: {
       return tx(b, c, async (p) => {
         await owner(p, b, true);
         let s = await read(p, b, id, true);
-        const pending = await p.query<{ id: string }>(
-          `SELECT a.id FROM public.submission_attempt a JOIN ctp_execution.command k
+        const pending = await p.query<{ id: string; operation: 'AMEND' | 'CANCEL' }>(
+          `SELECT a.id,a.operation FROM public.submission_attempt a JOIN ctp_execution.command k
             ON k."tenantId"=a."tenantId" AND k."intentId"=a."intentId" AND k."orderId"=a."orderId"
-           WHERE a."tenantId"=$1 AND a."orderId"=$2 AND a.id=$3 AND a.operation='AMEND'
+           WHERE a."tenantId"=$1 AND a."orderId"=$2 AND a.id=$3 AND a.operation IN('AMEND','CANCEL')
             AND k.operation=a.operation AND k.binding=$4 AND a."commandHash"=k."commandHash"
             AND a."accountId"=$5 AND a.mode=$6 AND a."instrumentId"=$7
             AND a.status='DISPATCHING' AND a."permitProtocolVersion"=2
@@ -893,7 +944,7 @@ export async function createPostgresOrderStore(options: {
             AND a."operationVersion"<=$8 AND EXISTS(
               SELECT 1 FROM ctp_execution.authoritative_event e WHERE e."tenantId"=a."tenantId"
                AND e."orderId"=a."orderId" AND e.identity='dispatch:'||a.id::text
-               AND e.payload::jsonb=jsonb_build_object('type','DISPATCH','operation','AMEND','attemptId',a.id::text)
+               AND e.payload::jsonb=jsonb_build_object('type','DISPATCH','operation',a.operation::text,'attemptId',a.id::text)
                AND e.fingerprint=sha256(convert_to(e.payload,'UTF8')))
             FOR UPDATE OF a`,
           [
@@ -916,7 +967,7 @@ export async function createPostgresOrderStore(options: {
         s = await apply(
           p,
           s,
-          { type: 'RESULT', operation: 'AMEND', attemptId: attempt.id, outcome },
+          { type: 'RESULT', operation: attempt.operation, attemptId: attempt.id, outcome },
           `result:${attempt.id}`,
         );
         // Absence of dispatch proves NOT_SENT; it does not certify current native state.

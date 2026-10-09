@@ -8,6 +8,7 @@ import {
   orderBookSchema,
   newOrderSchema,
   inPlaceAmendmentSchema,
+  operations,
   decimalAdd,
   decimalMultiply,
   decimalCompare,
@@ -49,6 +50,11 @@ const publication = z.strictObject({
 export const riskCapturedIntentSchema = z.discriminatedUnion('operation', [
   z.strictObject({ id: z.uuid(), operation: z.literal('PLACE'), command: newOrderSchema }),
   z.strictObject({ id: z.uuid(), operation: z.literal('AMEND'), command: inPlaceAmendmentSchema }),
+  z.strictObject({
+    id: z.uuid(),
+    operation: z.literal('CANCEL'),
+    command: operations.cancelOrder.input.shape.command,
+  }),
 ]);
 const capture = z.strictObject({
   key: riskSnapshotKeySchema,
@@ -114,7 +120,14 @@ export function decodeRiskSnapshotCapture(
     const key = riskSnapshotKeySchema.parse(rawKey),
       e = capture.parse(raw);
     const intendedOrder =
-      e.intent.operation === 'PLACE' ? e.intent.command : e.intent.command.replacement;
+      e.intent.operation === 'PLACE'
+        ? e.intent.command
+        : e.intent.operation === 'AMEND'
+          ? e.intent.command.replacement
+          : newOrderSchema.parse({
+              ...e.intent.command.target?.current,
+              ruleVersion: e.metadata.value.record.rules.version,
+            });
     if (e.intent.operation === 'PLACE' ? e.retention !== undefined : e.retention === undefined)
       throw new Error('RISK_SNAPSHOT_INTENT');
     if (e.intent.operation === 'AMEND') {
@@ -130,6 +143,25 @@ export function decodeRiskSnapshotCapture(
         r.filledQuantity !== c.target.filledQuantity ||
         r.nativeUpdatedAt !== c.target.nativeUpdatedAt ||
         !equal(r.command, c.target.current)
+      )
+        throw new Error('RISK_SNAPSHOT_INTENT');
+    }
+    if (e.intent.operation === 'CANCEL') {
+      const r = e.retention!,
+        c = e.intent.command,
+        target = c.target;
+      if (
+        !target ||
+        r.orderId !== target.internalOrderId ||
+        r.placeIntentId !== target.placeIntentId ||
+        r.accountId !== key.binding.accountId ||
+        r.mode !== key.binding.mode ||
+        r.orderRevision !== target.revision ||
+        c.locator.kind !== 'EXCHANGE_ID' ||
+        r.exchangeOrderId !== c.locator.id ||
+        r.filledQuantity !== target.filledQuantity ||
+        r.nativeUpdatedAt !== target.nativeUpdatedAt ||
+        !equal(r.command, target.current)
       )
         throw new Error('RISK_SNAPSHOT_INTENT');
     }

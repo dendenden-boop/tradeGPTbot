@@ -194,6 +194,13 @@ export interface DispatchClaim {
   expiresAt: number;
 }
 export interface OrderStore {
+  /** Permanent lookup before refreshing current native cancellation evidence. */
+  findCancel(
+    binding: OrderBinding,
+    id: string,
+    key: string,
+    context: IoContext,
+  ): Promise<StoredCancellation | null>;
   /** Authorized durable lookup: exact replay, conflict, or null for a new key; never admits risk. */
   findCreate(
     binding: OrderBinding,
@@ -216,7 +223,7 @@ export interface OrderStore {
     context: IoContext,
   ): Promise<StoredAmendment>;
   read(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
-  /** Recover only an expired protocol-2 AMEND whose durable transport boundary is absent. */
+  /** Recover only an expired protocol-2 native control whose durable transport boundary is absent. */
   recoverUnsent(binding: OrderBinding, id: string, context: IoContext): Promise<OrderState>;
   /** Read the immutable pending native control; never grants a permit or retries dispatch. */
   pendingAmendment(
@@ -229,13 +236,8 @@ export interface OrderStore {
     id: string,
     key: string,
     context: IoContext,
-  ): Promise<{
-    state: OrderState;
-    intentId: string;
-    commandHash: string;
-    ruleVersion: string;
-    dispatched: boolean;
-  }>;
+    evidence?: NativeAmendTarget,
+  ): Promise<StoredCancellation>;
   begin(
     binding: OrderBinding,
     id: string,
@@ -279,4 +281,11 @@ export interface OrderStore {
   ): Promise<OrderState>;
   authorize(operation: unknown, input: unknown, context: unknown): Promise<boolean>;
   close(): Promise<void>;
+}
+export interface StoredCancellation {
+  state: OrderState;
+  intentId: string;
+  commandHash: string;
+  ruleVersion: string;
+  dispatched: boolean;
 }

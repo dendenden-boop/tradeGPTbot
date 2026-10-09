@@ -18,6 +18,7 @@ import { decodeRiskPortfolioSource } from './portfolio-source.js';
 import {
   evaluateRiskPolicy,
   evaluateRiskAmendmentPolicy,
+  evaluateRiskCancelPolicy,
   riskAmendmentRetentionSchema,
   intersectRiskLimits,
 } from './policy.js';
@@ -84,8 +85,6 @@ export async function createPostgresOrderRiskPort(options: CertificationDatabase
           riskEvidenceHash(current.key.binding) !== riskEvidenceHash(input.binding)
         )
           throw new Error('RISK_ADMISSION_CONFLICT');
-        if (input.operation !== 'PLACE' && input.operation !== 'AMEND')
-          throw new Error('RISK_ADMISSION_OPERATION_UNSUPPORTED');
         const now = Date.now(),
           sources = decodeRiskSnapshotCapture(current.capture, current.key, now);
         const projection = prepareRiskSnapshot(
@@ -114,7 +113,12 @@ export async function createPostgresOrderRiskPort(options: CertificationDatabase
         const sourceIntent =
           captured.intent.operation === 'PLACE'
             ? captured.intent.command
-            : captured.intent.command.replacement;
+            : captured.intent.operation === 'AMEND'
+              ? captured.intent.command.replacement
+              : {
+                  ...captured.intent.command.target!.current,
+                  ruleVersion: projection.metadata.record.rules.version,
+                };
         const calculation = {
           now,
           binding: projection.snapshot.binding,
@@ -129,11 +133,17 @@ export async function createPostgresOrderRiskPort(options: CertificationDatabase
         const evaluation =
           captured.intent.operation === 'PLACE'
             ? evaluateRiskPolicy(calculation)
-            : evaluateRiskAmendmentPolicy({
-                evaluation: calculation,
-                command: captured.intent.command,
-                retention: captured.retention,
-              });
+            : captured.intent.operation === 'CANCEL'
+              ? evaluateRiskCancelPolicy({
+                  evaluation: calculation,
+                  command: captured.intent.command,
+                  retention: captured.retention,
+                })
+              : evaluateRiskAmendmentPolicy({
+                  evaluation: calculation,
+                  command: captured.intent.command,
+                  retention: captured.retention,
+                });
         if (evaluation.kind === 'REJECTED')
           throw new Error(evaluation.reasons[0] ?? 'RISK_ADMISSION_DENIED');
         const rawPortfolio = z.object({ portfolio: z.unknown() }).parse(current.capture).portfolio;

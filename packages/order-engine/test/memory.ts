@@ -17,11 +17,22 @@ import {
 } from '../src/domain.js';
 import { reduceOrder } from '../src/state.js';
 import { prepareOrderAmendment } from '../src/amendment.js';
+import { prepareOrderCancellation } from '../src/cancellation.js';
 import { state } from './fixtures.js';
 export function memoryStore(currentRule = () => 'v1') {
   const orders = new Map<string, OrderState>(),
     keys = new Map<string, { id: string; fp: string }>(),
-    cancel = new Map<string, { intentId: string; fp: string; ruleVersion: string }>(),
+    cancel = new Map<
+      string,
+      {
+        orderId: string;
+        bindingHash: string;
+        command: unknown;
+        intentId: string;
+        fp: string;
+        ruleVersion: string;
+      }
+    >(),
     amendments = new Map<string, { requestHash: string; result: StoredAmendment }>(),
     claims = new Map<string, DispatchClaim>(),
     consumed = new Set<string>();
@@ -32,7 +43,10 @@ export function memoryStore(currentRule = () => 'v1') {
     return structuredClone(s);
   };
   const store: OrderStore = {
-    async recoverUnsent() {
+    async recoverUnsent(b, id) {
+      const s = bind(b, id);
+      const claim = [...claims.values()].find((v) => v.attemptId === s.activeAttemptId);
+      if (claim && claim.expiresAt > Date.now()) return s;
       throw new Error('ORDER_DURABLE_RECOVERY_REQUIRED');
     },
     async pendingAmendment(b, id, c) {
@@ -110,12 +124,33 @@ export function memoryStore(currentRule = () => 'v1') {
       amendments.set(key, { requestHash, result });
       return structuredClone(result);
     },
-    async cancelIntent(b, id, key) {
+    async findCancel(b, id, key) {
       const s = bind(b, id),
-        command = {
-          instrumentId: s.command.instrumentId,
-          locator: { kind: 'CLIENT_ID', id: s.command.clientOrderId },
-        },
+        old = cancel.get(`${b.tenantId}:${key}`);
+      if (!old) return null;
+      if (old.orderId !== id || old.bindingHash !== hash(b))
+        throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
+      return {
+        state: s,
+        intentId: old.intentId,
+        commandHash: old.fp,
+        ruleVersion: old.ruleVersion,
+        dispatched: claims.has(old.intentId),
+      };
+    },
+    async cancelIntent(b, id, key, c, evidence) {
+      const existing = await store.findCancel(b, id, key, c);
+      if (existing) return existing;
+      const s = bind(b, id),
+        command = evidence
+          ? prepareOrderCancellation(s, evidence, Date.now())
+          : {
+              instrumentId: s.command.instrumentId,
+              locator: {
+                kind: s.exchangeOrderId === null ? 'CLIENT_ID' : 'EXCHANGE_ID',
+                id: s.exchangeOrderId ?? s.command.clientOrderId,
+              },
+            },
         fp = computeCommandHash('cancelOrder', command, {
           profile: b.profile,
           account: {
@@ -124,11 +159,16 @@ export function memoryStore(currentRule = () => 'v1') {
             externalAccountId: b.externalAccountId,
           },
         });
-      const previous = cancel.get(key);
-      if (previous && previous.fp !== fp) throw new Error('ORDER_IDEMPOTENCY_CONFLICT');
-      const intentId = previous?.intentId ?? randomUUID();
-      const ruleVersion = previous?.ruleVersion ?? currentRule();
-      cancel.set(key, { intentId, fp, ruleVersion });
+      const intentId = randomUUID();
+      const ruleVersion = currentRule();
+      cancel.set(`${b.tenantId}:${key}`, {
+        orderId: id,
+        bindingHash: hash(b),
+        command,
+        intentId,
+        fp,
+        ruleVersion,
+      });
       return { state: s, intentId, commandHash: fp, ruleVersion, dispatched: claims.has(intentId) };
     },
     async begin(b, id, intentId, g) {
@@ -139,10 +179,7 @@ export function memoryStore(currentRule = () => 'v1') {
         command =
           operation === 'PLACE'
             ? s.command
-            : {
-                instrumentId: s.command.instrumentId,
-                locator: { kind: 'CLIENT_ID', id: s.command.clientOrderId },
-              },
+            : [...cancel.values()].find((v) => v.intentId === intentId)!.command,
         commandHash = computeCommandHash(
           operation === 'PLACE' ? 'createOrder' : 'cancelOrder',
           command,

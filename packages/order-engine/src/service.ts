@@ -369,7 +369,25 @@ export function createOrderEngine(options: {
         'CANCEL',
         async (c) => {
           mode();
-          const cmd = await options.store.cancelIntent(b, id, key, c);
+          const old = await options.store.findCancel(b, id, key, c);
+          check(c);
+          if (old?.dispatched) return old.state;
+          const s = await options.store.read(b, id, c);
+          if (s.exchangeOrderId === null) throw new Error('ORDER_CANCEL_TARGET');
+          const found = await options.adapter.getOrder(
+            {
+              instrumentId: s.command.instrumentId,
+              locator: { kind: 'EXCHANGE_ID', id: s.exchangeOrderId },
+            },
+            context(c),
+          );
+          const receivedAt = options.now();
+          check(c);
+          if (!found.ok || found.value.kind !== 'FOUND') throw new Error('ORDER_CANCEL_TARGET');
+          const cmd = await options.store.cancelIntent(b, id, key, c, {
+            order: found.value.order,
+            receivedAt,
+          });
           if (cmd.dispatched) return cmd.state;
           return dispatch(id, cmd.intentId, cmd.commandHash, 'CANCEL', c, cmd.ruleVersion);
         },
@@ -382,8 +400,12 @@ export function createOrderEngine(options: {
         async (c) => {
           mode();
           let s = await options.store.read(b, id, c);
-          const nativeControl = s.activeOperation === 'AMEND' || s.effectiveCommand !== undefined;
-          if (s.activeOperation === 'AMEND') s = await options.store.recoverUnsent(b, id, c);
+          const nativeControl =
+            s.activeOperation === 'AMEND' ||
+            s.activeOperation === 'CANCEL' ||
+            s.effectiveCommand !== undefined;
+          if (s.activeOperation === 'AMEND' || s.activeOperation === 'CANCEL')
+            s = await options.store.recoverUnsent(b, id, c);
           const pending = nativeControl ? await options.store.pendingAmendment(b, id, c) : null;
           const lookup = () =>
             options.adapter.getOrder(
@@ -519,6 +541,7 @@ const safe = new Set([
   'ORDER_EXECUTION_PRICE_REQUIRED',
   'ORDER_ID_EXHAUSTED',
   'ORDER_AMEND_TARGET',
+  'ORDER_CANCEL_TARGET',
   'ORDER_AMEND_UNSUPPORTED',
   'ORDER_AMEND_APPLICATION_UNPROVED',
 ]);

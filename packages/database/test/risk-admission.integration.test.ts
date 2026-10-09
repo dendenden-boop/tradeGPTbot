@@ -116,7 +116,7 @@ afterAll(async () => {
   for (const h of handles.splice(0)) await h.close();
   await admin.end();
 });
-async function fixture(nativeAmend = false) {
+async function fixture(nativeAmend = false, nativeCancel = false) {
   const f = await seedRiskCertification({
     admin,
     portfolio,
@@ -128,6 +128,7 @@ async function fixture(nativeAmend = false) {
     observer,
     registryOptions: options('DATABASE_INSTRUMENT_REGISTRY_URL'),
     nativeAmend,
+    nativeCancel,
   });
   const commandHash = computeCommandHash('createOrder', f.created.command, {
     profile: f.key.binding.profile,
@@ -153,8 +154,8 @@ async function open() {
   handles.push(port);
   return port;
 }
-async function bridgeFixture(dispatch = true, nativeAmend = false) {
-  const f = await fixture(nativeAmend),
+async function bridgeFixture(dispatch = true, nativeAmend = false, nativeCancel = false) {
+  const f = await fixture(nativeAmend, nativeCancel),
     port = await open();
   const grant = await port.approve(f.input, io());
   const claim = await orders.begin(f.key.binding, f.created.id, f.created.intentId, grant, io());
@@ -191,7 +192,7 @@ async function bridgeFixture(dispatch = true, nativeAmend = false) {
   ).rows[0]!.id;
   return { ...f, grant, claim, book };
 }
-async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
+async function bridgeState(f: Pick<Awaited<ReturnType<typeof bridgeFixture>>, 'grant' | 'book'>) {
   const reservation = (
     await admin.query<{ status: string; amount: string }>(
       'SELECT status,trim_scale(amount)::text amount FROM public.risk_reservation WHERE id=$1',
@@ -219,8 +220,8 @@ async function bridgeState(f: Awaited<ReturnType<typeof bridgeFixture>>) {
     state: JSON.parse(book.state) as { holds: { id: string; status: string; amount: string }[] },
   };
 }
-async function reconciledBridge(nativeAmend = false) {
-  const f = await bridgeFixture(true, nativeAmend);
+async function reconciledBridge(nativeAmend = false, nativeCancel = false) {
+  const f = await bridgeFixture(true, nativeAmend, nativeCancel);
   await orders.result(
     f.key.binding,
     f.claim,
@@ -328,6 +329,271 @@ async function amendmentFixture() {
   };
   return { ...f, amendment, amendmentInput: input };
 }
+it('certified CANCEL approval creates only a zero control hold while retaining the exact primary reservation', async () => {
+  const f = await reconciledBridge(false, true);
+  const cancel = await orders.cancelIntent(f.key.binding, f.created.id, randomUUID(), io(), {
+    order: f.native,
+    receivedAt: Date.now(),
+  });
+  const grant = await (
+    await open()
+  ).approve(
+    {
+      binding: f.key.binding,
+      state: { id: f.created.id },
+      intentId: cancel.intentId,
+      operation: 'CANCEL',
+      commandHash: cancel.commandHash,
+    },
+    io(),
+  );
+  expect((await bridgeState(f)).reservation).toEqual({ status: 'ACTIVE', amount: '5.005' });
+  expect(
+    (
+      await admin.query(
+        'SELECT status,trim_scale(amount)::text amount FROM public.risk_reservation WHERE id=$1',
+        [grant.reservationId],
+      )
+    ).rows,
+  ).toEqual([{ status: 'ACTIVE', amount: '0' }]);
+  expect(
+    await orders.begin(f.key.binding, f.created.id, cancel.intentId, grant, io()),
+  ).toMatchObject({ operation: 'CANCEL' });
+});
+it('new CANCEL after applied native AMEND targets the stable exchange identity and preserves immutable PLACE', async () => {
+  const f = await dispatchedAmendment();
+  await orders.resolveAmendment(f.key.binding, f.created.id, f.claim.attemptId, f.proof, io());
+  const cancel = await orders.cancelIntent(f.key.binding, f.created.id, randomUUID(), io());
+  const command = (
+    await admin.query<{ command: unknown }>(
+      'SELECT command::jsonb command FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2',
+      [f.key.binding.tenantId, cancel.intentId],
+    )
+  ).rows[0]!.command;
+  expect(command).toEqual({
+    instrumentId: f.created.command.instrumentId,
+    locator: { kind: 'EXCHANGE_ID', id: f.native.exchangeOrderId },
+  });
+  expect((await orders.read(f.key.binding, f.created.id, io())).command).toEqual(f.created.command);
+});
+async function cancellationIntentFixture() {
+  const f = await reconciledBridge(false, true),
+    key = randomUUID();
+  const cancel = await orders.cancelIntent(f.key.binding, f.created.id, key, io(), {
+    order: f.native,
+    receivedAt: Date.now(),
+  });
+  const input = {
+    binding: f.key.binding,
+    state: { id: f.created.id },
+    intentId: cancel.intentId,
+    operation: 'CANCEL' as const,
+    commandHash: cancel.commandHash,
+  };
+  const risk = await open();
+  return { ...f, primaryGrant: f.grant, cancel, input, riskPort: risk, cancelKey: key };
+}
+async function cancellationFixture() {
+  const f = await cancellationIntentFixture();
+  const grant = await f.riskPort.approve(f.input, io());
+  return { ...f, grant };
+}
+it('concurrent certified CANCEL approval and permanent intent replay create exactly one zero reservation and no posting', async () => {
+  const ledgerCount = async () =>
+    (await admin.query<{ count: string }>('SELECT count(*)::text count FROM public.ledger_entry'))
+      .rows[0]!.count;
+  const f = await cancellationIntentFixture(),
+    beforeLedger = await ledgerCount();
+  const restarted = await open();
+  const [a, b] = await Promise.all([
+    f.riskPort.approve(f.input, io()),
+    restarted.approve(f.input, io()),
+  ]);
+  expect(a).toEqual(b);
+  expect(
+    await orders.cancelIntent(f.key.binding, f.created.id, f.cancelKey, io(), {
+      order: f.native,
+      receivedAt: 0,
+    }),
+  ).toMatchObject({ intentId: f.cancel.intentId, commandHash: f.cancel.commandHash });
+  expect(await ledgerCount()).toBe(beforeLedger);
+  expect(
+    (
+      await admin.query(
+        'SELECT trim_scale(amount)::text amount FROM public.risk_reservation WHERE "tenantId"=$1 ORDER BY amount',
+        [f.key.binding.tenantId],
+      )
+    ).rows,
+  ).toEqual([{ amount: '0' }, { amount: '5.005' }]);
+  const other = await orders.create(f.key.binding, { ...f.created.draft, key: randomUUID() }, io());
+  await expect(orders.findCancel(f.key.binding, other.id, f.cancelKey, io())).rejects.toThrow(
+    'ORDER_IDEMPOTENCY_CONFLICT',
+  );
+});
+it('certified CANCEL rejects an unclassified legacy locator command instead of guessing a native target', async () => {
+  const f = await reconciledBridge(false, true);
+  const c = await orders.cancelIntent(f.key.binding, f.created.id, randomUUID(), io());
+  await expect(
+    (await open()).approve(
+      {
+        binding: f.key.binding,
+        state: { id: f.created.id },
+        intentId: c.intentId,
+        operation: 'CANCEL',
+        commandHash: c.commandHash,
+      },
+      io(),
+    ),
+  ).rejects.toThrow();
+  expect(await bridgeState(f)).toEqual(f.before);
+});
+async function cancelPermit(
+  f: Awaited<ReturnType<typeof cancellationFixture>>,
+  claim: DispatchClaim,
+  durable = orders,
+) {
+  const account = f.native.account;
+  return durable.authorize(
+    'cancelOrder',
+    {
+      command: claim.command,
+      authorization: {
+        commandId: claim.intentId,
+        commandHash: claim.commandHash,
+        dispatchAttemptId: claim.attemptId,
+        profile: f.key.binding.profile,
+        account,
+        issuedAt: Date.now(),
+        expiresAt: f.grant.expiresAt,
+      },
+    },
+    { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+  );
+}
+it('certified CANCEL consumes one durable permit and preserves primary/control UNKNOWN holds through restart and replay', async () => {
+  const f = await cancellationFixture();
+  expect(await f.riskPort.approve(f.input, io())).toEqual(f.grant);
+  const claim = await orders.begin(f.key.binding, f.created.id, f.cancel.intentId, f.grant, io());
+  if (!claim) throw new Error('MISSING_CANCEL_CLAIM');
+  expect(await cancelPermit(f, claim)).toBe(true);
+  expect(await cancelPermit(f, claim)).toBe(false);
+  await orders.result(
+    f.key.binding,
+    claim,
+    { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+    io(),
+  );
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  expect(await restarted.findCancel(f.key.binding, f.created.id, f.cancelKey, io())).toMatchObject({
+    intentId: f.cancel.intentId,
+    commandHash: f.cancel.commandHash,
+    dispatched: true,
+  });
+  expect(
+    await restarted.begin(f.key.binding, f.created.id, f.cancel.intentId, f.grant, io()),
+  ).toBeNull();
+  expect((await bridgeState({ ...f, grant: f.primaryGrant })).reservation).toEqual({
+    status: 'UNRESOLVED',
+    amount: '5.005',
+  });
+  expect(
+    (
+      await admin.query(
+        'SELECT status,trim_scale(amount)::text amount FROM public.risk_reservation WHERE id=$1',
+        [f.grant.reservationId],
+      )
+    ).rows,
+  ).toEqual([{ status: 'UNRESOLVED', amount: '0' }]);
+});
+it('CANCEL pause between approval and permit records NOT_SENT and releases only the zero control hold', async () => {
+  const f = await cancellationFixture();
+  const claim = await orders.begin(f.key.binding, f.created.id, f.cancel.intentId, f.grant, io());
+  if (!claim) throw new Error('MISSING_CANCEL_CLAIM');
+  const controller = await createPostgresControls({
+    ...options('DATABASE_RISK_CONTROL_URL'),
+    authority: 'TENANT',
+  });
+  handles.push(controller);
+  await controller.update(
+    {
+      scope: {
+        kind: 'CONNECTION',
+        tenantId: f.key.binding.tenantId,
+        targetId: f.key.binding.connectionId!,
+      },
+      kind: 'KILL_SWITCH',
+      key: 'kill',
+      state: 'PAUSED',
+      expectedEpoch: '0',
+      eventId: randomUUID(),
+      reason: 'ISOLATED_CANCEL_FINAL_PAUSE',
+      evidenceHash: 'b'.repeat(64),
+    },
+    io(),
+  );
+  expect(await cancelPermit(f, claim)).toBe(false);
+  await orders.result(
+    f.key.binding,
+    claim,
+    { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+    io(),
+  );
+  expect(
+    (
+      await admin.query(
+        'SELECT "transportStartedAt","permitConsumedAt","responseCode" FROM public.submission_attempt WHERE id=$1',
+        [claim.attemptId],
+      )
+    ).rows,
+  ).toEqual([{ transportStartedAt: null, permitConsumedAt: null, responseCode: 'NOT_SENT' }]);
+  expect((await bridgeState({ ...f, grant: f.primaryGrant })).reservation.amount).toBe('5.005');
+  expect(
+    (
+      await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+        f.grant.reservationId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RELEASED' }]);
+});
+it('restart recovers an expired undispatched certified CANCEL as NOT_SENT without releasing primary collateral', async () => {
+  const f = await cancellationFixture();
+  const claim = await orders.begin(f.key.binding, f.created.id, f.cancel.intentId, f.grant, io());
+  if (!claim) throw new Error('MISSING_CANCEL_CLAIM');
+  await new Promise((resolve) =>
+    setTimeout(resolve, Math.max(1, f.grant.expiresAt - Date.now() + 25)),
+  );
+  const restart = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restart);
+  const resolved = await restart.recoverUnsent(f.key.binding, f.created.id, io());
+  expect(resolved.activeAttemptId).toBeNull();
+  expect(
+    (
+      await admin.query(
+        'SELECT status,"responseCode","transportStartedAt","permitConsumedAt" FROM public.submission_attempt WHERE id=$1',
+        [claim.attemptId],
+      )
+    ).rows,
+  ).toEqual([
+    {
+      status: 'REJECTED',
+      responseCode: 'NOT_SENT',
+      transportStartedAt: null,
+      permitConsumedAt: null,
+    },
+  ]);
+  const retained = await bridgeState({ ...f, grant: f.primaryGrant });
+  expect(retained.reservation.amount).toBe('5.005');
+  expect(
+    (
+      await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+        f.grant.reservationId,
+      ])
+    ).rows,
+  ).toEqual([{ status: 'RELEASED' }]);
+  expect(await restart.recoverUnsent(f.key.binding, f.created.id, io())).toEqual(resolved);
+  expect(await bridgeState({ ...f, grant: f.primaryGrant })).toEqual(retained);
+});
 async function dispatchedAmendment() {
   const f = await amendmentFixture();
   const grant = await (await open()).approve(f.amendmentInput, io());
@@ -665,6 +931,141 @@ async function serviceAmendFixture(kind: 'ACK' | 'UNKNOWN' | 'BLOCKED' | 'MISSIN
     current: () => current,
   };
 }
+async function serviceCancelFixture(kind: 'ACK' | 'UNKNOWN' | 'BLOCKED') {
+  const f = await reconciledBridge(false, true);
+  let current = f.native,
+    sends = 0,
+    lookups = 0,
+    approvals = 0;
+  const riskPort = await open();
+  const registry = await createPostgresInstrumentRegistry({
+    ...options('DATABASE_INSTRUMENT_REGISTRY_URL'),
+    scope: f.native.scope,
+    instrumentIds: [f.key.instrumentId],
+  });
+  handles.push(registry);
+  const transport: AdapterTransport = {
+    async request(op, raw) {
+      if (op === 'getOrder') {
+        lookups++;
+        expect(operations.getOrder.input.parse(raw).locator).toEqual({
+          kind: 'EXCHANGE_ID',
+          id: f.native.exchangeOrderId,
+        });
+        return { kind: 'FOUND', order: current };
+      }
+      if (op === 'getTrades') {
+        const q = operations.getTrades.input.parse(raw);
+        return { queryId: q.queryId, items: [], nextCursor: null };
+      }
+      if (op !== 'cancelOrder') throw new Error('UNEXPECTED_SERVICE_CANCEL_FIXTURE_OPERATION');
+      const q = operations.cancelOrder.input.parse(raw);
+      const attempt = (
+        await admin.query<{ permitConsumedAt: Date | null; transportStartedAt: Date | null }>(
+          'SELECT "permitConsumedAt","transportStartedAt" FROM public.submission_attempt WHERE id=$1',
+          [q.authorization.dispatchAttemptId],
+        )
+      ).rows[0]!;
+      expect(attempt.permitConsumedAt).not.toBeNull();
+      expect(attempt.transportStartedAt).toEqual(attempt.permitConsumedAt);
+      expect(q.command.target?.current).toEqual(f.created.command);
+      sends++;
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      current = orderSchema.parse({ ...current, status: 'CANCELED', updatedAt: Date.now() });
+      if (kind === 'UNKNOWN') return { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } };
+      return {
+        kind: 'ACCEPTED',
+        ack: {
+          commandId: q.authorization.commandId,
+          status: 'ACKNOWLEDGED',
+          exchangeId: current.exchangeOrderId,
+          receivedAt: Date.now(),
+        },
+      };
+    },
+    subscribe() {
+      return Promise.resolve(() => Promise.resolve());
+    },
+    async disconnect() {},
+  };
+  const adapter = createExchangeAdapter({
+    profile: f.key.binding.profile,
+    account: f.native.account,
+    capabilities: adapterCapabilities.map((c) => ({
+      ...c,
+      profile: f.key.binding.profile,
+      adapterVersion: f.risk.adapterVersion,
+      checkedAt: Date.now() - 1000,
+      expiresAt: Date.now() + 60000,
+    })),
+    adapterVersion: f.risk.adapterVersion,
+    registry,
+    transport,
+    authorization: {
+      async authorize(...args) {
+        if (kind === 'BLOCKED' && args[0] === 'cancelOrder')
+          await admin.query(
+            'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+            [f.key.binding.accountId],
+          );
+        return orders.authorize(...args);
+      },
+    },
+    now: () => Date.now(),
+  });
+  handles.push({ close: () => adapter.disconnect() });
+  const compose = (store: OrderStore) =>
+    createOrderEngine({
+      binding: f.key.binding,
+      store,
+      adapter,
+      registry,
+      now: () => Date.now(),
+      authorization: { check: () => Promise.resolve(true) },
+      risk: {
+        async approve(input, context) {
+          approvals++;
+          return riskPort.approve(input, context);
+        },
+      },
+      fills: { ingest: () => Promise.reject(new Error('NO_FILL_FIXTURE')) },
+    });
+  return { ...f, compose, counts: () => ({ sends, lookups, approvals }) };
+}
+it.each(['ACK', 'UNKNOWN', 'BLOCKED'] as const)(
+  'production CANCEL service %s uses actual Risk/Portfolio/permit authority and permanent restart replay',
+  async (kind) => {
+    const f = await serviceCancelFixture(kind),
+      engine = f.compose(orders),
+      key = randomUUID();
+    handles.push(engine);
+    const first = await engine.cancel(f.created.id, key);
+    expect(f.counts().sends).toBe(kind === 'BLOCKED' ? 0 : 1);
+    expect(first.status).toBe(
+      kind === 'ACK'
+        ? 'CANCEL_PENDING'
+        : kind === 'UNKNOWN'
+          ? 'UNKNOWN'
+          : 'RECONCILIATION_REQUIRED',
+    );
+    expect((await bridgeState(f)).reservation.amount).toBe('5.005');
+    const store = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL')),
+      restart = f.compose(store);
+    handles.push(store, restart);
+    const before = f.counts();
+    expect(await restart.cancel(f.created.id, key)).toEqual(first);
+    expect(f.counts()).toEqual(before);
+    if (kind !== 'BLOCKED') {
+      expect((await restart.reconcile(f.created.id)).status).toBe('CANCELED');
+      const released = await bridgeState(f);
+      expect(released.reservation.status).toBe('RELEASED');
+      expect(released.state.holds).toEqual([]);
+      await restart.reconcile(f.created.id);
+      expect(await bridgeState(f)).toEqual(released);
+      expect(f.counts().sends).toBe(1);
+    }
+  },
+);
 it.each(['ACK', 'UNKNOWN'] as const)(
   'production AMEND service %s keeps certified holds until causal reconciliation and replays across runtime restart',
   async (kind) => {
@@ -1537,6 +1938,132 @@ it.each(['ACK', 'UNKNOWN'] as const)(
   },
 );
 it.each(['POLICY', 'PERMISSION', 'NATIVE_RACE', 'HEALTH', 'PAUSE', 'DEADLINE'] as const)(
+  'CANCEL final %s replacement is NOT_SENT and releases only the zero control commitment',
+  async (kind) => {
+    const f = await cancellationFixture();
+    const grant = f.grant;
+    const claim = await orders.begin(f.key.binding, f.created.id, f.cancel.intentId, grant, io());
+    if (!claim) throw new Error('MISSING_CANCEL_CLAIM');
+    if (kind === 'POLICY')
+      await user.update(
+        {
+          scope: { kind: 'USER', tenantId: f.key.binding.tenantId },
+          mode: 'TESTNET',
+          eventId: randomUUID(),
+          expectedVersion: '1',
+          reason: 'ISOLATED_CANCEL_FINAL_POLICY',
+          limits: riskLimitsSchema.parse({ ...f.risk.user, maxOrderNotional: '1' }),
+        },
+        io(),
+      );
+    else if (kind === 'PERMISSION') {
+      await admin.query(
+        'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+        [f.key.binding.accountId],
+      );
+    } else if (kind === 'NATIVE_RACE') {
+      await orders.observe(
+        f.key.binding,
+        f.created.id,
+        orderSchema.parse({ ...f.native, updatedAt: f.native.updatedAt + 1 }),
+        io(),
+      );
+    } else if (kind === 'HEALTH') {
+      await observer.publish(
+        {
+          ...f.observationEvent,
+          id: randomUUID(),
+          expectedRevision: '1',
+          observation: {
+            ...f.observationEvent.observation,
+            health: {
+              ...f.observationEvent.observation.health,
+              privateStream: { sourceId: randomUUID(), asOf: Date.now(), status: 'FAILED' },
+            },
+          },
+        },
+        io(),
+      );
+    } else if (kind === 'PAUSE') {
+      const controller = await createPostgresControls({
+        ...options('DATABASE_RISK_CONTROL_URL'),
+        authority: 'TENANT',
+      });
+      handles.push(controller);
+      await controller.update(
+        {
+          scope: {
+            kind: 'CONNECTION',
+            tenantId: f.key.binding.tenantId,
+            targetId: f.key.binding.connectionId!,
+          },
+          kind: 'KILL_SWITCH',
+          key: 'kill',
+          state: 'PAUSED',
+          expectedEpoch: '0',
+          eventId: randomUUID(),
+          reason: 'ISOLATED_CANCEL_FINAL_PAUSE',
+          evidenceHash: 'b'.repeat(64),
+        },
+        io(),
+      );
+    } else {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(1, grant.expiresAt - Date.now() + 25)),
+      );
+    }
+    const account = {
+      tenantId: f.key.binding.tenantId,
+      connectionId: f.key.binding.connectionId,
+      externalAccountId: f.key.binding.externalAccountId,
+    };
+    expect(
+      await orders.authorize(
+        'cancelOrder',
+        {
+          command: claim.command,
+          authorization: {
+            commandId: claim.intentId,
+            commandHash: claim.commandHash,
+            dispatchAttemptId: claim.attemptId,
+            profile: f.key.binding.profile,
+            account,
+            issuedAt: Date.now(),
+            expiresAt: grant.expiresAt,
+          },
+        },
+        { ...io(), profile: f.key.binding.profile, account, correlationId: randomUUID() },
+      ),
+    ).toBe(false);
+    const state = await orders.result(
+      f.key.binding,
+      claim,
+      { kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } },
+      io(),
+    );
+    expect(state.status).not.toBe('UNKNOWN');
+    expect(
+      (
+        await admin.query(
+          'SELECT "transportStartedAt","permitConsumedAt","responseCode" FROM public.submission_attempt WHERE id=$1',
+          [claim.attemptId],
+        )
+      ).rows,
+    ).toEqual([{ transportStartedAt: null, permitConsumedAt: null, responseCode: 'NOT_SENT' }]);
+    expect(
+      (
+        await admin.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
+          grant.reservationId,
+        ])
+      ).rows,
+    ).toEqual([{ status: 'RELEASED' }]);
+    const after = await bridgeState({ ...f, grant: f.primaryGrant });
+    expect(after.reservation.amount).toBe('5.005');
+    expect(after.reservation.status).toBe('UNRESOLVED');
+    expect(after.state.holds).toHaveLength(1);
+  },
+);
+it.each(['POLICY', 'PERMISSION', 'NATIVE_RACE', 'HEALTH', 'PAUSE', 'DEADLINE'] as const)(
   'AMEND final %s replacement is NOT_SENT and releases only the zero control commitment',
   async (kind) => {
     const f = await amendmentFixture();
@@ -1736,6 +2263,46 @@ it.each(['POLICY', 'RULES', 'PERMISSION', 'NATIVE_RACE'] as const)(
     ).toEqual([{ id: f.grant.reservationId }]);
   },
 );
+it('CANCEL returns no grant on a real lost COMMIT response and recovers its zero delta across restart', async () => {
+  const f = await cancellationIntentFixture();
+  const proxy = await registryCommitProxy(
+    options('DATABASE_RISK_ADMISSION_URL').connectionString,
+    'ADMISSION',
+  );
+  let port: Awaited<ReturnType<typeof createPostgresOrderRiskPort>> | undefined;
+  try {
+    port = await createPostgresOrderRiskPort({
+      connectionString: proxy.connectionString,
+      environment: 'test',
+    });
+    proxy.arm();
+    await expect(port.approve(f.input, io())).rejects.toThrow('RISK_SNAPSHOT_STORE_FAILED');
+    expect(proxy.dropped()).toBe(1);
+    await port.close();
+    const after = await bridgeState(f);
+    expect(after.reservation).toEqual(f.before.reservation);
+    const restarted = await open();
+    const grant = await restarted.approve(f.input, io());
+    expect(await restarted.approve(f.input, io())).toEqual(grant);
+    expect(after.state.holds).toHaveLength(2);
+    expect(after.state.holds).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: grant.reservationId, amount: '0', status: 'RESERVED' }),
+      ]),
+    );
+    expect(await bridgeState(f)).toEqual(after);
+    expect(
+      (
+        await admin.query('SELECT id FROM public.risk_reservation WHERE "tenantId"=$1', [
+          f.key.binding.tenantId,
+        ])
+      ).rowCount,
+    ).toBe(2);
+  } finally {
+    await port?.close();
+    await proxy.close();
+  }
+});
 it('AMEND returns no grant on a real lost COMMIT response and recovers its zero delta across restart', async () => {
   const f = await amendmentFixture();
   const proxy = await registryCommitProxy(

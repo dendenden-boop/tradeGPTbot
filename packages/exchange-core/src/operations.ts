@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { positiveAmountSchema } from './decimal.js';
+import { decimalCompare, positiveAmountSchema } from './decimal.js';
 import {
   accountInfoSchema,
   accountSnapshotSchema,
@@ -49,6 +49,21 @@ const orderLocator = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('CLIENT_ID'), id: idSchema }),
 ]);
 const locatorQuery = z.strictObject({ instrumentId: idSchema, locator: orderLocator });
+/** Optional evidence preserves existing wire calls. Certified admission requires
+ * a server-owned frozen target; parsing alone never proves its authority. */
+const cancellationCommand = locatorQuery
+  .extend({ target: inPlaceAmendmentSchema.shape.target.optional() })
+  .superRefine((c, ctx) => {
+    const t = c.target;
+    if (
+      t &&
+      (c.locator.kind !== 'EXCHANGE_ID' ||
+        c.instrumentId !== t.current.instrumentId ||
+        t.nativeUpdatedAt > t.observedAt ||
+        decimalCompare(t.filledQuantity, t.current.size.value) >= 0)
+    )
+      ctx.addIssue({ code: 'custom', message: 'INVALID_NATIVE_CANCEL_TARGET' });
+  });
 const algoLocatorQuery = z.strictObject({ instrumentId: idSchema, clientAlgoId: idSchema });
 export const authorizationSchema = z
   .strictObject({
@@ -196,7 +211,7 @@ export const operations = Object.freeze({
   subscribePositions: stream(instrumentQuery, positionSchema, true),
   subscribeBalances: stream(empty, accountSnapshotSchema, true),
   createOrder: mutation(authorized(newOrderSchema), 'MARKET_ORDER'),
-  cancelOrder: mutation(authorized(locatorQuery), 'CANCEL_ORDER'),
+  cancelOrder: mutation(authorized(cancellationCommand), 'CANCEL_ORDER'),
   cancelAllOrders: {
     kind: 'BATCH' as const,
     input: z.strictObject({ commands: z.array(authorized(locatorQuery)).min(1).max(100) }),

@@ -43,6 +43,7 @@ const expectedMigrations = [
   '202610080013_native_amend_application',
   '202610080014_native_amend_identity_type',
   '202610090001_native_amend_source_clock',
+  '202610090002_certified_native_cancel',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
