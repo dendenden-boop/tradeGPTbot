@@ -13,6 +13,23 @@ function h(...args: Parameters<typeof harness>) {
   return x;
 }
 describe('OKX Core integration with private signing and admission', () => {
+  it.each(['okx-spot-demo-v1', 'okx-swap-demo-v1'] as const)(
+    'rechecks final durable authority after dynamic admission changes permission %s',
+    async (profile) => {
+      const x = h(profile),
+        version = await x.warm();
+      let allowed = true;
+      x.authorization.authorize.mockImplementation(() => Promise.resolve(allowed));
+      x.admission.validate.mockImplementation(() => {
+        allowed = false;
+        return Promise.resolve(true);
+      });
+      expect(
+        await x.adapter.createOrder(x.permit('createOrder', x.order(version)), x.context()),
+      ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+      expect(x.request.mock.calls.filter(([r]) => r.method === 'POST')).toHaveLength(0);
+    },
+  );
   it('only factory is a runtime production export', () => {
     expect(Object.keys(production)).toEqual(['createOkxAdapter']);
   });

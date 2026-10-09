@@ -20,6 +20,26 @@ function h(...args: Parameters<typeof harness>) {
   return x;
 }
 describe('Bybit adapter security and native protocol integration', () => {
+  it.each(['bybit-spot-testnet-v1', 'bybit-linear-testnet-v1'] as const)(
+    'rechecks final durable authority after dynamic admission changes permission %s',
+    async (profile) => {
+      const x = h(profile),
+        version = await x.warm();
+      let allowed = true;
+      x.authorization.authorize.mockImplementation(() => Promise.resolve(allowed));
+      x.admission.validate.mockImplementation(() => {
+        allowed = false;
+        return Promise.resolve(true);
+      });
+      expect(
+        await x.adapter.createOrder(
+          x.permit('createOrder', { ...x.order(), ruleVersion: version }),
+          x.context(),
+        ),
+      ).toMatchObject({ kind: 'DEFINITIVELY_REJECTED', error: { code: 'AUTHORIZATION_REQUIRED' } });
+      expect(x.request.mock.calls.filter(([r]) => r.method === 'POST')).toHaveLength(0);
+    },
+  );
   it('exports factory/types only; raw IO/signer/testing are private', () => {
     expect(Object.keys(production)).toEqual(['createBybitAdapter']);
   });
