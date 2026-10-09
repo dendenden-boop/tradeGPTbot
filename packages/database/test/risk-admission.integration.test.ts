@@ -10,7 +10,7 @@ import {
   createPostgresPortfolioStore,
   type PortfolioStore,
 } from '@ctp/portfolio';
-import { createPostgresOrderStore, type OrderStore } from '@ctp/order-engine';
+import { createPostgresOrderStore, type OrderStore, type DispatchClaim } from '@ctp/order-engine';
 import {
   createPostgresMarketSnapshots,
   createPostgresInstrumentRegistry,
@@ -373,6 +373,48 @@ async function dispatchedAmendment() {
   };
   return { ...f, controlGrant: grant, claim, proof };
 }
+type PendingStore = OrderStore & {
+  pendingAmendment(
+    binding: Parameters<OrderStore['read']>[0],
+    id: string,
+    context: Parameters<OrderStore['read']>[2],
+  ): Promise<DispatchClaim | null>;
+};
+it('server recovery reads exact pending AMEND command across restart without new Risk or transport authority', async () => {
+  const f = await dispatchedAmendment();
+  const before = await bridgeState(f);
+  const current = await (orders as PendingStore).pendingAmendment(
+    f.key.binding,
+    f.created.id,
+    io(),
+  );
+  expect(current).toMatchObject({
+    attemptId: f.claim.attemptId,
+    intentId: f.amendment.intentId,
+    operation: 'AMEND',
+    command: f.amendment.command,
+    commandHash: f.amendment.commandHash,
+    expiresAt: f.controlGrant.expiresAt,
+  });
+  expect(current?.state.command).toEqual(f.created.command);
+  const restarted = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+  handles.push(restarted);
+  expect(
+    await (restarted as PendingStore).pendingAmendment(f.key.binding, f.created.id, io()),
+  ).toEqual(current);
+  expect(await bridgeState(f)).toEqual(before);
+  await expect(
+    (restarted as PendingStore).pendingAmendment(
+      { ...f.key.binding, accountId: randomUUID() },
+      f.created.id,
+      io(),
+    ),
+  ).rejects.toThrow('ORDER_BINDING_DENIED');
+  await orders.resolveAmendment(f.key.binding, f.created.id, f.claim.attemptId, f.proof, io());
+  expect(
+    await (restarted as PendingStore).pendingAmendment(f.key.binding, f.created.id, io()),
+  ).toBeNull();
+});
 function resolveAmendment(
   store: OrderStore,
   f: Awaited<ReturnType<typeof dispatchedAmendment>>,
