@@ -328,6 +328,50 @@ async function amendmentFixture() {
   };
   return { ...f, amendment, amendmentInput: input };
 }
+it('certified CANCEL approval creates only a zero control hold while retaining the exact primary reservation', async () => {
+  const f = await reconciledBridge();
+  const cancel = await orders.cancelIntent(f.key.binding, f.created.id, randomUUID(), io());
+  const grant = await (
+    await open()
+  ).approve(
+    {
+      binding: f.key.binding,
+      state: { id: f.created.id },
+      intentId: cancel.intentId,
+      operation: 'CANCEL',
+      commandHash: cancel.commandHash,
+    },
+    io(),
+  );
+  expect((await bridgeState(f)).reservation).toEqual({ status: 'ACTIVE', amount: '5.005' });
+  expect(
+    (
+      await admin.query(
+        'SELECT status,trim_scale(amount)::text amount FROM public.risk_reservation WHERE id=$1',
+        [grant.reservationId],
+      )
+    ).rows,
+  ).toEqual([{ status: 'ACTIVE', amount: '0' }]);
+  expect(
+    await orders.begin(f.key.binding, f.created.id, cancel.intentId, grant, io()),
+  ).toMatchObject({ operation: 'CANCEL' });
+});
+it('new CANCEL after applied native AMEND targets the stable exchange identity and preserves immutable PLACE', async () => {
+  const f = await dispatchedAmendment();
+  await orders.resolveAmendment(f.key.binding, f.created.id, f.claim.attemptId, f.proof, io());
+  const cancel = await orders.cancelIntent(f.key.binding, f.created.id, randomUUID(), io());
+  const command = (
+    await admin.query<{ command: unknown }>(
+      'SELECT command::jsonb command FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2',
+      [f.key.binding.tenantId, cancel.intentId],
+    )
+  ).rows[0]!.command;
+  expect(command).toEqual({
+    instrumentId: f.created.command.instrumentId,
+    locator: { kind: 'EXCHANGE_ID', id: f.native.exchangeOrderId },
+  });
+  expect((await orders.read(f.key.binding, f.created.id, io())).command).toEqual(f.created.command);
+});
 async function dispatchedAmendment() {
   const f = await amendmentFixture();
   const grant = await (await open()).approve(f.amendmentInput, io());
