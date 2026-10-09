@@ -1,11 +1,11 @@
 name: Native certification reproduction
 on:
   push:
-    branches: [codex/phase12-certified-cancel-green]
+    branches: [codex/phase12-binance-profile-red]
 permissions:
   contents: read
 concurrency:
-  group: native-certified-cancel-green
+  group: native-binance-profile-red
   cancel-in-progress: true
 jobs:
   reproduce:
@@ -29,7 +29,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: native-certified-cancel-green
+          name: native-binance-profile-red
           path: test-results/
           if-no-files-found: error
           retention-days: 7

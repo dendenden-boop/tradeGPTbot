@@ -7,6 +7,8 @@ import {
   orderSchema,
   createExchangeAdapter,
   operations,
+  featureSchema,
+  capabilityRecordSchema,
   type AdapterTransport,
   type AmendmentEvidence,
 } from '@ctp/exchange-core';
@@ -41,6 +43,10 @@ import {
   type PostgresPolicies,
 } from '@ctp/risk-engine';
 import { seedRiskCertification } from './fixtures/risk-certification.js';
+import { createBinanceAdapterWithIo } from '../../exchange-binance/src/adapter.js';
+import { adapterProfile, getBinanceProfile } from '../../exchange-binance/src/profiles.js';
+import { exchangeInfo, spotSymbol } from '../../exchange-binance/test/fixtures/public-data.js';
+import type { NetworkIo } from '../../exchange-binance/src/io.js';
 import { order as nativeOrderFixture } from '../../exchange-core/test/fixtures/adapter.js';
 import { capabilities as adapterCapabilities } from '../../exchange-core/test/fixtures/adapter.js';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
@@ -116,7 +122,11 @@ afterAll(async () => {
   for (const h of handles.splice(0)) await h.close();
   await admin.end();
 });
-async function fixture(nativeAmend = false, nativeCancel = false) {
+async function fixture(
+  nativeAmend = false,
+  nativeCancel = false,
+  nativeProfile?: Parameters<typeof seedRiskCertification>[0]['nativeProfile'],
+) {
   const f = await seedRiskCertification({
     admin,
     portfolio,
@@ -129,6 +139,7 @@ async function fixture(nativeAmend = false, nativeCancel = false) {
     registryOptions: options('DATABASE_INSTRUMENT_REGISTRY_URL'),
     nativeAmend,
     nativeCancel,
+    ...(nativeProfile ? { nativeProfile } : {}),
   });
   const commandHash = computeCommandHash('createOrder', f.created.command, {
     profile: f.key.binding.profile,
@@ -931,6 +942,326 @@ async function serviceAmendFixture(kind: 'ACK' | 'UNKNOWN' | 'BLOCKED' | 'MISSIN
     current: () => current,
   };
 }
+it.each(['ACK', 'UNKNOWN', 'BLOCKED'] as const)(
+  'native Binance assembly %s uses PostgreSQL AMEND authority, holds and restart reconciliation',
+  async (kind) => {
+    const identities = {
+      tenantId: randomUUID(),
+      accountId: randomUUID(),
+      connectionId: randomUUID(),
+    };
+    const symbol = 'BTCUSDT' + randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
+    const endpoint = getBinanceProfile('binance-spot-testnet-v1');
+    const profile = adapterProfile(endpoint, 'isolated-native-profile');
+    const account = {
+      tenantId: identities.tenantId,
+      connectionId: identities.connectionId,
+      externalAccountId: portfolioBinding().externalAccountId,
+    };
+    const registry = await createPostgresInstrumentRegistry({
+      ...options('DATABASE_INSTRUMENT_REGISTRY_URL'),
+      scope: endpoint.scope,
+      instrumentIds: [symbol],
+    });
+    handles.push(registry);
+    const capabilities = featureSchema.options.map((feature) =>
+      capabilityRecordSchema.parse({
+        profile,
+        feature,
+        support: 'SUPPORTED',
+        implementation: 'NATIVE',
+        constraints: {},
+        evidenceUrl:
+          'https://developers.binance.com/en/docs/products/spot/faqs/order_amend_keep_priority',
+        checkedAt: Date.now() - 1000,
+        expiresAt: Date.now() + 60000,
+        adapterVersion: 'binance-v1',
+      }),
+    );
+    let owned: Awaited<ReturnType<typeof fixture>> | undefined;
+    let store = orders;
+    let current: Record<string, unknown> | undefined;
+    let history: readonly Record<string, unknown>[] = [];
+    let sends = 0;
+    const network: NetworkIo = {
+      async request(input) {
+        const url = input.url;
+        let body: unknown;
+        if (url.pathname === '/api/v3/exchangeInfo')
+          body = {
+            ...exchangeInfo([{ ...spotSymbol(), symbol, amendAllowed: true }]),
+            serverTime: String(Date.now()),
+          };
+        else if (url.pathname === '/api/v3/time') body = { serverTime: String(Date.now()) };
+        else if (url.pathname === '/api/v3/order' && input.method === 'GET') {
+          expect(url.searchParams.get('orderId')).toBe('9007199254740993123');
+          expect(current).toBeDefined();
+          body = current;
+        } else if (url.pathname === '/api/v3/myTrades') body = [];
+        else if (url.pathname === '/api/v3/order/amendments') body = history;
+        else if (url.pathname === '/api/v3/order/amend/keepPriority' && input.method === 'PUT') {
+          const f = owned!;
+          const attempt = (
+            await admin.query<{ permit: Date; started: Date; command: string }>(
+              'SELECT a."permitConsumedAt" permit,a."transportStartedAt" started,c.command FROM public.submission_attempt a JOIN ctp_execution.command c ON c."tenantId"=a."tenantId" AND c."intentId"=a."intentId" WHERE a."orderId"=$1 AND a.operation=\'AMEND\'',
+              [f.created.id],
+            )
+          ).rows[0]!;
+          expect(attempt.permit).not.toBeNull();
+          expect(attempt.started).not.toBeNull();
+          const command = operations.amendOrder.input.shape.command.parse(
+            JSON.parse(attempt.command),
+          );
+          expect(url.searchParams.get('orderId')).toBe(command.locator.locator.id);
+          expect(url.searchParams.get('newQty')).toBe(command.replacement.size.value);
+          expect(url.searchParams.get('newClientOrderId')).toBe(command.replacement.clientOrderId);
+          sends++;
+          const at = Date.now(),
+            previous = current!;
+          current = {
+            ...previous,
+            clientOrderId: command.replacement.clientOrderId,
+            origQty: command.replacement.size.value,
+            updateTime: String(at),
+          };
+          history = [
+            {
+              symbol: symbol,
+              orderId: '9007199254740993123',
+              executionId: '9007199254740993124',
+              time: String(at),
+              origClientOrderId: previous.clientOrderId,
+              newClientOrderId: current.clientOrderId,
+              origQty: previous.origQty,
+              newQty: current.origQty,
+            },
+          ];
+          if (kind === 'UNKNOWN') throw new Error('ISOLATED_NATIVE_CONNECTION_LOST_AFTER_DISPATCH');
+          body = {
+            transactTime: String(at),
+            executionId: '9007199254740993124',
+            amendedOrder: {
+              ...current,
+              origClientOrderId: previous.clientOrderId,
+              qty: current.origQty,
+              preventedQty: '0',
+              quoteOrderQty: '0',
+            },
+          };
+        } else throw new Error('UNEXPECTED_NATIVE_PROFILE_ROUTE');
+        return { status: 200, headers: {}, body: JSON.stringify(body) };
+      },
+      openSocket() {
+        return Promise.reject(new Error('UNEXPECTED_NATIVE_PROFILE_WS'));
+      },
+      async close() {},
+    };
+    const adapter = createBinanceAdapterWithIo(
+      {
+        profileId: endpoint.id,
+        symbols: [symbol],
+        registry,
+        capabilities,
+        limiter: { reserve: async () => true, observe: async () => {} },
+        connection: { resolve: () => ({ account, credentialRef: 'isolated-native-profile' }) },
+        credentials: {
+          resolve: async () => ({
+            profileId: endpoint.id,
+            account,
+            apiKey: 'isolated-synthetic-key',
+            secret: 'isolated-synthetic-secret',
+          }),
+        },
+        sandboxAcceptance: { authorize: async () => true },
+        orderAdmission: { validate: async () => true },
+        identities: {
+          order(a, instrumentId, exchangeId, clientId) {
+            expect(a).toEqual(account);
+            expect(instrumentId).toBe(symbol);
+            expect(exchangeId).toBe('9007199254740993123');
+            if (
+              !owned ||
+              !current ||
+              (clientId !== owned.created.command.clientOrderId &&
+                clientId !== current.clientOrderId)
+            )
+              throw new Error('UNOWNED_NATIVE_ORDER');
+            return { internalOrderId: owned.created.id, intentId: owned.created.intentId };
+          },
+          algo() {
+            throw new Error('UNEXPECTED_NATIVE_PROFILE_ALGO');
+          },
+          fill() {
+            throw new Error('UNEXPECTED_NATIVE_PROFILE_FILL');
+          },
+        },
+        authorization: {
+          async authorize(...args) {
+            if (kind === 'BLOCKED' && args[0] === 'amendOrder')
+              await admin.query(
+                'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+                [identities.accountId],
+              );
+            return store.authorize(...args);
+          },
+        },
+      },
+      network,
+    );
+    handles.push({ close: () => adapter.disconnect() });
+    const context = () => ({
+      ...io(),
+      account,
+      profile: adapter.profile,
+      correlationId: randomUUID(),
+    });
+    expect(
+      await adapter.getSymbols(
+        { limit: 10, cursor: null, queryId: 'native-profile-warm' },
+        context(),
+      ),
+    ).toMatchObject({
+      ok: true,
+    });
+    const record = registry.get(endpoint.scope, symbol, Date.now());
+    if (!record.ok) throw new Error('NATIVE_PROFILE_METADATA_MISSING');
+    const f = await fixture(false, false, {
+      identities,
+      record: record.value,
+      capabilities: adapter.capabilities.filter((c) =>
+        ['LIMIT_ORDER', 'AMEND_ORDER', 'CANCEL_ORDER'].includes(c.feature),
+      ),
+    });
+    owned = f;
+    const risk = await open(),
+      grant = await risk.approve(f.input, io());
+    const claim = await store.begin(f.key.binding, f.created.id, f.created.intentId, grant, io());
+    if (!claim) throw new Error('NATIVE_PROFILE_PLACE_CLAIM_MISSING');
+    expect(
+      await store.authorize(
+        'createOrder',
+        {
+          command: claim.command,
+          authorization: {
+            commandId: claim.intentId,
+            dispatchAttemptId: claim.attemptId,
+            commandHash: claim.commandHash,
+            account,
+            profile: adapter.profile,
+            issuedAt: Date.now(),
+            expiresAt: grant.expiresAt,
+          },
+        },
+        context(),
+      ),
+    ).toBe(true);
+    await store.result(
+      f.key.binding,
+      claim,
+      { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } },
+      io(),
+    );
+    current = {
+      symbol: symbol,
+      orderId: '9007199254740993123',
+      orderListId: '-1',
+      clientOrderId: f.created.command.clientOrderId,
+      side: 'BUY',
+      type: 'LIMIT',
+      timeInForce: 'GTC',
+      status: 'NEW',
+      price: '10',
+      origQty: '1',
+      executedQty: '0',
+      stopPrice: '0',
+      icebergQty: '0',
+      origQuoteOrderQty: '0',
+      time: String(f.created.createdAt),
+      updateTime: String(Date.now()),
+    };
+    const native = await adapter.getOrder(
+      { instrumentId: symbol, locator: { kind: 'EXCHANGE_ID', id: '9007199254740993123' } },
+      context(),
+    );
+    if (!native.ok || native.value.kind !== 'FOUND')
+      throw new Error('NATIVE_PROFILE_ORDER_MISSING');
+    const target = await store.complete(f.key.binding, f.created.id, native.value.order, io());
+    const pb = portfolioBindingSchema.parse({ ...portfolioBinding(), ...identities });
+    const before = await portfolio.read(pb, io());
+    await portfolio.apply(
+      pb,
+      snapshot({
+        id: randomUUID(),
+        timestamp: Date.now(),
+        balances: before.state.balances,
+        positions: [],
+      }),
+      before.revision,
+      io(),
+    );
+    const request = {
+      key: randomUUID(),
+      expectedVersion: String(target.version),
+      dbRuleId: target.draft.dbRuleId,
+      replacement: {
+        ...target.draft.order,
+        size: { ...target.command.size, value: parseDecimal('0.8') },
+      },
+    };
+    const runtime = async () => {
+      store = await createPostgresOrderStore(options('DATABASE_EXECUTION_URL'));
+      handles.push(store);
+      const r = await open();
+      const engine = createOrderEngine({
+        binding: f.key.binding,
+        store,
+        registry,
+        adapter,
+        now: Date.now,
+        authorization: { check: async () => true },
+        risk: r,
+        fills: {
+          ingest: async () => {
+            throw new Error('UNEXPECTED_NATIVE_PROFILE_FILL_INGEST');
+          },
+        },
+      });
+      handles.push(engine);
+      return engine;
+    };
+    const engine = await runtime();
+    const state = await engine.amend(target.id, request, io().signal);
+    expect(sends).toBe(kind === 'BLOCKED' ? 0 : 1);
+    const reservation = async () =>
+      (
+        await admin.query(
+          'SELECT trim_scale(amount)::text amount,status FROM public.risk_reservation WHERE id=$1',
+          [grant.reservationId],
+        )
+      ).rows[0];
+    expect((await reservation()).amount).toBe('10.01');
+    const restart = await runtime();
+    expect(await restart.amend(target.id, request, io().signal)).toEqual(state);
+    expect(sends).toBe(kind === 'BLOCKED' ? 0 : 1);
+    if (kind === 'BLOCKED') {
+      expect(
+        (
+          await admin.query(
+            'SELECT "responseCode","transportStartedAt","permitConsumedAt" FROM public.submission_attempt WHERE "orderId"=$1 AND operation=\'AMEND\'',
+            [target.id],
+          )
+        ).rows[0],
+      ).toEqual({ responseCode: 'NOT_SENT', transportStartedAt: null, permitConsumedAt: null });
+    } else {
+      const resolved = await restart.reconcile(target.id, io().signal);
+      expect(resolved.effectiveCommand?.size.value).toBe('0.8');
+      expect(resolved.command).toEqual(f.created.command);
+      expect(resolved.activeAttemptId).toBeNull();
+      expect(await reservation()).toEqual({ amount: '8.008', status: 'ACTIVE' });
+      expect(sends).toBe(1);
+    }
+  },
+);
 async function serviceCancelFixture(kind: 'ACK' | 'UNKNOWN' | 'BLOCKED') {
   const f = await reconciledBridge(false, true);
   let current = f.native,
