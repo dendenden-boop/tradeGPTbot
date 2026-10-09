@@ -469,6 +469,7 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
     operation: Exclude<MutationOperation, 'cancelAllOrders'>,
     raw: unknown,
     context: RequestContext,
+    dispatchGate?: () => Promise<boolean>,
   ): Promise<MutationOutcome> {
     let dispatched = false;
     try {
@@ -611,6 +612,7 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
       }
       spec = {
         ...spec,
+        ...(dispatchGate ? { beforeDispatch: dispatchGate } : {}),
         onDispatch: () => {
           authority(context);
           if (input.authorization.issuedAt > now() || input.authorization.expiresAt <= now())
@@ -765,9 +767,15 @@ export function createPrivateTransport(options: BinancePrivateTransportOptions) 
       operation: ReadOperation | MutationOperation,
       input: unknown,
       context: RequestContext,
+      dispatchGate?: () => Promise<boolean>,
     ): Promise<unknown> {
       if (operations[operation].kind === 'MUTATION')
-        return mutation(operation as Exclude<MutationOperation, 'cancelAllOrders'>, input, context);
+        return mutation(
+          operation as Exclude<MutationOperation, 'cancelAllOrders'>,
+          input,
+          context,
+          dispatchGate,
+        );
       if (operation === 'cancelAllOrders') {
         const parsed = operations.cancelAllOrders.input.safeParse(input);
         if (!parsed.success) return { kind: 'NOT_SENT', error: { code: 'INVALID_REQUEST' } };

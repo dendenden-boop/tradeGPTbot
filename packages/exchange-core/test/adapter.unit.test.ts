@@ -132,6 +132,103 @@ function invoke(
   ) => Promise<unknown>;
   return method(input, context);
 }
+
+function deferredDispatch(
+  request: AdapterTransport['request'],
+  authorize = vi.fn(() => Promise.resolve(true)),
+) {
+  return {
+    ...setup({
+      authorization: { authorize },
+      transport: {
+        dispatchAuthorization: ['createOrder'],
+        request,
+        subscribe: () => Promise.resolve(() => Promise.resolve()),
+        disconnect: () => Promise.resolve(),
+      },
+    }),
+    authorize,
+  };
+}
+describe('transport handoff final authorization', () => {
+  it('rereads authority after asynchronous preparation and rejects before mutation dispatch', async () => {
+    let allowed = true;
+    const authorize = vi.fn(() => Promise.resolve(allowed));
+    const env = deferredDispatch(async (_op, _request, _context, gate) => {
+      expect(authorize).not.toHaveBeenCalled();
+      await Promise.resolve();
+      allowed = false;
+      expect(await gate!()).toBe(false);
+      return localFailure('createOrder', 'AUTHORIZATION_REQUIRED');
+    }, authorize);
+    expect(await env.adapter.createOrder(signed('createOrder'), env.context())).toEqual(
+      localFailure('createOrder', 'AUTHORIZATION_REQUIRED'),
+    );
+    expect(authorize).toHaveBeenCalledTimes(1);
+  });
+  it('consumes the callback only once for the exact immutable request', async () => {
+    const env = deferredDispatch(async (_op, request, _context, gate) => {
+      expect(request).toEqual(signed('createOrder'));
+      expect(await gate!()).toBe(true);
+      expect(await gate!()).toBe(false);
+      return operationFixtures.createOrder.output;
+    });
+    expect(await env.adapter.createOrder(signed('createOrder'), env.context())).toEqual(
+      operationFixtures.createOrder.output,
+    );
+    expect(env.authorize).toHaveBeenCalledTimes(1);
+  });
+  it('rejects an ACK from a transport that omitted final authorization', async () => {
+    const env = deferredDispatch(() => Promise.resolve(operationFixtures.createOrder.output));
+    expect(await env.adapter.createOrder(signed('createOrder'), env.context())).toEqual(
+      localFailure('createOrder', 'AUTHORIZATION_REQUIRED'),
+    );
+    expect(env.authorize).not.toHaveBeenCalled();
+  });
+  it('invalidates an unused callback as soon as its transport settles', async () => {
+    let saved: (() => Promise<boolean>) | undefined;
+    const env = deferredDispatch((_op, _request, _context, gate) => {
+      saved = gate;
+      return Promise.resolve(localFailure('createOrder', 'UNAVAILABLE'));
+    });
+    await env.adapter.createOrder(signed('createOrder'), env.context());
+    expect(await saved!()).toBe(false);
+    expect(env.authorize).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    'classifies transport failure only after actual final grant %s',
+    async (started) => {
+      const env = deferredDispatch(async (_op, _request, _context, gate) => {
+        if (started) expect(await gate!()).toBe(true);
+        throw new Error('SYNTHETIC_HANDOFF_FAILURE');
+      });
+      expect(await env.adapter.createOrder(signed('createOrder'), env.context())).toEqual(
+        started ? unknownOutcome('createOrder') : localFailure('createOrder', 'UNAVAILABLE'),
+      );
+      expect(env.authorize).toHaveBeenCalledTimes(started ? 1 : 0);
+    },
+  );
+  it('aborts preparation without false UNKNOWN and denies a late callback', async () => {
+    let saved: (() => Promise<boolean>) | undefined;
+    const task = deferred<unknown>();
+    const env = deferredDispatch((_op, _request, _context, gate) => {
+      saved = gate;
+      return task.promise;
+    });
+    const controller = new AbortController();
+    const result = env.adapter.createOrder(
+      signed('createOrder'),
+      env.context({ signal: controller.signal }),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+    expect(await result).toEqual(localFailure('createOrder', 'ABORTED'));
+    expect(await saved!()).toBe(false);
+    expect(env.authorize).not.toHaveBeenCalled();
+    task.resolve(localFailure('createOrder', 'ABORTED'));
+  });
+});
 function localFailure(operation: Operation, code: string): unknown {
   if (operation === 'cancelAllOrders') return { kind: 'NOT_SENT', error: { code } };
   if (mutations.includes(operation as MutationOperation))

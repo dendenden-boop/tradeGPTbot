@@ -50,10 +50,13 @@ export interface RequestContext {
 
 /** The injected protocol port is trusted server code; no destination comes from a request. */
 export interface AdapterTransport {
+  /** Trusted protocol assembly opts in per operation. Consume only at actual mutation I/O. */
+  readonly dispatchAuthorization?: readonly MutationOperation[];
   request(
     operation: ReadOperation | MutationOperation,
     request: unknown,
     context: RequestContext,
+    dispatchGate?: () => Promise<boolean>,
   ): Promise<unknown>;
   subscribe(
     operation: StreamOperation,
@@ -245,11 +248,26 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
   let account: AccountScope | null;
   let capabilities: readonly CapabilityRecord[];
   let adapterVersion: string;
+  let dispatchAuthorization: ReadonlySet<MutationOperation>;
   try {
     profile = adapterProfileSchema.parse(options.profile);
     account = accountScopeSchema.nullable().parse(options.account);
     capabilities = z.array(capabilityRecordSchema).max(1024).readonly().parse(options.capabilities);
     adapterVersion = idSchema.parse(options.adapterVersion);
+    const deferred = options.transport.dispatchAuthorization ?? [];
+    if (
+      !Array.isArray(deferred) ||
+      deferred.length > 32 ||
+      new Set(deferred).size !== deferred.length ||
+      deferred.some(
+        (value) =>
+          typeof value !== 'string' ||
+          !Object.hasOwn(operations, value) ||
+          !isMutation(value as Operation),
+      )
+    )
+      throw new Error();
+    dispatchAuthorization = new Set(deferred);
     if (options.allowSynthetic !== undefined && typeof options.allowSynthetic !== 'boolean')
       throw new Error();
   } catch {
@@ -597,6 +615,7 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
       );
     });
 
+    let gateClosed = false;
     const work = async (): Promise<InternalResult> => {
       try {
         const refreshCurrent = async (): Promise<ExchangeErrorCode | null> => {
@@ -611,7 +630,8 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
           const initialMetadata = await refreshCurrent();
           if (initialMetadata !== null) return reject(operation, request, initialMetadata, false);
         }
-        if (isMutation(operation)) {
+        const deferred = isMutation(operation) && dispatchAuthorization.has(operation);
+        if (isMutation(operation) && !deferred) {
           const authorized = await authorize(operation, request, internalContext);
           if (authorized !== true)
             return reject(operation, request, 'AUTHORIZATION_REQUIRED', false);
@@ -730,22 +750,46 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
             return failure('UNAVAILABLE');
           }
         }
-        dispatched = true;
+        let gateAttempted = false;
+        const dispatchGate = deferred
+          ? async (): Promise<boolean> => {
+              if (gateAttempted || gateClosed) return false;
+              gateAttempted = true;
+              if (controller.signal.aborted || closed || now() >= context.deadline) return false;
+              const current = await refreshCurrent();
+              if (current !== null || preflight(operation, request, internalContext) !== null)
+                return false;
+              if (
+                !isMutation(operation) ||
+                (await authorize(operation, request, internalContext)) !== true
+              )
+                return false;
+              // No further awaited port after durable authorization and before transport handoff.
+              if (preflight(operation, request, internalContext) !== null) return false;
+              dispatched = true;
+              return true;
+            }
+          : undefined;
+        if (!deferred) dispatched = true;
         const rawOutput = await requestTransport(
           operation as ReadOperation | MutationOperation,
           transportRequest,
           internalContext,
+          dispatchGate,
         );
-        if (controller.signal.aborted) return reject(operation, request, 'ABORTED', true);
-        if (now() >= context.deadline) return reject(operation, request, 'DEADLINE_EXCEEDED', true);
+        if (controller.signal.aborted) return reject(operation, request, 'ABORTED', dispatched);
+        if (now() >= context.deadline)
+          return reject(operation, request, 'DEADLINE_EXCEEDED', dispatched);
         let output: unknown;
         try {
           output = operations[operation].output.parse(rawOutput);
           if (!responseMatches(operation, request, output))
-            return reject(operation, request, 'SCOPE_MISMATCH', true);
+            return reject(operation, request, 'SCOPE_MISMATCH', dispatched);
         } catch {
-          return reject(operation, request, 'INVALID_RESPONSE', true);
+          return reject(operation, request, 'INVALID_RESPONSE', dispatched);
         }
+        if (deferred && !dispatched && object(output).kind !== 'DEFINITIVELY_REJECTED')
+          return reject(operation, request, 'AUTHORIZATION_REQUIRED', false);
         if (isMutation(operation))
           return immutable(output) as MutationOutcome | OperationOutput<'cancelAllOrders'>;
         const value = object(output);
@@ -772,6 +816,7 @@ export function createExchangeAdapter(options: ExchangeAdapterOptions): Exchange
       }
     };
     const settled = work().finally(() => {
+      gateClosed = true;
       pending.delete(controller);
     });
     try {
