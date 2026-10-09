@@ -84,13 +84,25 @@ export function createBinanceAdapterWithIo(
     throw new Error('INVALID_BINANCE_CONFIGURATION');
   }
   const endpoint = getBinanceProfile(options.profileId);
+  const binding = resolveBinanceBinding(endpoint, options.connection);
+  const account = binding?.account ?? null;
+  // This profile has native quantity-reduction semantics. Evidence never substitutes
+  // for the server's durable Order/Risk permit, owned identity and dynamic admission.
+  const nativeAmend =
+    endpoint.id === 'binance-spot-testnet-v1' &&
+    account !== null &&
+    options.credentials !== undefined &&
+    options.authorization !== undefined &&
+    options.sandboxAcceptance !== undefined &&
+    options.identities !== undefined &&
+    options.orderAdmission !== undefined;
   // Evidence can restrict support; it cannot enable a protocol the adapter lacks.
   const unsupported = new Set([
     'OCO',
     'ATTACHED_TP_SL',
     'TRAILING_STOP',
     'CLOSE_POSITION',
-    'AMEND_ORDER',
+    ...(!nativeAmend ? ['AMEND_ORDER'] : []),
     'CHANGE_POSITION_MODE',
     'ALGO_ORDERS',
     'QUOTE_BUDGET_MARKET_BUY',
@@ -102,7 +114,10 @@ export function createBinanceAdapterWithIo(
   const nativeTimeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d'];
   const capabilities = options.capabilities.map((record) => ({
     ...record,
-    ...(unsupported.has(record.feature) ? { support: 'UNSUPPORTED' as const } : {}),
+    ...(unsupported.has(record.feature) ||
+    (record.feature === 'AMEND_ORDER' && record.implementation !== 'NATIVE')
+      ? { support: 'UNSUPPORTED' as const }
+      : {}),
     ...(record.feature === 'HISTORICAL_CANDLES'
       ? {
           constraints: {
@@ -116,8 +131,6 @@ export function createBinanceAdapterWithIo(
         }
       : {}),
   }));
-  const binding = resolveBinanceBinding(endpoint, options.connection);
-  const account = binding?.account ?? null;
   const profile = adapterProfile(endpoint, binding?.credentialRef);
   const now = options.now ?? Date.now;
   const registry = options.registry;

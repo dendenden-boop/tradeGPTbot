@@ -14,7 +14,7 @@ import {
   type createPostgresLossJournal,
   type createPostgresRiskObservations,
 } from '@ctp/risk-engine';
-import { parseDecimal } from '@ctp/exchange-core';
+import { parseDecimal, type InstrumentRecord, type CapabilityRecord } from '@ctp/exchange-core';
 import { expect } from 'vitest';
 import { captureFixture } from '../../../risk-engine/test/snapshot-fixtures.js';
 import { binding, snapshot } from '../../../portfolio/test/fixtures.js';
@@ -30,11 +30,17 @@ interface FixturePorts {
   registryOptions: { connectionString: string; environment: 'test' };
   nativeAmend?: boolean;
   nativeCancel?: boolean;
+  /** Explicit test-owned production assembly evidence; never a runtime source. */
+  nativeProfile?: {
+    identities: { tenantId: string; accountId: string; connectionId: string };
+    record: InstrumentRecord;
+    capabilities: readonly CapabilityRecord[];
+  };
 }
 const io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2500 });
 export async function seedRiskCertification(ports: FixturePorts, missing?: 'OBSERVATION' | 'LOSS') {
   const { admin, portfolio, orders, market, platform, user, loss, observer } = ports;
-  const identities = {
+  const identities = ports.nativeProfile?.identities ?? {
       tenantId: randomUUID(),
       accountId: randomUUID(),
       connectionId: randomUUID(),
@@ -62,6 +68,26 @@ export async function seedRiskCertification(ports: FixturePorts, missing?: 'OBSE
   f.observation.key.instrumentId = i.id;
   f.rehashMarket();
   f.rehashObservation();
+  if (ports.nativeProfile) {
+    const native = ports.nativeProfile;
+    Object.assign(i, native.record.instrument);
+    Object.assign(r, native.record.rules);
+    f.key.instrumentId = i.id;
+    f.risk.order.instrumentId = i.id;
+    f.risk.order.ruleVersion = r.version;
+    f.risk.order.size = { kind: 'BASE_QUANTITY', value: parseDecimal('1'), asset: 'BTC' };
+    f.risk.capabilities.splice(0, f.risk.capabilities.length, ...native.capabilities);
+    f.risk.adapterVersion = native.capabilities[0]!.adapterVersion;
+    f.key.binding.profile = native.capabilities[0]!.profile;
+    f.risk.binding.profile = native.capabilities[0]!.profile;
+    f.publication.key.instrumentId = i.id;
+    f.publication.ticker.instrumentId = i.id;
+    f.publication.book.instrumentId = i.id;
+    f.observation.key.instrumentId = i.id;
+    f.observation.key.binding.profile = native.capabilities[0]!.profile;
+    f.rehashMarket();
+    f.rehashObservation();
+  }
   const b = f.key.binding;
   await admin.query(
     'INSERT INTO public."user"(id,"emailNormalized",status,"updatedAt") VALUES($1,$2,\'ACTIVE\',now())',
@@ -109,7 +135,10 @@ export async function seedRiskCertification(ports: FixturePorts, missing?: 'OBSE
     instrumentIds: [i.id],
   });
   try {
-    expect((await registry.putBatch([f.risk.record], Date.now(), io())).ok).toBe(true);
+    if (ports.nativeProfile) {
+      // Native public transport has already durably published this exact immutable version.
+      expect(registry.get(i.scope, i.id, Date.now())).toEqual({ ok: true, value: f.risk.record });
+    } else expect((await registry.putBatch([f.risk.record], Date.now(), io())).ok).toBe(true);
   } finally {
     await registry.close();
   }
