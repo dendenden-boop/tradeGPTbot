@@ -2,6 +2,10 @@
 
 ## Starting point and scope
 
+Current read-only initial Portfolio increment starts from protected main **f382658685116c287ac6dcf7834615cd80537885**, with accepted configuration/seals and initial funding. Published migrations 1–37 stay immutable. Scope is the separate [initial Portfolio source](initial-portfolio.md), minimal credential-free common Portfolio Binding, additive capture-only migration 38, native tests and deployment/runner checks. This is not certified PAPER Risk/Portfolio or a financial writer; any later activity fails closed.
+
+The starting points below are historical increments, not the current HEAD.
+
 The initial-funding increment starts from fresh protected main **5ae5aeae5a361021dff8dc71caa39a068530c388**, accepted configuration/seal runtime. Published migrations 1–36 remain immutable. Scope is the separate [initial funding contract](funding.md), native replay/conservation/role/COMMIT tests and necessary deployment/runner checks. Reset or PAPER dispatch is not enabled by funding.
 
 Fresh main **dbdf3c6ef65a3830176660f5f861cc1d535c6a2c** on 9 October 2026. PHASE 0–12 are accepted. Housekeeping main passed [full CI 37938234587](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37938234587) and [CodeQL 37938234586](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37938234586); main has mandatory PR, strict Ubuntu/Windows/real-services/CodeQL checks and administrator enforcement. Published migrations 1–34 remain immutable.

@@ -47,6 +47,7 @@ const expectedMigrations = [
   '202610090003_paper_configuration',
   '202610090004_paper_configuration_seal',
   '202610090005_paper_initial_funding',
+  '202610100001_paper_initial_portfolio',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -100,6 +101,7 @@ const observationPassword = randomBytes(24).toString('hex');
 const admissionPassword = randomBytes(24).toString('hex');
 const paperConfigurationPassword = randomBytes(24).toString('hex');
 const paperFundingPassword = randomBytes(24).toString('hex');
+const paperPortfolioPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -121,6 +123,7 @@ const secrets = [
   admissionPassword,
   paperConfigurationPassword,
   paperFundingPassword,
+  paperPortfolioPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [
@@ -148,6 +151,7 @@ const certificationRole = `ctp_p2_certification_${suffix}`;
 const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
 const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
+const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
@@ -262,6 +266,12 @@ const paperFundingUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperFundingRole;
   url.password = paperFundingPassword;
+  return url.href;
+};
+const paperPortfolioUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperPortfolioRole;
+  url.password = paperPortfolioPassword;
   return url.href;
 };
 const paperConfigurationUrl = (name) => {
@@ -380,6 +390,7 @@ try {
     [admissionRole, admissionPassword, 'ctp_risk_admission'],
     [paperConfigurationRole, paperConfigurationPassword, 'ctp_paper_configuration'],
     [paperFundingRole, paperFundingPassword, 'ctp_paper_funding'],
+    [paperPortfolioRole, paperPortfolioPassword, 'ctp_paper_portfolio_reader'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -1450,6 +1461,40 @@ try {
   assert.equal(paperFundingOwner.success, true);
   assert.equal(paperFundingOwner.numPendingTests, 0);
   assert.ok(paperFundingOwner.numPassedTests >= 40);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-initial-portfolio.integration.test.ts',
+      '--outputFile.json=test-results/paper-portfolio-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
+        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperPortfolioOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-portfolio-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperPortfolioOwner.success, true);
+  assert.equal(paperPortfolioOwner.numPendingTests, 0);
+  assert.ok(paperPortfolioOwner.numPassedTests >= 35);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -1612,6 +1657,66 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     ),
     legacyPaperReceipt,
   );
+  // Initial-funding provenance from published 37 survives read-only capture.
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[37]),
+    path.join(paperMigrations, expectedMigrations[37]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  const { createPostgresPaperInitialPortfolio } = await import(
+    pathToFileURL(path.join(workspace, 'packages/paper-engine/dist/portfolio.js'))
+  );
+  const initialPortfolio = await createPostgresPaperInitialPortfolio({
+    connectionString: paperPortfolioUrl(databases[4]),
+    environment: 'test',
+  });
+  let initialSource;
+  try {
+    initialSource = await initialPortfolio.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.deepEqual(initialSource.funding, fundingReceipt);
+    assert.deepEqual(initialSource.configuration, legacyPaperReceipt);
+    assert.equal(initialSource.state.binding.connectionId, null);
+    assert.equal(initialSource.state.balances[0].total, '1000');
+  } finally {
+    await initialPortfolio.close();
+  }
+  await migrate(databases[4], paperConfig, true);
+  const restartedPortfolio = await createPostgresPaperInitialPortfolio({
+    connectionString: paperPortfolioUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const source = await restartedPortfolio.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.deepEqual(source.funding, fundingReceipt);
+    assert.deepEqual(source.state.balances, initialSource.state.balances);
+  } finally {
+    await restartedPortfolio.close();
+  }
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+        [initialFunding.id],
+      )
+    ).rows[0].n,
+    2,
+  );
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        'SELECT count(*)::int n FROM ctp_portfolio.book WHERE "accountId"=$1',
+        [paperInput.owner.accountId],
+      )
+    ).rows[0].n,
+    0,
+  );
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -1718,6 +1823,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
         DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
         DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
+        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
       },
       secrets,
       echo: true,
@@ -1852,6 +1958,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperConfigurationPopulatedUpgradeFromPublished35: 'PASS',
     paperFundingNonBypassOwner: 'PASS',
     paperFundingPopulatedUpgradeFromPublished36: 'PASS',
+    paperPortfolioNonBypassOwner: 'PASS',
+    paperPortfolioPopulatedUpgradeFromPublished37: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

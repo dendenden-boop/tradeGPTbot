@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./portfolio": {
+      "types": "./dist/portfolio.d.ts",
+      "default": "./dist/portfolio.js"
+    },
     "./configuration": {
       "types": "./dist/configuration.d.ts",
       "default": "./dist/configuration.js"
@@ -24,6 +28,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
+    "@ctp/portfolio": "workspace:*",
     "@ctp/exchange-core": "workspace:*",
     "decimal.js": "10.6.0",
     "pg": "8.23.0",

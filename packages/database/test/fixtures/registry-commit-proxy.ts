@@ -13,6 +13,7 @@ export async function registryCommitProxy(
     | 'UNSENT_RECOVERY'
     | 'AMEND_APPLICATION'
     | 'PAPER_CONFIGURATION'
+    | 'PAPER_PORTFOLIO'
     | 'PAPER_FUNDING' = 'REGISTRY',
 ) {
   const marker = {
@@ -25,6 +26,7 @@ export async function registryCommitProxy(
     AMEND_APPLICATION: 'SELECT ctp_execution.apply_amendment(',
     PAPER_CONFIGURATION: 'SELECT ctp_paper.register_configuration(',
     PAPER_FUNDING: 'SELECT ctp_paper.initialize_funding(',
+    PAPER_PORTFOLIO: 'SELECT ctp_paper.capture_initial_portfolio(',
   }[effect];
   const target = new URL(connectionString),
     sockets = new Set<Socket>();

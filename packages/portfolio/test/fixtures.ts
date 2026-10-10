@@ -1,6 +1,8 @@
 import type { Binding, PortfolioEvent, SnapshotEvent, FillEvent } from '../src/domain.js';
 export const context = { now: () => 1000 };
-export function binding(market: 'SPOT' | 'LINEAR_PERPETUAL' = 'SPOT'): Binding {
+export function binding(
+  market: 'SPOT' | 'LINEAR_PERPETUAL' = 'SPOT',
+): Binding & { mode: 'TESTNET'; connectionId: string } {
   return {
     tenantId: '11111111-1111-4111-8111-111111111111',
     accountId: '22222222-2222-4222-8222-222222222222',

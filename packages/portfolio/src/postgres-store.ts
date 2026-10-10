@@ -212,7 +212,13 @@ export async function createPostgresPortfolioStore(options: {
       throw new Error('PORTFOLIO_BINDING_DENIED');
     return row;
   }
-  const parseBinding = (b: Binding) => bindingSchema.parse(b);
+  const parseBinding = (b: Binding) => {
+    const parsed = bindingSchema.parse(b);
+    // This existing writer owns native reconciliation only. PAPER uses a
+    // separate credential-free source and cannot acquire its SQL authority.
+    if (parsed.mode === 'PAPER') throw new Error('PORTFOLIO_BINDING_DENIED');
+    return parsed;
+  };
   return Object.freeze({
     evidence(binding: Binding, ids: readonly string[], context: IoContext) {
       const b = parseBinding(binding);
