@@ -23,5 +23,7 @@ it('keeps DEMO distinct and accepts a server-selected PAPER public profile', () 
       scope: { ...binding().scope, environment: 'DEMO' },
     }).mode,
   ).toBe('DEMO');
-  expect(bindingSchema.parse({ ...binding(), mode: 'PAPER' }).mode).toBe('PAPER');
+  expect(bindingSchema.parse({ ...binding(), mode: 'PAPER', connectionId: null }).mode).toBe(
+    'PAPER',
+  );
 });

@@ -21,7 +21,7 @@ export const bindingSchema = z
   .strictObject({
     tenantId: z.uuid(),
     accountId: z.uuid(),
-    connectionId: z.uuid(),
+    connectionId: z.uuid().nullable(),
     externalAccountId: idSchema,
     mode: z.enum(['PAPER', 'TESTNET', 'DEMO', 'LIVE']),
     walletId: idSchema,
@@ -30,6 +30,7 @@ export const bindingSchema = z
   .superRefine((b, c) => {
     if (
       !['SPOT', 'LINEAR_PERPETUAL'].includes(b.scope.market) ||
+      (b.mode === 'PAPER') !== (b.connectionId === null) ||
       (b.mode !== 'PAPER' && b.mode !== b.scope.environment)
     )
       c.addIssue({ code: 'custom', message: 'UNSUPPORTED_ACCOUNT_PROFILE' });

@@ -1,0 +1,25 @@
+# PAPER initial Portfolio source
+
+## Scope and authority
+
+Starting protected main **f382658685116c287ac6dcf7834615cd80537885** accepted initial funding through one common ledger posting. This increment adds a read-only initial Portfolio source for an already funded pristine PAPER account. It does not implement a Risk certificate, admission, reservation, Portfolio writer, order/fill worker or reset. PHASE 13 remains **IN PROGRESS / NOT READY FOR PHASE 14**. PAPER dispatch and LIVE stay disabled.
+
+The common Portfolio Binding must represent credential-free PAPER with `connectionId: null`; native TESTNET/DEMO/LIVE still require a private connection UUID and exact mode/environment agreement. Existing native Portfolio store rejects PAPER before I/O. A dummy private connection is forbidden. This is the minimum shared contract change; native financial/authorization semantics remain unchanged.
+
+`@ctp/paper-engine/portfolio` exposes a separate `createPostgresPaperInitialPortfolio` reader with `read(owner, io)` and `close`. Its server-controlled login belongs only to NOLOGIN `ctp_paper_portfolio_reader`, with exactly one SECURITY DEFINER capture function. No direct public/private table or column, configuration/funding writer, native Portfolio/Risk/Order/credential or transport authority is granted. Startup and SQL independently validate role membership, privileges, schema ownership/CREATE and private function signatures. Tenant/account/PAPER owner, database URL and environment are derived by the authenticated server; no HTTP route or user-selected wallet/balances is added.
+
+## Current complete initial evidence
+
+One bounded transaction captures current active verified ownership under GLOBAL shared → tenant shared → account locks. Configuration and funding must have their retained original immutable seals, coherent exact IDs/owner/identity/model, and the actual conserved closed PAPER_SEED ledger header/entries. Existing validators are reused without editing migrations 1–37. The capture also includes current permission/reconciliation epochs and account revision. Its `asOf` comes from the database after the checks; node verifies receipt checksums, cross-references, identities, times and a maximum five-second response age. A checksum is wire consistency, not authentication or a RiskGrant; arbitrary caller envelopes cannot certify a source.
+
+Initial completeness requires no other ledger posting, order intent/order, Risk reservation, Portfolio book, legacy Paper account/order/position or common position. Missing funding, stale/replaced ownership, corrupt/missing provenance or any later activity rejects. The reader cannot omit pending/UNKNOWN holds or positions by returning the initial seed after activity; the full lifecycle must implement those before this restriction changes.
+
+The source derives the common PortfolioState from exactly the funding assets: total/free/available equal the canonical original amount, locked zero, no positions/holds/pending/differences. Its source ID is the permanent funding ID, and its observation time is the verified current capture time. The server derives wallet identity from funding ID and market profile from sealed configuration. No number conversion, asset summation, FX price, inferred cost basis or PnL is added. Portfolio valuation uses the existing pure valuation function and separately fresh proven prices. It creates zero books, evidence/outbox rows or ledger entries. Restart/read/concurrent capture preserves the exact original funding receipt and monetary effect.
+
+## Physical lifecycle and acceptance
+
+Strict AbortSignal/deadline validation precedes socket allocation. Four owned physical PostgreSQL slots maximum, no hidden waiting queue; connection/server/query/whole-operation deadlines remain bounded. Abort/deadline/close destroys the owned socket, and slots remain held until physical close. Only an acknowledged transaction returns a source. Ambiguous completion returns no source and performs no retry or financial mutation.
+
+Required RED→GREEN evidence: null PAPER binding and UUID rejection, funding→common Portfolio balances/valuation, malformed/conflicting/stale envelopes; native fresh and non-BYPASSRLS owner capture; no second seed/book/outbox; concurrent reads, restart, lost response, corruption, changed ownership, later activity, hung locks, bounded slots and role isolation; populated published-37→38 upgrade. Migration 38 is additive role/capture authority only, with no new financial table or write grant. Complete local regression and exact source/PR/main Ubuntu, Windows, native PostgreSQL/real-services/Docker and CodeQL CI remain required before accepting this source.
+
+Certified PAPER Portfolio/Risk integration, durable market evidence/liquidity, virtual execution/conditional exits, positions/PnL and reset remain outstanding. Positive native collateral credit stays disabled; native AMEND scope stays Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed.

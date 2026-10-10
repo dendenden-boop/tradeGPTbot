@@ -383,11 +383,14 @@ try {
     const paper=await import('@ctp/paper-engine');
     const configuration=await import('@ctp/paper-engine/configuration');
     const funding=await import('@ctp/paper-engine/funding');
+    const portfolio=await import('@ctp/paper-engine/portfolio');
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');
     assert.equal(typeof configuration.createPostgresPaperConfiguration,'function');
     assert.equal(typeof funding.createPostgresPaperFunding,'function');
+    assert.equal(typeof portfolio.createPostgresPaperInitialPortfolio,'function');
+    await assert.rejects(portfolio.createPostgresPaperInitialPortfolio({connectionString:'https://example.invalid',environment:'test'}),/PAPER_PORTFOLIO_DATABASE_URL/);
     await assert.rejects(funding.createPostgresPaperFunding({connectionString:'https://example.invalid',environment:'test'}),/PAPER_FUNDING_DATABASE_URL/);
     await assert.rejects(configuration.createPostgresPaperConfiguration({connectionString:'https://example.invalid',environment:'test'}),/PAPER_CONFIGURATION_DATABASE_URL/);
     assert.throws(()=>paper.preparePaperFrame({}),/PAPER_EVIDENCE/);
@@ -399,6 +402,7 @@ try {
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/model.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-configuration.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-funding.js'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-initial-portfolio.js'));
   `,
     options,
   );

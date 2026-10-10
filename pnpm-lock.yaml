@@ -261,6 +261,9 @@ importers:
       '@ctp/exchange-core':
         specifier: workspace:*
         version: link:../exchange-core
+      '@ctp/portfolio':
+        specifier: workspace:*
+        version: link:../portfolio
       decimal.js:
         specifier: 10.6.0
         version: 10.6.0

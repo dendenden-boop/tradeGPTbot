@@ -109,6 +109,7 @@ it('refuses mixed modes, owners, duplicate wallets and conflicting price evidenc
   ).toThrow('DUPLICATE_WALLET');
   const other = structuredClone(s);
   other.binding.mode = 'PAPER';
+  other.binding.connectionId = null;
   other.binding.walletId = 'paper';
   expect(() =>
     valuePortfolio([s, other], prices, { quote: 'USDT', now: 1000, reconciledAfterRestart: true }),
