@@ -519,11 +519,16 @@ it.each(['configuration', 'receipt', 'coherent-rewrite', 'ledger', 'seal'] as co
           `UPDATE ctp_paper.initial_funding SET receipt_text=jsonb_set(receipt_text::jsonb,'{funding,balances,1,amount}','"2000"')::text WHERE id=$1`,
           [f.id],
         );
-        if (part === 'coherent-rewrite')
+        if (part === 'coherent-rewrite') {
           await p.query(
             `UPDATE ctp_paper.initial_funding SET request=jsonb_set(request,'{balances,1,amount}','"2000"') WHERE id=$1`,
             [f.id],
           );
+          await p.query(
+            `UPDATE public.ledger_entry SET amount=CASE WHEN bucket='AVAILABLE' THEN 2000 ELSE -2000 END WHERE "transactionId"=$1 AND asset='USDT'`,
+            [f.id],
+          );
+        }
       } else if (part === 'ledger')
         await p.query(
           `UPDATE public.ledger_entry SET amount=CASE WHEN bucket='AVAILABLE' THEN 2000 ELSE -2000 END WHERE "transactionId"=$1 AND asset='USDT'`,
@@ -545,7 +550,7 @@ it.each(['configuration', 'receipt', 'coherent-rewrite', 'ledger', 'seal'] as co
         f.configurationId,
         originalConfig,
       ]);
-      if (part === 'ledger')
+      if (part === 'ledger' || part === 'coherent-rewrite')
         await p.query(
           `UPDATE public.ledger_entry SET amount=CASE WHEN bucket='AVAILABLE' THEN $2::numeric ELSE -$2::numeric END WHERE "transactionId"=$1 AND asset='USDT'`,
           [f.id, f.balances[1]!.amount],
