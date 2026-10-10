@@ -2,6 +2,8 @@
 
 ## Scope and authority
 
+Final protected main **4bf19f747d522929177189a80e3fe0eda4ba3f02** passed [full CI 38039697901](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38039697901) and [CodeQL 38039698037](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38039698037). This completes the final-head/protected merge/main requirement described at the historical source checkpoint below. Published migrations 1–38 are now frozen. Initial-only source acceptance does not complete the PHASE 13 financial lifecycle.
+
 Source **0b7e4ec5b719c81d2377c61b944461128de65e90** passed complete source/PR native/OS/Docker/CodeQL acceptance; see [verified results and historical RED checkpoints](verification.md). All 38 source contracts passed in fresh and non-BYPASSRLS owner databases; populated published-37→38 upgrade passed. Final documentation-head/protected merge/main CI is a separate requirement. This accepts only this initial-only source, not the full PHASE 13 lifecycle.
 
 Starting protected main **f382658685116c287ac6dcf7834615cd80537885** accepted initial funding through one common ledger posting. This increment adds a read-only initial Portfolio source for an already funded pristine PAPER account. It does not implement a Risk certificate, admission, reservation, Portfolio writer, order/fill worker or reset. PHASE 13 remains **IN PROGRESS / NOT READY FOR PHASE 14**. PAPER dispatch and LIVE stay disabled.

@@ -1,5 +1,7 @@
 # PHASE 13 contracts
 
+The pure [conservative execution envelope](risk-envelope.md) bounds quote principal and per-minimum-lot rounded fees for current supported commands. A reference price cannot bound later execution; MARKET and SELL require a finite rule maximum, while BUY LIMIT has an immutable limit ceiling. SELL keeps base principal and quote fees separately, without proceeds credit. Its full model/rules/command and mathematical freshness deadline are calculation inputs, never a RiskGrant or reservation. The accepted native PAPER guards remain unchanged.
+
 The read-only [initial Portfolio source](initial-portfolio.md) derives pristine funded PAPER balances through an isolated capture RPC and the common Portfolio projection. PAPER Binding now requires `connectionId: null`; native modes still require a UUID. The native Portfolio writer rejects PAPER before I/O. Any subsequent ledger/order/reservation/book/position activity denies this initial-only source. No certified PAPER Risk grant, reservation, dispatch, reset or financial write is enabled.
 
 The initial-funding increment has a separate [funding contract](funding.md): one immutable server-owned multi-asset seed through the existing common ledger and isolated funding role. Configuration authority stays unchanged; funding grants no Risk or dispatch authority. Reset, virtual execution/evidence/liquidity and certified PAPER composition remain outstanding.
