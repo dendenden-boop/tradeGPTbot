@@ -1,5 +1,7 @@
 # PHASE 13 dependencies and operation
 
+The funding increment reuses the same pinned pg/decimal/Zod graph and adds no dependency or lockfile change. Additive migration 37 introduces isolated NOLOGIN `ctp_paper_funding` and immutable funding provenance; it exposes only fixed initialize/read RPCs. Provision a separate server login with only this membership. Never grant it to API, configuration, native execution, Portfolio or Risk identities. Backups must retain funding/seal, configuration/seal and the common ledger together. The compiled `/funding` subpath is exercised by the existing twelfth clean deployment; no test/source import or credential port is exported. See [funding lifecycle and recovery](funding.md).
+
 The initial `@ctp/paper-engine` pure calculator reuses existing pinned `@ctp/exchange-core`, decimal.js 10.6.0 and Zod 4.5.4. Only a workspace importer is added to the frozen lock; no new external package, version, integrity, build-script allowance or release-age exception. SHA-256 provides deterministic domain-separated seed sampling, not authentication or credential encryption.
 
 Only compiled public calculation/schema exports are deployed; source/tests, testing subpaths and memory financial stores are excluded. The clean-install check adds a twelfth isolated production deployment and exercises actual public imports, input rejection and absence of grant/mutation authority. Ancestor node_modules resolution remains forbidden.

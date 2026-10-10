@@ -2,6 +2,8 @@
 
 ## Starting point and scope
 
+The initial-funding increment starts from fresh protected main **5ae5aeae5a361021dff8dc71caa39a068530c388**, accepted configuration/seal runtime. Published migrations 1–36 remain immutable. Scope is the separate [initial funding contract](funding.md), native replay/conservation/role/COMMIT tests and necessary deployment/runner checks. Reset or PAPER dispatch is not enabled by funding.
+
 Fresh main **dbdf3c6ef65a3830176660f5f861cc1d535c6a2c** on 9 October 2026. PHASE 0–12 are accepted. Housekeeping main passed [full CI 37938234587](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37938234587) and [CodeQL 37938234586](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/37938234586); main has mandatory PR, strict Ubuntu/Windows/real-services/CodeQL checks and administrator enforcement. Published migrations 1–34 remain immutable.
 
 PHASE 13 implements the canonical [Paper Engine roadmap](../phase-0/implementation-plan.md): separate virtual account/ledger; real public market evidence; deterministic order simulation; starting balances in multiple assets; market/limit/stops and TP/SL; fees, adverse slippage, latency and partial fills; positions, realized and unrealized PnL. This phase does not implement Strategy Engine, Backtesting or UI. PAPER is an exact account mode; public source environment is not a private trading destination. PAPER has no connection or live credentials.

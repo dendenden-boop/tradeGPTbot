@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./funding": {
+      "types": "./dist/funding.d.ts",
+      "default": "./dist/funding.js"
     }
   },
   "files": [

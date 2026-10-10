@@ -12,7 +12,8 @@ export async function registryCommitProxy(
     | 'ADMISSION'
     | 'UNSENT_RECOVERY'
     | 'AMEND_APPLICATION'
-    | 'PAPER_CONFIGURATION' = 'REGISTRY',
+    | 'PAPER_CONFIGURATION'
+    | 'PAPER_FUNDING' = 'REGISTRY',
 ) {
   const marker = {
     REGISTRY: 'SELECT ctp_registry.publish(',
@@ -23,6 +24,7 @@ export async function registryCommitProxy(
     UNSENT_RECOVERY: "UPDATE public.submission_attempt SET status='REJECTED'",
     AMEND_APPLICATION: 'SELECT ctp_execution.apply_amendment(',
     PAPER_CONFIGURATION: 'SELECT ctp_paper.register_configuration(',
+    PAPER_FUNDING: 'SELECT ctp_paper.initialize_funding(',
   }[effect];
   const target = new URL(connectionString),
     sockets = new Set<Socket>();

@@ -1,5 +1,7 @@
 # PHASE 13 contracts
 
+The initial-funding increment has a separate [funding contract](funding.md): one immutable server-owned multi-asset seed through the existing common ledger and isolated funding role. Configuration authority stays unchanged; funding grants no Risk or dispatch authority. Reset, virtual execution/evidence/liquidity and certified PAPER composition remain outstanding.
+
 ## Authority boundary
 
 `@ctp/paper-engine` begins with pure calculation exports only. It has no database, HTTP/WS, clock timer, credentials, Risk grant, reservation, transport permit or mutation method. Its validated input does not certify source provenance, tenant ownership or authorization. Production composition must read trusted durable evidence, issue Risk authorization through the common gateway and commit allocations/order/Portfolio effects atomically; none of that is replaced by a calculation result.

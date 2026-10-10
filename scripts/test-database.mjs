@@ -46,6 +46,7 @@ const expectedMigrations = [
   '202610090002_certified_native_cancel',
   '202610090003_paper_configuration',
   '202610090004_paper_configuration_seal',
+  '202610090005_paper_initial_funding',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -98,6 +99,7 @@ const certificationPassword = randomBytes(24).toString('hex');
 const observationPassword = randomBytes(24).toString('hex');
 const admissionPassword = randomBytes(24).toString('hex');
 const paperConfigurationPassword = randomBytes(24).toString('hex');
+const paperFundingPassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -118,6 +120,7 @@ const secrets = [
   observationPassword,
   admissionPassword,
   paperConfigurationPassword,
+  paperFundingPassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [
@@ -144,6 +147,7 @@ const registryRole = `ctp_p2_registry_${suffix}`;
 const certificationRole = `ctp_p2_certification_${suffix}`;
 const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
+const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
@@ -252,6 +256,12 @@ const admissionUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = admissionRole;
   url.password = admissionPassword;
+  return url.href;
+};
+const paperFundingUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperFundingRole;
+  url.password = paperFundingPassword;
   return url.href;
 };
 const paperConfigurationUrl = (name) => {
@@ -369,6 +379,7 @@ try {
     [observationRole, observationPassword, 'ctp_risk_observer'],
     [admissionRole, admissionPassword, 'ctp_risk_admission'],
     [paperConfigurationRole, paperConfigurationPassword, 'ctp_paper_configuration'],
+    [paperFundingRole, paperFundingPassword, 'ctp_paper_funding'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -1389,6 +1400,7 @@ try {
         NODE_ENV: 'test',
         DATABASE_MIGRATION_URL: dbUrl(databases[2]),
         DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
       },
       secrets,
       echo: true,
@@ -1405,6 +1417,39 @@ try {
   assert.equal(paperConfigurationOwner.numPendingTests, 0);
   assert.ok(paperConfigurationOwner.numPassedTests >= 30);
 
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-funding.integration.test.ts',
+      '--outputFile.json=test-results/paper-funding-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperFundingOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-funding-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperFundingOwner.success, true);
+  assert.equal(paperFundingOwner.numPendingTests, 0);
+  assert.ok(paperFundingOwner.numPassedTests >= 40);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -1468,7 +1513,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await legacyPaperStore.close();
   }
-  await migrate(databases[4], config, true);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[35]),
+    path.join(paperMigrations, expectedMigrations[35]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
   const sealedPaperStore = await createPostgresPaperConfiguration({
     connectionString: paperConfigurationUrl(databases[4]),
     environment: 'test',
@@ -1498,6 +1548,70 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     0,
   );
 
+  // Published-36 populated configuration survives the additive funding upgrade.
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[36]),
+    path.join(paperMigrations, expectedMigrations[36]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  const { createPostgresPaperFunding } = await import(
+    pathToFileURL(path.join(workspace, 'packages/paper-engine/dist/funding.js'))
+  );
+  const upgradedFunding = await createPostgresPaperFunding({
+    connectionString: paperFundingUrl(databases[4]),
+    environment: 'test',
+  });
+  const initialFunding = {
+    id: randomUUID(),
+    owner: paperInput.owner,
+    configurationId: paperInput.id,
+    balances: [{ asset: 'USDT', amount: '1000' }],
+  };
+  let fundingReceipt;
+  try {
+    fundingReceipt = await upgradedFunding.initialize(initialFunding, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+  } finally {
+    await upgradedFunding.close();
+  }
+  await migrate(databases[4], paperConfig, true);
+  const restartedFunding = await createPostgresPaperFunding({
+    connectionString: paperFundingUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    assert.deepEqual(
+      await restartedFunding.read(paperInput.owner, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      fundingReceipt,
+    );
+  } finally {
+    await restartedFunding.close();
+  }
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+        [initialFunding.id],
+      )
+    ).rows[0].n,
+    2,
+  );
+  assert.deepEqual(
+    JSON.parse(
+      (
+        await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.configuration WHERE id=$1', [
+          paperInput.id,
+        ])
+      ).rows[0].receipt_text,
+    ),
+    legacyPaperReceipt,
+  );
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -1603,6 +1717,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
         DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
         DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
       },
       secrets,
       echo: true,
@@ -1687,6 +1802,14 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration_seal')).rows[0].n,
     0,
   );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.initial_funding')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.funding_seal')).rows[0].n,
+    0,
+  );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -1727,6 +1850,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     riskLifecyclePopulatedUpgradeFromPublished19: 'PASS',
     paperConfigurationNonBypassOwner: 'PASS',
     paperConfigurationPopulatedUpgradeFromPublished35: 'PASS',
+    paperFundingNonBypassOwner: 'PASS',
+    paperFundingPopulatedUpgradeFromPublished36: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
