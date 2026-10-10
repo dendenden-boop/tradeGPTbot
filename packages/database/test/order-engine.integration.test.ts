@@ -85,7 +85,7 @@ afterAll(async () => {
   await portfolio?.close();
   await admin.end();
 });
-async function fixture() {
+async function fixture(futureMetadata = false) {
   const s = state(),
     b = {
       ...s.binding,
@@ -120,8 +120,8 @@ async function fixture() {
     [instrument],
   );
   await admin.query(
-    `INSERT INTO instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1::uuid,$2,1,true,now(),now(),$3,0.01,0.001,0.001,'{"version":"v1"}')`,
-    [rule, instrument, Buffer.alloc(32, 1)],
+    `INSERT INTO instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1::uuid,$2,1,true,CASE WHEN $4 THEN now()+interval '1 minute' ELSE now() END,now(),$3,0.01,0.001,0.001,'{"version":"v1"}')`,
+    [rule, instrument, Buffer.alloc(32, 1), futureMetadata],
   );
   return { b, draft };
 }
@@ -338,9 +338,32 @@ function observation(s: OrderState, overrides: Record<string, unknown> = {}) {
   });
 }
 async function submitted() {
-  const f = await fixture(),
-    s = await store.create(f.b, f.draft, io()),
-    g = await grant(s),
+  const f = await fixture();
+  let s: OrderState;
+  try {
+    s = await store.create(f.b, f.draft, io());
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'ORDER_METADATA') throw error;
+    // Test-only diagnostics preserve the failed admission; never retry it or
+    // relax production metadata validation to make a positive fixture pass.
+    const detail = await admin.query<Record<string, unknown>>(
+      `SELECT i.exchange::text=$3 AS exchange_match,i.mode::text=$4 AS mode_match,i.market::text=$5 AS market_match,i."exchangeSymbol"=$6 AS symbol_match,i.active,NOT i."isInverse" AND i."expiryAt" IS NULL AS instrument_supported,r."isCurrent" AS rule_current,r.rules->>'version'=$7 AS version_match,i."baseAsset"=$8 AS asset_match,r."effectiveAt"<=now() AS effective_now,r."effectiveAt"::text AS effective_at,now()::text AS database_now FROM public.instrument i JOIN public.instrument_rule_version r ON r."instrumentId"=i.id WHERE i.id=$1 AND r.id=$2`,
+      [
+        f.draft.dbInstrumentId,
+        f.draft.dbRuleId,
+        f.b.profile.exchange,
+        f.b.mode,
+        f.b.profile.market,
+        f.draft.order.instrumentId,
+        f.draft.order.ruleVersion,
+        f.draft.order.size.kind === 'BASE_QUANTITY' ? f.draft.order.size.asset : null,
+      ],
+    );
+    throw new Error('ORDER_FIXTURE_METADATA_REJECTED:' + JSON.stringify(detail.rows), {
+      cause: error,
+    });
+  }
+  const g = await grant(s),
     c = await store.begin(f.b, s.id, s.intentId, g, io());
   if (!c) throw new Error('Missing fixture claim');
   await store.result(f.b, c, { kind: 'UNKNOWN', error: { code: 'UNAVAILABLE' } }, io());
@@ -1296,6 +1319,22 @@ it('CANCEL references current rules after refresh while preserving original PLAC
       )
     ).rows[0]?.rule,
   ).toBe(rule);
+});
+it('future native metadata fails closed without order, intent, outbox or client counter effects', async () => {
+  const { b, draft } = await fixture(true);
+  await expect(store.create(b, draft, io())).rejects.toThrow('ORDER_METADATA');
+  const a = await admin.query<{ counter: string }>(
+    'SELECT "clientIdHighWatermark"::text AS counter FROM public.exchange_account WHERE id=$1',
+    [b.accountId],
+  );
+  expect(a.rows[0]?.counter).toBe('9007199254740992');
+  for (const table of ['public."order"', 'public.order_intent', 'public.outbox_event']) {
+    const r = await admin.query<{ n: number }>(
+      `SELECT count(*)::int n FROM ${table} WHERE "tenantId"=$1`,
+      [b.tenantId],
+    );
+    expect(r.rows[0]?.n).toBe(0);
+  }
 });
 it('native UNKNOWN keeps the attempt unresolved until a positive scoped observation', async () => {
   const { b, s, c } = await submitted(),
