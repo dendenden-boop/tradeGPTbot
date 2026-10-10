@@ -1,0 +1,21 @@
+# PAPER conservative execution envelope
+
+This PHASE 13 increment starts from protected main **4bf19f747d522929177189a80e3fe0eda4ba3f02**, whose full CI 38039697901 and CodeQL 38039698037 passed. Published migrations 1–38, accepted native runtime and workflow enforcement remain immutable. Scope is a pure deterministic calculation prerequisite for certified PAPER Risk, its cross-calculator contracts and compiled deployment verification. It adds no reservation, grant, financial writer, worker, credential access or dispatch. **PHASE 13 IN PROGRESS / NOT READY FOR PHASE 14**.
+
+`calculatePaperRiskEnvelope` accepts strict current complete Spot model/record/book/trade/command and explicit evaluation time. It reuses existing freshness/evidence and current order/rules validation. Its input does not attest provenance, ownership, policy, permissions or account balances. Caller-selected tenant/credential/URL/grant/executed-quantity fields reject. Its deeply immutable `PAPER_RISK_ENVELOPE_CALCULATION` binds full rules, metadata, model and original command; it has no RiskGrant or reservation identity. JSON roundtrip preserves deterministic calculation, not durable authorization.
+
+The execution price interval bounds accepted post-slippage, post-tick-rounding calculator fills for the full original quantity. BUY LIMIT/STOP_LIMIT has its immutable limit ceiling. Other BUY and all SELL commands require a finite native rule `maxPrice`; a SELL limit/trigger/reference is not an upper bound. Native bounds round inward to positive tick multiples; SELL limits strengthen the lower bound. Missing finite maximum, an empty interval or amount overflow fail closed. The result does not infer a missing price ceiling from maxNotional, current depth or expected future prices. Conservative ceilings may make orders unaffordable; the later financial gateway must reject rather than debit beyond the reservation.
+
+For quantity Q, step S, maximum accepted execution price P and quote fee rate F:
+
+- maximum fill count = Q / S as an exact integer string;
+- quote principal bound = ceil18(Q × P);
+- quote fee bound = (Q / S) × ceil18(S × P × F).
+
+Each real fill is a positive multiple of S, so its rounded fee is no greater than the sum of fees of its constituent minimum lots at P. This covers arbitrary depth/event fragmentation, including small fees whose per-fill ceilings exceed a single aggregate commission ceiling. Computation uses a private Decimal constructor, never monetary JS Number conversion or a loop proportional to Q/S. Every output amount must fit the existing 20-integer/18-fractional-digit envelope; rejection never silently clips, rounds down or tops up a reservation.
+
+BUY requires quote principal plus quote fees. SELL requires base principal and the whole quote fee bound separately, without positive credit for expected proceeds. No valuation/FX, budget, balance sufficiency, maxNotional admission or monetary ledger effect is certified by this calculation. Existing Risk rules still need certified evidence and atomic enforcement. The exclusive mathematical freshness deadline is the earliest native metadata expiry or evidence expiry; current ownership/rules/model/controls may invalidate it earlier.
+
+Before using this calculation in production, the eventual PAPER gateway must certify real public evidence and exact tenant/account/PAPER/null-connection/model/reset scope; include all pending/UNKNOWN orders and holds once; evaluate current policies/capabilities/permissions and asset/instrument/account/user limits; atomically persist the decision and matching reservation/Portfolio commitment; and recheck the binding and bounds before virtual execution. Every fill must stay within the certified ceiling, quantity and fee reservation under the same durable transaction and shared liquidity journal. Refresh/restart/replay must not grant money through a calculation object. Accepted Order/Risk PAPER dispatch guards remain enabled until that composition is accepted.
+
+LIVE and positive native collateral credit stay disabled; native AMEND remains the accepted Binance Spot TESTNET scope. Real private exchange tests and production soak are not claimed. Source/PR/exact-main full Ubuntu, Windows, PostgreSQL/real-services/Docker and CodeQL acceptance remains required for this increment.
