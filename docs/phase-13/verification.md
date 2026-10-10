@@ -2,6 +2,8 @@
 
 ## Initial Portfolio baseline and RED checkpoints
 
+Initial candidate **97532da7f20323b043f51d36cd0c966aa2e1edc9** passed Ubuntu/Windows and both CodeQL analyses, but [source CI 38035168516](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38035168516) failed native owner acceptance: 37/38 new cases passed; the later-ledger fixture omitted required transaction-local tenant context and was stopped by the existing ledger guard before reaching capture. The fixture now sets authenticated test tenant context inside its transaction, preserving RLS and published guards. No runtime or migration change is made for this fixture error. This failed run is not acceptance; complete new exact-head native/OS/Docker/CodeQL CI remains required.
+
 Complete sequential local regression passed **2026-10-10T07:37:20.577Z**: format/docs/lint/typecheck, **3236 unit / 41 HTTP**, db:validate/build/runtime, twelve isolated deployments and dependency/secrets/supply-chain audits; dependency vulnerabilities zero. Native fixture/mocks were typed without disabling lint. Published migration blobs 1–37 and native Order/Risk/adapters/workflows remain unchanged. Lock adds only Paper→Portfolio workspace linkage; all external resolutions/integrities are unchanged. Final source/PR/main native/OS/Docker/CodeQL acceptance is still required.
 
 Fresh protected main **f382658685116c287ac6dcf7834615cd80537885** is the starting HEAD. All thirteen local baseline tasks passed sequentially: format/docs/lint/typecheck/unit/HTTP/db:validate/build/runtime/clean/dependency/secrets/supply-chain audits; 3193 unit, 41 HTTP, twelve deployments and dependency audit zero.

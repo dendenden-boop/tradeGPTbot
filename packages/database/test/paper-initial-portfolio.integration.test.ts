@@ -256,6 +256,7 @@ it.each(['ledger', 'book', 'UNKNOWN-book', 'legacy-paper'] as const)(
         p = await admin.connect();
       try {
         await p.query('BEGIN');
+        await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.owner.tenantId]);
         await p.query(
           'INSERT INTO public.ledger_transaction(id,"tenantId","accountId",mode,cause,"causeIdentity","effectiveAt","descriptionCode") VALUES($1,$2,$3,\'PAPER\',\'PAPER_SEED\',$4,now(),\'PAPER_TEST_EXTRA\')',
           [id, f.owner.tenantId, f.owner.accountId, `test-extra:${id}`],
