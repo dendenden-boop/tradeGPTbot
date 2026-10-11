@@ -463,18 +463,28 @@ it('300 instruments retain independent heads across consecutive refresh and rest
   const s = await open(),
     publications: Publication[] = [];
   for (let i = 0; i < 300; i++) publications.push(await fixture('SPOT-' + i));
-  for (const p of publications) {
+  // Independent instruments use the port's bounded admission. Keep each
+  // instrument's two updates ordered; never schedule an unbounded queue or
+  // consume all four physical slots while one is still closing.
+  const wave = async (work: (p: Publication) => Promise<void>) => {
+    for (let offset = 0; offset < publications.length; offset += 3)
+      await Promise.all(publications.slice(offset, offset + 3).map(work));
+  };
+  await wave(async (p) => {
     const q = next(p, '0', p.trade.sourceSequence);
     q.trade.tradeId = p.trade.tradeId;
     Object.assign(p, q);
     expect((await s.publish(p, io())).status).toBe('APPLIED');
-  }
-  for (const p of publications)
+  });
+  await wave(async (p) => {
     expect((await s.publish(next(p, '1'), io())).status).toBe('APPLIED');
+  });
   await s.close();
   const restarted = await open();
-  for (const p of publications)
+  await wave(async (p) => {
     expect(await restarted.head(p.key, io())).toEqual({ revision: '2', gap: false });
+    expect(await rows(p)).toEqual({ events: 2, native: 2, seals: 2 });
+  });
 }, 30000);
 it('coherent payload and checksum rewrite cannot replace the retained original publication seal', async () => {
   const p = await fixture(),
