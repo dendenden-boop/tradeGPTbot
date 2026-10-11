@@ -319,6 +319,9 @@ try {
     assert.equal(typeof market.createMarketDataWorker,'function');
     assert.equal(typeof market.createPostgresMarketStore,'function');
     assert.equal(typeof market.createPostgresMarketSnapshots,'function');
+      assert.equal(typeof market.createPostgresMarketTrades,'function');
+      assert.equal(market.marketTradePublicationSchema.safeParse({tenantId:'untrusted'}).success,false);
+      assert.throws(()=>import.meta.resolve('@ctp/market-data/src/postgres-trades'));
     assert.equal(typeof market.createPostgresInstrumentRegistry,'function');
     assert.equal(typeof market.createNativeTradeFeed,'function');
     assert.throws(()=>market.createMarketDataEngine({}));
