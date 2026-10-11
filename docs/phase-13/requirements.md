@@ -1,8 +1,10 @@
 # PHASE 13 requirements
 
+Current public-trade evidence increment starts from protected main **b00275ee4fa35da7d7eb8227b9deba357caaf643**, accepted through PR #6 and complete main CI. Scope is the isolated [durable public Spot trade journal](public-trades.md), additive migration 39 and native persistence/ordering/role checks. Published migrations 1–38 remain immutable. Feed composition/recovery, shared liquidity and financial admission/dispatch remain outstanding.
+
 ## Starting point and scope
 
-Current conservative execution-envelope increment starts from protected main **4bf19f747d522929177189a80e3fe0eda4ba3f02**, with accepted calculator, configuration/seals, initial funding and read-only initial Portfolio source. Published migrations 1–38, financial runtime and workflows stay unchanged. Scope is the pure [Risk envelope calculation contract](risk-envelope.md), actual-calculator comparisons and compiled deployment checks. This neither certifies a snapshot nor reserves money or enables dispatch.
+The historical conservative execution-envelope increment starts from protected main **4bf19f747d522929177189a80e3fe0eda4ba3f02**, with accepted calculator, configuration/seals, initial funding and read-only initial Portfolio source. Published migrations 1–38, financial runtime and workflows stay unchanged. Scope is the pure [Risk envelope calculation contract](risk-envelope.md), actual-calculator comparisons and compiled deployment checks. This neither certifies a snapshot nor reserves money or enables dispatch.
 
 The starting points below are historical increments, not the current HEAD.
 

@@ -12,4 +12,6 @@ export {
 } from './worker.js';
 export * from './durable-snapshots.js';
 export * from './postgres-snapshots.js';
+export * from './durable-trades.js';
+export * from './postgres-trades.js';
 export { createPostgresInstrumentRegistry } from './postgres-instrument-registry.js';

@@ -48,6 +48,7 @@ const expectedMigrations = [
   '202610090004_paper_configuration_seal',
   '202610090005_paper_initial_funding',
   '202610100001_paper_initial_portfolio',
+  '202610110001_public_trade_journal',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -102,6 +103,7 @@ const admissionPassword = randomBytes(24).toString('hex');
 const paperConfigurationPassword = randomBytes(24).toString('hex');
 const paperFundingPassword = randomBytes(24).toString('hex');
 const paperPortfolioPassword = randomBytes(24).toString('hex');
+const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
   password,
@@ -124,6 +126,7 @@ const secrets = [
   paperConfigurationPassword,
   paperFundingPassword,
   paperPortfolioPassword,
+  marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
 const databases = [
@@ -152,6 +155,7 @@ const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
 const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
 const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
+const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
   if (!/^ctp_p2_[a-z0-9_]+$/.test(name)) throw new Error('Refusing unrelated database object');
@@ -236,6 +240,12 @@ const snapshotUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = snapshotRole;
   url.password = snapshotPassword;
+  return url.href;
+};
+const marketTradeUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = marketTradeRole;
+  url.password = marketTradePassword;
   return url.href;
 };
 const riskSnapshotUrl = (name) => {
@@ -391,6 +401,7 @@ try {
     [paperConfigurationRole, paperConfigurationPassword, 'ctp_paper_configuration'],
     [paperFundingRole, paperFundingPassword, 'ctp_paper_funding'],
     [paperPortfolioRole, paperPortfolioPassword, 'ctp_paper_portfolio_reader'],
+    [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
       `CREATE ROLE ${identifier(role)} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${secret}'`,
@@ -1495,6 +1506,38 @@ try {
   assert.equal(paperPortfolioOwner.success, true);
   assert.equal(paperPortfolioOwner.numPendingTests, 0);
   assert.ok(paperPortfolioOwner.numPassedTests >= 35);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/market-trades.integration.test.ts',
+      '--outputFile.json=test-results/market-trades-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 120000,
+    },
+  );
+  const marketTradesOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/market-trades-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(marketTradesOwner.success, true);
+  assert.equal(marketTradesOwner.numFailedTests, 0);
+  assert.equal(marketTradesOwner.numPendingTests, 0);
+  assert.equal(marketTradesOwner.numPassedTests, 40);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -1699,6 +1742,61 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await restartedPortfolio.close();
   }
+  // Published-38 populated funding/configuration survive the isolated public
+  // journal migration. No Portfolio book or monetary journal is introduced.
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[38]),
+    path.join(paperMigrations, expectedMigrations[38]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const postTradePortfolio = await createPostgresPaperInitialPortfolio({
+    connectionString: paperPortfolioUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const source = await postTradePortfolio.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.deepEqual(source.configuration, legacyPaperReceipt);
+    assert.deepEqual(source.funding, fundingReceipt);
+    assert.deepEqual(source.state.balances, initialSource.state.balances);
+  } finally {
+    await postTradePortfolio.close();
+  }
+  const { createPostgresMarketTrades } = await import(
+    pathToFileURL(path.join(workspace, 'packages/market-data/dist/index.js'))
+  );
+  const upgradedTrades = await createPostgresMarketTrades({
+    connectionString: marketTradeUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const emptyKey = {
+      scope: paperInput.source,
+      instrumentId: 'BINANCE:SPOT:BTCUSDT',
+      dbInstrumentId: randomUUID(),
+      dbRuleId: randomUUID(),
+    };
+    assert.deepEqual(
+      await upgradedTrades.head(emptyKey, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      { revision: '0', gap: false },
+    );
+    await assert.rejects(
+      upgradedTrades.read(emptyKey, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      /MARKET_TRADE_MISSING/u,
+    );
+  } finally {
+    await upgradedTrades.close();
+  }
   assert.equal(
     (
       await paperUpgrade.query(
@@ -1824,6 +1922,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
         DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
         DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
+        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
       secrets,
       echo: true,
@@ -1916,6 +2015,11 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     (await reset.query('SELECT count(*)::int n FROM ctp_paper.funding_seal')).rows[0].n,
     0,
   );
+  for (const table of ['trade_event', 'trade_seal', 'native_trade_seen', 'trade_head'])
+    assert.equal(
+      (await reset.query(`SELECT count(*)::int n FROM ctp_market.${table}`)).rows[0].n,
+      0,
+    );
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -1960,6 +2064,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperFundingPopulatedUpgradeFromPublished36: 'PASS',
     paperPortfolioNonBypassOwner: 'PASS',
     paperPortfolioPopulatedUpgradeFromPublished37: 'PASS',
+    marketTradesNonBypassOwner: 'PASS',
+    marketTradesPopulatedUpgradeFromPublished38: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

@@ -4,6 +4,7 @@ import { createDatabase, createAuthDatabase } from '@ctp/database';
 import {
   createPostgresMarketStore,
   createPostgresMarketSnapshots,
+  createPostgresMarketTrades,
   createPostgresInstrumentRegistry,
 } from '@ctp/market-data';
 import { createPostgresPortfolioStore } from '@ctp/portfolio';
@@ -70,6 +71,7 @@ const cases: readonly [string, string, (options: Options) => Promise<Handle>][] 
   ],
   ['ctp_risk_evidence_collector', 'DATABASE_RISK_EVIDENCE_URL', createPostgresLossJournal],
   ['ctp_market_snapshot', 'DATABASE_MARKET_SNAPSHOT_URL', createPostgresMarketSnapshots],
+  ['ctp_market_trade', 'DATABASE_MARKET_TRADE_URL', createPostgresMarketTrades],
   ['ctp_risk_snapshot_reader', 'DATABASE_RISK_SNAPSHOT_URL', createPostgresRiskPortfolioReader],
   ['ctp_risk_certifier', 'DATABASE_RISK_CERTIFICATION_URL', createPostgresRiskSnapshotStore],
   ['ctp_risk_observer', 'DATABASE_RISK_OBSERVATION_URL', createPostgresRiskObservations],
