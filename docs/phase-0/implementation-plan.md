@@ -1,5 +1,8 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+Current isolated [public trade journal](../phase-13/public-trades.md) source **172a4b36…** passed complete source/PR Ubuntu/Windows/native PostgreSQL/Docker/CodeQL CI: 3363 unit / 41 HTTP per OS, 851 native PostgreSQL, 40 journal contracts on fresh/owner databases, twelve deployments and audit zero. The original 300-instrument aggregate timeout remains a failed checkpoint; bounded waves fixed the harness without relaxing deadlines or runtime guards. Final documentation-head/protected merge/main acceptance remains separate. This is not certified PAPER Risk, shared liquidity or virtual execution; **NOT READY FOR PHASE 14**, LIVE disabled. Historical checkpoints below retain their original pending statements; current evidence is in [verification](../phase-13/verification.md).
+
+
 Основание: разделы 1, 77–80, 94–97 пользовательского задания, [архитектура](../architecture.md), [требования и противоречия](requirements.md). План принят 2026-09-05; состояние согласовано 2026-09-20, перенос AMEND уточнён 2026-10-05 по разрешённому пользователем варианту. **PHASE 0–3 завершены в объёме своих этапов.** Таблица ниже сохраняет gates всех фаз с явно описанным переносом AMEND из PHASE 11 в PHASE 12, а раздел PHASE 1 — её критерии приёмки. Фактические результаты и ограничения находятся в отдельных исторических отчётах: [PHASE 0](verification.md), [PHASE 1](../phase-1/verification.md), [PHASE 2](../phase-2/verification.md), [PHASE 3](../phase-3/verification.md). Сам план не заменяет выполненные проверки.
 
 ## Текущее состояние после PHASE 12

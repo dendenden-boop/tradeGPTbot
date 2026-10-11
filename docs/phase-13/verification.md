@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Accepted public trade journal source checkpoint
+
+Source **172a4b36d380736b0ee8c515ad8185c1f5b85dab** passed complete [source CI 38164166089](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38164166089), [source CodeQL 38164166103](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38164166103), [PR CI 38164169672](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38164169672) and [PR CodeQL 38164169655](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38164169655). All jobs completed successfully, without cancelled/skipped substitutes. Artifacts verified **2026-10-11T18:53:02.657Z**: **3363 unit / 41 HTTP per OS**, **56 new trade unit contracts**, **851 native PostgreSQL with zero failures/skips**, **40 journal contracts on fresh and non-BYPASSRLS owner databases**, **143 role-graph cases**, populated published-38 upgrade, twelve deployments and audit zero. Docker made 46 authenticated requests; shutdown was 312ms source / 310ms PR. CodeQL has no open findings.
+
+The isolated journal preserves permanent native identities/original receipts, lossless ordering and sticky GAP across restart/rules refresh. Both historical-loss regressions, physical lost COMMIT/abort/slot tests, 300 instruments/two refreshes and financial non-effects passed. The failed PR CI 38162813538 remains failed; its serial aggregate timeout was fixed using bounded waves of three with the original 30-second limit and stronger per-instrument counts. No runtime guard, CI budget or check was weakened. Published migrations 1–38 and accepted native financial/adapters/Core/Portfolio/Paper/workflows/lock remain unchanged; additive 39 is the journal only.
+
+This accepts isolated journal source, not full PHASE 13. Native feed composition and verified GAP recovery, shared liquidity allocation, certified PAPER Risk/reservations/Portfolio holds, virtual execution/conditional exits, positions/PnL and reset remain outstanding. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. LIVE, PAPER dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed. Final documentation-head source/PR CI, ordinary protected merge of [PR #7](https://github.com/dendenden-boop/tradeGPTbot/pull/7) and exact-main CI remain separate required checks.
+
 ## Public trade journal — implementation checkpoint
 
 Starting protected main **b00275ee4fa35da7d7eb8227b9deba357caaf643**. Full thirteen-command baseline passed **2026-10-11T17:13:41.167Z**: format/docs/lint/typecheck, 3307 unit / 41 HTTP, db validation, build/runtime, twelve clean deployments and dependency/secrets/supply-chain audits. Dependency audit is zero.
