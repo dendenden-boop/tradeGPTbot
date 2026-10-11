@@ -387,6 +387,7 @@ try {
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');
+    assert.equal(typeof paper.calculatePaperRiskEnvelope,'function');
     assert.equal(typeof configuration.createPostgresPaperConfiguration,'function');
     assert.equal(typeof funding.createPostgresPaperFunding,'function');
     assert.equal(typeof portfolio.createPostgresPaperInitialPortfolio,'function');
@@ -395,11 +396,13 @@ try {
     await assert.rejects(configuration.createPostgresPaperConfiguration({connectionString:'https://example.invalid',environment:'test'}),/PAPER_CONFIGURATION_DATABASE_URL/);
     assert.throws(()=>paper.preparePaperFrame({}),/PAPER_EVIDENCE/);
     assert.throws(()=>paper.evaluatePaperOrder({}),/PAPER_INPUT/);
+    assert.throws(()=>paper.calculatePaperRiskEnvelope({}),/PAPER_ENVELOPE_INPUT/);
     for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);
     assert.equal(existsSync('./test'),false);
     assert.equal(existsSync('./src'),false);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/testing'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/model.js'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/risk-envelope.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-configuration.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-funding.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-initial-portfolio.js'));

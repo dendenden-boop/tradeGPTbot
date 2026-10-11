@@ -2,9 +2,11 @@
 
 ## Starting point and scope
 
-Current read-only initial Portfolio increment starts from protected main **f382658685116c287ac6dcf7834615cd80537885**, with accepted configuration/seals and initial funding. Published migrations 1–37 stay immutable. Scope is the separate [initial Portfolio source](initial-portfolio.md), minimal credential-free common Portfolio Binding, additive capture-only migration 38, native tests and deployment/runner checks. This is not certified PAPER Risk/Portfolio or a financial writer; any later activity fails closed.
+Current conservative execution-envelope increment starts from protected main **4bf19f747d522929177189a80e3fe0eda4ba3f02**, with accepted calculator, configuration/seals, initial funding and read-only initial Portfolio source. Published migrations 1–38, financial runtime and workflows stay unchanged. Scope is the pure [Risk envelope calculation contract](risk-envelope.md), actual-calculator comparisons and compiled deployment checks. This neither certifies a snapshot nor reserves money or enables dispatch.
 
 The starting points below are historical increments, not the current HEAD.
+
+The read-only initial Portfolio increment starts from protected main **f382658685116c287ac6dcf7834615cd80537885**, with accepted configuration/seals and initial funding. Published migrations 1–37 stayed immutable; additive capture-only 38 was accepted through [PR #5](https://github.com/dendenden-boop/tradeGPTbot/pull/5) and exact-main CI. Its [initial-only source](initial-portfolio.md) rejects any later financial activity; it is not a certified PAPER Risk/Portfolio writer.
 
 The initial-funding increment starts from fresh protected main **5ae5aeae5a361021dff8dc71caa39a068530c388**, accepted configuration/seal runtime. Published migrations 1–36 remain immutable. Scope is the separate [initial funding contract](funding.md), native replay/conservation/role/COMMIT tests and necessary deployment/runner checks. Reset or PAPER dispatch is not enabled by funding.
 
