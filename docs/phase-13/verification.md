@@ -8,6 +8,8 @@ Fresh clean main matches origin/main; baseline passed all thirteen existing comm
 
 Initial RED fixture source df9f757 failed local typecheck on two unbranded funding amounts. That checkpoint cannot reproduce PostgreSQL behavior. Parsing the fixture with the existing `paperFundingSchema` preserves its lossless decimal contract; no production/schema/type suppression is introduced. Native RED is required after this fixture correction.
 
+Corrected fixture source fe83fbd passed typecheck but source CI 38298867731 and PR CI 38298894365 failed lint on three untyped query-count results; their real-services jobs were skipped. Both CodeQL runs 38298867714 / 38298894412 passed. These are fixture failures, not native RED evidence. Explicit query result types fix the fixture without suppressions; native reproduction remains required.
+
 **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Active Portfolio holds/certified PAPER Risk, shared allocation, virtual execution/conditional exits, feed recovery, PnL/reset remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak.
 
 ## Whole PostgreSQL suite deadline correction

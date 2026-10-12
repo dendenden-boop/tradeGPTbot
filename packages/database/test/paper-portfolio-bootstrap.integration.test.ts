@@ -172,26 +172,28 @@ it('funded PAPER with a common draft bootstraps one durable shared Portfolio che
   ]);
   expect(
     (
-      await admin.query(
+      await admin.query<{ n: number }>(
         'SELECT count(*)::int n FROM public.ledger_transaction WHERE "accountId"=$1',
         [f.c.owner.accountId],
       )
-    ).rows[0].n,
+    ).rows[0]?.n,
   ).toBe(1);
   expect(
     (
-      await admin.query('SELECT count(*)::int n FROM public.ledger_entry WHERE "accountId"=$1', [
-        f.c.owner.accountId,
-      ])
-    ).rows[0].n,
+      await admin.query<{ n: number }>(
+        'SELECT count(*)::int n FROM public.ledger_entry WHERE "accountId"=$1',
+        [f.c.owner.accountId],
+      )
+    ).rows[0]?.n,
   ).toBe(4);
   for (const table of ['ctp_portfolio.book', 'ctp_portfolio.evidence', 'ctp_portfolio.outbox'])
     expect(
       (
-        await admin.query('SELECT count(*)::int n FROM ' + table + ' WHERE "accountId"=$1', [
-          f.c.owner.accountId,
-        ])
-      ).rows[0].n,
+        await admin.query<{ n: number }>(
+          'SELECT count(*)::int n FROM ' + table + ' WHERE "accountId"=$1',
+          [f.c.owner.accountId],
+        )
+      ).rows[0]?.n,
     ).toBe(1);
   expect((await store.read(f.binding, order.id, io())).command).toEqual(order.command);
 });
