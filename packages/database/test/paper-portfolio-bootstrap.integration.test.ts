@@ -425,7 +425,7 @@ it('other conserved monetary posting prevents bootstrap from ignoring economic h
   try {
     await p.query('BEGIN');
     await p.query(
-      'INSERT INTO public.ledger_transaction(id,"tenantId","accountId",mode,cause,"causeIdentity","effectiveAt","descriptionCode") VALUES($1,$2,$3,\'PAPER\',\'ADJUSTMENT\',$1::text,now(),\'owned-fixture\')',
+      'INSERT INTO public.ledger_transaction(id,"tenantId","accountId",mode,cause,"causeIdentity","effectiveAt","descriptionCode") VALUES($1::uuid,$2::uuid,$3::uuid,\'PAPER\',\'ADJUSTMENT\',($1::uuid)::text,now(),\'owned-fixture\')',
       [id, f.c.owner.tenantId, f.c.owner.accountId],
     );
     await p.query(
@@ -433,6 +433,9 @@ it('other conserved monetary posting prevents bootstrap from ignoring economic h
       [f.c.owner.tenantId, id, f.c.owner.accountId],
     );
     await p.query('COMMIT');
+  } catch (error) {
+    await p.query('ROLLBACK');
+    throw error;
   } finally {
     p.release();
   }

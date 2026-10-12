@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Bootstrap first native candidate fixture correction
+
+Candidate **8f54e07b0d6c6c9615fbac9cbfd7fcd095c97a32** passed Ubuntu/Windows and both CodeQL runs. [Source CI 38304342349](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38304342349) and [PR CI 38304346952](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38304346952) stopped at the new non-BYPASSRLS owner stage: **30 passed / two failed / zero skipped** of 32 bootstrap cases. One fixture parameter was inferred inconsistently as UUID/text; its missing rollback returned an aborted connection to the pool, so the following lost-COMMIT fixture setup failed before exercising the bootstrap transport. These are not full native GREEN or acceptance; later stages were not reached. CodeQL 38304342377 / 38304346966 passed.
+
+Explicit UUID casts for the owned ADJUSTMENT fixture and rollback-before-release fix both fixture faults. No production code, migration, ledger rule, assertion, timeout or stage changes. The original missing-port RED and this failed candidate remain preserved. Full local regression and complete source/PR/native owner/upgrade CI are repeated before acceptance.
+
 ## Durable common Portfolio bootstrap RED and candidate
 
 Test-only source **1857ed91baeb26a29ba0bb668d744c5ed02d2117** ran complete [source CI 38300161420](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38300161420) and [PR CI 38300169800](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38300169800). Both OS jobs passed; real PostgreSQL reproduced exactly one new absent-bootstrap contract failure after actual sealed configuration, conserved funding and common draft creation: **894 existing passed / one failed / zero skipped** in both runs. Source [CodeQL 38300161330](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38300161330) and [PR CodeQL 38300169583](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38300169583) passed. Artifacts verified **2026-10-12T20:06:17.127Z**. These intentional failures are RED evidence, not acceptance.
