@@ -172,9 +172,7 @@ export function createPaperFrameReader(ports: FrameReadPorts): PaperMarketFrames
             book: b.book,
             trade: t.trade,
           });
-          if (now() >= expiresAt) fail('PAPER_FRAME_STALE');
-          guard();
-          return immutable({
+          const result = immutable({
             configuration,
             frame,
             capturedAt,
@@ -188,6 +186,9 @@ export function createPaperFrameReader(ports: FrameReadPorts): PaperMarketFrames
               tradeHash: trade.hash,
             },
           });
+          guard();
+          if (now() >= expiresAt) fail('PAPER_FRAME_STALE');
+          return result;
         } catch (error) {
           if (error instanceof Error && errors.has(error.message)) throw error;
           if (error instanceof Error && /_UNCERTAIN$/u.test(error.message))

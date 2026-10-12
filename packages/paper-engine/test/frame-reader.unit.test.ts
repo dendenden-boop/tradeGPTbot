@@ -342,6 +342,15 @@ it('evidence which ages out during final calculation cannot be returned', async 
   await expect(h.capture(f.request, f.io)).rejects.toThrow('PAPER_FRAME_STALE');
   await h.close();
 });
+it('expiry crossing at the final guard cannot return an already expired immutable view', async () => {
+  const f = frameFixture();
+  f.configuration.configuration.model.maxEvidenceAgeMs = 20;
+  let calls = 0;
+  f.ports.now = () => (++calls >= 10 ? f.now + 20 : f.now);
+  const h = f.open();
+  await expect(h.capture(f.request, f.io)).rejects.toThrow('PAPER_FRAME_STALE');
+  await h.close();
+});
 it('source-like error prefixes cannot leak arbitrary database text', async () => {
   const f = frameFixture();
   f.ports.configuration.read.mockRejectedValue(new Error('PAPER_FRAME_secret_password_SQL'));
