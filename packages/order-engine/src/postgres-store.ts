@@ -36,6 +36,7 @@ import {
 import { reduceOrder, terminal } from './state.js';
 import { prepareOrderAmendment } from './amendment.js';
 import { prepareOrderCancellation } from './cancellation.js';
+import { assertPaperDraft } from './paper-drafts.js';
 const bytes = (value: string) => Buffer.from(value, 'hex');
 const market = (b: OrderBinding) => (b.profile.market === 'SPOT' ? 'SPOT' : 'PERPETUAL');
 export async function createPostgresOrderStore(options: {
@@ -91,7 +92,8 @@ export async function createPostgresOrderStore(options: {
     if (c.signal.aborted || !Number.isSafeInteger(c.deadline) || c.deadline <= Date.now())
       throw new Error('ORDER_ABORTED');
     let p: PoolClient | undefined,
-      destroyed = false;
+      destroyed = false,
+      committing = false;
     const abort = () => {
       if (destroyed) return;
       destroyed = true;
@@ -115,9 +117,12 @@ export async function createPostgresOrderStore(options: {
         ]);
       }
       const value = await work(p);
-      if (destroyed || c.signal.aborted) throw new Error('ORDER_ABORTED');
+      if (destroyed || c.signal.aborted || (b?.mode === 'PAPER' && c.deadline <= Date.now()))
+        throw new Error('ORDER_ABORTED');
+      committing = true;
       await p.query('COMMIT');
-      if (destroyed || c.signal.aborted) throw new Error('ORDER_ABORTED');
+      if (destroyed || c.signal.aborted || (b?.mode === 'PAPER' && c.deadline <= Date.now()))
+        throw new Error('ORDER_ABORTED');
       return value;
     } catch (error) {
       if (p && !destroyed) await p.query('ROLLBACK').catch(() => {});
@@ -125,10 +130,17 @@ export async function createPostgresOrderStore(options: {
         error instanceof Error && /^ORDER_[A-Z_]+$/.test(error.message)
           ? error.message
           : 'ORDER_STORE_FAILED';
-      throw new Error(destroyed || c.signal.aborted ? 'ORDER_ABORTED' : message, {
-        // eslint-disable-next-line preserve-caught-error -- Raw PostgreSQL errors may contain binding data or connection secrets.
-        cause: new Error('ORDER_TRANSACTION_FAILED'),
-      });
+      throw new Error(
+        b?.mode === 'PAPER' && committing
+          ? 'ORDER_PAPER_STORE_UNCERTAIN'
+          : destroyed || c.signal.aborted
+            ? 'ORDER_ABORTED'
+            : message,
+        {
+          // eslint-disable-next-line preserve-caught-error -- Raw PostgreSQL errors may contain binding data or connection secrets.
+          cause: new Error('ORDER_TRANSACTION_FAILED'),
+        },
+      );
     } finally {
       clearTimeout(timer);
       c.signal.removeEventListener('abort', abort);
@@ -138,12 +150,13 @@ export async function createPostgresOrderStore(options: {
   try {
     await tx(null, io(), async (p) => {
       const r = await p.query<{ safe: boolean }>(
-        `SELECT NOT(r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication) AND current_user=session_user AND NOT has_function_privilege(current_user,'ctp_risk.update_global(jsonb)','EXECUTE') AND NOT has_function_privilege(current_user,'ctp_risk.update_tenant(jsonb)','EXECUTE') AND pg_has_role(current_user,'ctp_execution','MEMBER') AND NOT EXISTS(SELECT 1 FROM pg_roles x WHERE (x.rolsuper OR x.rolbypassrls OR x.rolcreatedb OR x.rolcreaterole OR x.rolreplication OR left(x.rolname,3)='pg_' OR x.rolname IN('ctp_api','ctp_auth','ctp_auth_owner','ctp_ingest','ctp_signer','ctp_portfolio','ctp_risk_control','ctp_risk_operator')) AND pg_has_role(current_user,x.oid,'MEMBER')) AND NOT has_schema_privilege(current_user,'public','CREATE') AND NOT has_schema_privilege(current_user,'ctp_execution','CREATE') AND NOT has_database_privilege(current_user,current_database(),'CREATE,TEMP') AND NOT EXISTS(SELECT 1 FROM pg_class x JOIN pg_namespace n ON n.oid=x.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND pg_has_role(current_user,x.relowner,'MEMBER')) AND NOT has_table_privilege(current_user,'public.ledger_transaction','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AND (${postgresRoleBoundary('ctp_execution', ['ctp_risk.dispatch_gate(uuid,uuid)', 'ctp_execution.apply_amendment(jsonb)'], ['ctp_execution.amendment_application', 'ctp_execution.amendment_head', 'ctp_execution.command', 'ctp_execution.progress', 'ctp_execution.evidence', 'ctp_execution.fill_adoption', 'ctp_execution.authoritative_event', 'ctp_portfolio.book', 'ctp_portfolio.evidence'])}) AS safe FROM pg_roles r WHERE r.rolname=current_user`,
+        `SELECT NOT(r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication) AND current_user=session_user AND NOT has_function_privilege(current_user,'ctp_risk.update_global(jsonb)','EXECUTE') AND NOT has_function_privilege(current_user,'ctp_risk.update_tenant(jsonb)','EXECUTE') AND pg_has_role(current_user,'ctp_execution','MEMBER') AND NOT EXISTS(SELECT 1 FROM pg_roles x WHERE (x.rolsuper OR x.rolbypassrls OR x.rolcreatedb OR x.rolcreaterole OR x.rolreplication OR left(x.rolname,3)='pg_' OR x.rolname IN('ctp_api','ctp_auth','ctp_auth_owner','ctp_ingest','ctp_signer','ctp_portfolio','ctp_risk_control','ctp_risk_operator')) AND pg_has_role(current_user,x.oid,'MEMBER')) AND NOT has_schema_privilege(current_user,'public','CREATE') AND NOT has_schema_privilege(current_user,'ctp_execution','CREATE') AND NOT has_database_privilege(current_user,current_database(),'CREATE,TEMP') AND NOT EXISTS(SELECT 1 FROM pg_class x JOIN pg_namespace n ON n.oid=x.relnamespace WHERE n.nspname IN('public','ctp_auth','ctp_market','ctp_portfolio','ctp_execution','ctp_risk') AND pg_has_role(current_user,x.relowner,'MEMBER')) AND NOT has_table_privilege(current_user,'public.ledger_transaction','INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER') AND (${postgresRoleBoundary('ctp_execution', ['ctp_risk.dispatch_gate(uuid,uuid)', 'ctp_execution.apply_amendment(jsonb)', 'ctp_execution.paper_order_identity(jsonb)'], ['ctp_execution.amendment_application', 'ctp_execution.amendment_head', 'ctp_execution.command', 'ctp_execution.progress', 'ctp_execution.evidence', 'ctp_execution.fill_adoption', 'ctp_execution.authoritative_event', 'ctp_portfolio.book', 'ctp_portfolio.evidence'])}) AS safe FROM pg_roles r WHERE r.rolname=current_user`,
       );
       if (r.rows[0]?.safe !== true) throw new Error('ORDER_ROLE_UNSAFE');
       const functions = await p.query<{ safe: boolean }>(`SELECT
         has_function_privilege(current_user,'ctp_risk.dispatch_gate(uuid,uuid)','EXECUTE')
         AND has_function_privilege(current_user,'ctp_execution.apply_amendment(jsonb)','EXECUTE')
+        AND has_function_privilege(current_user,'ctp_execution.paper_order_identity(jsonb)','EXECUTE')
         AND NOT EXISTS(SELECT 1 FROM pg_proc f JOIN pg_namespace n ON n.oid=f.pronamespace
           WHERE n.nspname='ctp_risk' AND has_function_privilege(current_user,f.oid,'EXECUTE')
             AND f.oid<>'ctp_risk.dispatch_gate(uuid,uuid)'::regprocedure::oid)
@@ -176,6 +189,19 @@ export async function createPostgresOrderStore(options: {
     throw new Error('ORDER_DATABASE_ROLE_UNSAFE');
   }
   async function owner(p: PoolClient, b: OrderBinding, lock = false) {
+    const identity =
+      b.mode === 'PAPER'
+        ? z
+            .strictObject({ externalAccountId: z.string(), clientIdEpoch: z.string() })
+            .parse(
+              (
+                await p.query<{ identity: unknown }>(
+                  'SELECT ctp_execution.paper_order_identity($1::jsonb) AS identity',
+                  [JSON.stringify(b)],
+                )
+              ).rows[0]?.identity,
+            )
+        : null;
     const r = await p.query<{ epoch: string; counter: string; status: string; permission: string }>(
       `SELECT a."clientIdEpoch" AS epoch,a."clientIdHighWatermark"::text AS counter,a.status::text,a."permissionEpoch"::text AS permission FROM public.exchange_account a LEFT JOIN public.exchange_connection x ON x."tenantId"=a."tenantId" AND x."accountId"=a.id AND x.mode=a.mode AND x.id=$4 WHERE a."tenantId"=$1 AND a.id=$2 AND a.mode=$3 AND a.exchange=$5 AND a.region=$6 AND a."externalAccountId"=$7 AND a."accountMode"=$8 AND (($3='PAPER' AND $4::uuid IS NULL) OR x.id IS NOT NULL) ${lock ? 'FOR UPDATE OF a' : ''}`,
       [
@@ -190,19 +216,35 @@ export async function createPostgresOrderStore(options: {
       ],
     );
     if (!r.rows[0]) throw new Error('ORDER_BINDING_DENIED');
+    if (
+      identity !== null &&
+      (identity.externalAccountId !== b.externalAccountId ||
+        identity.clientIdEpoch !== r.rows[0].epoch)
+    )
+      throw new Error('ORDER_PAPER_CONFIGURATION');
     return r.rows[0];
   }
   async function metadata(p: PoolClient, b: OrderBinding, d: OrderDraft) {
     const r = await p.query<{ base: string; quote: string }>(
-      `SELECT i."baseAsset" AS base,i."quoteAsset" AS quote FROM public.instrument i JOIN public.instrument_rule_version r ON r."instrumentId"=i.id WHERE i.id=$1 AND r.id=$2 AND i.exchange=$3 AND i.mode=$4 AND i.market=$5 AND i."exchangeSymbol"=$6 AND i.active AND NOT i."isInverse" AND i."expiryAt" IS NULL AND r."isCurrent" AND r."effectiveAt"<=now() AND r.rules->>'version'=$7`,
+      `SELECT i."baseAsset" AS base,i."quoteAsset" AS quote FROM public.instrument i JOIN public.instrument_rule_version r ON r."instrumentId"=i.id WHERE i.id=$1 AND r.id=$2 AND i.exchange=$3 AND i.mode=$4 AND i.market=$5 AND ${b.mode === 'PAPER' ? "r.rules->>'instrumentId'=$6" : 'i."exchangeSymbol"=$6'} AND i.active AND NOT i."isInverse" AND i."expiryAt" IS NULL AND r."isCurrent" AND r."effectiveAt"<=now() AND r.rules->>'version'=$7 ${b.mode === 'PAPER' ? `AND r.rules->'scope'=$8::jsonb AND r.rules->>'quantityUnit'='BASE' AND jsonb_typeof(r.rules->'expiresAt')='number' AND (r.rules->>'expiresAt')::numeric>extract(epoch from clock_timestamp())*1000 AND jsonb_typeof(r.rules->'effectiveAt')='number' AND (r.rules->>'effectiveAt')::numeric<=extract(epoch from clock_timestamp())*1000` : ''}`,
       [
         d.dbInstrumentId,
         d.dbRuleId,
         b.profile.exchange,
-        b.mode,
+        b.mode === 'PAPER' ? b.profile.environment : b.mode,
         market(b),
         d.order.instrumentId,
         d.order.ruleVersion,
+        ...(b.mode === 'PAPER'
+          ? [
+              JSON.stringify({
+                exchange: b.profile.exchange,
+                region: b.profile.region,
+                market: b.profile.market,
+                environment: b.profile.environment,
+              }),
+            ]
+          : []),
       ],
     );
     const m = r.rows[0];
@@ -565,6 +607,7 @@ export async function createPostgresOrderStore(options: {
         const a = await owner(p, b, true);
         const existing = await findCreate(p, b, d);
         if (existing !== null) return existing;
+        assertPaperDraft(b, d);
         if (BigInt(a.counter) >= 9223372036854775807n) throw new Error('ORDER_ID_EXHAUSTED');
         const clientId = (BigInt(a.counter) + 1n).toString();
         await p.query(

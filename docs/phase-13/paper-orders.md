@@ -21,6 +21,8 @@ Implement only common draft creation/read/permanent replay against configured pu
 
 ## Acceptance
 
+Candidate additive migration 40 exposes the read-only proof only to the existing execution role. Deploy migration 40 before the new Order Store binary, including native deployments: startup requires the exact proof privilege alongside existing dispatch/amend privileges. No existing role membership, published migration, or financial table grant changes. PAPER normalized instrument identity comes from the exact public rule row; native symbol selection retains its earlier contract. An initial-only Portfolio source intentionally fails closed after a common draft exists; a later certified active PAPER Portfolio remains future scope.
+
 RED → GREEN query/command contracts and real PostgreSQL tests for common identity, zero financial effects, exact replay/conflict, rules refresh, concurrent creation/client sequence, restart, lost COMMIT, ownership/configuration/seal/profile/role rejection and still-disabled dispatch. Published migrations 1–39 remain byte immutable; any proof RPC requires a new additive migration and populated/non-BYPASSRLS owner verification. Full existing regression and Ubuntu/Windows/native PostgreSQL/Docker/CodeQL CI are mandatory before accepting the increment.
 
 **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Durable shared liquidity, certified PAPER Risk/reservations/Portfolio holds, virtual execution/conditional exits, native feed/GAP recovery, positions/PnL and reset remain outstanding. LIVE/PAPER dispatch/positive native credit stay disabled. Native AMEND remains Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed.

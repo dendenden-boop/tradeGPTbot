@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assertPaperDraft } from './paper-drafts.js';
 import {
   computeCommandHash,
   immutable,
@@ -287,6 +288,7 @@ export function createOrderEngine(options: {
           const existing = await options.store.findCreate(b, d, c);
           check(c);
           if (existing !== null) return existing;
+          assertPaperDraft(b, d);
           metadata(d);
           check(c);
           return options.store.create(b, d, c);
@@ -526,6 +528,10 @@ const safe = new Set([
   'ORDER_CLOSED',
   'ORDER_LIVE_DISABLED',
   'ORDER_PAPER_ENGINE_REQUIRED',
+  'ORDER_PAPER_CONFIGURATION',
+  'ORDER_PAPER_ORDER_UNSUPPORTED',
+  'ORDER_PAPER_STORE_UNCERTAIN',
+  'ORDER_PAPER_ROLE_UNSAFE',
   'ORDER_BINDING_DENIED',
   'ORDER_IDEMPOTENCY_CONFLICT',
   'ORDER_RISK_DENIED',
