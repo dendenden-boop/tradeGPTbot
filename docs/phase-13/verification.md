@@ -6,6 +6,8 @@ Protected merge **11e51a2a5ce519344038ed151e4397d7303a5dbf** through [PR #11](ht
 
 Fresh clean main matches origin/main; baseline passed all thirteen existing commands with 3466 unit / 41 HTTP, twelve deployments and audit zero. Current scope is only [durable common Portfolio bootstrap](portfolio-bootstrap.md). A first native contract sets up actual sealed funding/common draft and requires the missing bootstrap port. RED has not run yet, no implementation or new acceptance is claimed. Published 1–40 and accepted native runtime stay unchanged.
 
+Initial RED fixture source df9f757 failed local typecheck on two unbranded funding amounts. That checkpoint cannot reproduce PostgreSQL behavior. Parsing the fixture with the existing `paperFundingSchema` preserves its lossless decimal contract; no production/schema/type suppression is introduced. Native RED is required after this fixture correction.
+
 **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Active Portfolio holds/certified PAPER Risk, shared allocation, virtual execution/conditional exits, feed recovery, PnL/reset remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak.
 
 ## Whole PostgreSQL suite deadline correction

@@ -1,5 +1,5 @@
 import * as paperPortfolio from '@ctp/paper-engine/portfolio';
-import { createPostgresPaperFunding } from '@ctp/paper-engine/funding';
+import { createPostgresPaperFunding, paperFundingSchema } from '@ctp/paper-engine/funding';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
@@ -122,7 +122,7 @@ it('funded PAPER with a common draft bootstraps one durable shared Portfolio che
   const fundingId = randomUUID();
   try {
     await funding.initialize(
-      {
+      paperFundingSchema.parse({
         id: fundingId,
         owner: f.c.owner,
         configurationId: f.c.id,
@@ -130,7 +130,7 @@ it('funded PAPER with a common draft bootstraps one durable shared Portfolio che
           { asset: 'BTC', amount: '0.000000000000000001' },
           { asset: 'USDT', amount: '9007199254740993' },
         ],
-      },
+      }),
       io(),
     );
   } finally {
@@ -143,10 +143,7 @@ it('funded PAPER with a common draft bootstraps one durable shared Portfolio che
   expect(factory).toBeTypeOf('function');
   if (typeof factory !== 'function') throw new Error('PAPER_BOOK_IMPLEMENTATION_REQUIRED');
   const bootstrap = await (
-    factory as (o: {
-      connectionString: string;
-      environment: 'test';
-    }) => Promise<{
+    factory as (o: { connectionString: string; environment: 'test' }) => Promise<{
       initialize(
         o: typeof f.c.owner,
         c: ReturnType<typeof io>,
