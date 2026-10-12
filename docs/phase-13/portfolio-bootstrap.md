@@ -22,4 +22,12 @@ First RED: real sealed configuration/funding and common draft need the absent du
 
 Full format/docs/lint/typecheck/unit/HTTP/db:validate/build/runtime/clean/audit and complete source/PR/protected-main Ubuntu/Windows/native PostgreSQL/real-services/Docker/CodeQL acceptance are required. This candidate is not yet accepted.
 
+## Candidate API and durable representation
+
+`@ctp/paper-engine/portfolio` adds `createPostgresPaperPortfolioBootstrap` with `initialize(owner, io)`, `read(owner, io)` and `close`. Only the separate `ctp_paper_book_initializer` group may call `initialize_book(jsonb)` / `read_book_origin(jsonb)`; it gets no table or other function privileges. Only the new bootstrap factory requires additive migration 41. Existing factories and published migrations 1–40 are unchanged.
+
+Book and outbox IDs equal the permanent funding UUID; wallet is `paper-initial:<fundingId>`, snapshot event is `paper-bootstrap:<fundingId>`. Revision is exactly one. The original common SNAPSHOT references the existing seed ledger and has no postings. Immutable `book_origin` and an independent `book_origin_seal` retain the original serialized receipt/checkpoint. Decode validates all common state fields against the retained receipts without converting money to Number. Bootstrap read returns a historical `INITIAL_BOOK`, with its original snapshot time; it has no current-source timestamp, permission epoch, reservation or grant. A matching checksum proves content consistency, not authorization or current Risk evidence.
+
+Native RED confirmed the absent port with 894 existing passes and one new failure, followed by 35 private unit RED→GREEN contracts. The current working-tree implementation and its 32 native/owner contracts still require full regression/CI. No production Paper financial gateway is enabled.
+
 **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. LIVE/PAPER dispatch/positive native credit disabled. Native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed.

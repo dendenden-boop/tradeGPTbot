@@ -50,6 +50,7 @@ const expectedMigrations = [
   '202610100001_paper_initial_portfolio',
   '202610110001_public_trade_journal',
   '202610120001_paper_order_binding',
+  '202610120002_paper_portfolio_bootstrap',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -104,6 +105,7 @@ const admissionPassword = randomBytes(24).toString('hex');
 const paperConfigurationPassword = randomBytes(24).toString('hex');
 const paperFundingPassword = randomBytes(24).toString('hex');
 const paperPortfolioPassword = randomBytes(24).toString('hex');
+const paperBookPassword = randomBytes(24).toString('hex');
 const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
@@ -127,6 +129,7 @@ const secrets = [
   paperConfigurationPassword,
   paperFundingPassword,
   paperPortfolioPassword,
+  paperBookPassword,
   marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
@@ -156,6 +159,7 @@ const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
 const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
 const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
+const paperBookRole = `ctp_p2_paper_book_${suffix}`;
 const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
@@ -277,6 +281,12 @@ const paperFundingUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperFundingRole;
   url.password = paperFundingPassword;
+  return url.href;
+};
+const paperBookUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperBookRole;
+  url.password = paperBookPassword;
   return url.href;
 };
 const paperPortfolioUrl = (name) => {
@@ -402,6 +412,7 @@ try {
     [paperConfigurationRole, paperConfigurationPassword, 'ctp_paper_configuration'],
     [paperFundingRole, paperFundingPassword, 'ctp_paper_funding'],
     [paperPortfolioRole, paperPortfolioPassword, 'ctp_paper_portfolio_reader'],
+    [paperBookRole, paperBookPassword, 'ctp_paper_book_initializer'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
@@ -1607,6 +1618,40 @@ try {
   assert.equal(paperDraftsOwner.numFailedTests, 0);
   assert.equal(paperDraftsOwner.numPendingTests, 0);
   assert.equal(paperDraftsOwner.numPassedTests, 29);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-portfolio-bootstrap.integration.test.ts',
+      '--outputFile.json=test-results/paper-book-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
+        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperBookOwner = JSON.parse(
+    await readFile(new URL('../test-results/paper-book-owner-tests.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(paperBookOwner.success, true);
+  assert.equal(paperBookOwner.numFailedTests, 0);
+  assert.equal(paperBookOwner.numPendingTests, 0);
+  assert.equal(paperBookOwner.numPassedTests, 32);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -1966,6 +2011,108 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     ).rows[0].n,
     0,
   );
+  // Published-40 populated upgrade retains the original conserved seed and
+  // initial-only guard. New checkpoint authority is isolated and adds no money.
+  const beforePaperBookUpgrade = (
+    await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.initial_funding WHERE id=$1', [
+      initialFunding.id,
+    ])
+  ).rows[0].receipt_text;
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[40]),
+    path.join(paperMigrations, expectedMigrations[40]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const { createPostgresPaperPortfolioBootstrap } =
+    await import('../packages/paper-engine/dist/portfolio.js');
+  const upgradedBook = await createPostgresPaperPortfolioBootstrap({
+    connectionString: paperBookUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    await assert.rejects(
+      upgradedBook.read(paperInput.owner, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      /PAPER_BOOK_MISSING/,
+    );
+    const initialBook = await upgradedBook.initialize(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.equal(initialBook.bookId, initialFunding.id);
+    assert.equal(initialBook.revision, '1');
+    assert.deepEqual(initialBook.state.balances, initialSource.state.balances);
+    assert.deepEqual(
+      await upgradedBook.initialize(paperInput.owner, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      initialBook,
+    );
+    assert.deepEqual(
+      await upgradedBook.read(paperInput.owner, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      initialBook,
+    );
+  } finally {
+    await upgradedBook.close();
+  }
+  assert.equal(
+    (
+      await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.initial_funding WHERE id=$1', [
+        initialFunding.id,
+      ])
+    ).rows[0].receipt_text,
+    beforePaperBookUpgrade,
+  );
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        'SELECT count(*)::int n FROM public.ledger_transaction WHERE "accountId"=$1',
+        [paperInput.owner.accountId],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+        [initialFunding.id],
+      )
+    ).rows[0].n,
+    2,
+  );
+  for (const table of ['ctp_portfolio.book', 'ctp_portfolio.evidence', 'ctp_portfolio.outbox'])
+    assert.equal(
+      (
+        await paperUpgrade.query('SELECT count(*)::int n FROM ' + table + ' WHERE "accountId"=$1', [
+          paperInput.owner.accountId,
+        ])
+      ).rows[0].n,
+      1,
+    );
+  const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
+    connectionString: paperPortfolioUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    await assert.rejects(
+      retainedInitialGuard.read(paperInput.owner, {
+        signal: new AbortController().signal,
+        deadline: Date.now() + 2500,
+      }),
+      /PAPER_PORTFOLIO_INCOMPLETE/,
+    );
+  } finally {
+    await retainedInitialGuard.close();
+  }
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -2073,6 +2220,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
         DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
         DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
+        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[0]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
       secrets,
@@ -2220,6 +2368,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     marketTradesPopulatedUpgradeFromPublished38: 'PASS',
     paperOrderDraftsNonBypassOwner: 'PASS',
     paperOrderDraftsPopulatedUpgradeFromPublished39: 'PASS',
+    paperBookNonBypassOwner: 'PASS',
+    paperBookPopulatedUpgradeFromPublished40: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,

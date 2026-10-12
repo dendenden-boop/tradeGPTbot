@@ -397,6 +397,10 @@ try {
     assert.equal(typeof configuration.createPostgresPaperConfiguration,'function');
     assert.equal(typeof funding.createPostgresPaperFunding,'function');
     assert.equal(typeof portfolio.createPostgresPaperInitialPortfolio,'function');
+    assert.equal(typeof portfolio.createPostgresPaperPortfolioBootstrap,'function');
+    assert.equal('createPostgresPaperPortfolioBootstrap' in paper,false);
+    assert.equal('decodePaperPortfolioBootstrap' in portfolio,false);
+    await assert.rejects(portfolio.createPostgresPaperPortfolioBootstrap({connectionString:'https://example.invalid',environment:'test'}),/PAPER_BOOK_DATABASE_URL/);
     assert.equal(typeof evidence.createPostgresPaperMarketFrames,'function');
     assert.equal('createPaperFrameReader' in evidence,false);
     assert.equal('createPostgresPaperMarketFrames' in paper,false);
@@ -420,6 +424,8 @@ try {
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-configuration.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-funding.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-initial-portfolio.js'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-portfolio-bootstrap.js'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/portfolio-bootstrap-domain.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/frame-reader.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-frames.js'));
   `,
