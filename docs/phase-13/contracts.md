@@ -1,5 +1,7 @@
 # PHASE 13 contracts
 
+The [bounded competition calculation](competition.md) sorts up to 300 immutable-order calculation inputs by lossless admission sequence and applies the existing model sequentially to one shared frame. It returns one immutable final frame, with no partial result if a later candidate rejects. Priority, input ownership, permanent replay and consumed volume still require the future durable financial worker; this pure API creates no allocation receipt, reservation, grant or dispatch authority.
+
 The [read-only market frame composition](market-frames.md) creates fixed configuration/snapshot/trade PostgreSQL ports, retains native provenance, rereads independent evidence and fails closed on changes/freshness. It exposes only capture/close; it is neither an atomic Risk certificate nor durable liquidity allocation. The root calculator and existing native financial runtime remain unchanged.
 
 The isolated [public Spot trade journal](public-trades.md) preserves permanent publication/native identities, original receipt time and exact sequence watermarks across restart and rules refresh. GAP is sticky with no recovery endpoint; head progress gives no freshness or authority. No shared liquidity, Risk grant, Portfolio writer or PAPER dispatch is introduced.
