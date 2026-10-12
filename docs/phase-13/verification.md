@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Aggregate acceptance deadline RED correction
+
+At **8c54648b2be374386e7457d534a2af5df538e00f**, complete [source CI 38263065403](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38263065403) and [source CodeQL 38263065402](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38263065402) passed. [PR CI 38263069354](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38263069354) passed both OS jobs, all **894 PostgreSQL tests / zero failed / zero skipped**, all **29** new owner contracts and compiled Auth, but the outer database runner's **600-second** deadline stopped the remaining stages. PR [CodeQL 38263069434](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38263069434) passed. The failed aggregate job is not acceptance and its missing database/smoke reports are not treated as successful.
+
+A new configuration contract reproduces the budget mismatch RED: the serial SQL (300s), compiled Auth (120s) and Auth hardening (180s) child budgets already sum to the entire 600s parent, with no owner/upgrade/setup/reset allowance. Only the aggregate parent is corrected to **750s**, bounded below the unchanged 20-minute CI job. The contract also pins the existing child budgets; no operation/transaction/abort deadline, test stage, assertion, failure propagation, workflow or cleanup is removed or weakened. Candidate runtime and published migrations 1–39 stay unchanged. Full regression and complete source/PR CI are repeated before accepting this increment.
+
 ## Common PAPER draft first CI correction
 
 Candidate **9fcd2fcf4879eee083216680d28ca47a2ef5a31f** passed Ubuntu, Windows and both CodeQL runs; [source CI 38261191462](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38261191462) and [PR CI 38261200204](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38261200204) stopped at the owner harness assertion **28 != 29**. All **28** actual new PostgreSQL contracts passed against the non-BYPASSRLS function owner, including the original common draft reproduction, lost COMMIT/restart, metadata replacement, current role/seal/ownership, concurrency and lossless sequence. This is not full acceptance: the runner stopped before populated upgrade and the full suite. No runtime correction or gate change is inferred from that failure.

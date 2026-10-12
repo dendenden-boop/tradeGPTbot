@@ -85,8 +85,10 @@ try {
     ...options,
     echo: true,
     // Includes native owner repeats, upgrades, the full DB suite and paced
-    // authentication recovery. Their individual physical guards remain bounded.
-    timeoutMs: 600000,
+    // authentication recovery. The serial SQL/Auth child budgets already sum
+    // to 600s; reserve bounded room for owner/upgrade/setup/reset stages too.
+    // Individual SQL/Auth deadlines and the 20-minute CI job cap are unchanged.
+    timeoutMs: 750000,
     env: {
       ...test.env,
       NODE_ENV: 'test',
