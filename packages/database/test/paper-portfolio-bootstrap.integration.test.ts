@@ -424,6 +424,7 @@ it('other conserved monetary posting prevents bootstrap from ignoring economic h
     p = await admin.connect();
   try {
     await p.query('BEGIN');
+    await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
     await p.query(
       'INSERT INTO public.ledger_transaction(id,"tenantId","accountId",mode,cause,"causeIdentity","effectiveAt","descriptionCode") VALUES($1::uuid,$2::uuid,$3::uuid,\'PAPER\',\'ADJUSTMENT\',($1::uuid)::text,now(),\'owned-fixture\')',
       [id, f.c.owner.tenantId, f.c.owner.accountId],

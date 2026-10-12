@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Bootstrap transaction-context fixture correction
+
+Correction source **60b16ba2857bd8cc010580db1f9413514001ae2c** passed both OS jobs and CodeQL. Source CI 38306965902 / CodeQL 38306965945 and PR CI 38306970542 / CodeQL 38306970628 stopped at the bootstrap owner stage: **31 passed / one failed / zero skipped**. Real lost acknowledged COMMIT/restart/permanent replay now passed; the remaining economic-history fixture hit the existing `Ledger tenant context is required` guard before creating its extra posting. No full-suite/populated-upgrade acceptance is claimed.
+
+The fixture now sets its actual transaction-local `app.tenant_id` before inserting the owned posting. Ledger guards, FORCE RLS, production runtime, migration 41, assertions and deadlines remain unchanged. Full regression and complete source/PR native CI are repeated. Earlier failures remain historical evidence; no merge was attempted.
+
 ## Bootstrap first native candidate fixture correction
 
 Candidate **8f54e07b0d6c6c9615fbac9cbfd7fcd095c97a32** passed Ubuntu/Windows and both CodeQL runs. [Source CI 38304342349](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38304342349) and [PR CI 38304346952](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38304346952) stopped at the new non-BYPASSRLS owner stage: **30 passed / two failed / zero skipped** of 32 bootstrap cases. One fixture parameter was inferred inconsistently as UUID/text; its missing rollback returned an aborted connection to the pool, so the following lost-COMMIT fixture setup failed before exercising the bootstrap transport. These are not full native GREEN or acceptance; later stages were not reached. CodeQL 38304342377 / 38304346966 passed.
