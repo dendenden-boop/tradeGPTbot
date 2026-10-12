@@ -2078,7 +2078,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       secrets,
       echo: true,
       // Whole serial suite budget; individual transaction/abort deadlines stay unchanged.
-      timeoutMs: 300000,
+      timeoutMs: 360000,
     },
   );
   const tests = JSON.parse(

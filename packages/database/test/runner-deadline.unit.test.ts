@@ -17,9 +17,17 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond serial n
     native = deadline(database, '// Whole serial suite budget;'),
     auth = deadline(database, "['scripts/test-auth-runtime.mjs']"),
     hardening = deadline(database, "['scripts/test-auth-hardening.mjs']");
-  expect([native, auth, hardening]).toEqual([300000, 120000, 180000]);
-  // Their sum already consumed the former entire parent budget, leaving no
-  // time for populated migrations, non-BYPASSRLS owner repeats or cleanup.
+  // The full serial suite now has 894 cases; a real PR run exhausted 300s.
+  // This aggregate is separate from each test/transaction/abort deadline.
+  expect([native, auth, hardening]).toEqual([360000, 120000, 180000]);
+  const config = readFileSync(
+    new URL('../../../vitest.database.config.ts', import.meta.url),
+    'utf8',
+  );
+  expect(config).toContain('testTimeout: 15000');
+  expect(config).toContain('hookTimeout: 30000');
+  // Preserve room for populated migrations, non-BYPASSRLS owner repeats and
+  // cleanup as well as the complete SQL/Auth sequence.
   expect(parent).toBeGreaterThanOrEqual(native + auth + hardening + 90000);
   expect(parent).toBeLessThanOrEqual(900000);
   const workflow = readFileSync(
