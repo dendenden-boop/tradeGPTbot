@@ -1,5 +1,7 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+Protected main **dc8aa954…** accepted readonly market frames/final-return hardening through PRs #8–9 and complete [CI 38226761988](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38226761988) / [CodeQL 38226760693](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38226760693): 3407 unit / 41 HTTP per OS, 865 native PostgreSQL, twelve deployments, audit zero. Next PHASE 13 scope is [bounded pure competition](../phase-13/competition.md), with 42 RED→GREEN contracts and full new-head acceptance still required. Durable shared allocation, certified PAPER Risk/holds/dispatch, feed/GAP recovery, conditional exits, positions/PnL and reset remain outstanding. **NOT READY FOR PHASE 14**, LIVE/PAPER dispatch disabled. Historical entries below retain their original evidence and pending requirements; they do not supersede this checkpoint.
+
 Read-only [PAPER market frame](../phase-13/market-frames.md) source **c97ac07f…** passed complete source/PR CI and CodeQL: 3406 unit / 41 HTTP per OS, 865 native PostgreSQL, fourteen frame contracts fresh/owner, twelve deployments and audit zero. Published 1–39/native financial runtime/workflows are unchanged; one workspace link adds no external resolution. It does not complete shared liquidity or certified PAPER Risk/dispatch; **NOT READY FOR PHASE 14**, LIVE disabled. Documentation-head/protected merge/main checks remain separate. Historical candidate entries below preserve their original context.
 
 

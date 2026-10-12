@@ -1,5 +1,17 @@
 # PHASE 13 verification
 
+## Bounded competition candidate checkpoint
+
+Starting protected main **dc8aa954bebe9a6c0d297d6369a92535e9522a41** is clean and matches origin/main. Fresh baseline passed all thirteen existing format/docs/lint/typecheck/unit/HTTP/db:validate/build/runtime/clean/dependency/secrets/supply-chain commands: 3407 unit, 41 HTTP, twelve deployments and audit zero. Main protection retains mandatory PR, four strict required Actions contexts, administrator enforcement and no force/delete/bypass.
+
+Scope is only [bounded pure competition](competition.md), its contracts and compiled deployment checks. RED: after strengthening four overly broad draft assertions, all 42 new contracts failed against the absent API. GREEN: all 42 pass against lossless admission ordering and sequential shared-frame calculation. This does not implement durable replay/allocation or a financial writer. Existing model, financial runtime, Market Data, published 1–39, dependency lock and workflows remain unchanged. Complete candidate regression/source/PR/main CI is still required; no final acceptance is claimed here.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. LIVE/PAPER dispatch/positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed.
+
+## Accepted readonly frames and final-return main checkpoint
+
+Protected main **dc8aa954bebe9a6c0d297d6369a92535e9522a41** accepted PRs #8–9 and passed complete [CI 38226761988](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38226761988) and [CodeQL 38226760693](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38226760693). Artifacts verified 2026-10-12T09:19:36.262Z: **3407 unit / 41 HTTP per OS**, 313 Paper unit including 44 frame/factory contracts, **865 native PostgreSQL**, fourteen frame contracts fresh/non-BYPASSRLS owner, role graph 143 and owner repeats 14/95/35/43/38/40/14. Populated upgrade and twelve deployments passed; audit zero, no open CodeQL alerts, Docker 46 requests / 299ms shutdown. Published 1–39 are immutable; this closes the historical documentation-head/protected merge/exact-main requirements below without changing their original evidence or the full PHASE 13 gate.
+
 ## Accepted final-return hardening source checkpoint
 
 Final-return correction source **2eadba6f55aa55e4cd6164c7bb76041fcd786a47** passed complete [source CI 38222414858](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38222414858), [source CodeQL 38222414912](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38222414912), [PR CI 38222455126](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38222455126) and [PR CodeQL 38222454985](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38222454985), with every job successful and no skipped/cancelled substitutes. Artifacts verified **2026-10-12T08:34:32.020Z**: **3407 unit / 41 HTTP per OS**, **44 frame/factory unit contracts**, **865 native PostgreSQL**, fourteen frame contracts fresh/non-BYPASSRLS owner, 143 role-graph cases, owner repeats 14/95/35/43/38/40/14, populated upgrade, twelve deployments and audit zero/no open CodeQL alerts. Docker shutdown 296ms source / 289ms PR; 46 requests each.

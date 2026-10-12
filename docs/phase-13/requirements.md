@@ -1,6 +1,8 @@
 # PHASE 13 requirements
 
-The current increment starts from protected main **26a3a77281dd5826db39f910d24fa102f19c65ac** and implements only the [read-only durable market frame composition](market-frames.md), strict deployment/owner/evidence boundaries and regression/deployment tests. Published migrations 1–39 are immutable. This does not certify Risk, allocate liquidity or enable PAPER dispatch. The starting points below describe historical increments.
+The current increment starts from protected main **dc8aa954bebe9a6c0d297d6369a92535e9522a41**, with accepted read-only frames/final-return hardening. Scope is the pure [bounded competition calculation](competition.md): stable lossless admission priority, shared BUY/SELL volume/depth accounting within a single frame, bounded input and whole-calculation failure. It leaves durable shared allocation, certified financial admission and dispatch outstanding. Published 1–39 and existing financial/model runtime remain immutable. The following starting points describe historical increments.
+
+The historical increment starts from protected main **26a3a77281dd5826db39f910d24fa102f19c65ac** and implements only the [read-only durable market frame composition](market-frames.md), strict deployment/owner/evidence boundaries and regression/deployment tests. Published migrations 1–39 are immutable. This does not certify Risk, allocate liquidity or enable PAPER dispatch. The starting points below describe historical increments.
 
 Current public-trade evidence increment starts from protected main **b00275ee4fa35da7d7eb8227b9deba357caaf643**, accepted through PR #6 and complete main CI. Scope is the isolated [durable public Spot trade journal](public-trades.md), additive migration 39 and native persistence/ordering/role checks. Published migrations 1–38 remain immutable. Feed composition/recovery, shared liquidity and financial admission/dispatch remain outstanding.
 
