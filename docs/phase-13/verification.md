@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Common draft publication accepted; Portfolio bootstrap candidate
+
+Protected merge **11e51a2a5ce519344038ed151e4397d7303a5dbf** through [PR #11](https://github.com/dendenden-boop/tradeGPTbot/pull/11) passed complete exact-main [CI 38295195972](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38295195972) and [CodeQL 38295195966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38295195966). Final source 7d151818df81096be454548212fdabb4928906d2 passed source CI 38292695499 / CodeQL 38292698059 and PR CI 38292702100 / CodeQL 38292702149. Artifacts verified **2026-10-12T19:23:22.121Z**: 3466 unit / 41 HTTP per OS, 894 native PostgreSQL, 29 new draft contracts fresh/non-BYPASSRLS owner, populated 39→40, twelve deployments, audit zero/no open CodeQL alerts and Docker 46 requests / 306ms shutdown. All jobs succeeded without skipped/cancelled substitutes. GitHub confirms MERGED, actual main ref and four strict required checks with administrator enforcement and no force/delete/bypass. PR #10's earlier metadata/missing-event discrepancy remains separately open; it was not retried or represented as repaired.
+
+Fresh clean main matches origin/main; baseline passed all thirteen existing commands with 3466 unit / 41 HTTP, twelve deployments and audit zero. Current scope is only [durable common Portfolio bootstrap](portfolio-bootstrap.md). A first native contract sets up actual sealed funding/common draft and requires the missing bootstrap port. RED has not run yet, no implementation or new acceptance is claimed. Published 1–40 and accepted native runtime stay unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Active Portfolio holds/certified PAPER Risk, shared allocation, virtual execution/conditional exits, feed recovery, PnL/reset remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak.
+
 ## Whole PostgreSQL suite deadline correction
 
 Documentation HEAD **e0423bfd3550c3351d777543552f55b50f65417c** passed complete [source CI 38269856219](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38269856219) and [source CodeQL 38269856193](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38269856193). [PR CI 38269860355](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38269860355) passed Ubuntu/Windows and owner/upgrade stages, but its full serial PostgreSQL suite exhausted the **300-second whole-suite** child budget. That incomplete run has no successful final database report and is not acceptance. [PR CodeQL 38269860352](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38269860352) passed. No merge or protection bypass was attempted.

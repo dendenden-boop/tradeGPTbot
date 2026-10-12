@@ -1,5 +1,7 @@
 # PHASE 13 contracts
 
+[Common Portfolio bootstrap](portfolio-bootstrap.md) is the current candidate contract. It must project the retained conserved PAPER seed once into a durable common book/evidence/outbox, using isolated server authority and permanent replay, while leaving active holds/Risk/dispatch disabled. Common drafts are accepted at protected main 11e51a2 through PR #11 and full exact-main CI. Published migrations 1–40 and earlier contracts remain immutable.
+
 The common PAPER draft contract is accepted at source **6f0d300889b69975f1fd1991e64f1c2f67ebc913**, including real PostgreSQL restart/concurrency/lost-COMMIT/abort/deadline and populated upgrade/owner acceptance. Documentation-head/protected main acceptance remains separate. The read-only execution proof grants no configuration table access or financial authority. Native finance/dispatch stay unchanged and PAPER dispatch remains disabled. Earlier candidate wording below is retained as the original contract checkpoint.
 
 [Common durable PAPER drafts](paper-orders.md) reuse the existing Order Engine identity, immutable command, permanent key and account client sequence. The configured public-source rule mode is distinct from PAPER storage mode. Creation/read must verify sealed server configuration and current ownership; native finance/dispatch guards remain unchanged. This is a candidate contract awaiting RED→GREEN and complete exact-head acceptance.
