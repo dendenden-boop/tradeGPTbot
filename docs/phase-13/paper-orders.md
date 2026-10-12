@@ -1,5 +1,11 @@
 # Common durable PAPER order drafts
 
+## Source acceptance checkpoint
+
+Source **6f0d300889b69975f1fd1991e64f1c2f67ebc913** passed complete [source CI 38266973171](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38266973171), [source CodeQL 38266973167](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38266973167), [PR CI 38266979729](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38266979729) and [PR CodeQL 38266979733](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38266979733): 3466 unit / 41 HTTP per OS, 894 PostgreSQL, 29 draft contracts fresh/non-BYPASSRLS owner, populated 39→40 upgrade, twelve deployments and audit zero. This accepts common draft identity/read/replay only. Documentation-head/protected merge/exact-main acceptance is tracked separately in [verification](verification.md). Earlier reproduction/requirements remain historical; migration 40 is the binary prerequisite and published 1–39 are immutable.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Durable shared allocation, certified PAPER Risk/reservations/active Portfolio holds, virtual execution/conditional exits, feed/GAP recovery, positions/PnL and reset remain outstanding. LIVE/PAPER dispatch/positive native credit remain disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed.
+
 This increment starts from fresh protected main **8c2ddf6d48a23f100ded4510ee72bdba0b9e3392**. Its exact-SHA [CI 38251606993](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38251606993) and [CodeQL 38251606933](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38251606933) passed: 3449 unit / 41 HTTP per OS, 865 native PostgreSQL, twelve deployments and audit zero. Those runs were triggered by synchronizing the owned feature branch to the actual main commit after GitHub's merge request returned 502. Git parents/tree confirm applied code; PR #10 metadata remains closed/unmerged and the missing default-main push event is not claimed repaired. The current Git main is source of truth; that external publishing discrepancy remains open.
 
 ## Reproduction and scope
