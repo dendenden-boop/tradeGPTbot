@@ -1,5 +1,7 @@
 # PHASE 13 contracts
 
+The [read-only market frame composition](market-frames.md) creates fixed configuration/snapshot/trade PostgreSQL ports, retains native provenance, rereads independent evidence and fails closed on changes/freshness. It exposes only capture/close; it is neither an atomic Risk certificate nor durable liquidity allocation. The root calculator and existing native financial runtime remain unchanged.
+
 The isolated [public Spot trade journal](public-trades.md) preserves permanent publication/native identities, original receipt time and exact sequence watermarks across restart and rules refresh. GAP is sticky with no recovery endpoint; head progress gives no freshness or authority. No shared liquidity, Risk grant, Portfolio writer or PAPER dispatch is introduced.
 
 The pure [conservative execution envelope](risk-envelope.md) bounds quote principal and per-minimum-lot rounded fees for current supported commands. A reference price cannot bound later execution; MARKET and SELL require a finite rule maximum, while BUY LIMIT has an immutable limit ceiling. SELL keeps base principal and quote fees separately, without proceeds credit. Its full model/rules/command and mathematical freshness deadline are calculation inputs, never a RiskGrant or reservation. The accepted native PAPER guards remain unchanged.

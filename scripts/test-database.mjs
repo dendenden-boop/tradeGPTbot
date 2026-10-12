@@ -1538,6 +1538,41 @@ try {
   assert.equal(marketTradesOwner.numFailedTests, 0);
   assert.equal(marketTradesOwner.numPendingTests, 0);
   assert.equal(marketTradesOwner.numPassedTests, 40);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-market-frames.integration.test.ts',
+      '--outputFile.json=test-results/paper-market-frames-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperFramesOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-market-frames-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperFramesOwner.success, true);
+  assert.equal(paperFramesOwner.numFailedTests, 0);
+  assert.equal(paperFramesOwner.numPendingTests, 0);
+  assert.equal(paperFramesOwner.numPassedTests, 14);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -2065,6 +2100,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperPortfolioNonBypassOwner: 'PASS',
     paperPortfolioPopulatedUpgradeFromPublished37: 'PASS',
     marketTradesNonBypassOwner: 'PASS',
+    paperMarketFramesNonBypassOwner: 'PASS',
     marketTradesPopulatedUpgradeFromPublished38: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,

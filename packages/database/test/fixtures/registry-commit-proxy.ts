@@ -15,7 +15,8 @@ export async function registryCommitProxy(
     | 'PAPER_CONFIGURATION'
     | 'PAPER_PORTFOLIO'
     | 'PAPER_FUNDING'
-    | 'MARKET_TRADE' = 'REGISTRY',
+    | 'MARKET_TRADE'
+    | 'FRAME_TRADE_READ' = 'REGISTRY',
 ) {
   const marker = {
     REGISTRY: 'SELECT ctp_registry.publish(',
@@ -29,6 +30,7 @@ export async function registryCommitProxy(
     PAPER_FUNDING: 'SELECT ctp_paper.initialize_funding(',
     PAPER_PORTFOLIO: 'SELECT ctp_paper.capture_initial_portfolio(',
     MARKET_TRADE: 'SELECT ctp_market.publish_trade(',
+    FRAME_TRADE_READ: 'SELECT ctp_market.read_trade(',
   }[effect];
   const target = new URL(connectionString),
     sockets = new Set<Socket>();
