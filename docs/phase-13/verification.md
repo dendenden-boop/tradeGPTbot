@@ -1,5 +1,15 @@
 # PHASE 13 verification
 
+## Accepted bounded competition source checkpoint
+
+Source **b815172500a8184d0c0f36fd8462b4744d7814d7** passed complete [source CI 38245771538](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245771538), [source CodeQL 38245771604](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245771604), [PR CI 38245793668](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245793668) and [PR CodeQL 38245793716](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245793716). All jobs succeeded, with no skipped/cancelled substitutes. Artifacts verified **2026-10-12T12:16:56.202Z**: **3449 unit / 41 HTTP per OS**, **355 Paper including 42 competition contracts**, **865 native PostgreSQL**, role graph 143, owner repeats 14/95/35/43/38/40/14, populated upgrades, twelve deployments and audit zero/no open CodeQL alerts. Docker made 46 requests; shutdown 283ms source / 306ms PR.
+
+Fresh baseline passed thirteen commands at starting main dc8aa954. Complete local candidate regression passed the same thirteen commands at **2026-10-12T11:58:11.031Z**, with 3449 unit / 41 HTTP, twelve deployments and audit zero. The earlier first regression failed typecheck on five new fixture assignments to branded decimal fields; existing Core `parseDecimal` fixed the fixtures. No type/rule suppression or runtime change was used. Both RED drafts and that failed typecheck remain historical evidence; strict 42/42 RED became 42/42 GREEN.
+
+The [competition contract](competition.md) is accepted as a pure calculation prerequisite. Published 1–39, dependency lock, workflows, individual calculator, frame readers and existing native financial/Market Data runtime remain unchanged. Native restart/concurrency/uncertain-COMMIT evidence belongs to the retained persistence runtime; serialized pure inputs do not prove durable allocation or financial replay. This source checkpoint closes the candidate source/regression requirement below; final documentation-head/source/PR/protected-merge/exact-main checks are required separately. Required human approval count is zero; no human review is claimed.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Durable shared liquidity, certified PAPER Risk/reservations/Portfolio holds, final dispatch/worker/conditional exits, feed/GAP recovery, positions/PnL and reset remain outstanding. LIVE/PAPER dispatch/positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed.
+
 ## Bounded competition candidate checkpoint
 
 Starting protected main **dc8aa954bebe9a6c0d297d6369a92535e9522a41** is clean and matches origin/main. Fresh baseline passed all thirteen existing format/docs/lint/typecheck/unit/HTTP/db:validate/build/runtime/clean/dependency/secrets/supply-chain commands: 3407 unit, 41 HTTP, twelve deployments and audit zero. Main protection retains mandatory PR, four strict required Actions contexts, administrator enforcement and no force/delete/bypass.
