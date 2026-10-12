@@ -561,3 +561,27 @@ it('PAPER account-lock abort settles physical operation and leaves the pool reus
     p.release();
   }
 });
+
+it('PAPER account-lock deadline settles without an explicit abort and preserves durable draft identity', async () => {
+  const f = await fixture(),
+    h = await open(),
+    p = await admin.connect(),
+    before = await inspect(f);
+  try {
+    await p.query('BEGIN');
+    await p.query('SELECT id FROM public.exchange_account WHERE id=$1 FOR UPDATE', [
+      f.binding.accountId,
+    ]);
+    const signal = new AbortController().signal;
+    await expect(
+      h.create(f.binding, f.draft, { signal, deadline: Date.now() + 150 }),
+    ).rejects.toThrow('ORDER_ABORTED');
+    expect(signal.aborted).toBe(false);
+    await p.query('ROLLBACK');
+    expect(await inspect(f)).toEqual(before);
+    expect((await h.create(f.binding, f.draft, io())).command.clientOrderId).toBe('1');
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+  }
+});

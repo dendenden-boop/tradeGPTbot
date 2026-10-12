@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Common PAPER draft first CI correction
+
+Candidate **9fcd2fcf4879eee083216680d28ca47a2ef5a31f** passed Ubuntu, Windows and both CodeQL runs; [source CI 38261191462](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38261191462) and [PR CI 38261200204](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38261200204) stopped at the owner harness assertion **28 != 29**. All **28** actual new PostgreSQL contracts passed against the non-BYPASSRLS function owner, including the original common draft reproduction, lost COMMIT/restart, metadata replacement, current role/seal/ownership, concurrency and lossless sequence. This is not full acceptance: the runner stopped before populated upgrade and the full suite. No runtime correction or gate change is inferred from that failure.
+
+The missing separate account-lock deadline contract is now added alongside explicit abort, so the declared 29-case owner/native set is complete. It requires bounded physical settlement without signal abort, unchanged counters/events, and successful reuse. Full CI is repeated; failed candidate runs remain historical failures. Published 1–39 and the candidate runtime stay unchanged.
+
 ## Common PAPER drafts RED and working-tree correction
 
 Complete local candidate regression passed all thirteen format/docs/lint/typecheck/unit/HTTP/db:validate/build/runtime/clean/dependency/secrets/supply-chain commands: **3465 unit / 41 HTTP**, twelve deployments and audit zero. SQL proof validation at this checkpoint is pending real PostgreSQL CI, including **29** new draft contracts against fresh and non-BYPASSRLS function owners and populated 39→40 upgrade. Native dispatch/financial regressions must remain green. No source/PR/main acceptance or PHASE 14 gate is inferred from local checks.
