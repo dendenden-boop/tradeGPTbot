@@ -1,0 +1,26 @@
+# Common durable PAPER order drafts
+
+This increment starts from fresh protected main **8c2ddf6d48a23f100ded4510ee72bdba0b9e3392**. Its exact-SHA [CI 38251606993](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38251606993) and [CodeQL 38251606933](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38251606933) passed: 3449 unit / 41 HTTP per OS, 865 native PostgreSQL, twelve deployments and audit zero. Those runs were triggered by synchronizing the owned feature branch to the actual main commit after GitHub's merge request returned 502. Git parents/tree confirm applied code; PR #10 metadata remains closed/unmerged and the missing default-main push event is not claimed repaired. The current Git main is source of truth; that external publishing discrepancy remains open.
+
+## Reproduction and scope
+
+Existing Order Engine `create()` can persist a PAPER draft and intentionally does not dispatch or approve Risk at creation. The PostgreSQL metadata query nevertheless compares `instrument.mode` with account mode `PAPER`. Actual market metadata is public TESTNET/DEMO/LIVE evidence, selected separately by the immutable server configuration. Creating a configured PAPER draft against that public rule therefore fails with `ORDER_METADATA`. A real PostgreSQL reproduction first requires the common durable intent/order to be created without reservation, attempt, fill or ledger effects. Its RED evidence must precede the compatibility fix.
+
+Implement only common draft creation/read/permanent replay against configured public Spot rules. Do not create a parallel Paper intent table, a fake native credential/connection, a Risk grant or standalone volume allocation. Existing shared `order_intent`, `order`, immutable execution command, client epoch/high-watermark and order/outbox events remain the source of identity and replay. `clientOrderId` is the positive signed-64-bit account sequence later used by the bounded competition calculator; callers do not supply it.
+
+## Required contract
+
+- Server-authenticated ownership and existing Order Engine CREATE/READ authorization remain required. A binding or shaped port alone authorizes neither a user nor money. No HTTP endpoint or default allowing authorization port is introduced.
+- Exact PAPER mode, null connection and SIMULATED account. Public source exchange/region/environment/SPOT scope and model version must equal the sealed immutable configuration. The server-selected profile has endpoint `paper-spot-v1`, account mode SIMULATED and profile version equal to the frozen model version; no credentialRef is permitted.
+- Additive read-only SQL binding proof before account/counter use. Current active verified user/account, absence of private connections, retained configuration seal and original external/client epoch identity must agree. Runtime role must be the existing exact execution role graph, without extra configuration, financial or credential authority. No direct configuration/seal table grants.
+- GLOBAL → tenant → user/account locking stays consistent. The proof precedes the account write lock and reads only immutable configuration; no monetary locks or effects are added.
+- New requests perform current public-source metadata/rules admission, supported Spot base-quantity command policy and fail closed on unsupported POST_ONLY/reduce-only/MARK/INDEX semantics. Native TESTNET/DEMO/LIVE paths retain their current behavior.
+- Authoritative exact permanent-key lookup precedes current metadata admission. Same semantic request returns original order/intent/client identity/command after rule refresh/restart, without counter/outbox duplication. Conflicts reject; a new stale request gains no bypass.
+- Only acknowledged COMMIT returns a result. Ambiguous PAPER store COMMIT returns no result or grant; recovery uses explicit exact-key read/replay after restart, without automatic retry. Physical abort/deadline/slot settlement remains bounded.
+- Native submit/cancel/amend dispatch and production Risk/Portfolio still reject PAPER. Draft creation does not imply funds, valid current Risk, reservation, liquidity, execution or dispatch authorization.
+
+## Acceptance
+
+RED → GREEN query/command contracts and real PostgreSQL tests for common identity, zero financial effects, exact replay/conflict, rules refresh, concurrent creation/client sequence, restart, lost COMMIT, ownership/configuration/seal/profile/role rejection and still-disabled dispatch. Published migrations 1–39 remain byte immutable; any proof RPC requires a new additive migration and populated/non-BYPASSRLS owner verification. Full existing regression and Ubuntu/Windows/native PostgreSQL/Docker/CodeQL CI are mandatory before accepting the increment.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Durable shared liquidity, certified PAPER Risk/reservations/Portfolio holds, virtual execution/conditional exits, native feed/GAP recovery, positions/PnL and reset remain outstanding. LIVE/PAPER dispatch/positive native credit stay disabled. Native AMEND remains Binance Spot TESTNET only. Real private exchange tests and production soak are not claimed.

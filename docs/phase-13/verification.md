@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Common PAPER draft reproduction candidate
+
+Fresh actual main **8c2ddf6d48a23f100ded4510ee72bdba0b9e3392** matches origin/main with a clean working tree. Baseline passed all thirteen existing commands: 3449 unit / 41 HTTP, twelve deployments and audit zero. Scope/authority/replay requirements are in [common PAPER drafts](paper-orders.md). The first native PostgreSQL contract reproduces the existing store's incorrect PAPER instrument-mode lookup against a configured public source. RED has not yet run; no compatibility implementation or acceptance is claimed here. Published 1–39 and accepted runtime remain unchanged at this checkpoint.
+
+Previous exact-main SHA CI 38251606993 / CodeQL 38251606933 passed through unchanged owned-branch push workflows: 3449 unit / 41 HTTP per OS, 355 Paper including 42 competition contracts, 865 native PostgreSQL, role graph 143, owner repeats 14/95/35/43/38/40/14, populated upgrades, twelve deployments, audit zero, Docker 46 requests / 321ms shutdown. Git main contains the protected merge commit after the GitHub 502; PR #10 API metadata remains closed/merged=false and the original main push event remains missing. No repeated merge, direct main push or protection bypass was used. This external publication discrepancy is open separately from code verification.
+
 ## Accepted bounded competition source checkpoint
 
 Source **b815172500a8184d0c0f36fd8462b4744d7814d7** passed complete [source CI 38245771538](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245771538), [source CodeQL 38245771604](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245771604), [PR CI 38245793668](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245793668) and [PR CodeQL 38245793716](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38245793716). All jobs succeeded, with no skipped/cancelled substitutes. Artifacts verified **2026-10-12T12:16:56.202Z**: **3449 unit / 41 HTTP per OS**, **355 Paper including 42 competition contracts**, **865 native PostgreSQL**, role graph 143, owner repeats 14/95/35/43/38/40/14, populated upgrades, twelve deployments and audit zero/no open CodeQL alerts. Docker made 46 requests; shutdown 283ms source / 306ms PR.

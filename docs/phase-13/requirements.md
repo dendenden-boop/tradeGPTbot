@@ -1,5 +1,7 @@
 # PHASE 13 requirements
 
+Current scope starts from actual protected main **8c2ddf6d48a23f100ded4510ee72bdba0b9e3392**: [common durable PAPER drafts](paper-orders.md) must use the existing immutable OrderIntent and permanent client sequence against sealed configuration/public-source rules. First reproduce the PAPER-versus-public instrument mode mismatch in real PostgreSQL, then add only scoped binding/metadata compatibility and additive proof authority. No PAPER dispatch or monetary allocation is enabled. Earlier entries describe historical increments.
+
 The current increment starts from protected main **dc8aa954bebe9a6c0d297d6369a92535e9522a41**, with accepted read-only frames/final-return hardening. Scope is the pure [bounded competition calculation](competition.md): stable lossless admission priority, shared BUY/SELL volume/depth accounting within a single frame, bounded input and whole-calculation failure. It leaves durable shared allocation, certified financial admission and dispatch outstanding. Published 1–39 and existing financial/model runtime remain immutable. The following starting points describe historical increments.
 
 Competition source **b8151725…** passed complete source/PR Ubuntu/Windows/native PostgreSQL/Docker/CodeQL CI, verified in [verification](verification.md): 3449 unit / 41 HTTP per OS, 42 new contracts, 865 native PostgreSQL, twelve deployments and audit zero. Exact documentation-head/protected merge/main checks remain part of publication acceptance; the full gate remains **NOT READY FOR PHASE 14**.
