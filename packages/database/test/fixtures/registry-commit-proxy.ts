@@ -13,6 +13,7 @@ export async function registryCommitProxy(
     | 'UNSENT_RECOVERY'
     | 'AMEND_APPLICATION'
     | 'PAPER_CONFIGURATION'
+    | 'PAPER_ORDER'
     | 'PAPER_PORTFOLIO'
     | 'PAPER_FUNDING'
     | 'MARKET_TRADE'
@@ -27,6 +28,7 @@ export async function registryCommitProxy(
     UNSENT_RECOVERY: "UPDATE public.submission_attempt SET status='REJECTED'",
     AMEND_APPLICATION: 'SELECT ctp_execution.apply_amendment(',
     PAPER_CONFIGURATION: 'SELECT ctp_paper.register_configuration(',
+    PAPER_ORDER: 'INSERT INTO public.order_intent',
     PAPER_FUNDING: 'SELECT ctp_paper.initialize_funding(',
     PAPER_PORTFOLIO: 'SELECT ctp_paper.capture_initial_portfolio(',
     MARKET_TRADE: 'SELECT ctp_market.publish_trade(',

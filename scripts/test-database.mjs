@@ -49,6 +49,7 @@ const expectedMigrations = [
   '202610090005_paper_initial_funding',
   '202610100001_paper_initial_portfolio',
   '202610110001_public_trade_journal',
+  '202610120001_paper_order_binding',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -1573,6 +1574,39 @@ try {
   assert.equal(paperFramesOwner.numFailedTests, 0);
   assert.equal(paperFramesOwner.numPendingTests, 0);
   assert.equal(paperFramesOwner.numPassedTests, 14);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-order-drafts.integration.test.ts',
+      '--outputFile.json=test-results/paper-order-drafts-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperDraftsOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-order-drafts-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperDraftsOwner.success, true);
+  assert.equal(paperDraftsOwner.numFailedTests, 0);
+  assert.equal(paperDraftsOwner.numPendingTests, 0);
+  assert.equal(paperDraftsOwner.numPassedTests, 29);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -1832,6 +1866,88 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await upgradedTrades.close();
   }
+  // Published-39 population: retain the original configuration/funding/initial
+  // Portfolio receipt while adding the read-only common order binding proof.
+  const beforePaperDraftUpgrade = (
+    await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.configuration WHERE id=$1', [
+      paperInput.id,
+    ])
+  ).rows[0].receipt_text;
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[39]),
+    path.join(paperMigrations, expectedMigrations[39]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const { createPostgresOrderStore } = await import('../packages/order-engine/dist/index.js');
+  const upgradedPaperOrders = await createPostgresOrderStore({
+    connectionString: dbUrl(databases[4], false, false, false, false, false, true),
+    environment: 'test',
+  });
+  try {
+    const binding = {
+      ...paperInput.owner,
+      connectionId: null,
+      externalAccountId: `paper:${paperInput.owner.accountId}`,
+      profile: {
+        ...paperInput.source,
+        accountMode: 'SIMULATED',
+        endpointProfileId: 'paper-spot-v1',
+        profileVersion: paperInput.model.version,
+      },
+    };
+    assert.equal(
+      await upgradedPaperOrders.findCreate(
+        binding,
+        {
+          key: 'upgrade-missing',
+          dbInstrumentId: randomUUID(),
+          dbRuleId: randomUUID(),
+          positionSide: 'NET',
+          bucket: 'CROSS',
+          order: {
+            instrumentId: 'BTCUSDT',
+            ruleVersion: 'v1',
+            side: 'BUY',
+            type: 'MARKET',
+            size: { kind: 'BASE_QUANTITY', value: '1', asset: 'BTC' },
+            limitPrice: null,
+            trigger: null,
+            timeInForce: null,
+            reduceOnly: false,
+          },
+        },
+        { signal: new AbortController().signal, deadline: Date.now() + 2500 },
+      ),
+      null,
+    );
+  } finally {
+    await upgradedPaperOrders.close();
+  }
+  assert.equal(
+    (
+      await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.configuration WHERE id=$1', [
+        paperInput.id,
+      ])
+    ).rows[0].receipt_text,
+    beforePaperDraftUpgrade,
+  );
+  const retainedPaper = await createPostgresPaperInitialPortfolio({
+    connectionString: paperPortfolioUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const retained = await retainedPaper.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.deepEqual(retained.configuration, legacyPaperReceipt);
+    assert.deepEqual(retained.funding, fundingReceipt);
+    assert.deepEqual(retained.state.balances, initialSource.state.balances);
+  } finally {
+    await retainedPaper.close();
+  }
   assert.equal(
     (
       await paperUpgrade.query(
@@ -1962,7 +2078,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       secrets,
       echo: true,
       // Whole serial suite budget; individual transaction/abort deadlines stay unchanged.
-      timeoutMs: 300000,
+      timeoutMs: 360000,
     },
   );
   const tests = JSON.parse(
@@ -2102,6 +2218,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     marketTradesNonBypassOwner: 'PASS',
     paperMarketFramesNonBypassOwner: 'PASS',
     marketTradesPopulatedUpgradeFromPublished38: 'PASS',
+    paperOrderDraftsNonBypassOwner: 'PASS',
+    paperOrderDraftsPopulatedUpgradeFromPublished39: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
