@@ -261,6 +261,9 @@ importers:
       '@ctp/exchange-core':
         specifier: workspace:*
         version: link:../exchange-core
+      '@ctp/market-data':
+        specifier: workspace:*
+        version: link:../market-data
       '@ctp/portfolio':
         specifier: workspace:*
         version: link:../portfolio

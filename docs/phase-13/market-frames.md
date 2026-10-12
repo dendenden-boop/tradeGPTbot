@@ -1,0 +1,27 @@
+# Read-only durable PAPER market frames
+
+This increment starts from protected main **26a3a77281dd5826db39f910d24fa102f19c65ac**, which accepted the isolated public Spot trade journal through PR #7 and complete exact-main CI. Published migrations **1–39** remain immutable; this increment adds no migration or SQL grant. The `/evidence` subpath composes existing configuration, snapshot and trade ports into read-only calculator input. Its acceptance is recorded in [verification](verification.md); full PHASE 13 is **IN_PROGRESS / NOT READY FOR PHASE 14**.
+
+## Authority and deployment
+
+`createPostgresPaperMarketFrames` constructs three actual PostgreSQL ports itself. Deployment owns `configurationUrl`, `snapshotUrl` and `tradeUrl`; callers cannot inject ports, exchange endpoints, credentials, clock, model or raw evidence. All URLs bind the same explicit host/port/database and three distinct LOGIN identities. Each existing port independently enforces its isolated role boundary at startup and in SQL. Staging/production require verify-full TLS and reject disabled Node verification. The validated options are copied before asynchronous startup; later mutation of the caller object cannot change a destination. Partial startup failure closes every constructed port before returning a sanitized error.
+
+These are the existing configuration/snapshot/trade roles, with their existing publication capabilities. The wrapper exposes only `capture` and `close`, calls only read RPCs and adds no grants; it does not claim database roles have become read-only. They have no native credentials or financial table authority. No HTTP endpoint or account provisioner is added. Tenant/account values must come from authenticated server ownership, never a request-body assertion. The common native Risk/Order/Portfolio runtime remains unchanged.
+
+The calculation root stays pure; the internal injectable reader is absent from package exports, as are source/test paths. There is one workspace link Paper → Market Data; external versions, resolutions, integrities and supply-chain checks are unchanged. Existing isolated clean deployment verifies the new compiled subpath, rejected options and blocked internal imports.
+
+## Capture and freshness
+
+Capture accepts only exact PAPER owner and public Spot instrument/database/rule key. It reads the immutable configuration and checks exact ownership and source environment/region/exchange/market before market reads. The stricter of model freshness and **5000ms** applies to both durable evidence stores. It then rereads configuration, book and trade and rejects changed receipts/publications, ownership identity, rules or metadata. Missing evidence, GAP, corrupt original provenance, replaced rules, disabled ownership or uncertain read COMMIT gives no capture. Reads are never retried internally.
+
+The two market records must agree exactly, including immutable metadata/rule versions. The actual accepted `preparePaperFrame` performs model/decimal/book/trade validation. Capture retains the snapshot/trade publication IDs, lossless revision strings, checksums and complete native trade identity. Output is immutable. Expiry is the earliest caller deadline, rules/instrument expiry and native/received/publication/ticker freshness boundary. Future evidence and configuration times reject; final calculation and deadline checks cannot return an already expired frame.
+
+These are independent PostgreSQL transactions, **not an atomic Risk snapshot** or proof that state stays unchanged after return. A continuously changing source can reject between read passes; no stable cut, queue position or production soak is claimed. Future certified PAPER composition must reread authoritative state and enforce controls/permissions/ownership/evidence/current rules in the monetary transaction and final dispatch gate. This view cannot substitute for that work.
+
+## Liquidity and lifecycle limits
+
+Capture creates no account, funding, Intent, reservation, Portfolio hold, ledger entry, liquidity allocation or permit. Repeated capture preserves native identity but prepares a zero-used calculation frame; **zero-used is not renewed available volume**. Durable allocation must share the native identity across competing orders in the same tenant/account/reset/model scenario, independently of publication UUID, metadata refresh or new book snapshot. Shared liquidity, feed composition/GAP recovery, financial PAPER Risk/Portfolio integration, execution/conditional exits, positions/PnL and reset remain outstanding.
+
+At most four captures are admitted without a queue. A child signal/deadline cancels peers on failure; all started underlying reads settle before the capture slot is released. Local work is bounded to three seconds plus physical port settlement. The existing ports retain their own physical connection/query/abort limits; at most four connections per role and twelve across this composition. Every concurrent close waits for owned ports and in-flight captures. A late/ambiguous result is not returned, and error messages cannot expose SQL, DSNs or payloads.
+
+LIVE, PAPER dispatch and positive native credit remain disabled. Native AMEND remains the accepted narrow Binance Spot TESTNET scope. Real private exchange tests and production soak are not claimed.

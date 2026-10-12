@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./evidence": {
+      "types": "./dist/evidence.d.ts",
+      "default": "./dist/evidence.js"
+    },
     "./portfolio": {
       "types": "./dist/portfolio.d.ts",
       "default": "./dist/portfolio.js"
@@ -28,6 +32,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
+    "@ctp/market-data": "workspace:*",
     "@ctp/portfolio": "workspace:*",
     "@ctp/exchange-core": "workspace:*",
     "decimal.js": "10.6.0",

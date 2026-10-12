@@ -1,5 +1,7 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+На 2026-10-12 protected main **26a3a77281dd5826db39f910d24fa102f19c65ac** принял public Spot trade journal через PR #7, полный exact-main CI 38167336026 и CodeQL 38167335956: 3363 unit / 41 HTTP per OS, 851 native PostgreSQL, twelve deployments, audit zero. Следующий scope PHASE 13 — [read-only market frames](../phase-13/market-frames.md) с существующими isolated PostgreSQL roles, без migrations/financial authority/dispatch; он ещё candidate. **NOT READY FOR PHASE 14**, LIVE disabled. Записи ниже сохраняют исторические checkpoints.
+
 Current isolated [public trade journal](../phase-13/public-trades.md) source **172a4b36…** passed complete source/PR Ubuntu/Windows/native PostgreSQL/Docker/CodeQL CI: 3363 unit / 41 HTTP per OS, 851 native PostgreSQL, 40 journal contracts on fresh/owner databases, twelve deployments and audit zero. The original 300-instrument aggregate timeout remains a failed checkpoint; bounded waves fixed the harness without relaxing deadlines or runtime guards. Final documentation-head/protected merge/main acceptance remains separate. This is not certified PAPER Risk, shared liquidity or virtual execution; **NOT READY FOR PHASE 14**, LIVE disabled. Historical checkpoints below retain their original pending statements; current evidence is in [verification](../phase-13/verification.md).
 
 
