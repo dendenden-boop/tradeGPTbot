@@ -393,6 +393,7 @@ try {
     assert.equal(typeof paper.evaluatePaperOrder,'function');
     assert.equal(typeof paper.calculatePaperRiskEnvelope,'function');
     assert.equal(typeof paper.calculatePaperCompetition,'function');
+    assert.equal(typeof paper.calculatePaperInventoryValuation,'function');
     assert.equal(paper.PAPER_COMPETITION_MAX_ORDERS,300);
     assert.equal(typeof configuration.createPostgresPaperConfiguration,'function');
     assert.equal(typeof funding.createPostgresPaperFunding,'function');
@@ -422,6 +423,7 @@ try {
     assert.throws(()=>paper.evaluatePaperOrder({}),/PAPER_INPUT/);
     assert.throws(()=>paper.calculatePaperRiskEnvelope({}),/PAPER_ENVELOPE_INPUT/);
     assert.throws(()=>paper.calculatePaperCompetition({}),/PAPER_COMPETITION_INPUT/);
+    assert.throws(()=>paper.calculatePaperInventoryValuation({}),/PAPER_VALUATION_INPUT/);
     for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);
     assert.equal(existsSync('./test'),false);
     assert.equal(existsSync('./src'),false);
@@ -429,6 +431,7 @@ try {
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/model.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/risk-envelope.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/competition.js'));
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/inventory-valuation.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-configuration.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-funding.js'));
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-initial-portfolio.js'));

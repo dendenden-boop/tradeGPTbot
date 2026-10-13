@@ -1,5 +1,12 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Current PAPER valuation candidate
+
+Protected main **a06d66ac946b6f9f1e6bef6fc23c2b59570bc907** accepted the complete PAPER inventory through PR #14 and full exact-main CI 38411084261 / CodeQL 38411083418: 3563 unit / 41 HTTP per OS, 1007 PostgreSQL, all owner/upgrades, twelve deployments, audit zero and verified strict main protection. The new scope is only the [pure complete inventory valuation](../phase-13/inventory-valuation.md), preserving historical snapshot times while requiring complete fresh scoped prices. Its 33 contracts passed RED→GREEN; three additional native contracts and full candidate CI are pending. Published migrations 1–43 and accepted financial/native runtime remain unchanged. This calculation grants no financial authority.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Certified PAPER Risk/active holds, reservation/virtual dispatch, shared allocation, conditional exits, feed recovery, positions/PnL/reset remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak not claimed. Earlier checkpoints below preserve their historical scope and evidence.
+
+
 ## Accepted complete PAPER Risk Portfolio source checkpoint
 
 Read-only complete tenant PAPER account/book inventory is accepted at source/native level. Current user/account epochs and complete bounded common CREATED draft identities preserve original conserved balances, receipts/seals and snapshot times. Tenant/user FK locking prevents concurrent catalog insertion from escaping the capture. Missing/disabled/corrupt/UNKNOWN sibling and over-capacity inventory reject wholly. No ledger/book/evidence/outbox/counter effect, Risk certificate/grant/reservation/hold or PAPER dispatch is introduced. Additive 43 precedes only the new source factory; published 1–42, the prior single-account source and accepted native runtime remain unchanged. Earlier checkpoints retain their historical scope; final documentation-head/protected publication acceptance is required separately.
