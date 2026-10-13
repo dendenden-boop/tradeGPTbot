@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Deterministic native metadata clock RED and fixture correction
+
+Native clock reproduction **21ffe1d4cb095c4794f07d73e5303f36c7d8bf06** is confirmed: [clock-red-source CI 38372758687](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38372758687): 977 passed / 1 failed / zero skipped; [clock-red-pr CI 38372763964](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38372763964): 977 passed / 1 failed / zero skipped. The new probe reads the actual normal fixture expression and evaluates it at 2026-10-13 00:00:00.0006 UTC. PostgreSQL timestamptz(3) rounds the ordinary timestamp into the future; the unchanged now() producer therefore violates nonfuture metadata at this boundary. All 37 source owner contracts and both OS/CodeQL jobs passed. These intentional probe failures are reproduction, not acceptance. Evidence verified 2026-10-13T10:59:05.173Z.
+
+Only the test fixture's normal effectiveAt is now date_trunc('milliseconds',now()), preserving PostgreSQL time without future rounding. The explicit futureMetadata path stays now()+one minute and remains rejected. No artificial delay/backdating by an interval, retry, production predicate/clock/deadline change, migration rewrite or test skip. The probe must become GREEN in real PostgreSQL; full regression and complete source/PR/main CI are repeated. Old failures/source acceptance remain historical checkpoints. The suite now requires 978 PostgreSQL tests including this added native clock contract.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER dispatch/positive native credit disabled.
+
 ## Final documentation-head metadata fixture reproduction
 
 Final documentation HEAD **43662e741e58cc87fc2d6c3fed2c1028248dacd1** passed Ubuntu/Windows and CodeQL 38370124012 / 38370132808. Source CI 38370123993 passed all 37 new owner contracts, old owner/upgrade stages and then failed the full suite: **976 passed / one failed / zero skipped**. Existing `final transport permit rejects a newer durable USER control without consuming it` failed in setup at create with ORDER_METADATA, before exercising the control. This incomplete source run is not acceptance. Accepted source 9ba128c/source contracts remain historical evidence, not a substitute for final-head acceptance.
