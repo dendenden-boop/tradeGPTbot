@@ -12,3 +12,9 @@ export type {
 
 export { createPostgresPaperBookSource } from './postgres-book-source.js';
 export type { PaperBookSource, PaperBookSourceReader } from './book-source-domain.js';
+
+export { createPostgresPaperRiskPortfolioSource } from './postgres-risk-portfolio.js';
+export type {
+  PaperRiskPortfolioSource,
+  PaperRiskPortfolioReader,
+} from './risk-portfolio-domain.js';

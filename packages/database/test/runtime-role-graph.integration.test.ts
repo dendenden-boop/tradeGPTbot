@@ -15,6 +15,7 @@ import {
   createPostgresPaperInitialPortfolio,
   createPostgresPaperPortfolioBootstrap,
   createPostgresPaperBookSource,
+  createPostgresPaperRiskPortfolioSource,
 } from '@ctp/paper-engine/portfolio';
 import {
   createPostgresControls,
@@ -41,6 +42,11 @@ afterAll(() => admin.end());
 type Options = { connectionString: string; environment: 'test' };
 type Handle = { close(): Promise<void> };
 const cases: readonly [string, string, (options: Options) => Promise<Handle>][] = [
+  [
+    'ctp_paper_risk_portfolio',
+    'DATABASE_PAPER_RISK_PORTFOLIO_URL',
+    createPostgresPaperRiskPortfolioSource,
+  ],
   ['ctp_paper_book_source', 'DATABASE_PAPER_BOOK_SOURCE_URL', createPostgresPaperBookSource],
   ['ctp_paper_book_initializer', 'DATABASE_PAPER_BOOK_URL', createPostgresPaperPortfolioBootstrap],
   [
