@@ -11,7 +11,10 @@ import { createPostgresPortfolioStore } from '@ctp/portfolio';
 import { createPostgresOrderStore } from '@ctp/order-engine';
 import { createPostgresPaperConfiguration } from '@ctp/paper-engine/configuration';
 import { createPostgresPaperFunding } from '@ctp/paper-engine/funding';
-import { createPostgresPaperInitialPortfolio } from '@ctp/paper-engine/portfolio';
+import {
+  createPostgresPaperInitialPortfolio,
+  createPostgresPaperPortfolioBootstrap,
+} from '@ctp/paper-engine/portfolio';
 import {
   createPostgresControls,
   createPostgresPolicies,
@@ -37,6 +40,7 @@ afterAll(() => admin.end());
 type Options = { connectionString: string; environment: 'test' };
 type Handle = { close(): Promise<void> };
 const cases: readonly [string, string, (options: Options) => Promise<Handle>][] = [
+  ['ctp_paper_book_initializer', 'DATABASE_PAPER_BOOK_URL', createPostgresPaperPortfolioBootstrap],
   [
     'ctp_paper_portfolio_reader',
     'DATABASE_PAPER_PORTFOLIO_URL',
