@@ -601,11 +601,16 @@ it('bootstrap authority cannot become a current capture role and capture has no 
   ).rejects.toThrow('PAPER_BOOK_SOURCE_ROLE_UNSAFE');
   await unchangedMoney(f);
 });
-it('client high watermark rollback cannot legitimize already allocated draft identity', async () => {
+it('published client counter guard and current source both reject watermark regression', async () => {
   const f = await ready();
-  await admin.query('UPDATE public.exchange_account SET "clientIdHighWatermark"=0 WHERE id=$1', [
-    f.c.owner.accountId,
-  ]);
+  const query = 'UPDATE public.exchange_account SET "clientIdHighWatermark"=0 WHERE id=$1';
+  await expect(admin.query(query, [f.c.owner.accountId])).rejects.toThrow(
+    'Client counter cannot regress',
+  );
+  expect((await f.h.read(f.c.owner, io())).state).toEqual(f.origin.state);
+  // Test-only physical corruption exercises the source guard independently of
+  // the published writer guard, which stays enabled on every runtime path.
+  await corrupt(query, [f.c.owner.accountId]);
   await expect(f.h.read(f.c.owner, io())).rejects.toThrow('PAPER_BOOK_SOURCE_CORRUPT');
   await unchangedMoney(f);
 });
