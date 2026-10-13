@@ -1746,7 +1746,7 @@ try {
     ),
   );
   assert.equal(paperRiskPortfolioOwner.success, true);
-  assert.equal(paperRiskPortfolioOwner.numPassedTests, 22);
+  assert.equal(paperRiskPortfolioOwner.numPassedTests, 25);
   assert.equal(paperRiskPortfolioOwner.numFailedTests, 0);
   assert.equal(paperRiskPortfolioOwner.numPendingTests, 0);
 

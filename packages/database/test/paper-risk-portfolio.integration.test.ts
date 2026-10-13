@@ -1,6 +1,7 @@
 import { setTimeout as wait } from 'node:timers/promises';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import * as portfolio from '@ctp/paper-engine/portfolio';
+import { calculatePaperInventoryValuation } from '@ctp/paper-engine';
 import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfolio';
 import type { PaperOwner } from '@ctp/paper-engine/configuration';
 import { createPostgresPaperFunding, paperFundingSchema } from '@ctp/paper-engine/funding';
@@ -563,4 +564,101 @@ it('catalog FK insertion cannot bypass a capture already holding the tenant inve
     lock.release();
     await observed;
   }
+});
+
+function valuationInput(capture: portfolio.PaperRiskPortfolioSource, now = Date.now()) {
+  return {
+    inventory: capture,
+    now,
+    maxEvidenceAgeMs: 5000,
+    quote: 'USDT',
+    prices: capture.accounts.flatMap((a) =>
+      a.state.balances
+        .filter((b) => b.asset !== 'USDT')
+        .map((b) => ({
+          accountId: a.state.binding.accountId,
+          asset: b.asset,
+          quote: 'USDT',
+          price: '2',
+          kind: 'LAST' as const,
+          sourceId: 'native-test-price',
+          asOf: now,
+          scope: a.state.binding.scope,
+        })),
+    ),
+  };
+}
+async function valuationEffects(tenantId: string) {
+  return (
+    await admin.query<{ effects: unknown }>(
+      `SELECT jsonb_build_object(
+    'ledger',(SELECT count(*) FROM public.ledger_transaction WHERE "tenantId"=$1),
+    'entries',(SELECT count(*) FROM public.ledger_entry WHERE "tenantId"=$1),
+    'books',(SELECT count(*) FROM ctp_portfolio.book WHERE "tenantId"=$1),
+    'decisions',(SELECT count(*) FROM public.risk_decision WHERE "tenantId"=$1),
+    'reservations',(SELECT count(*) FROM public.risk_reservation WHERE "tenantId"=$1)
+    ) AS effects`,
+      [tenantId],
+    )
+  ).rows;
+}
+it('complete native PAPER inventory values historical seeds exactly without refreshing snapshots or financial effects', async () => {
+  const f = await readyInventory(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const capture = await f.h.read(f.c.owner, io()),
+    input = valuationInput(capture);
+  const r = calculatePaperInventoryValuation(input);
+  expect(r.equity).toBe('9007199254740996.000000000000000002');
+  expect(r.accounts.map((a) => a.snapshotAt)).toEqual(
+    capture.accounts.map((a) => a.state.snapshotAt),
+  );
+  expect(capture.accounts.map((a) => a.state.snapshotAt).sort()).toEqual(
+    [f.first.createdAt, f.second.createdAt].sort(),
+  );
+  expect(r).not.toHaveProperty('grant');
+  expect(r).not.toHaveProperty('reservationId');
+  expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('native PAPER valuation after restart changes only the public-price projection and keeps original source identity', async () => {
+  const f = await readyInventory(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const original = await f.h.read(f.c.owner, io());
+  const a = calculatePaperInventoryValuation(valuationInput(original));
+  await f.h.close();
+  const h = await openInventory(),
+    next = await h.read(f.c.owner, io());
+  const input = valuationInput(next);
+  for (const p of input.prices) {
+    p.price = '3';
+    p.sourceId = 'native-test-next-price';
+  }
+  const b = calculatePaperInventoryValuation(input);
+  expect(next.hash).toBe(original.hash);
+  expect(a.equity).toBe('9007199254740996.000000000000000002');
+  expect(b.equity).toBe('9007199254740996.000000000000000003');
+  expect(b.accounts.map((a) => a.snapshotAt)).toEqual(a.accounts.map((a) => a.snapshotAt));
+  expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('missing stale or foreign native valuation evidence cannot manufacture a partial total or Risk reservation', async () => {
+  const f = await readyInventory(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const capture = await f.h.read(f.c.owner, io()),
+    input = valuationInput(capture);
+  expect(() => calculatePaperInventoryValuation({ ...input, prices: [] })).toThrow(
+    'PAPER_VALUATION_PRICE',
+  );
+  expect(() =>
+    calculatePaperInventoryValuation({
+      ...input,
+      prices: input.prices.map((p) => ({ ...p, asOf: input.now - 5001 })),
+    }),
+  ).toThrow('PAPER_VALUATION_STALE');
+  expect(() =>
+    calculatePaperInventoryValuation({
+      ...input,
+      prices: input.prices.map((p) => ({ ...p, accountId: randomUUID() })),
+    }),
+  ).toThrow('PAPER_VALUATION_PRICE');
+  expect((await f.h.read(f.c.owner, io())).hash).toBe(capture.hash);
+  expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
 });
