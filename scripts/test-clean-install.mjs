@@ -398,6 +398,10 @@ try {
     assert.equal(typeof funding.createPostgresPaperFunding,'function');
     assert.equal(typeof portfolio.createPostgresPaperInitialPortfolio,'function');
     assert.equal(typeof portfolio.createPostgresPaperPortfolioBootstrap,'function');
+    assert.equal(typeof portfolio.createPostgresPaperBookSource,'function');
+    assert.equal('createPostgresPaperBookSource' in paper,false);
+    assert.equal('decodePaperBookSource' in portfolio,false);
+    await assert.rejects(portfolio.createPostgresPaperBookSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_BOOK_SOURCE_DATABASE_URL/);
     assert.equal('createPostgresPaperPortfolioBootstrap' in paper,false);
     assert.equal('decodePaperPortfolioBootstrap' in portfolio,false);
     await assert.rejects(portfolio.createPostgresPaperPortfolioBootstrap({connectionString:'https://example.invalid',environment:'test'}),/PAPER_BOOK_DATABASE_URL/);

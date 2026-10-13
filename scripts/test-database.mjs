@@ -51,6 +51,7 @@ const expectedMigrations = [
   '202610110001_public_trade_journal',
   '202610120001_paper_order_binding',
   '202610120002_paper_portfolio_bootstrap',
+  '202610130001_paper_book_source',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -106,6 +107,7 @@ const paperConfigurationPassword = randomBytes(24).toString('hex');
 const paperFundingPassword = randomBytes(24).toString('hex');
 const paperPortfolioPassword = randomBytes(24).toString('hex');
 const paperBookPassword = randomBytes(24).toString('hex');
+const paperBookSourcePassword = randomBytes(24).toString('hex');
 const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
@@ -130,6 +132,7 @@ const secrets = [
   paperFundingPassword,
   paperPortfolioPassword,
   paperBookPassword,
+  paperBookSourcePassword,
   marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
@@ -160,6 +163,7 @@ const admissionRole = `ctp_p2_admission_${suffix}`;
 const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
 const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
 const paperBookRole = `ctp_p2_paper_book_${suffix}`;
+const paperBookSourceRole = `ctp_p2_paper_book_source_${suffix}`;
 const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
@@ -281,6 +285,12 @@ const paperFundingUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperFundingRole;
   url.password = paperFundingPassword;
+  return url.href;
+};
+const paperBookSourceUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperBookSourceRole;
+  url.password = paperBookSourcePassword;
   return url.href;
 };
 const paperBookUrl = (name) => {
@@ -413,6 +423,7 @@ try {
     [paperFundingRole, paperFundingPassword, 'ctp_paper_funding'],
     [paperPortfolioRole, paperPortfolioPassword, 'ctp_paper_portfolio_reader'],
     [paperBookRole, paperBookPassword, 'ctp_paper_book_initializer'],
+    [paperBookSourceRole, paperBookSourcePassword, 'ctp_paper_book_source'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
@@ -1652,6 +1663,44 @@ try {
   assert.equal(paperBookOwner.numFailedTests, 0);
   assert.equal(paperBookOwner.numPendingTests, 0);
   assert.equal(paperBookOwner.numPassedTests, 32);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-book-source.integration.test.ts',
+      '--outputFile.json=test-results/paper-book-source-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
+        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperBookSourceOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-book-source-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperBookSourceOwner.success, true);
+  assert.equal(paperBookSourceOwner.numFailedTests, 0);
+  assert.equal(paperBookSourceOwner.numPendingTests, 0);
+  assert.equal(paperBookSourceOwner.numPassedTests, 37);
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -2098,6 +2147,89 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       ).rows[0].n,
       1,
     );
+  // Genuine populated published-41 book survives additive capture-only 42.
+  const { createPostgresPaperBookSource } =
+    await import('../packages/paper-engine/dist/portfolio.js');
+  await assert.rejects(
+    createPostgresPaperBookSource({
+      connectionString: paperBookSourceUrl(databases[4]),
+      environment: 'test',
+    }),
+    /PAPER_BOOK_SOURCE_ROLE_UNSAFE/,
+  );
+  const retainedBookBefore42 = (
+    await paperUpgrade.query(
+      'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+      [paperInput.owner.accountId],
+    )
+  ).rows;
+  const retainedOriginBefore42 = (
+    await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1', [
+      paperInput.owner.accountId,
+    ])
+  ).rows;
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[41]),
+    path.join(paperMigrations, expectedMigrations[41]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const upgradedBookSource = await createPostgresPaperBookSource({
+    connectionString: paperBookSourceUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const source = await upgradedBookSource.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.equal(source.kind, 'PAPER_BOOK_SOURCE');
+    assert.equal(source.bookId, initialFunding.id);
+    assert.equal(source.revision, '1');
+    assert.deepEqual(source.state.balances, initialSource.state.balances);
+    assert.deepEqual(source.drafts, []);
+    assert.equal(source.state.snapshotAt, source.origin.createdAt);
+    assert.ok(source.asOf >= source.origin.createdAt);
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      retainedBookBefore42,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      retainedOriginBefore42,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_transaction WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+          [initialFunding.id],
+        )
+      ).rows[0].n,
+      2,
+    );
+  } finally {
+    await upgradedBookSource.close();
+  }
   const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
     connectionString: paperPortfolioUrl(databases[4]),
     environment: 'test',
@@ -2221,6 +2353,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
         DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
         DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[0]),
+        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[0]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
       secrets,
@@ -2369,6 +2502,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperOrderDraftsNonBypassOwner: 'PASS',
     paperOrderDraftsPopulatedUpgradeFromPublished39: 'PASS',
     paperBookNonBypassOwner: 'PASS',
+    paperBookSourceNonBypassOwner: 'PASS',
+    paperBookSourcePopulatedUpgradeFromPublished41: 'PASS',
     paperBookPopulatedUpgradeFromPublished40: 'PASS',
     resetStorageMs,
     maintenanceStatementTimeoutMs: 30_000,

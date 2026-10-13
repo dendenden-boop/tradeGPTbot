@@ -120,7 +120,7 @@ async function fixture(futureMetadata = false) {
     [instrument],
   );
   await admin.query(
-    `INSERT INTO instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1::uuid,$2,1,true,CASE WHEN $4 THEN now()+interval '1 minute' ELSE now() END,now(),$3,0.01,0.001,0.001,'{"version":"v1"}')`,
+    `INSERT INTO instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1::uuid,$2,1,true,CASE WHEN $4 THEN now()+interval '1 minute' ELSE date_trunc('milliseconds',now()) END,now(),$3,0.01,0.001,0.001,'{"version":"v1"}')`,
     [rule, instrument, Buffer.alloc(32, 1), futureMetadata],
   );
   return { b, draft };
