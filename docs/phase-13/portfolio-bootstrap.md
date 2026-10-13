@@ -1,5 +1,13 @@
 # Common PAPER Portfolio bootstrap
 
+## Source acceptance checkpoint
+
+Source **acc1e31d15cf12d91d82c2efa0b871969931cf7c** passed complete [source CI 38308906077](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38308906077), [source CodeQL 38308906141](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38308906141), [PR CI 38308909644](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38308909644) and [PR CodeQL 38308909647](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38308909647). All jobs succeeded with no skipped/cancelled substitute; artifacts verified **2026-10-13T05:58:08.387Z** / **2026-10-13T05:58:08.399Z**: **3501 unit / 41 HTTP per OS**, **933 native PostgreSQL**, 32 new bootstrap contracts fresh/non-BYPASSRLS owner, 35 private decoder contracts, role graph 150, populated 40→41, all earlier owner/upgrade stages, twelve deployments and audit zero/no open CodeQL alerts. Docker made 46 requests; shutdown 324ms source / 312ms PR.
+
+This accepts one historical durable bootstrap projection and original provenance, not active Portfolio/Risk or dispatch. Additive 41 must precede the new factory; published 1–40/native runtime remain unchanged. Final documentation-head/protected merge/exact-main publication acceptance remains separate. Earlier candidate requirements/failures preserve the history.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Active PAPER Portfolio holds/certified Risk, durable shared allocation, virtual execution/conditional exits, feed recovery, positions/PnL and reset remain outstanding. LIVE/PAPER dispatch/positive native credit remain disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed.
+
 ## Scope
 
 Start from protected main **11e51a2a5ce519344038ed151e4397d7303a5dbf**, accepted through [PR #11](https://github.com/dendenden-boop/tradeGPTbot/pull/11), [full CI 38295195972](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38295195972) and [CodeQL 38295195966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38295195966). Published migrations 1–40 are immutable. The initial-only Portfolio reader intentionally rejects post-draft activity and remains unchanged.
