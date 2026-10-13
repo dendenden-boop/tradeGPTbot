@@ -9,3 +9,6 @@ export type {
   PaperPortfolioBootstrap,
   PaperPortfolioBootstrapReceipt,
 } from './portfolio-bootstrap-domain.js';
+
+export { createPostgresPaperBookSource } from './postgres-book-source.js';
+export type { PaperBookSource, PaperBookSourceReader } from './book-source-domain.js';

@@ -21,3 +21,11 @@ This increment is a server-owned read-only current book capture prerequisite, in
 First native RED creates real configuration, conserved funding, common draft and accepted bootstrap, then requires the absent current-source port. GREEN requires exact scope/provenance, current epochs/draft replacement, unchanged original time/no second effects, current owner/role/seal/corruption/UNKNOWN denial, concurrency/restart, real lost read COMMIT, physical abort/deadline/slot recovery, fresh/non-BYPASSRLS owner, populated published-41 upgrade and compiled deployment proof. Full local regression and complete source/PR/protected-main Ubuntu/Windows/PostgreSQL/Docker/CodeQL acceptance are required. No skipped/cancelled run is acceptance.
 
 **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. LIVE/PAPER dispatch/positive native credit disabled. Native AMEND only Binance Spot TESTNET; real private exchange acceptance and production soak not claimed.
+
+## Candidate API and validation checkpoint
+
+The separate @ctp/paper-engine/portfolio subpath adds createPostgresPaperBookSource with read(owner, io) and close only. The isolated ctp_paper_book_source role has only capture_book_source(jsonb); it cannot initialize/fund or directly access tables. Additive 42 must precede this new factory; old ports and native guards do not change.
+
+PAPER_BOOK_SOURCE returns current asOf, original bookId/revision/state/receipt, current account permission/reconciliation epochs/version/client high watermark and numerically ordered lossless common draft IDs/command hashes/client IDs. Its content hash excludes capture time, so a new read of unchanged evidence does not replace content identity or rewrite snapshotAt. This is one account-scoped read proof, not a complete tenant Risk inventory, certificate, permission, reservation or grant.
+
+Both native missing-port RED runs preserve 933 existing passes and one new failure; 38 unit RED→GREEN cases pass. The original sandbox EPERM with zero cases is kept separately. Candidate native acceptance, 37 fresh/owner contracts, populated 41→42, role graph 157 and compiled/full CI remain pending. Full PHASE 13 gate stays NOT READY FOR PHASE 14.
