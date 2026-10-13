@@ -1,6 +1,20 @@
 # PAPER inventory valuation
 
+## Accepted PAPER inventory valuation source checkpoint
+
+Source **1c4f7f515c8adb83738f9dba8657f107081d13ee** passed complete [source CI 38432709212](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432709212), [source CodeQL 38432709110](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432709110), [PR CI 38432718347](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432718347) and [PR CodeQL 38432718238](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432718238). Artifacts verified 2026-10-13T17:20:32.146Z / 2026-10-13T17:20:37.223Z: **3596 unit / 41 HTTP per OS**, **1010 PostgreSQL**, three new valuation contracts fresh/non-BYPASSRLS owner, 33 verified unit RED→GREEN contracts, role graph 164, all prior owner/populated-upgrade stages, twelve deployments, audit zero/no open CodeQL findings. Docker 46 requests; shutdown 324ms source / 277ms PR. All jobs succeeded without skipped/cancelled substitutes.
+
+The pure calculator values the complete current PAPER inventory using fresh scoped direct LAST prices and retains original seed snapshot times. It rejects partial/foreign/stale/conflicting evidence, changed balance/UNKNOWN hold and decimal range/scale loss. Native restart/new-price and no second book/ledger/Risk effect are proven. This result is not a Risk certificate, grant, reservation or financial permission. Published migrations 1–43, native financial runtime, dependencies and workflows remain unchanged. Final documentation-head/protected merge/exact-main acceptance is required separately. Earlier checkpoints below retain their historical scope and then-pending evidence.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Certified PAPER Risk/active holds, atomic reservation/virtual dispatch, durable shared allocation, conditional exits, feed recovery, positions/PnL/reset remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak not claimed.
+
 Starting protected main: **a06d66ac946b6f9f1e6bef6fc23c2b59570bc907**. Complete tenant PAPER inventory was accepted through [PR #14](https://github.com/dendenden-boop/tradeGPTbot/pull/14), [exact-main CI 38411084261](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38411084261) and [CodeQL 38411083418](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38411083418): 3563 unit / 41 HTTP per OS, 1007 PostgreSQL, 22 inventory contracts fresh/non-BYPASSRLS owner, role graph 164, all prior populated upgrades, twelve deployments, audit zero. Reports and main protection were verified 2026-10-13T15:59:22.984Z. Published migrations 1–43 are immutable.
+
+## Docker control checkpoint
+
+Corrected source **1c4f7f515c8adb83738f9dba8657f107081d13ee** passed full source CI 38432709212, including Docker 46 requests / 324ms shutdown. PR CI 38432718347 attempt 1 passed all 1010 PostgreSQL tests, 25 inventory/valuation owner contracts and earlier upgrade stages, then failed when Compose restarted Redis: `container ... exited (0)`. API/Auth/infra/workflows were unchanged from the accepted base; the precise cause of this isolated Compose failure is **not established**, and no runtime fix or production-soak result is claimed.
+
+After saving the failed logs/reports and the successful independent same-SHA source control, exactly one failed-job recheck ran in a fresh disposable environment with identical code and assertions. PR native/Docker recheck passed, including 1010 PostgreSQL / zero failures/skips, all owners/upgrades and Docker 46 requests / 277ms shutdown. Source/PR artifacts were verified 2026-10-13T17:20:32.146Z / 2026-10-13T17:20:37.223Z. Attempt 1 remains historical failure evidence, not acceptance. Final documentation-head/protected merge/exact-main CI is still required.
 
 ## Contract
 
