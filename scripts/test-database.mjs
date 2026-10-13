@@ -52,6 +52,7 @@ const expectedMigrations = [
   '202610120001_paper_order_binding',
   '202610120002_paper_portfolio_bootstrap',
   '202610130001_paper_book_source',
+  '202610130002_paper_risk_portfolio',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -108,6 +109,7 @@ const paperFundingPassword = randomBytes(24).toString('hex');
 const paperPortfolioPassword = randomBytes(24).toString('hex');
 const paperBookPassword = randomBytes(24).toString('hex');
 const paperBookSourcePassword = randomBytes(24).toString('hex');
+const paperRiskPortfolioPassword = randomBytes(24).toString('hex');
 const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
@@ -133,6 +135,7 @@ const secrets = [
   paperPortfolioPassword,
   paperBookPassword,
   paperBookSourcePassword,
+  paperRiskPortfolioPassword,
   marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
@@ -164,6 +167,7 @@ const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
 const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
 const paperBookRole = `ctp_p2_paper_book_${suffix}`;
 const paperBookSourceRole = `ctp_p2_paper_book_source_${suffix}`;
+const paperRiskPortfolioRole = `ctp_p2_paper_risk_portfolio_${suffix}`;
 const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
@@ -285,6 +289,12 @@ const paperFundingUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperFundingRole;
   url.password = paperFundingPassword;
+  return url.href;
+};
+const paperRiskPortfolioUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperRiskPortfolioRole;
+  url.password = paperRiskPortfolioPassword;
   return url.href;
 };
 const paperBookSourceUrl = (name) => {
@@ -424,6 +434,7 @@ try {
     [paperPortfolioRole, paperPortfolioPassword, 'ctp_paper_portfolio_reader'],
     [paperBookRole, paperBookPassword, 'ctp_paper_book_initializer'],
     [paperBookSourceRole, paperBookSourcePassword, 'ctp_paper_book_source'],
+    [paperRiskPortfolioRole, paperRiskPortfolioPassword, 'ctp_paper_risk_portfolio'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
@@ -1701,6 +1712,44 @@ try {
   assert.equal(paperBookSourceOwner.numFailedTests, 0);
   assert.equal(paperBookSourceOwner.numPendingTests, 0);
   assert.equal(paperBookSourceOwner.numPassedTests, 37);
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-risk-portfolio.integration.test.ts',
+      '--outputFile.json=test-results/paper-risk-portfolio-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
+        DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperRiskPortfolioOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-risk-portfolio-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperRiskPortfolioOwner.success, true);
+  assert.equal(paperRiskPortfolioOwner.numPassedTests, 22);
+  assert.equal(paperRiskPortfolioOwner.numFailedTests, 0);
+  assert.equal(paperRiskPortfolioOwner.numPendingTests, 0);
+
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -2230,6 +2279,88 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await upgradedBookSource.close();
   }
+
+  // Genuine populated published-42 source remains unchanged by capture-only 43.
+  const { createPostgresPaperRiskPortfolioSource } =
+    await import('../packages/paper-engine/dist/portfolio.js');
+  await assert.rejects(
+    createPostgresPaperRiskPortfolioSource({
+      connectionString: paperRiskPortfolioUrl(databases[4]),
+      environment: 'test',
+    }),
+    /PAPER_RISK_PORTFOLIO_ROLE_UNSAFE/,
+  );
+  const bookBefore43 = (
+    await paperUpgrade.query(
+      'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+      [paperInput.owner.accountId],
+    )
+  ).rows;
+  const originBefore43 = (
+    await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1', [
+      paperInput.owner.accountId,
+    ])
+  ).rows;
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[42]),
+    path.join(paperMigrations, expectedMigrations[42]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const inventory = await createPostgresPaperRiskPortfolioSource({
+    connectionString: paperRiskPortfolioUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const r = await inventory.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.equal(r.kind, 'PAPER_RISK_PORTFOLIO_SOURCE');
+    assert.deepEqual(r.accountIds, [paperInput.owner.accountId]);
+    assert.equal(r.accounts.length, 1);
+    assert.deepEqual(r.accounts[0].state.balances, initialSource.state.balances);
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      bookBefore43,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      originBefore43,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_transaction WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+          [initialFunding.id],
+        )
+      ).rows[0].n,
+      2,
+    );
+  } finally {
+    await inventory.close();
+  }
+
   const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
     connectionString: paperPortfolioUrl(databases[4]),
     environment: 'test',
@@ -2354,6 +2485,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
         DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[0]),
         DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[0]),
+        DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[0]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
       secrets,
@@ -2503,6 +2635,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperOrderDraftsPopulatedUpgradeFromPublished39: 'PASS',
     paperBookNonBypassOwner: 'PASS',
     paperBookSourceNonBypassOwner: 'PASS',
+    paperRiskPortfolioNonBypassOwner: 'PASS',
+    paperRiskPortfolioPopulatedUpgradeFromPublished42: 'PASS',
     paperBookSourcePopulatedUpgradeFromPublished41: 'PASS',
     paperBookPopulatedUpgradeFromPublished40: 'PASS',
     resetStorageMs,

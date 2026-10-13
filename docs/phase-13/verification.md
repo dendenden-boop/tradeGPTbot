@@ -1,5 +1,15 @@
 # PHASE 13 verification
 
+## Complete PAPER Risk inventory RED and candidate
+
+Native test-only **cfded06cf5477068b0a54399c22b301663fccbb3** reproduced exactly one absent-inventory factory failure after real two-account configuration/funding/common bootstrap in [source CI 38398057190](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38398057190) and [PR CI 38398067518](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38398067518): **978 existing PostgreSQL passed / one new failed / zero skipped** in each run. Both OS jobs and CodeQL 38398057212 / 38398067667 passed; all 37 prior source owner contracts passed. Artifacts verified 2026-10-13T12:54:22.951Z. These intentional RED failures are reproduction, not acceptance.
+
+All 24 final private decoder contracts failed against an unwired private stub, then passed against the complete bounded decoder. The stub is fully replaced and never exported or used by a production factory. Initial fixture lint/type issues were fixed without suppressions; byte-cap proof uses valid hashed receipt content rather than an unknown padding field.
+
+Candidate adds isolated capture-only role/RPC and complete tenant inventory, original common-book provenance and historical snapshot time, lossless account epochs/draft identities and no financial writes/grants. It freezes the tenant/user FK row before bounded catalog enumeration and sorted account/book locks. Missing/disabled/corrupt/UNKNOWN sibling rejects wholly. Native 22-case acceptance, new seven role-graph cases, physical lost read COMMIT/abort/deadline/slots/close, catalog FK insertion, privilege replacement and populated published-42 upgrade are required. Additive 43 precedes only the new factory; published 1–42, prior single-account source and accepted native runtime stay unchanged. Full local regression and complete candidate/source/PR/main CI are pending.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. This source is not a certificate, reservation, active hold, Risk admission or virtual dispatch. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak not claimed.
+
 Protected main **4cf1724e592683177c1c8a36d84d63e6ce060264** accepted the current PAPER book source through PR #13 and complete exact-main CI 38393505441 / CodeQL 38393505453: 3539 unit / 41 HTTP per OS, 978 PostgreSQL, all owner/upgrade stages, twelve deployments and audit zero. The new scope is only the [complete tenant PAPER Risk Portfolio inventory](risk-portfolio.md), needed before aggregate Risk limits. Published migrations 1–42 and accepted runtime remain immutable. Native RED is added but not yet run; no inventory source, certificate, reservation, hold or PAPER dispatch is claimed. Earlier checkpoints below preserve their historical context. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER dispatch/positive native credit disabled.
 
 ## Accepted native clock correction and current-source checkpoint

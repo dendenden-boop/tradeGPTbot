@@ -16,6 +16,7 @@ export async function registryCommitProxy(
     | 'PAPER_ORDER'
     | 'PAPER_BOOK'
     | 'PAPER_BOOK_SOURCE'
+    | 'PAPER_RISK_PORTFOLIO'
     | 'PAPER_PORTFOLIO'
     | 'PAPER_FUNDING'
     | 'MARKET_TRADE'
@@ -33,6 +34,7 @@ export async function registryCommitProxy(
     PAPER_ORDER: 'INSERT INTO public.order_intent',
     PAPER_BOOK: 'SELECT ctp_paper.initialize_book(',
     PAPER_BOOK_SOURCE: 'SELECT ctp_paper.capture_book_source(',
+    PAPER_RISK_PORTFOLIO: 'SELECT ctp_paper.capture_risk_portfolio(',
     PAPER_FUNDING: 'SELECT ctp_paper.initialize_funding(',
     PAPER_PORTFOLIO: 'SELECT ctp_paper.capture_initial_portfolio(',
     MARKET_TRADE: 'SELECT ctp_market.publish_trade(',
