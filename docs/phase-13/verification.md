@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Final documentation-head metadata fixture reproduction
+
+Final documentation HEAD **43662e741e58cc87fc2d6c3fed2c1028248dacd1** passed Ubuntu/Windows and CodeQL 38370124012 / 38370132808. Source CI 38370123993 passed all 37 new owner contracts, old owner/upgrade stages and then failed the full suite: **976 passed / one failed / zero skipped**. Existing `final transport permit rejects a newer durable USER control without consuming it` failed in setup at create with ORDER_METADATA, before exercising the control. This incomplete source run is not acceptance. Accepted source 9ba128c/source contracts remain historical evidence, not a substitute for final-head acceptance.
+
+The ordinary native Order fixture writes PostgreSQL now() into effectiveAt with timestamptz(3), while production admission correctly requires effectiveAt <= transaction now(). A new read-only native contract evaluates the actual fixture expression against a deterministic sub-millisecond clock and PostgreSQL's own precision conversion; it must prove a normal fixture cannot become future metadata. Runtime freshness/rules validation, published migrations and mutation deadlines remain unchanged. The new reproduction is pending; no blind CI rerun or merge was performed.
+
 ## Accepted current PAPER book source checkpoint
 
 The read-only current common PAPER book source is accepted at source/native level: exact retained origin and current common book, owner/epochs and complete bounded CREATED-draft identities. It preserves original snapshot time and adds no book/evidence/outbox/counter/ledger effect or Risk authorization. Pending/UNKNOWN/active finance/corruption fails closed. Additive 42 precedes only this new factory; published 1–41 and accepted native runtime/old ports remain unchanged. Final documentation-head/protected publication acceptance remains separate; earlier paragraphs preserve historical checkpoints.
