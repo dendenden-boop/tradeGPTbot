@@ -1,5 +1,5 @@
 BEGIN;
--- Read-only current common book provenance; no financial table/initializer grants.
+-- Initial cash-only UTC proof; no financial table/initializer grants.
 DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='ctp_paper_risk_loss') THEN
  CREATE ROLE ctp_paper_risk_loss NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 END IF; END $$;
@@ -42,6 +42,11 @@ BEGIN
  IF cardinality(ids)>100 THEN RAISE EXCEPTION 'PAPER_RISK_LOSS_CAPACITY'; END IF;
  IF NOT ((o->>'accountId')::uuid=ANY(ids)) THEN RAISE EXCEPTION 'PAPER_RISK_LOSS_OWNERSHIP'; END IF;
  PERFORM 1 FROM public.exchange_account WHERE "tenantId"=t AND mode='PAPER' ORDER BY id FOR UPDATE;
+ -- Order FK locks also close execution evidence insertion phantoms. Only
+ -- untouched common CREATED drafts are compatible with this initial proof.
+ IF (SELECT count(*) FROM (SELECT id FROM public."order" WHERE "tenantId"=t AND mode='PAPER' LIMIT 1001) q)>1000
+ THEN RAISE EXCEPTION 'PAPER_RISK_LOSS_CAPACITY'; END IF;
+ PERFORM 1 FROM public."order" WHERE "tenantId"=t AND mode='PAPER' ORDER BY id FOR UPDATE;
  -- Account/User FK locks close the retained tenant PAPER catalog. Every money
  -- posting must be the one sealed original funding; zero/open extra postings
  -- also reject. No history eviction, backdating, reset or monetary write.
@@ -50,6 +55,25 @@ BEGIN
   SELECT 1 FROM ctp_paper.initial_funding f WHERE f.tenant_id=t AND f.account_id=x."accountId" AND f.ledger_id=x.id AND f.mode=x.mode))
  OR EXISTS(SELECT 1 FROM public.ledger_entry x WHERE x."tenantId"=t AND x.mode='PAPER' AND NOT EXISTS(
   SELECT 1 FROM ctp_paper.initial_funding f WHERE f.tenant_id=t AND f.account_id=x."accountId" AND f.ledger_id=x."transactionId" AND f.mode=x.mode))
+ -- A conserved seed is insufficient when independent economic evidence has
+ -- not yet reached the common ledger/book. Never infer zero PnL in that case.
+ OR EXISTS(SELECT 1 FROM public.trade WHERE "tenantId"=t AND mode='PAPER')
+ OR EXISTS(SELECT 1 FROM public.funding_payment WHERE "tenantId"=t AND mode='PAPER')
+ OR EXISTS(SELECT 1 FROM public.asset_valuation WHERE "tenantId"=t AND mode='PAPER')
+ OR EXISTS(SELECT 1 FROM public.account_state_version WHERE "tenantId"=t AND mode='PAPER')
+ OR EXISTS(SELECT 1 FROM public.balance_snapshot WHERE "tenantId"=t AND mode='PAPER')
+ OR EXISTS(SELECT 1 FROM ctp_execution.evidence e JOIN public."order" x ON x."tenantId"=e."tenantId" AND x.id=e."orderId"
+  WHERE x."tenantId"=t AND x.mode='PAPER')
+ OR EXISTS(SELECT 1 FROM ctp_execution.authoritative_event e JOIN public."order" x ON x."tenantId"=e."tenantId" AND x.id=e."orderId"
+  WHERE x."tenantId"=t AND x.mode='PAPER')
+ OR EXISTS(SELECT 1 FROM public.order_event e JOIN public."order" x ON x."tenantId"=e."tenantId" AND x.id=e."orderId"
+  LEFT JOIN ctp_execution.command c ON c."tenantId"=x."tenantId" AND c."intentId"=x."intentId" AND c."orderId"=x.id
+  WHERE x."tenantId"=t AND x.mode='PAPER' AND (e.version<>0 OR e."previousStatus" IS NOT NULL OR e.status<>'CREATED'
+   OR e.source<>'CREATE' OR e."sourceIdentity" IS DISTINCT FROM x."intentId"::text
+   OR e."evidenceHash" IS DISTINCT FROM c."commandHash" OR e."attemptId" IS NOT NULL
+   OR e."occurredAt"<x."createdAt" OR e."occurredAt">clock_timestamp()))
+ OR EXISTS(SELECT 1 FROM public."order" x WHERE x."tenantId"=t AND x.mode='PAPER' AND NOT EXISTS(
+  SELECT 1 FROM public.order_event e WHERE e."tenantId"=t AND e."orderId"=x.id AND e.version=0))
  THEN RAISE EXCEPTION 'PAPER_RISK_LOSS_INCOMPLETE'; END IF;
  ts:=floor(extract(epoch FROM clock_timestamp())*1000)::bigint;
  FOREACH a IN ARRAY ids LOOP

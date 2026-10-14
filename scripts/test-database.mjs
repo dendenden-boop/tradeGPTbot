@@ -1810,7 +1810,7 @@ try {
     ),
   );
   assert.equal(paperRiskLossOwner.success, true);
-  assert.equal(paperRiskLossOwner.numPassedTests, 22);
+  assert.equal(paperRiskLossOwner.numPassedTests, 26);
   assert.equal(paperRiskLossOwner.numFailedTests, 0);
   assert.equal(paperRiskLossOwner.numPendingTests, 0);
 

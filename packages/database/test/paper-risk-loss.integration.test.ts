@@ -110,6 +110,10 @@ async function effects(owner: PaperOwner) {
       reservations: number;
       evidence: number;
       outbox: number;
+      trades: number;
+      funding: number;
+      valuations: number;
+      snapshots: number;
     }>(
       `SELECT
         (SELECT count(*)::int FROM public.ledger_transaction WHERE "tenantId"=$1) ledger,
@@ -118,7 +122,11 @@ async function effects(owner: PaperOwner) {
         (SELECT count(*)::int FROM public.risk_decision WHERE "tenantId"=$1) decisions,
         (SELECT count(*)::int FROM public.risk_reservation WHERE "tenantId"=$1) reservations,
         (SELECT count(*)::int FROM ctp_portfolio.evidence WHERE "tenantId"=$1) evidence,
-        (SELECT count(*)::int FROM ctp_portfolio.outbox WHERE "tenantId"=$1) outbox`,
+        (SELECT count(*)::int FROM ctp_portfolio.outbox WHERE "tenantId"=$1) outbox,
+        (SELECT count(*)::int FROM public.trade WHERE "tenantId"=$1) trades,
+        (SELECT count(*)::int FROM public.funding_payment WHERE "tenantId"=$1) funding,
+        (SELECT count(*)::int FROM public.asset_valuation WHERE "tenantId"=$1) valuations,
+        (SELECT count(*)::int FROM public.balance_snapshot WHERE "tenantId"=$1) snapshots`,
       [owner.tenantId],
     )
   ).rows;
@@ -232,6 +240,7 @@ it.each(['nonquote', 'mixed-quote', 'disabled', 'unconfigured', 'extra-posting']
         p = await admin.connect();
       try {
         await p.query('BEGIN');
+        await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
         await p.query(
           'INSERT INTO public.ledger_transaction(id,"tenantId","accountId",mode,cause,"causeIdentity","effectiveAt","descriptionCode") VALUES($1,$2,$3,\'PAPER\',\'ADJUSTMENT\',$4,now(),\'cash-loss-fixture\')',
           [id, f.c.owner.tenantId, f.c.owner.accountId, id],
@@ -293,77 +302,120 @@ it('the immutable cash funding seal cannot be rewritten before restart recapture
   expect((await (await openLoss()).read(f.c.owner, io())).actualEquity).toBe('1000');
   expect(await effects(f.c.owner)).toEqual(before);
 });
-it('an UNKNOWN common PAPER order invalidates cash loss evidence without releasing or reseeding balances', async () => {
-  const f = await prepared(),
-    frame = frameFixture(),
-    i = frame.p.record.instrument,
-    r = frame.p.record.rules;
-  i.scope = r.scope = { ...f.c.source };
-  await admin.query(
-    'INSERT INTO public.instrument(id,exchange,market,mode,"exchangeSymbol","baseAsset","quoteAsset",active,"updatedAt") VALUES($1,$2,\'SPOT\',$3,$4,$5,$6,true,now())',
-    [
-      frame.p.key.dbInstrumentId,
-      i.scope.exchange,
-      i.scope.environment,
-      i.exchangeSymbol,
-      i.baseAsset,
-      i.quoteAsset,
-    ],
-  );
-  await admin.query(
-    'INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",rules) VALUES($1,$2,1,true,$3,now(),$4,$5,$6,$7,$8,$9,$10::jsonb)',
-    [
-      frame.p.key.dbRuleId,
-      frame.p.key.dbInstrumentId,
-      new Date(r.effectiveAt),
-      Buffer.alloc(32, 1),
-      r.tickSize,
-      r.stepSize,
-      r.minQuantity,
-      r.maxQuantity,
-      r.minNotional,
-      JSON.stringify(r),
-    ],
-  );
-  const orders = await createPostgresOrderStore({
-    connectionString: required('DATABASE_EXECUTION_URL'),
-    environment: 'test',
-  });
-  handles.push(orders);
-  const binding = bindingSchema.parse({
-    ...f.c.owner,
-    connectionId: null,
-    externalAccountId: 'paper:' + f.c.owner.accountId,
-    profile: {
-      ...f.c.source,
-      accountMode: 'SIMULATED',
-      endpointProfileId: 'paper-spot-v1',
-      profileVersion: f.c.model.version,
-    },
-  });
-  const draft = draftSchema.parse({
-    ...state().draft,
-    key: randomUUID(),
-    dbInstrumentId: frame.p.key.dbInstrumentId,
-    dbRuleId: frame.p.key.dbRuleId,
-    order: {
-      ...state().draft.order,
-      instrumentId: i.id,
-      ruleVersion: r.version,
-      size: { kind: 'BASE_QUANTITY', asset: i.baseAsset, value: '0.5' },
-    },
-  });
-  const order = await orders.create(binding, draft, io()),
-    h = await openLoss();
-  expect((await h.read(f.c.owner, io())).inventory.accounts[0]!.drafts).toHaveLength(1);
-  await admin.query('UPDATE public."order" SET status=\'UNKNOWN\' WHERE id=$1', [order.id]);
-  const before = await effects(f.c.owner);
-  await h.close();
-  await expect((await openLoss()).read(f.c.owner, io())).rejects.toThrow(
-    'PAPER_RISK_LOSS_INCOMPLETE',
-  );
-  expect(await effects(f.c.owner)).toEqual(before);
-});
+it.each(['status', 'unapplied-event', 'fk-insert'] as const)(
+  'execution %s cannot bypass the closed cash loss proof',
+  async (kind) => {
+    const f = await prepared(),
+      frame = frameFixture(),
+      i = frame.p.record.instrument,
+      r = frame.p.record.rules;
+    i.scope = r.scope = { ...f.c.source };
+    await admin.query(
+      'INSERT INTO public.instrument(id,exchange,market,mode,"exchangeSymbol","baseAsset","quoteAsset",active,"updatedAt") VALUES($1,$2,\'SPOT\',$3,$4,$5,$6,true,now())',
+      [
+        frame.p.key.dbInstrumentId,
+        i.scope.exchange,
+        i.scope.environment,
+        i.exchangeSymbol,
+        i.baseAsset,
+        i.quoteAsset,
+      ],
+    );
+    await admin.query(
+      'INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",rules) VALUES($1,$2,1,true,$3,now(),$4,$5,$6,$7,$8,$9,$10::jsonb)',
+      [
+        frame.p.key.dbRuleId,
+        frame.p.key.dbInstrumentId,
+        new Date(r.effectiveAt),
+        Buffer.alloc(32, 1),
+        r.tickSize,
+        r.stepSize,
+        r.minQuantity,
+        r.maxQuantity,
+        r.minNotional,
+        JSON.stringify(r),
+      ],
+    );
+    const orders = await createPostgresOrderStore({
+      connectionString: required('DATABASE_EXECUTION_URL'),
+      environment: 'test',
+    });
+    handles.push(orders);
+    const binding = bindingSchema.parse({
+      ...f.c.owner,
+      connectionId: null,
+      externalAccountId: 'paper:' + f.c.owner.accountId,
+      profile: {
+        ...f.c.source,
+        accountMode: 'SIMULATED',
+        endpointProfileId: 'paper-spot-v1',
+        profileVersion: f.c.model.version,
+      },
+    });
+    const draft = draftSchema.parse({
+      ...state().draft,
+      key: randomUUID(),
+      dbInstrumentId: frame.p.key.dbInstrumentId,
+      dbRuleId: frame.p.key.dbRuleId,
+      order: {
+        ...state().draft.order,
+        instrumentId: i.id,
+        ruleVersion: r.version,
+        size: { kind: 'BASE_QUANTITY', asset: i.baseAsset, value: '0.5' },
+      },
+    });
+    const order = await orders.create(binding, draft, io()),
+      h = await openLoss();
+    expect((await h.read(f.c.owner, io())).inventory.accounts[0]!.drafts).toHaveLength(1);
+    if (kind === 'fk-insert') {
+      const runtime = new Pool({
+        connectionString: required('DATABASE_PAPER_RISK_LOSS_URL'),
+        max: 1,
+        query_timeout: 3000,
+      });
+      const reader = await runtime.connect(),
+        writer = await admin.connect();
+      try {
+        await reader.query('BEGIN');
+        await reader.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+        await reader.query('SELECT ctp_paper.capture_risk_loss($1::jsonb)', [
+          JSON.stringify(f.c.owner),
+        ]);
+        await writer.query('BEGIN');
+        await writer.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+        await writer.query("SET LOCAL lock_timeout='100ms'");
+        await expect(
+          writer.query(
+            'INSERT INTO ctp_execution.evidence("tenantId","orderId",identity,fingerprint) VALUES($1,$2,$3,$4)',
+            [f.c.owner.tenantId, order.id, randomUUID(), Buffer.alloc(32, 1)],
+          ),
+        ).rejects.toThrow(/lock timeout/);
+        await reader.query('COMMIT');
+      } finally {
+        await writer.query('ROLLBACK');
+        writer.release();
+        await reader.query('ROLLBACK');
+        reader.release();
+        await runtime.end();
+      }
+      expect((await h.read(f.c.owner, io())).actualEquity).toBe('1000');
+      return;
+    }
+    if (kind === 'status')
+      await admin.query('UPDATE public."order" SET status=\'UNKNOWN\' WHERE id=$1', [order.id]);
+    else
+      await admin.query(
+        'INSERT INTO public.order_event(id,"tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,$3,1,\'CREATED\',\'UNKNOWN\',\'NATIVE_FIXTURE\',$4,$5,now())',
+        [randomUUID(), f.c.owner.tenantId, order.id, randomUUID(), Buffer.alloc(32, 2)],
+      );
+    const before = await effects(f.c.owner);
+    await h.close();
+    await expect((await openLoss()).read(f.c.owner, io())).rejects.toThrow(
+      'PAPER_RISK_LOSS_INCOMPLETE',
+    );
+    expect(await effects(f.c.owner)).toEqual(before);
+  },
+);
 it.each(['abort', 'deadline'] as const)(
   'hung cash source %s settles physically and makes its slot reusable',
   async (kind) => {
@@ -531,6 +583,32 @@ it.each(['trade', 'funding'] as const)(
         'INSERT INTO public.funding_payment(id,"tenantId","accountId",mode,"instrumentId","paymentIdentity",asset,amount,rate,timestamp,"receivedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'USDT\',-10,-0.01,now(),now())',
         [randomUUID(), f.c.owner.tenantId, f.c.owner.accountId, instrument, randomUUID()],
       );
+    const before = await effects(f.c.owner),
+      h = await openLoss();
+    await expect(h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_LOSS_INCOMPLETE');
+    expect(await effects(f.c.owner)).toEqual(before);
+  },
+);
+it.each(['valuation', 'balance'] as const)(
+  'additional native %s evidence prevents adopting the original seed as a current cash loss proof',
+  async (kind) => {
+    const f = await prepared();
+    if (kind === 'valuation')
+      await admin.query(
+        'INSERT INTO public.asset_valuation(id,"tenantId","accountId",mode,"baseAsset","quoteAsset",price,"baseAmount","quoteAmount",source,"sourceIdentity","valuedAt","receivedAt") VALUES($1,$2,$3,\'PAPER\',\'USDT\',\'USD\',1,1000,1000,\'isolated-fixture\',$4,now(),now())',
+        [randomUUID(), f.c.owner.tenantId, f.c.owner.accountId, randomUUID()],
+      );
+    else {
+      const version = randomUUID();
+      await admin.query(
+        'INSERT INTO public.account_state_version(id,"tenantId","accountId",mode,version,"sourceCursor","sourceAt","receivedAt","reconciliationEpoch","stateHash") VALUES($1,$2,$3,\'PAPER\',1,\'cash-loss-unposted\',now(),now(),0,$4)',
+        [version, f.c.owner.tenantId, f.c.owner.accountId, Buffer.alloc(32, 1)],
+      );
+      await admin.query(
+        'INSERT INTO public.balance_snapshot(id,"tenantId","accountId",mode,"stateVersionId",asset,total,available,reserved,"sourceAt","receivedAt") VALUES($1,$2,$3,\'PAPER\',$4,\'USDT\',990,990,0,now(),now())',
+        [randomUUID(), f.c.owner.tenantId, f.c.owner.accountId, version],
+      );
+    }
     const before = await effects(f.c.owner),
       h = await openLoss();
     await expect(h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_LOSS_INCOMPLETE');
