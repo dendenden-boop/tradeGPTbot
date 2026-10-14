@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Candidate verification corrections
+
+The first source run 38614215401 failed the existing 300-instrument owner fixture (39 PASS / one 30s timeout). Independent PR run 38614227003 passed that earlier stage, then returned 18 PASS / one failed new source assertion: the common Order Engine fixture is MARKET with native maxPrice 1000, so its conservative .5-unit debit is 500.5; 5.25525 belongs to the separate LIMIT fixture. Neither failed run is acceptance. Original source/migration bytes are preserved. The correction uses the correct immutable MARKET command expectation and batches only administrative metadata setup for the existing 300-instrument test. All 300 instruments, native publish/head operations, restart assertions, three-slot native waves and 30s test / 2.5s I/O deadlines remain unchanged. Corrected full regression/CI is pending.
+
 ## Current PAPER order-risk source candidate
 
 Starting protected main **13a23ec72eb80d4ee5a93b03065428b8bdb3f363** passed the complete thirteen-command local baseline. The new read-only order-risk source binds one durable common PLACE draft, original book/configuration and current public book/trade heads in one bounded transaction, then computes conservative principal/fee bounds. Candidate additive 46 preserves published 1–45 and accepted native financial runtime. Factory contract RED and 28 initial decoder/source GREEN tests are retained; native/full CI acceptance is pending. This source issues no certificate, grant, reservation, hold or PAPER dispatch permission. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; LIVE/PAPER dispatch/positive native credit disabled, native AMEND Binance Spot TESTNET only. Historical checkpoints below retain their original results.

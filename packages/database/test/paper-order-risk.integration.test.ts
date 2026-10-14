@@ -236,7 +236,14 @@ it('actual durable PAPER PLACE and public heads yield conservative debits with n
   expect(r).toMatchObject({
     kind: 'PAPER_ORDER_RISK_SOURCE',
     target: { orderId: f.order!.id, intentId: f.order!.intentId, command: f.order!.command },
-    envelope: { debits: [{ asset: 'USDT', amount: '5.25525' }] },
+    // The shared Order Engine fixture is MARKET, not the pure LIMIT fixture.
+    // Its lifetime ceiling is the native maxPrice=1000, so .5 principal plus
+    // per-lot fees is 500.5. Never substitute current last/limit for this bound.
+    envelope: {
+      quantity: '0.5',
+      executionPrice: { maximum: '1000' },
+      debits: [{ asset: 'USDT', amount: '500.5' }],
+    },
   });
   expect(r.book.state.snapshotAt).toBeLessThanOrEqual(r.asOf);
   expect(await effects(f.c.owner.tenantId)).toEqual(before);

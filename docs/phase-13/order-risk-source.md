@@ -1,5 +1,9 @@
 # Server-owned PAPER order-risk source
 
+## Candidate verification corrections
+
+The first source run 38614215401 failed the existing 300-instrument owner fixture (39 PASS / one 30s timeout). Independent PR run 38614227003 passed that earlier stage, then returned 18 PASS / one failed new source assertion: the common Order Engine fixture is MARKET with native maxPrice 1000, so its conservative .5-unit debit is 500.5; 5.25525 belongs to the separate LIMIT fixture. Neither failed run is acceptance. Original source/migration bytes are preserved. The correction uses the correct immutable MARKET command expectation and batches only administrative metadata setup for the existing 300-instrument test. All 300 instruments, native publish/head operations, restart assertions, three-slot native waves and 30s test / 2.5s I/O deadlines remain unchanged. Corrected full regression/CI is pending.
+
 This candidate starts from protected main **13a23ec72eb80d4ee5a93b03065428b8bdb3f363**. It supplies an atomic read-only prerequisite for certified PAPER Risk: an existing common PLACE intent, its original book/configuration and current durable public book/trade heads. It creates no certificate, decision, reservation, hold, liquidity allocation or dispatch permission. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**.
 
 ## Contract

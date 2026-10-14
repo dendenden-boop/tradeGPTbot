@@ -461,17 +461,43 @@ it('four physical pending journal slots reject BUSY and become reusable after ab
 });
 it('300 instruments retain independent heads across consecutive refresh and restart', async () => {
   const s = await open(),
-    publications: Publication[] = [];
-  // Prepare independent metadata within the existing three-connection admin
-  // bound; 600 sequential seed statements needlessly consume the test budget.
-  for (let offset = 0; offset < 300; offset += 3)
-    publications.push(
-      ...(await Promise.all(
-        Array.from({ length: Math.min(3, 300 - offset) }, (_, i) =>
-          fixture('SPOT-' + (offset + i)),
-        ),
-      )),
+    publications = Array.from({ length: 300 }, (_, index) => {
+      const p = tradeFixture(),
+        instrumentId = 'SPOT-' + index;
+      p.key.instrumentId =
+        p.record.instrument.id =
+        p.record.rules.instrumentId =
+        p.trade.instrumentId =
+          instrumentId;
+      return p;
+    });
+  // Real metadata setup in bounded batches. A reproduced 30s timeout occurred
+  // while 600 per-row seed round trips shared the budget with 900 real port
+  // operations. Preserve all 300 instruments, native calls, three-slot waves,
+  // restart checks and the unchanged 30s/2.5s deadlines.
+  for (let offset = 0; offset < publications.length; offset += 50) {
+    const batch = JSON.stringify(publications.slice(offset, offset + 50));
+    const instruments = await admin.query(
+      `INSERT INTO public.instrument(id,exchange,market,mode,"exchangeSymbol","baseAsset","quoteAsset",active,"updatedAt")
+      SELECT (p->'key'->>'dbInstrumentId')::uuid,(p->'key'->'scope'->>'exchange')::public."Exchange",'SPOT',
+      (p->'key'->'scope'->>'environment')::public."TradingMode",p->'record'->'instrument'->>'exchangeSymbol',
+      p->'record'->'instrument'->>'baseAsset',p->'record'->'instrument'->>'quoteAsset',true,now()
+      FROM jsonb_array_elements($1::jsonb) p`,
+      [batch],
     );
+    const rules = await admin.query(
+      `INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",rules)
+      SELECT (p->'key'->>'dbRuleId')::uuid,(p->'key'->>'dbInstrumentId')::uuid,1,true,
+      to_timestamp((p->'record'->'rules'->>'effectiveAt')::double precision/1000),now(),decode(repeat('01',32),'hex'),
+      (p->'record'->'rules'->>'tickSize')::numeric,(p->'record'->'rules'->>'stepSize')::numeric,
+      (p->'record'->'rules'->>'minQuantity')::numeric,(p->'record'->'rules'->>'maxQuantity')::numeric,
+      (p->'record'->'rules'->>'minNotional')::numeric,p->'record'->'rules'
+      FROM jsonb_array_elements($1::jsonb) p`,
+      [batch],
+    );
+    expect(instruments.rowCount).toBe(50);
+    expect(rules.rowCount).toBe(50);
+  }
   // Independent instruments use the port's bounded admission. Keep each
   // instrument's two updates ordered; never schedule an unbounded queue or
   // consume all four physical slots while one is still closing.
