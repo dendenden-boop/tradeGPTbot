@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Initial cash UTC loss source candidate
+
+Fresh protected main **f5741ec5b9aed19b87e0f2996fbfb8aa0855a42e** passed full exact-main CI **38569022762** / CodeQL **38569022756** and all thirteen local baseline commands. The next scope is the separate [cash-only UTC loss source](cash-loss-source.md), deriving complete pristine quote funding history through fixed server-owned read authority. Nonquote/extra/UNKNOWN/missing history must fail closed; no current FX price or backdated snapshot is used. First native missing-factory RED is added after real configuration/funding/common-book preparation but has not yet executed. No source, loss journal write, Risk grant, reservation or dispatch is claimed. Published migrations 1–44 remain immutable. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER dispatch/positive native credit disabled.
+
 ## Exact-main serial PostgreSQL runner budget reproduction
 
 Protected PR #16 merged source/documentation head **8981e009090c05b7b5c30f20bc6be0995875b43e** into main **de694450beccd16b884f54cf293bf62dbca477d4**. Source CI **38531584719** attempt 2 and PR CI **38531591164**, with CodeQL **38531584653 / 38531591175**, passed strict artifact verification: 3626 unit / 41 HTTP per OS, 1036 PostgreSQL, 44 owner capture contracts, all owners/upgrades and audit zero. The source run retained two `bootstrap-docker` artifacts: failed attempt **11879630648** and successful attempt **11879218587**. Name-only download initially selected the failed report. The successful artifact was subsequently selected by exact ID, SHA and successful job time window; its SHA-256 matched GitHub's digest. Both attempts remain retained; no failed result was waived.
