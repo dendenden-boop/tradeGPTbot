@@ -462,7 +462,16 @@ it('four physical pending journal slots reject BUSY and become reusable after ab
 it('300 instruments retain independent heads across consecutive refresh and restart', async () => {
   const s = await open(),
     publications: Publication[] = [];
-  for (let i = 0; i < 300; i++) publications.push(await fixture('SPOT-' + i));
+  // Prepare independent metadata within the existing three-connection admin
+  // bound; 600 sequential seed statements needlessly consume the test budget.
+  for (let offset = 0; offset < 300; offset += 3)
+    publications.push(
+      ...(await Promise.all(
+        Array.from({ length: Math.min(3, 300 - offset) }, (_, i) =>
+          fixture('SPOT-' + (offset + i)),
+        ),
+      )),
+    );
   // Independent instruments use the port's bounded admission. Keep each
   // instrument's two updates ordered; never schedule an unbounded queue or
   // consume all four physical slots while one is still closing.
