@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Stale fixture correction — retained evidence
+
+Corrected SHA **c9dfcb78e6805784443210ce51526580f3a0520e**, PR CI **38525476826**, passed 43/44 owner contracts, including eighteen new native capture cases. The remaining stale case failed before its reader assertion: the existing Market Data publisher correctly rejected an already 5001ms-old publication with `MARKET_EVIDENCE_STALE`. This fixture did not prove the new reader's stale rejection and is not acceptance. Logs/JSON are retained. The test now publishes genuinely fresh native data, waits 5100ms using real time, then invokes the reader with a new bounded I/O deadline. Runtime, migration 44, freshness/metadata guards, test assertions and timeouts remain unchanged. Full current-head CI remains required.
+
 ## Initial native fixture failure — retained evidence
 
 Candidate **f8906c037868509622774f952cfddd3e0fb507ea** passed Ubuntu, Windows and both CodeQL jobs. Source CI **38523589582** failed in the owner fixture: region was 46 characters and the published account column allows 32. All 25 existing owner contracts passed; all 19 new cases stopped at account insertion with `value too long for type character varying(32)`, before testing the new capture. This is a fixture failure, not product RED or native valuation acceptance. Failed logs/JSON are retained. The correction shortens only the isolated test region to 26 characters; no runtime, migration, schema limit or assertion is relaxed. Complete new-head regression/CI remains required.

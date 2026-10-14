@@ -731,7 +731,7 @@ it('a captured market catalog remains locked until transaction settlement and a 
     await runtime.end();
   }
 });
-async function readyValuation(publish = true, age = 0) {
+async function readyValuation(publish = true) {
   const f = await inventoryFixture('v-' + randomUUID().replaceAll('-', '').slice(0, 24));
   const snapshots = await createPostgresMarketSnapshots({
     connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
@@ -739,7 +739,7 @@ async function readyValuation(publish = true, age = 0) {
   });
   handles.push(snapshots);
   const p = structuredClone(f.f.s);
-  const at = Date.now() - age;
+  const at = Date.now();
   p.key = structuredClone(f.f.p.key);
   p.record = structuredClone(f.f.p.record);
   p.timestamp = at;
@@ -776,7 +776,8 @@ it('production PAPER valuation restart and concurrent replay preserve source ide
 it.each(['missing', 'stale', 'gap', 'rule-refresh', 'unknown', 'sibling'] as const)(
   'production valuation %s fails closed without a partial result or reservation',
   async (kind) => {
-    const f = await readyValuation(kind !== 'missing', kind === 'stale' ? 5001 : 0);
+    const f = await readyValuation(kind !== 'missing');
+    if (kind === 'stale') await wait(5100);
     const before = await valuationEffects(f.c.owner.tenantId);
     if (kind === 'gap')
       await f.snapshots.publish(
