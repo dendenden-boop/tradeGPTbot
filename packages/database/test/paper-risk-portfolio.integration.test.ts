@@ -732,7 +732,7 @@ it('a captured market catalog remains locked until transaction settlement and a 
   }
 });
 async function readyValuation(publish = true, age = 0) {
-  const f = await inventoryFixture('valuation-' + randomUUID());
+  const f = await inventoryFixture('v-' + randomUUID().replaceAll('-', '').slice(0, 24));
   const snapshots = await createPostgresMarketSnapshots({
     connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
     environment: 'test',

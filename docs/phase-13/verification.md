@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Initial native fixture failure — retained evidence
+
+Candidate **f8906c037868509622774f952cfddd3e0fb507ea** passed Ubuntu, Windows and both CodeQL jobs. Source CI **38523589582** failed in the owner fixture: region was 46 characters and the published account column allows 32. All 25 existing owner contracts passed; all 19 new cases stopped at account insertion with `value too long for type character varying(32)`, before testing the new capture. This is a fixture failure, not product RED or native valuation acceptance. Failed logs/JSON are retained. The correction shortens only the isolated test region to 26 characters; no runtime, migration, schema limit or assertion is relaxed. Complete new-head regression/CI remains required.
+
 ## Current server-owned PAPER valuation candidate
 
 This PHASE 13 increment starts from protected main **cab8fa80b8f6095313fca91a39cebf3f967b13d4** and connects retained complete PAPER inventory with actual current durable public Market Data heads in one bounded read transaction. See [server-owned valuation source](risk-valuation-source.md). Additive 44 grants capture-only authority; published 1–43 and accepted native financial runtime remain unchanged. The source is not certified Risk, a reservation or dispatch permission. All 22 corrected source decoder contracts passed verified RED→GREEN; deployment override and physical handshake cases pass. Native owner/upgrade/full CI acceptance remains pending and is recorded only after execution.
