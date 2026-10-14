@@ -53,6 +53,7 @@ const expectedMigrations = [
   '202610120002_paper_portfolio_bootstrap',
   '202610130001_paper_book_source',
   '202610130002_paper_risk_portfolio',
+  '202610140001_paper_risk_valuation',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -110,6 +111,7 @@ const paperPortfolioPassword = randomBytes(24).toString('hex');
 const paperBookPassword = randomBytes(24).toString('hex');
 const paperBookSourcePassword = randomBytes(24).toString('hex');
 const paperRiskPortfolioPassword = randomBytes(24).toString('hex');
+const paperRiskValuationPassword = randomBytes(24).toString('hex');
 const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
@@ -136,6 +138,7 @@ const secrets = [
   paperBookPassword,
   paperBookSourcePassword,
   paperRiskPortfolioPassword,
+  paperRiskValuationPassword,
   marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
@@ -168,6 +171,7 @@ const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
 const paperBookRole = `ctp_p2_paper_book_${suffix}`;
 const paperBookSourceRole = `ctp_p2_paper_book_source_${suffix}`;
 const paperRiskPortfolioRole = `ctp_p2_paper_risk_portfolio_${suffix}`;
+const paperRiskValuationRole = `ctp_p2_paper_risk_valuation_${suffix}`;
 const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
@@ -295,6 +299,12 @@ const paperRiskPortfolioUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperRiskPortfolioRole;
   url.password = paperRiskPortfolioPassword;
+  return url.href;
+};
+const paperRiskValuationUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperRiskValuationRole;
+  url.password = paperRiskValuationPassword;
   return url.href;
 };
 const paperBookSourceUrl = (name) => {
@@ -435,6 +445,7 @@ try {
     [paperBookRole, paperBookPassword, 'ctp_paper_book_initializer'],
     [paperBookSourceRole, paperBookSourcePassword, 'ctp_paper_book_source'],
     [paperRiskPortfolioRole, paperRiskPortfolioPassword, 'ctp_paper_risk_portfolio'],
+    [paperRiskValuationRole, paperRiskValuationPassword, 'ctp_paper_risk_valuation'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
@@ -1733,6 +1744,8 @@ try {
         DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
         DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
         DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[2]),
+        DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[2]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
       },
       secrets,
       echo: true,
@@ -1746,7 +1759,7 @@ try {
     ),
   );
   assert.equal(paperRiskPortfolioOwner.success, true);
-  assert.equal(paperRiskPortfolioOwner.numPassedTests, 25);
+  assert.equal(paperRiskPortfolioOwner.numPassedTests, 44);
   assert.equal(paperRiskPortfolioOwner.numFailedTests, 0);
   assert.equal(paperRiskPortfolioOwner.numPendingTests, 0);
 
@@ -2361,6 +2374,78 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     await inventory.close();
   }
 
+  // Populated published-43 -> additive 44: original quote seed/book/draft.
+  const { createPostgresPaperRiskValuationSource } =
+    await import('../packages/paper-engine/dist/portfolio.js');
+  await assert.rejects(
+    createPostgresPaperRiskValuationSource({
+      connectionString: paperRiskValuationUrl(databases[4]),
+      environment: 'test',
+    }),
+    /PAPER_RISK_VALUATION_ROLE_UNSAFE/,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[43]),
+    path.join(paperMigrations, expectedMigrations[43]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const valuationSource = await createPostgresPaperRiskValuationSource({
+    connectionString: paperRiskValuationUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const r = await valuationSource.read(paperInput.owner, {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 2500,
+    });
+    assert.equal(r.kind, 'PAPER_RISK_VALUATION_SOURCE');
+    assert.equal(r.valuation.equity, '1000');
+    assert.deepEqual(r.markets, []);
+    assert.equal(
+      r.inventory.accounts[0].state.snapshotAt,
+      JSON.parse(bookBefore43[0].state).snapshotAt,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      bookBefore43,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      originBefore43,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_transaction WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+          [initialFunding.id],
+        )
+      ).rows[0].n,
+      2,
+    );
+  } finally {
+    await valuationSource.close();
+  }
   const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
     connectionString: paperPortfolioUrl(databases[4]),
     environment: 'test',
@@ -2486,6 +2571,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[0]),
         DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[0]),
         DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[0]),
+        DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[0]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
       secrets,
@@ -2637,6 +2723,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperBookSourceNonBypassOwner: 'PASS',
     paperRiskPortfolioNonBypassOwner: 'PASS',
     paperRiskPortfolioPopulatedUpgradeFromPublished42: 'PASS',
+    paperRiskValuationNonBypassOwner: 'PASS',
+    paperRiskValuationPopulatedUpgradeFromPublished43: 'PASS',
     paperBookSourcePopulatedUpgradeFromPublished41: 'PASS',
     paperBookPopulatedUpgradeFromPublished40: 'PASS',
     resetStorageMs,

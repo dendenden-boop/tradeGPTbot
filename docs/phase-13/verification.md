@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Current server-owned PAPER valuation candidate
+
+This PHASE 13 increment starts from protected main **cab8fa80b8f6095313fca91a39cebf3f967b13d4** and connects retained complete PAPER inventory with actual current durable public Market Data heads in one bounded read transaction. See [server-owned valuation source](risk-valuation-source.md). Additive 44 grants capture-only authority; published 1–43 and accepted native financial runtime remain unchanged. The source is not certified Risk, a reservation or dispatch permission. All 22 corrected source decoder contracts passed verified RED→GREEN; deployment override and physical handshake cases pass. Native owner/upgrade/full CI acceptance remains pending and is recorded only after execution.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. LIVE/PAPER dispatch/positive native credit remain disabled; native AMEND Binance Spot TESTNET only. Certified PAPER Risk with proven UTC loss evidence, reservations/active holds and virtual execution remain required. Historical checkpoints below retain their original scope/results.
+
 ## Accepted PAPER inventory valuation source checkpoint
 
 Source **1c4f7f515c8adb83738f9dba8657f107081d13ee** passed complete [source CI 38432709212](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432709212), [source CodeQL 38432709110](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432709110), [PR CI 38432718347](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432718347) and [PR CodeQL 38432718238](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432718238). Artifacts verified 2026-10-13T17:20:32.146Z / 2026-10-13T17:20:37.223Z: **3596 unit / 41 HTTP per OS**, **1010 PostgreSQL**, three new valuation contracts fresh/non-BYPASSRLS owner, 33 verified unit RED→GREEN contracts, role graph 164, all prior owner/populated-upgrade stages, twelve deployments, audit zero/no open CodeQL findings. Docker 46 requests; shutdown 324ms source / 277ms PR. All jobs succeeded without skipped/cancelled substitutes.

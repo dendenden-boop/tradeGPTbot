@@ -18,3 +18,9 @@ export type {
   PaperRiskPortfolioSource,
   PaperRiskPortfolioReader,
 } from './risk-portfolio-domain.js';
+
+export { createPostgresPaperRiskValuationSource } from './postgres-risk-valuation.js';
+export type {
+  PaperRiskValuationSource,
+  PaperRiskValuationReader,
+} from './risk-valuation-domain.js';

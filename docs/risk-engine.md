@@ -1,5 +1,7 @@
 # Risk Engine
 
+PHASE 13 от protected main **cab8fa80…**: [server-owned PAPER valuation source](phase-13/risk-valuation-source.md) связывает полный сохранённый inventory с текущими durable public heads в одном bounded read transaction. Candidate additive 44 не даёт financial/Risk authority. Native/full CI acceptance ещё ожидается. **IN_PROGRESS / NOT READY FOR PHASE 14**; certified PAPER Risk, UTC loss proof, reservations/active holds и virtual execution остаются обязательными. LIVE/PAPER dispatch/positive native credit выключены. Исторические checkpoints ниже сохранены.
+
 Read-only [PAPER market frames](phase-13/market-frames.md) source **c97ac07f…** passed complete source/PR/native/owner/CodeQL CI with no financial effect. Independent reads and zero-used calculation frames are neither an atomic Risk certificate nor renewed liquidity. Current native Risk/Order/Portfolio authority below is unchanged; **NOT READY FOR PHASE 14**, LIVE/PAPER dispatch disabled. Final documentation/main acceptance is separate.
 
 PHASE 13: изолированный public trade journal принят на main **26a3a772…** полным CI 38167336026 и CodeQL 38167335956. Следующий [read-only market frame composition](phase-13/market-frames.md) — candidate на verification: он не является atomic Risk snapshot, liquidity allocation или разрешением PAPER dispatch. Нативная authority chain ниже сохранена; **NOT READY FOR PHASE 14**, LIVE disabled.

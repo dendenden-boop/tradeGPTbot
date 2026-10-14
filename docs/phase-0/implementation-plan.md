@@ -1,5 +1,8 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+PHASE 13 от protected main **cab8fa80…**: [server-owned PAPER valuation source](../phase-13/risk-valuation-source.md) связывает полный сохранённый inventory с текущими durable public heads в одном bounded read transaction. Candidate additive 44 не даёт financial/Risk authority. Native/full CI acceptance ещё ожидается. **IN_PROGRESS / NOT READY FOR PHASE 14**; certified PAPER Risk, UTC loss proof, reservations/active holds и virtual execution остаются обязательными. LIVE/PAPER dispatch/positive native credit выключены. Исторические checkpoints ниже сохранены.
+
+
 ## Accepted PAPER inventory valuation source checkpoint
 
 Source **1c4f7f515c8adb83738f9dba8657f107081d13ee** passed complete [source CI 38432709212](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432709212), [source CodeQL 38432709110](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432709110), [PR CI 38432718347](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432718347) and [PR CodeQL 38432718238](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38432718238). Artifacts verified 2026-10-13T17:20:32.146Z / 2026-10-13T17:20:37.223Z: **3596 unit / 41 HTTP per OS**, **1010 PostgreSQL**, three new valuation contracts fresh/non-BYPASSRLS owner, 33 verified unit RED→GREEN contracts, role graph 164, all prior owner/populated-upgrade stages, twelve deployments, audit zero/no open CodeQL findings. Docker 46 requests; shutdown 324ms source / 277ms PR. All jobs succeeded without skipped/cancelled substitutes.
