@@ -403,6 +403,10 @@ try {
     assert.equal(typeof portfolio.createPostgresPaperRiskPortfolioSource,'function');
     assert.equal(typeof portfolio.createPostgresPaperRiskValuationSource,'function');
     assert.equal(typeof portfolio.createPostgresPaperRiskLossSource,'function');
+      assert.equal(typeof portfolio.createPostgresPaperOrderRiskSource,'function');
+      assert.equal('createPostgresPaperOrderRiskSource' in paper,false);
+      assert.equal('decodePaperOrderRiskSource' in portfolio,false);
+      await assert.rejects(portfolio.createPostgresPaperOrderRiskSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ORDER_RISK_DATABASE_URL/);
     assert.equal('createPostgresPaperRiskLossSource' in paper,false);
     assert.equal('decodePaperRiskLossSource' in portfolio,false);
     await assert.rejects(portfolio.createPostgresPaperRiskLossSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_RISK_LOSS_DATABASE_URL/);

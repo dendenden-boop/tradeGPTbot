@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Current PAPER order-risk source candidate
+
+Starting protected main **13a23ec72eb80d4ee5a93b03065428b8bdb3f363** passed the complete thirteen-command local baseline. The new read-only order-risk source binds one durable common PLACE draft, original book/configuration and current public book/trade heads in one bounded transaction, then computes conservative principal/fee bounds. Candidate additive 46 preserves published 1–45 and accepted native financial runtime. Factory contract RED and 28 initial decoder/source GREEN tests are retained; native/full CI acceptance is pending. This source issues no certificate, grant, reservation, hold or PAPER dispatch permission. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; LIVE/PAPER dispatch/positive native credit disabled, native AMEND Binance Spot TESTNET only. Historical checkpoints below retain their original results.
+
 ## Accepted initial cash UTC loss source checkpoint
 
 Source **60bc20195e59cc620453ac884686967e7793b2cc** passed complete [source CI 38600570272](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38600570272), [source CodeQL 38600570290](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38600570290), [PR CI 38600574418](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38600574418) and [PR CodeQL 38600574455](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38600574455). Full exact-SHA/artifact-ID/job-window/digest reports verified 2026-10-14T17:04:42.268Z / 2026-10-14T17:07:45.610Z: **3652 unit / 41 HTTP per OS**, **1069 PostgreSQL**, **26 cash contracts** fresh and repeated non-BYPASSRLS owner, **178 role-graph cases**, populated published-44→45 and all earlier owners/upgrades, twelve clean deployments, audit zero and no open CodeQL findings. Every required job completed successfully; no skipped/cancelled substitute.

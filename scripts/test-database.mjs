@@ -55,6 +55,7 @@ const expectedMigrations = [
   '202610130002_paper_risk_portfolio',
   '202610140001_paper_risk_valuation',
   '202610140002_paper_risk_cash_loss',
+  '202610140003_paper_order_risk_source',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -114,6 +115,7 @@ const paperBookSourcePassword = randomBytes(24).toString('hex');
 const paperRiskPortfolioPassword = randomBytes(24).toString('hex');
 const paperRiskValuationPassword = randomBytes(24).toString('hex');
 const paperRiskLossPassword = randomBytes(24).toString('hex');
+const paperOrderRiskPassword = randomBytes(24).toString('hex');
 const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
@@ -142,6 +144,7 @@ const secrets = [
   paperRiskPortfolioPassword,
   paperRiskValuationPassword,
   paperRiskLossPassword,
+  paperOrderRiskPassword,
   marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
@@ -176,6 +179,7 @@ const paperBookSourceRole = `ctp_p2_paper_book_source_${suffix}`;
 const paperRiskPortfolioRole = `ctp_p2_paper_risk_portfolio_${suffix}`;
 const paperRiskValuationRole = `ctp_p2_paper_risk_valuation_${suffix}`;
 const paperRiskLossRole = `ctp_p2_paper_risk_loss_${suffix}`;
+const paperOrderRiskRole = `ctp_p2_paper_order_risk_${suffix}`;
 const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
@@ -315,6 +319,12 @@ const paperRiskLossUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperRiskLossRole;
   url.password = paperRiskLossPassword;
+  return url.href;
+};
+const paperOrderRiskUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperOrderRiskRole;
+  url.password = paperOrderRiskPassword;
   return url.href;
 };
 const paperBookSourceUrl = (name) => {
@@ -457,6 +467,7 @@ try {
     [paperRiskPortfolioRole, paperRiskPortfolioPassword, 'ctp_paper_risk_portfolio'],
     [paperRiskValuationRole, paperRiskValuationPassword, 'ctp_paper_risk_valuation'],
     [paperRiskLossRole, paperRiskLossPassword, 'ctp_paper_risk_loss'],
+    [paperOrderRiskRole, paperOrderRiskPassword, 'ctp_paper_order_risk'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
@@ -1814,6 +1825,45 @@ try {
   assert.equal(paperRiskLossOwner.numFailedTests, 0);
   assert.equal(paperRiskLossOwner.numPendingTests, 0);
 
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-order-risk.integration.test.ts',
+      '--outputFile.json=test-results/paper-order-risk-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+        DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[2]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperOrderRiskOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-order-risk-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperOrderRiskOwner.success, true);
+  assert.equal(paperOrderRiskOwner.numPassedTests, 19);
+  assert.equal(paperOrderRiskOwner.numFailedTests, 0);
+  assert.equal(paperOrderRiskOwner.numPendingTests, 0);
+
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -2568,6 +2618,83 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await lossSource.close();
   }
+  // Populated published-45 -> additive 46 retains the original seed/book/draft.
+  const { createPostgresPaperOrderRiskSource } =
+    await import('../packages/paper-engine/dist/portfolio.js');
+  await assert.rejects(
+    createPostgresPaperOrderRiskSource({
+      connectionString: paperOrderRiskUrl(databases[4]),
+      environment: 'test',
+    }),
+    /PAPER_ORDER_RISK_ROLE_UNSAFE/,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[45]),
+    path.join(paperMigrations, expectedMigrations[45]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const orderRiskUpgrade = await createPostgresPaperOrderRiskSource({
+    connectionString: paperOrderRiskUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    const draftIdentity = (
+      await paperUpgrade.query(
+        'SELECT id FROM public.order_intent WHERE "tenantId"=$1 AND "accountId"=$2 AND operation=\'PLACE\'',
+        [paperInput.owner.tenantId, paperInput.owner.accountId],
+      )
+    ).rows;
+    assert.equal(draftIdentity.length, 1);
+    // This populated historical fixture deliberately has no market heads. A
+    // new source must reject missing evidence without renewing the original seed.
+    await assert.rejects(
+      orderRiskUpgrade.read(
+        { owner: paperInput.owner, intentId: draftIdentity[0].id },
+        { signal: new AbortController().signal, deadline: Date.now() + 2500 },
+      ),
+      /PAPER_ORDER_RISK_MARKET/,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      bookBefore43,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      originBefore43,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_transaction WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows[0].n,
+      1,
+    );
+    assert.equal(
+      (
+        await paperUpgrade.query(
+          'SELECT count(*)::int n FROM public.ledger_entry WHERE "transactionId"=$1',
+          [initialFunding.id],
+        )
+      ).rows[0].n,
+      2,
+    );
+  } finally {
+    await orderRiskUpgrade.close();
+  }
   const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
     connectionString: paperPortfolioUrl(databases[4]),
     environment: 'test',
@@ -2695,6 +2822,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[0]),
         DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[0]),
         DATABASE_PAPER_RISK_LOSS_URL: paperRiskLossUrl(databases[0]),
+        DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[0]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
       secrets,
@@ -2849,6 +2977,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperRiskPortfolioPopulatedUpgradeFromPublished42: 'PASS',
     paperRiskLossNonBypassOwner: 'PASS',
     paperRiskLossPopulatedUpgradeFromPublished44: 'PASS',
+    paperOrderRiskNonBypassOwner: 'PASS',
+    paperOrderRiskPopulatedUpgradeFromPublished45: 'PASS',
     paperRiskValuationNonBypassOwner: 'PASS',
     paperRiskValuationPopulatedUpgradeFromPublished43: 'PASS',
     paperBookSourcePopulatedUpgradeFromPublished41: 'PASS',

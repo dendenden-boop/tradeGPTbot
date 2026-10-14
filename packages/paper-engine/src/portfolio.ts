@@ -27,3 +27,10 @@ export type {
 
 export { createPostgresPaperRiskLossSource } from './postgres-risk-loss.js';
 export type { PaperRiskLossSource, PaperRiskLossReader } from './risk-loss-domain.js';
+
+export { createPostgresPaperOrderRiskSource } from './postgres-order-risk.js';
+export type {
+  PaperOrderRiskSource,
+  PaperOrderRiskReader,
+  PaperOrderRiskRequest,
+} from './order-risk-domain.js';
