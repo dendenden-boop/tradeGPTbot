@@ -2,6 +2,8 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import * as portfolio from '@ctp/paper-engine/portfolio';
 import { calculatePaperInventoryValuation } from '@ctp/paper-engine';
+import { parseDecimal } from '@ctp/exchange-core';
+import { createPostgresMarketSnapshots } from '@ctp/market-data';
 import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfolio';
 import type { PaperOwner } from '@ctp/paper-engine/configuration';
 import { createPostgresPaperFunding, paperFundingSchema } from '@ctp/paper-engine/funding';
@@ -44,9 +46,26 @@ async function openOrders() {
   handles.push(h);
   return h;
 }
-async function fixture({ configure = true } = {}) {
-  const f = frameFixture(),
-    c = paperConfigurationSchema.parse(f.configuration.configuration);
+async function fixture({
+  configure = true,
+  region,
+}: { configure?: boolean; region?: string } = {}) {
+  const f = frameFixture();
+  if (region) {
+    f.configuration.configuration.source = { ...f.configuration.configuration.source, region };
+    for (const holder of [
+      f.p.key,
+      f.p.record.instrument,
+      f.p.record.rules,
+      f.s.key,
+      f.s.record.instrument,
+      f.s.record.rules,
+      f.s.book,
+      f.s.ticker,
+    ])
+      holder.scope = { ...holder.scope, region };
+  }
+  const c = paperConfigurationSchema.parse(f.configuration.configuration);
   const externalAccountId = 'paper:' + c.owner.accountId;
   await admin.query(
     'INSERT INTO public."user"(id,"emailNormalized",status,"emailVerifiedAt","updatedAt") VALUES($1,$2,\'ACTIVE\',now(),now())',
@@ -119,8 +138,12 @@ async function fixture({ configure = true } = {}) {
   return { f, c, binding, draft };
 }
 
-async function prepared({ draft = true, fund = true } = {}) {
-  const f = await fixture();
+async function prepared({
+  draft = true,
+  fund = true,
+  region,
+}: { draft?: boolean; fund?: boolean; region?: string } = {}) {
+  const f = await fixture(region ? { region } : {});
   const fundingId = randomUUID();
   if (fund) {
     const funding = await createPostgresPaperFunding({
@@ -244,8 +267,8 @@ it('complete same-tenant PAPER Risk inventory captures two common books without 
   expect(after.rows[0]?.n).toBe('2');
 });
 
-async function inventoryFixture() {
-  const f = await prepared(),
+async function inventoryFixture(region?: string) {
+  const f = await prepared(region ? { region } : {}),
     bootstrap = await openBook();
   const first = await bootstrap.initialize(f.c.owner, io());
   const sibling = paperConfigurationSchema.parse({
@@ -619,6 +642,270 @@ it('complete native PAPER inventory values historical seeds exactly without refr
   expect(r).not.toHaveProperty('reservationId');
   expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
 });
+
+async function openValuation(connectionString = required('DATABASE_PAPER_RISK_VALUATION_URL')) {
+  const h = await portfolio.createPostgresPaperRiskValuationSource({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(h);
+  return h;
+}
+it('ambiguous active direct markets cannot silently select one convenient valuation price', async () => {
+  const f = await readyValuation();
+  const other = await fixture({ region: f.c.source.region }),
+    p = structuredClone(other.f.s);
+  const at = Date.now();
+  p.key = structuredClone(other.f.p.key);
+  p.record = structuredClone(other.f.p.record);
+  p.timestamp = at;
+  p.book.receivedAt = p.book.exchangeTime = at;
+  p.ticker.receivedAt = p.ticker.exchangeTime = at;
+  expect((await f.snapshots.publish(p, io())).status).toBe('APPLIED');
+  await expect(f.h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_VALUATION_MARKET');
+});
+it('a new durable public price after restart changes valuation only and keeps the original seed graph', async () => {
+  const f = await readyValuation(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const a = await f.h.read(f.c.owner, io());
+  const p = structuredClone(f.p),
+    at = Date.now();
+  p.id = randomUUID();
+  p.expectedRevision = '1';
+  p.timestamp = at;
+  p.book.receivedAt = p.book.exchangeTime = at;
+  p.ticker.receivedAt = p.ticker.exchangeTime = at;
+  p.book.sourceSequence = (BigInt(p.book.sourceSequence!) + 1n).toString();
+  p.ticker.last = { state: 'AVAILABLE', value: parseDecimal('3') };
+  expect((await f.snapshots.publish(p, io())).status).toBe('APPLIED');
+  await f.h.close();
+  const b = await (await openValuation()).read(f.c.owner, io());
+  expect(b.hash).not.toBe(a.hash);
+  expect(b.inventory.hash).toBe(a.inventory.hash);
+  expect(b.valuation.equity).toBe('9007199254740996.000000000000000003');
+  expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('a captured market catalog remains locked until transaction settlement and a following GAP invalidates the next read', async () => {
+  const f = await readyValuation();
+  const runtime = new Pool({
+    connectionString: required('DATABASE_PAPER_RISK_VALUATION_URL'),
+    max: 1,
+    query_timeout: 3000,
+  });
+  let settled = false;
+  const p = await runtime.connect();
+  let publication: Promise<unknown> | undefined;
+  try {
+    await p.query('BEGIN');
+    await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    await p.query('SELECT ctp_paper.capture_risk_valuation($1::jsonb)', [
+      JSON.stringify(f.c.owner),
+    ]);
+    publication = f.snapshots
+      .publish(
+        {
+          id: randomUUID(),
+          key: f.p.key,
+          expectedRevision: '1',
+          kind: 'GAP',
+          reason: 'CONNECTION_LOST',
+          timestamp: Date.now(),
+        },
+        io(),
+      )
+      .then((r) => {
+        settled = true;
+        return r;
+      });
+    // Attach rejection handling before any assertion; preserve the real result.
+    void publication.catch(() => {});
+    await wait(60);
+    expect(settled).toBe(false);
+    await p.query('COMMIT');
+    await publication;
+    await expect(f.h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_VALUATION_MARKET');
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+    await publication;
+    await runtime.end();
+  }
+});
+async function readyValuation(publish = true) {
+  const f = await inventoryFixture('v-' + randomUUID().replaceAll('-', '').slice(0, 24));
+  const snapshots = await createPostgresMarketSnapshots({
+    connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
+    environment: 'test',
+  });
+  handles.push(snapshots);
+  const p = structuredClone(f.f.s);
+  const at = Date.now();
+  p.key = structuredClone(f.f.p.key);
+  p.record = structuredClone(f.f.p.record);
+  p.timestamp = at;
+  p.book.receivedAt = p.book.exchangeTime = at;
+  p.ticker.receivedAt = p.ticker.exchangeTime = at;
+  p.ticker.last = { state: 'AVAILABLE', value: parseDecimal('2') };
+  if (publish) expect((await snapshots.publish(p, io())).status).toBe('APPLIED');
+  const h = await openValuation();
+  return { ...f, p, snapshots, h };
+}
+it('production PAPER valuation captures actual durable market heads and complete books in one read transaction', async () => {
+  const f = await readyValuation(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const r = await f.h.read(f.c.owner, io());
+  expect(r.kind).toBe('PAPER_RISK_VALUATION_SOURCE');
+  expect(r.valuation.equity).toBe('9007199254740996.000000000000000002');
+  expect(r.markets).toMatchObject([{ id: f.p.id, dbRuleId: f.p.key.dbRuleId, revision: '1' }]);
+  expect(r.inventory.accounts.map((a) => a.state.snapshotAt).sort()).toEqual(
+    [f.first.createdAt, f.second.createdAt].sort(),
+  );
+  expect(r).not.toHaveProperty('grant');
+  expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('production PAPER valuation restart and concurrent replay preserve source identity without a second financial effect', async () => {
+  const f = await readyValuation(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const a = await f.h.read(f.c.owner, io());
+  const all = await Promise.all(Array.from({ length: 4 }, () => f.h.read(f.c.owner, io())));
+  expect(all.every((r) => r.hash === a.hash)).toBe(true);
+  await f.h.close();
+  expect((await (await openValuation()).read(f.c.owner, io())).hash).toBe(a.hash);
+  expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it.each(['missing', 'stale', 'gap', 'rule-refresh', 'unknown', 'sibling'] as const)(
+  'production valuation %s fails closed without a partial result or reservation',
+  async (kind) => {
+    const f = await readyValuation(kind !== 'missing');
+    if (kind === 'stale') await wait(5100);
+    const before = await valuationEffects(f.c.owner.tenantId);
+    if (kind === 'gap')
+      await f.snapshots.publish(
+        {
+          id: randomUUID(),
+          key: f.p.key,
+          expectedRevision: '1',
+          kind: 'GAP',
+          reason: 'CONNECTION_LOST',
+          timestamp: Date.now(),
+        },
+        io(),
+      );
+    if (kind === 'rule-refresh')
+      await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+        f.p.key.dbRuleId,
+      ]);
+    if (kind === 'unknown') {
+      if (!f.order) throw Error('DRAFT_REQUIRED');
+      await admin.query('UPDATE public."order" SET status=\'UNKNOWN\' WHERE id=$1', [f.order.id]);
+    }
+    if (kind === 'sibling')
+      await admin.query("UPDATE public.exchange_account SET status='DISABLED' WHERE id=$1", [
+        f.sibling.owner.accountId,
+      ]);
+    await expect(f.h.read(f.c.owner, io())).rejects.toThrow(
+      /PAPER_RISK_VALUATION_(MARKET|STALE|INCOMPLETE|OWNERSHIP)/,
+    );
+    expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+  },
+);
+it('a caller cannot supply a price or omit a sibling in the production valuation request', async () => {
+  const f = await readyValuation();
+  await expect(f.h.read({ ...f.c.owner, prices: [] } as PaperOwner, io())).rejects.toThrow(
+    'PAPER_RISK_VALUATION_INPUT',
+  );
+  await expect(f.h.read({ ...f.c.owner, tenantId: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_RISK_VALUATION_OWNERSHIP',
+  );
+});
+it('physically lost valuation COMMIT yields no source and restart can recapture the unchanged durable graph', async () => {
+  const f = await readyValuation(),
+    before = await valuationEffects(f.c.owner.tenantId);
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_RISK_VALUATION_URL'),
+    'PAPER_RISK_VALUATION',
+  );
+  try {
+    const h = await openValuation(proxy.connectionString);
+    proxy.arm();
+    await expect(h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_VALUATION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await h.close();
+    expect((await (await openValuation()).read(f.c.owner, io())).valuation.equity).toBe(
+      '9007199254740996.000000000000000002',
+    );
+    expect(await valuationEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+it.each(['abort', 'deadline'] as const)(
+  'hung valuation market catalog %s settles physically and recovers the slot',
+  async (kind) => {
+    const f = await readyValuation(),
+      lock = await admin.connect(),
+      controller = new AbortController();
+    try {
+      await lock.query('BEGIN');
+      await lock.query('LOCK TABLE ctp_market.snapshot_head IN ACCESS EXCLUSIVE MODE');
+      const rejected = expect(
+        f.h.read(f.c.owner, io(controller.signal, kind === 'deadline' ? 150 : 2500)),
+      ).rejects.toThrow('PAPER_RISK_VALUATION_ABORTED');
+      await wait(50);
+      const start = Date.now();
+      if (kind === 'abort') controller.abort();
+      await rejected;
+      expect(Date.now() - start).toBeLessThan(1500);
+    } finally {
+      controller.abort();
+      await lock.query('ROLLBACK');
+      lock.release();
+    }
+    expect((await f.h.read(f.c.owner, io())).inventory.accounts).toHaveLength(2);
+  },
+);
+it('four physical valuation slots remain bounded and close drains every hung capture', async () => {
+  const f = await readyValuation(),
+    lock = await admin.connect();
+  try {
+    await lock.query('BEGIN');
+    await lock.query('LOCK TABLE ctp_market.snapshot_head IN ACCESS EXCLUSIVE MODE');
+    const settled = Promise.allSettled(Array.from({ length: 4 }, () => f.h.read(f.c.owner, io())));
+    await wait(60);
+    await expect(f.h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_VALUATION_BUSY');
+    await f.h.close();
+    expect((await settled).every((r) => r.status === 'rejected')).toBe(true);
+    await expect(f.h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_VALUATION_CLOSED');
+  } finally {
+    await lock.query('ROLLBACK');
+    lock.release();
+  }
+  expect((await (await openValuation()).read(f.c.owner, io())).inventory.accounts).toHaveLength(2);
+});
+it.each(['LOGIN', 'TABLE', 'FUNCTION'] as const)(
+  'valuation SQL refuses additional %s authority after startup',
+  async (kind) => {
+    const f = await readyValuation();
+    const grant =
+      kind === 'LOGIN'
+        ? 'ALTER ROLE ctp_paper_risk_valuation LOGIN'
+        : kind === 'TABLE'
+          ? 'GRANT SELECT ON ctp_portfolio.book TO ctp_paper_risk_valuation'
+          : 'GRANT EXECUTE ON FUNCTION ctp_paper.initialize_book(jsonb) TO ctp_paper_risk_valuation';
+    const revoke =
+      kind === 'LOGIN'
+        ? 'ALTER ROLE ctp_paper_risk_valuation NOLOGIN'
+        : kind === 'TABLE'
+          ? 'REVOKE SELECT ON ctp_portfolio.book FROM ctp_paper_risk_valuation'
+          : 'REVOKE EXECUTE ON FUNCTION ctp_paper.initialize_book(jsonb) FROM ctp_paper_risk_valuation';
+    try {
+      await admin.query(grant);
+      await expect(f.h.read(f.c.owner, io())).rejects.toThrow('PAPER_RISK_VALUATION_ROLE_UNSAFE');
+    } finally {
+      await admin.query(revoke);
+    }
+  },
+);
 it('native PAPER valuation after restart changes only the public-price projection and keeps original source identity', async () => {
   const f = await readyInventory(),
     before = await valuationEffects(f.c.owner.tenantId);
