@@ -32,6 +32,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
+    "@ctp/risk-engine": "workspace:*",
     "@ctp/market-data": "workspace:*",
     "@ctp/portfolio": "workspace:*",
     "@ctp/exchange-core": "workspace:*",
