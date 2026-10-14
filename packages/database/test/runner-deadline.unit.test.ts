@@ -17,9 +17,9 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond serial n
     native = deadline(database, '// Whole serial suite budget;'),
     auth = deadline(database, "['scripts/test-auth-runtime.mjs']"),
     hardening = deadline(database, "['scripts/test-auth-hardening.mjs']");
-  // The full serial suite now has 894 cases; a real PR run exhausted 300s.
+  // The full serial suite now has 1036 cases; two main attempts exhausted 360s.
   // This aggregate is separate from each test/transaction/abort deadline.
-  expect([native, auth, hardening]).toEqual([360000, 120000, 180000]);
+  expect([native, auth, hardening]).toEqual([480000, 120000, 180000]);
   const config = readFileSync(
     new URL('../../../vitest.database.config.ts', import.meta.url),
     'utf8',

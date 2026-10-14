@@ -2576,8 +2576,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       },
       secrets,
       echo: true,
-      // Whole serial suite budget; individual transaction/abort deadlines stay unchanged.
-      timeoutMs: 360000,
+      // Whole serial suite budget; 1036 cases outgrew the 360s aggregate on CI.
+      // This finite orchestration budget does not change any test/SQL/abort deadline.
+      timeoutMs: 480000,
     },
   );
   const tests = JSON.parse(
