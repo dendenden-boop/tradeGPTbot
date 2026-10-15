@@ -237,10 +237,13 @@ it.each(['permissionEpoch', 'userSessionEpoch', 'accountVersion'] as const)(
       await admin.query('UPDATE public."user" SET "sessionEpoch"="sessionEpoch"+1 WHERE id=$1', [
         f.c.owner.tenantId,
       ]);
-    else
-      await admin.query(`UPDATE public.exchange_account SET "${key}"="${key}"+1 WHERE id=$1`, [
-        f.c.owner.accountId,
-      ]);
+    else {
+      const column = key === 'accountVersion' ? 'version' : 'permissionEpoch';
+      await admin.query(
+        `UPDATE public.exchange_account SET "${column}"="${column}"+1 WHERE id=$1`,
+        [f.c.owner.accountId],
+      );
+    }
     await expect(source.read(f.c.owner, io())).rejects.toThrow('PAPER_RUNTIME_EPOCH');
     expect(await f.writer.find(f.publication, io())).toEqual({ ...a, replayed: true });
     expect(await f.writer.publish(f.publication, io())).toEqual({ ...a, replayed: true });
