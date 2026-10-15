@@ -392,6 +392,7 @@ try {
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');
     assert.equal(typeof paper.calculatePaperRiskEnvelope,'function');
+    assert.equal(typeof paper.calculatePaperReservationCoverage,'function');
     assert.equal(typeof paper.calculatePaperCompetition,'function');
     assert.equal(typeof paper.calculatePaperInventoryValuation,'function');
     assert.equal(paper.PAPER_COMPETITION_MAX_ORDERS,300);
@@ -434,6 +435,7 @@ try {
     assert.throws(()=>paper.preparePaperFrame({}),/PAPER_EVIDENCE/);
     assert.throws(()=>paper.evaluatePaperOrder({}),/PAPER_INPUT/);
     assert.throws(()=>paper.calculatePaperRiskEnvelope({}),/PAPER_ENVELOPE_INPUT/);
+    assert.throws(()=>paper.calculatePaperReservationCoverage({}),/PAPER_COVERAGE_INPUT/);
     assert.throws(()=>paper.calculatePaperCompetition({}),/PAPER_COMPETITION_INPUT/);
     assert.throws(()=>paper.calculatePaperInventoryValuation({}),/PAPER_VALUATION_INPUT/);
     for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);

@@ -260,7 +260,9 @@ export function createStreams(
         const ack = new Promise<void>((resolve, reject) => {
           pending = { op, reqId, resolve, reject };
         });
-        // A rejection handler is attached before send; abort/source close cannot become unhandled.
+        // boundedPort can reject before invoking its lazy action. Observe the
+        // owned waiter immediately; the awaited control operation still rejects.
+        void ack.catch(() => undefined);
         const awaited = boundedPort(() => ack, local, now);
         const caught = awaited.catch((e) => {
           throw e;

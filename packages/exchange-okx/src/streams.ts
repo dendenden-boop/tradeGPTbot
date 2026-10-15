@@ -285,6 +285,8 @@ export function createStreams(
         const ack = new Promise<void>((resolve, reject) => {
           pending = { op, id, resolve, reject };
         });
+        // The bounded wait can reject before adopting its owned ACK promise.
+        void ack.catch(() => undefined);
         const awaited = boundedPort(() => ack, local, now);
         await Promise.all([
           Promise.resolve().then(() => socket!.send(JSON.stringify({ op, args, id }))),
