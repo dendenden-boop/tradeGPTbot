@@ -241,9 +241,15 @@ BEGIN
  END LOOP;
  INSERT INTO ctp_paper.runtime_observation(id,tenant_id,account_id,configuration_id,revision,payload,hash,published_at)
  VALUES((p->>'id')::uuid,(owner->>'tenantId')::uuid,(owner->>'accountId')::uuid,(o->>'configurationId')::uuid,revision,t,sha256(convert_to(t,'UTF8')),ts) RETURNING * INTO e;
- INSERT INTO ctp_paper.runtime_observation_head(tenant_id,account_id,configuration_id,revision,id)
- VALUES(e.tenant_id,e.account_id,e.configuration_id,e.revision,e.id)
- ON CONFLICT(tenant_id,account_id) DO UPDATE SET revision=EXCLUDED.revision,id=EXCLUDED.id;
+ -- BEFORE INSERT runs before ON CONFLICT UPDATE. A revision>1 must use the
+ -- update path so the strict first-head/monotonic trigger remains effective.
+ IF previous.id IS NULL THEN
+  INSERT INTO ctp_paper.runtime_observation_head(tenant_id,account_id,configuration_id,revision,id)
+  VALUES(e.tenant_id,e.account_id,e.configuration_id,e.revision,e.id);
+ ELSE
+  UPDATE ctp_paper.runtime_observation_head AS head SET revision=e.revision,id=e.id
+  WHERE head.tenant_id=e.tenant_id AND head.account_id=e.account_id;
+ END IF;
  RETURN ctp_paper.runtime_receipt(e,false);
 EXCEPTION WHEN unique_violation THEN RAISE EXCEPTION 'PAPER_RUNTIME_CONFLICT';
 WHEN invalid_text_representation OR numeric_value_out_of_range THEN RAISE EXCEPTION 'PAPER_RUNTIME_INPUT';

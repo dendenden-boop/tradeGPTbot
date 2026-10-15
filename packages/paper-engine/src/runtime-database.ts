@@ -108,6 +108,7 @@ export async function openPaperRuntimeDatabase(
     } catch (error) {
       if (!destroyed) await p.query('ROLLBACK').catch(() => {});
       const known = [
+        'PAPER_RUNTIME_CONFLICT',
         'PAPER_RUNTIME_EPOCH',
         'PAPER_RUNTIME_ORDERING',
         'PAPER_RUNTIME_OWNERSHIP',

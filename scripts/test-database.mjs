@@ -1970,7 +1970,7 @@ try {
     ),
   );
   assert.equal(paperRuntimeOwner.success, true);
-  assert.equal(paperRuntimeOwner.numPassedTests, 1);
+  assert.equal(paperRuntimeOwner.numPassedTests, 40);
   assert.equal(paperRuntimeOwner.numFailedTests, 0);
   assert.equal(paperRuntimeOwner.numPendingTests, 0);
 
