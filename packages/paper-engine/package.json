@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./risk": {
+      "types": "./dist/risk.d.ts",
+      "default": "./dist/risk.js"
+    },
     "./evidence": {
       "types": "./dist/evidence.d.ts",
       "default": "./dist/evidence.js"

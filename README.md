@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## PAPER Risk authority source candidate
+
+Starting protected main **c00807a70a1500b962a3ca5768ed17bbee1a0219** passed all thirteen baseline commands. The new [read-only authority source](docs/phase-13/risk-authority-source.md) binds one original common PAPER PLACE, pristine book, current public book/trade heads, exact PAPER platform/user policies, controls and permission/session epochs in one bounded PostgreSQL transaction. It returns evidence only, including paused controls; it issues no certificate, Risk approval, reservation, hold or dispatch permit.
+
+Factory RED and a separate session-epoch range RED are retained; **58 targeted GREEN contracts** and typecheck passed. Candidate additive **47** defines an isolated capture-only role/RPC; published **1–46**, native financial runtime/adapters, pins and workflows remain unchanged. Native contracts cover restart, uncertain read COMMIT, physical abort/deadline/slots/close, policy/control writer serialization, least privilege and populated published-46 upgrade. Full local regression and source/PR/protected-main CI acceptance remain pending; final run IDs and artifact verification belong to the PR/checkpoint.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. This target/pristine source is not complete tenant exposure/loss/health/capability certification. Certified PAPER capture, atomic vector reservations, active UNKNOWN holds, final validation and virtual execution remain outstanding. LIVE/PAPER financial dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak claimed. Earlier checkpoints retain their historical scope/results.
+
 ## PAPER aggregate-budget calculation checkpoint
 
 Starting protected main **361770e5b2c3b58cf33c88b50310d9f0ed839972** passed the thirteen-command baseline. The new [PAPER budget calculation](docs/phase-13/risk-budget.md) combines the lifetime debit vector with conservative instrument/asset/account/user exposure, pending/UNKNOWN reservations and exact Portfolio hold matching. Order/reservation exposure counts once; only unreflected holds reduce asset availability. Platform/user maxima, open orders and potential positions include pending entries. This is pure arithmetic, without source authority or production financial wiring.

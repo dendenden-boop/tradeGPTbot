@@ -20,6 +20,7 @@ export async function registryCommitProxy(
     | 'PAPER_RISK_VALUATION'
     | 'PAPER_RISK_LOSS'
     | 'PAPER_ORDER_RISK'
+    | 'PAPER_RISK_AUTHORITY'
     | 'PAPER_PORTFOLIO'
     | 'PAPER_FUNDING'
     | 'MARKET_TRADE'
@@ -41,6 +42,7 @@ export async function registryCommitProxy(
     PAPER_RISK_VALUATION: 'SELECT ctp_paper.capture_risk_valuation(',
     PAPER_RISK_LOSS: 'SELECT ctp_paper.capture_risk_loss(',
     PAPER_ORDER_RISK: 'SELECT ctp_paper.capture_order_risk(',
+    PAPER_RISK_AUTHORITY: 'SELECT ctp_paper.capture_risk_authority(',
     PAPER_FUNDING: 'SELECT ctp_paper.initialize_funding(',
     PAPER_PORTFOLIO: 'SELECT ctp_paper.capture_initial_portfolio(',
     MARKET_TRADE: 'SELECT ctp_market.publish_trade(',

@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 
 export const aliases = {
+  '@ctp/paper-engine/risk': fileURLToPath(
+    new URL('./packages/paper-engine/src/risk.ts', import.meta.url),
+  ),
   '@ctp/paper-engine/evidence': fileURLToPath(
     new URL('./packages/paper-engine/src/evidence.ts', import.meta.url),
   ),
