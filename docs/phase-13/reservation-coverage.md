@@ -1,5 +1,13 @@
 # PAPER multi-asset reservation coverage
 
+## Accepted PAPER reservation coverage source checkpoint
+
+Source **5c2bd8934ed350391b9a740c128ee890619c94e6** passed complete [source CI 38702061298](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38702061298), [source CodeQL 38702061315](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38702061315), [PR CI 38702068094](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38702068094) and [PR CodeQL 38702068102](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38702068102). Exact-SHA/artifact-ID/job-window/digest verification completed 2026-10-15T08:19:00.196Z / 2026-10-15T08:18:14.366Z: **3764 unit / 41 HTTP per OS**, **653 Paper unit**, **76 new coverage contracts**, **1095 existing native PostgreSQL tests**, all owner/upgrade stages, **185 role-graph cases**, twelve clean deployments, audit zero and no open CodeQL findings. Every required job succeeded without skipped/cancelled substitutes.
+
+The pure calculation recomputes lifetime principal/per-fragment fees and checks each asset independently: BUY quote principal plus commission; SELL base principal and separately funded quote commission. One-atom shortage rejects the whole vector, without proceeds credit or scalar fee translation. One semantic missing-entrypoint RED, all 76 targeted GREEN contracts (32 real fragmented-fill comparisons), and complete thirteen-command local baseline/regression are retained. Published migrations 1–46, native financial runtime, pins and workflows are unchanged; there are no new migrations.
+
+This accepts arithmetic only, with no certified source authority, policy admission, durable reservation, Portfolio hold or financial dispatch. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Certified PAPER capture, aggregate budgets, atomic vector reservations/UNKNOWN holds, final validation and virtual execution remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed. Final documentation-head/protected merge/exact-main acceptance remains separate. Earlier candidate/pending paragraphs preserve their historical scope and are superseded by this source checkpoint.
+
 This PHASE 13 increment starts from protected main **1cf74aaf5f7ec5a55f4fa6d08a4a3a3312c807a5**. The complete thirteen-command baseline passed after correcting the local PATH to pinned Node 24.20.0. The original environment failure (nested pnpm selected system Node 24.19.0) is retained separately and is not acceptance.
 
 ## Purpose and contract
