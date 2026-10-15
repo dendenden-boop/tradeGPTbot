@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## PAPER aggregate-budget calculation checkpoint
+
+Starting protected main **361770e5b2c3b58cf33c88b50310d9f0ed839972** passed the thirteen-command baseline. The new [PAPER budget calculation](risk-budget.md) combines the lifetime debit vector with conservative instrument/asset/account/user exposure, pending/UNKNOWN reservations and exact Portfolio hold matching. Order/reservation exposure counts once; only unreflected holds reduce asset availability. Platform/user maxima, open orders and potential positions include pending entries. This is pure arithmetic, without source authority or production financial wiring.
+
+The missing entrypoint RED, five stricter market-age/deadline RED cases and one conflicting-FX RED are retained; **92 targeted contracts passed**, including 300 instruments across ten accounts. Full new-head local regression and source/PR/protected-main CI are required separately, with final run IDs/artifact verification in the PR/checkpoint. Published migrations **1–46**, native financial runtime/adapters, pins and workflows remain unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**: certified PAPER capture, atomic budgets/vector reservations, active UNKNOWN holds, final validation and virtual execution remain outstanding. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak claimed. Earlier checkpoints below retain their historical scope and results.
+
 ## Bybit/OKX ACK ownership hardening
 
 Later documentation-head [source CI 38704889479](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38704889479), SHA **0730f0e813e84233f924767c29c420b18de036c1**, failed Windows despite 3764 passed assertions: Vitest detected an unhandled Bybit WS ACK rejection during a hung subscription deadline. Its real-services job was skipped, so this run is not acceptance. The failed Windows artifact ID 11957618218, exact SHA/job window/digest and raw log are retained. The independently successful PR run 38704894760 does not resolve this nondeterministic defect. Earlier accepted coverage-source results remain historical checkpoints.
