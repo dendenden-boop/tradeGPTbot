@@ -1,5 +1,9 @@
 # Server-owned PAPER order-risk source
 
+## Populated-upgrade fixture correction
+
+Corrected source CI 38616675855 and PR CI 38616680633 both passed the 40 public-trade owner contracts and all 19 new order-risk owner contracts, then failed the new upgrade assertion (0 != 1). The earlier upgrade setup performed only findCreate for a missing key, so it had no common draft. These runs are not acceptance; artifact SHA/job-window/digests and actual reports are retained. The fixture now creates a real immutable common PAPER PLACE under published 45, verifies its original client ID, then upgrades to candidate 46 and checks exact durable replay plus missing-market rejection without seed/book changes. Source runtime, migrations, deadlines and workflows remain unchanged. Full new-head CI is required.
+
 ## Candidate verification corrections
 
 The first source run 38614215401 failed the existing 300-instrument owner fixture (39 PASS / one 30s timeout). Independent PR run 38614227003 passed that earlier stage, then returned 18 PASS / one failed new source assertion: the common Order Engine fixture is MARKET with native maxPrice 1000, so its conservative .5-unit debit is 500.5; 5.25525 belongs to the separate LIMIT fixture. Neither failed run is acceptance. Original source/migration bytes are preserved. The correction uses the correct immutable MARKET command expectation and batches only administrative metadata setup for the existing 300-instrument test. All 300 instruments, native publish/head operations, restart assertions, three-slot native waves and 30s test / 2.5s I/O deadlines remain unchanged. Corrected full regression/CI is pending.

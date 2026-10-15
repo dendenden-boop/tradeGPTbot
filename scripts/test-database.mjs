@@ -2619,6 +2619,77 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     await lossSource.close();
   }
   // Populated published-45 -> additive 46 retains the original seed/book/draft.
+  // Earlier upgrades only checked a missing idempotency key. Provision an
+  // actual common draft under published 45; never infer it from an empty lookup.
+  const retainedDraftBinding = {
+    ...paperInput.owner,
+    connectionId: null,
+    externalAccountId: `paper:${paperInput.owner.accountId}`,
+    profile: {
+      ...paperInput.source,
+      accountMode: 'SIMULATED',
+      endpointProfileId: 'paper-spot-v1',
+      profileVersion: paperInput.model.version,
+    },
+  };
+  const retainedInstrument = randomUUID(),
+    retainedRule = randomUUID(),
+    retainedAt = Date.now();
+  const retainedRules = {
+    ...registryRecord.rules,
+    scope: paperInput.source,
+    version: 'paper-upgrade-source-v1',
+    effectiveAt: retainedAt - 1000,
+    expiresAt: retainedAt + 60000,
+  };
+  await paperUpgrade.query(
+    "INSERT INTO public.instrument(id,exchange,market,mode,\"exchangeSymbol\",\"baseAsset\",\"quoteAsset\",active,\"updatedAt\") VALUES($1,'BINANCE','SPOT','LIVE',$2,'BTC','USDT',true,now())",
+    [retainedInstrument, 'PAPER-UPGRADE-' + retainedInstrument],
+  );
+  await paperUpgrade.query(
+    'INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",rules) VALUES($1,$2,1,true,$3,now(),$4,$5,$6,$7,$8,$9,$10::jsonb)',
+    [
+      retainedRule,
+      retainedInstrument,
+      new Date(retainedRules.effectiveAt),
+      Buffer.alloc(32, 1),
+      retainedRules.tickSize,
+      retainedRules.stepSize,
+      retainedRules.minQuantity,
+      retainedRules.maxQuantity,
+      retainedRules.minNotional,
+      JSON.stringify(retainedRules),
+    ],
+  );
+  const retainedDraft = {
+    key: 'published-45-real-draft',
+    dbInstrumentId: retainedInstrument,
+    dbRuleId: retainedRule,
+    positionSide: 'NET',
+    bucket: 'CROSS',
+    order: {
+      instrumentId: 'BTCUSDT',
+      ruleVersion: retainedRules.version,
+      side: 'BUY',
+      type: 'LIMIT',
+      size: { kind: 'BASE_QUANTITY', asset: 'BTC', value: '1' },
+      limitPrice: '10',
+      timeInForce: 'GTC',
+      trigger: null,
+      reduceOnly: false,
+    },
+  };
+  const retainedOrders = await createPostgresOrderStore({
+    connectionString: dbUrl(databases[4], false, false, false, false, false, true),
+    environment: 'test',
+  });
+  let retainedOrder;
+  try {
+    retainedOrder = await retainedOrders.create(retainedDraftBinding, retainedDraft, policyIo());
+    assert.equal(retainedOrder.command.clientOrderId, '1');
+  } finally {
+    await retainedOrders.close();
+  }
   const { createPostgresPaperOrderRiskSource } =
     await import('../packages/paper-engine/dist/portfolio.js');
   await assert.rejects(
@@ -2640,18 +2711,23 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     environment: 'test',
   });
   try {
-    const draftIdentity = (
-      await paperUpgrade.query(
-        'SELECT id FROM public.order_intent WHERE "tenantId"=$1 AND "accountId"=$2 AND operation=\'PLACE\'',
-        [paperInput.owner.tenantId, paperInput.owner.accountId],
-      )
-    ).rows;
-    assert.equal(draftIdentity.length, 1);
+    const replayOrders = await createPostgresOrderStore({
+      connectionString: dbUrl(databases[4], false, false, false, false, false, true),
+      environment: 'test',
+    });
+    try {
+      assert.deepEqual(
+        await replayOrders.findCreate(retainedDraftBinding, retainedDraft, policyIo()),
+        retainedOrder,
+      );
+    } finally {
+      await replayOrders.close();
+    }
     // This populated historical fixture deliberately has no market heads. A
     // new source must reject missing evidence without renewing the original seed.
     await assert.rejects(
       orderRiskUpgrade.read(
-        { owner: paperInput.owner, intentId: draftIdentity[0].id },
+        { owner: paperInput.owner, intentId: retainedOrder.intentId },
         { signal: new AbortController().signal, deadline: Date.now() + 2500 },
       ),
       /PAPER_ORDER_RISK_MARKET/,
