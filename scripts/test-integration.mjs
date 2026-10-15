@@ -86,9 +86,11 @@ try {
     echo: true,
     // Includes native owner repeats, upgrades, the full DB suite and paced
     // authentication recovery. The serial SQL/Auth child budgets already sum
-    // to 780s; reserve bounded room for owner/upgrade/setup/reset stages too.
+    // to 780s. With 1138 cases, two independent runs exhausted the old 900s
+    // parent after all native assertions passed; retain 240s bounded room for
+    // owner/upgrade/setup/reset stages rather than omitting any checks.
     // Individual SQL/Auth deadlines and the 20-minute CI job cap are unchanged.
-    timeoutMs: 900000,
+    timeoutMs: 1020000,
     env: {
       ...test.env,
       NODE_ENV: 'test',

@@ -388,12 +388,16 @@ try {
     const funding=await import('@ctp/paper-engine/funding');
     const portfolio=await import('@ctp/paper-engine/portfolio');
     const evidence=await import('@ctp/paper-engine/evidence');
+    const paperRisk=await import('@ctp/paper-engine/risk');
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');
     assert.equal(typeof paper.calculatePaperRiskEnvelope,'function');
     assert.equal(typeof paper.calculatePaperReservationCoverage,'function');
       assert.equal(typeof paper.calculatePaperRiskBudget,'function');
+      assert.equal(typeof paperRisk.createPostgresPaperRiskAuthoritySource,'function');
+      assert.equal('createPostgresPaperRiskAuthoritySource' in paper,false);
+      assert.equal('approve' in paperRisk,false);
     assert.equal(typeof paper.calculatePaperCompetition,'function');
     assert.equal(typeof paper.calculatePaperInventoryValuation,'function');
     assert.equal(paper.PAPER_COMPETITION_MAX_ORDERS,300);
@@ -433,6 +437,7 @@ try {
     await assert.rejects(portfolio.createPostgresPaperInitialPortfolio({connectionString:'https://example.invalid',environment:'test'}),/PAPER_PORTFOLIO_DATABASE_URL/);
     await assert.rejects(funding.createPostgresPaperFunding({connectionString:'https://example.invalid',environment:'test'}),/PAPER_FUNDING_DATABASE_URL/);
     await assert.rejects(configuration.createPostgresPaperConfiguration({connectionString:'https://example.invalid',environment:'test'}),/PAPER_CONFIGURATION_DATABASE_URL/);
+      await assert.rejects(paperRisk.createPostgresPaperRiskAuthoritySource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_RISK_AUTHORITY_DATABASE_URL/);
     assert.throws(()=>paper.preparePaperFrame({}),/PAPER_EVIDENCE/);
     assert.throws(()=>paper.evaluatePaperOrder({}),/PAPER_INPUT/);
     assert.throws(()=>paper.calculatePaperRiskEnvelope({}),/PAPER_ENVELOPE_INPUT/);
