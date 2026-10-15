@@ -17,7 +17,8 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond serial n
     native = deadline(database, '// Whole serial suite budget;'),
     auth = deadline(database, "['scripts/test-auth-runtime.mjs']"),
     hardening = deadline(database, "['scripts/test-auth-hardening.mjs']");
-  // The full serial suite now has 1036 cases; two main attempts exhausted 360s.
+  // With 1138 cases and the extra owner/upgrade stage, two independent runs
+  // passed native assertions but exhausted the 900s parent during Auth.
   // This aggregate is separate from each test/transaction/abort deadline.
   expect([native, auth, hardening]).toEqual([480000, 120000, 180000]);
   const config = readFileSync(
@@ -28,12 +29,13 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond serial n
   expect(config).toContain('hookTimeout: 30000');
   // Preserve room for populated migrations, non-BYPASSRLS owner repeats and
   // cleanup as well as the complete SQL/Auth sequence.
-  expect(parent).toBeGreaterThanOrEqual(native + auth + hardening + 90000);
-  expect(parent).toBeLessThanOrEqual(900000);
+  expect(parent).toBeGreaterThanOrEqual(native + auth + hardening + 240000);
+  expect(parent).toBeLessThanOrEqual(1020000);
   const workflow = readFileSync(
     new URL('../../../.github/workflows/ci.yml', import.meta.url),
     'utf8',
   );
   expect(workflow.slice(workflow.indexOf('  docker:'))).toContain('timeout-minutes: 20');
-  expect(parent).toBeLessThan(20 * 60000);
+  // Reserve three minutes within the unchanged job cap for setup and smoke.
+  expect(parent + 180000).toBeLessThanOrEqual(20 * 60000);
 });

@@ -1,5 +1,12 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Cumulative native runner capacity correction
+
+Corrected source **e498a8d44d8486877decbcc70659532d34d7053a**, [source CI 38772952015](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38772952015) and [PR CI 38772961393](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38772961393), passed Ubuntu/Windows/CodeQL, all **36 new owner contracts**, all populated upgrade assertions and the complete **1138-test native PostgreSQL suite**, including **192 role-graph cases**. Both independent runs then exhausted the unchanged **900s cumulative database parent deadline**, after PostgreSQL and compiled Auth runtime completed. They did not finish every Auth/reset/Docker acceptance stage and are not acceptance. Exact-head raw logs/reports/artifact IDs/job windows/digests are retained.
+
+The bounded parent orchestration budget changes **900s → 1020s**, with a RED→GREEN runner contract. Native suite **480s**, Auth children **120s/180s**, individual Vitest **15s/30s** defaults, SQL/abort/runtime deadlines and the GitHub job's **20-minute cap** stay unchanged. The contract reserves 240s beyond the serial child budgets and three minutes within the job cap for setup/smoke. No case, owner, upgrade, assertion, security scan or required check is removed. Production source/migration bytes remain unchanged. Full new-head local regression and complete source/PR/protected-main CI are required. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER financial dispatch/positive native credit disabled.
+
+
 ## Native authority fixture correction
 
 Source CI [38770620238](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38770620238), source c618bb47cda809eba63e553a550b641af1acabbf, passed Ubuntu/Windows/CodeQL but failed the new non-BYPASSRLS-owner suite: **35 PASS / one FAIL / zero pending**. The privilege assertion attempted text-name resolution of public.order_intent through a schema the capture-only login is deliberately forbidden to use. This is a test fixture error, not a request for broader runtime grants, and the failed run is not acceptance. Raw report/log and exact artifact ID/job-window/digest evidence are retained.
