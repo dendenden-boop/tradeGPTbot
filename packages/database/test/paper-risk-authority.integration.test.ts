@@ -695,7 +695,9 @@ it('authority login has neither private helper/old source nor financial/table ac
       has_function_privilege(current_user,'ctp_paper.authority_order_capture(jsonb)','EXECUTE') helper,
       has_function_privilege(current_user,'ctp_paper.capture_order_risk(jsonb)','EXECUTE') old,
       has_schema_privilege(current_user,'ctp_admission','USAGE') risk,
-      has_table_privilege(current_user,'public.order_intent','INSERT') "table"`)
+      has_table_privilege(current_user,(SELECT c.oid FROM pg_class c
+        JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relname='order_intent'),'INSERT') "table"`)
     ).rows[0]!;
     expect(allowed).toEqual({ helper: false, old: false, risk: false, table: false });
     await expect(
@@ -703,6 +705,9 @@ it('authority login has neither private helper/old source nor financial/table ac
         JSON.stringify(f.request),
       ]),
     ).rejects.toThrow(/permission denied/u);
+    await expect(pool.query('INSERT INTO public.order_intent DEFAULT VALUES')).rejects.toThrow(
+      /permission denied/u,
+    );
   } finally {
     await pool.end();
   }

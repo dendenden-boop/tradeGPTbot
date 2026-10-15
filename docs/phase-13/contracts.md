@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Native authority fixture correction
+
+Source CI [38770620238](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38770620238), source c618bb47cda809eba63e553a550b641af1acabbf, passed Ubuntu/Windows/CodeQL but failed the new non-BYPASSRLS-owner suite: **35 PASS / one FAIL / zero pending**. The privilege assertion attempted text-name resolution of public.order_intent through a schema the capture-only login is deliberately forbidden to use. This is a test fixture error, not a request for broader runtime grants, and the failed run is not acceptance. Raw report/log and exact artifact ID/job-window/digest evidence are retained.
+
+The corrected assertion uses the table catalog OID and separately proves a real INSERT remains permission-denied. Production source and candidate migration 47 bytes are unchanged; all 36 contracts, role boundaries, deadlines and existing suites remain. Full new-head local regression and native/source/PR/protected-main CI are required. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER financial dispatch/positive native credit disabled. Earlier candidate checkpoints retain their actual results.
+
 ## PAPER Risk authority source candidate
 
 Starting protected main **c00807a70a1500b962a3ca5768ed17bbee1a0219** passed all thirteen baseline commands. The new [read-only authority source](risk-authority-source.md) binds one original common PAPER PLACE, pristine book, current public book/trade heads, exact PAPER platform/user policies, controls and permission/session epochs in one bounded PostgreSQL transaction. It returns evidence only, including paused controls; it issues no certificate, Risk approval, reservation, hold or dispatch permit.
