@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## PAPER reservation coverage candidate
+
+Starting protected main **1cf74aaf5f7ec5a55f4fa6d08a4a3a3312c807a5** passed all thirteen baseline commands on pinned Node 24.20.0. The [pure multi-asset coverage calculation](reservation-coverage.md) now has one semantic missing-entrypoint RED and **76 targeted GREEN contracts**, including real fragmented-fill comparisons. BUY quote principal/fees and SELL base principal plus quote fees must each fit their own asset availability; no expected proceeds or scalar fee translation. Published migrations 1–46/native financial runtime/pins/workflows remain unchanged. Full local regression and exact-head full CI acceptance are pending.
+
+This is arithmetic only, without certified source authority, policy admission, reservation, hold or financial dispatch. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak claimed. Earlier checkpoints preserve their historical scope/results.
+
 ## Accepted atomic PAPER order-risk source checkpoint
 
 Source **098ce8de882be844b08cb40b0bfc57a1a2e99fd8** passed complete [source CI 38690628862](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38690628862), [source CodeQL 38690628859](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38690628859), [PR CI 38690634506](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38690634506) and [PR CodeQL 38690634491](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38690634491). Exact-SHA/artifact-ID/job-window/digest reports verified 2026-10-15T06:28:39.212Z / 2026-10-15T06:34:22.838Z: **3688 unit / 41 HTTP per OS**, **1095 PostgreSQL**, **19 new owner contracts** fresh and repeated non-BYPASSRLS owner, **185 role-graph cases**, populated published-45→46 and all earlier owners/upgrades, twelve clean deployments, dependency audit zero and no open CodeQL findings. Every required job succeeded without skipped/cancelled substitutes.
