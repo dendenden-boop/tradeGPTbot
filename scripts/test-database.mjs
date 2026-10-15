@@ -57,6 +57,7 @@ const expectedMigrations = [
   '202610140002_paper_risk_cash_loss',
   '202610140003_paper_order_risk_source',
   '202610150001_paper_risk_authority',
+  '202610150002_paper_runtime_observations',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -118,6 +119,8 @@ const paperRiskValuationPassword = randomBytes(24).toString('hex');
 const paperRiskLossPassword = randomBytes(24).toString('hex');
 const paperOrderRiskPassword = randomBytes(24).toString('hex');
 const paperRiskAuthorityPassword = randomBytes(24).toString('hex');
+const paperRuntimeObserverPassword = randomBytes(24).toString('hex');
+const paperRuntimeReaderPassword = randomBytes(24).toString('hex');
 const marketTradePassword = randomBytes(24).toString('hex');
 const secrets = [
   decodeURIComponent(adminUrl.password),
@@ -148,6 +151,8 @@ const secrets = [
   paperRiskLossPassword,
   paperOrderRiskPassword,
   paperRiskAuthorityPassword,
+  paperRuntimeObserverPassword,
+  paperRuntimeReaderPassword,
   marketTradePassword,
 ];
 const suffix = randomBytes(6).toString('hex');
@@ -184,6 +189,8 @@ const paperRiskValuationRole = `ctp_p2_paper_risk_valuation_${suffix}`;
 const paperRiskLossRole = `ctp_p2_paper_risk_loss_${suffix}`;
 const paperOrderRiskRole = `ctp_p2_paper_order_risk_${suffix}`;
 const paperRiskAuthorityRole = `ctp_p2_paper_risk_authority_${suffix}`;
+const paperRuntimeObserverRole = `ctp_p2_paper_runtime_observer_${suffix}`;
+const paperRuntimeReaderRole = `ctp_p2_paper_runtime_reader_${suffix}`;
 const marketTradeRole = `ctp_p2_market_trade_${suffix}`;
 const paperConfigurationRole = `ctp_p2_paper_config_${suffix}`;
 const identifier = (name) => {
@@ -337,6 +344,18 @@ const paperRiskAuthorityUrl = (name) => {
   url.password = paperRiskAuthorityPassword;
   return url.href;
 };
+const paperRuntimeObserverUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperRuntimeObserverRole;
+  url.password = paperRuntimeObserverPassword;
+  return url.href;
+};
+const paperRuntimeReaderUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperRuntimeReaderRole;
+  url.password = paperRuntimeReaderPassword;
+  return url.href;
+};
 const paperBookSourceUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperBookSourceRole;
@@ -478,6 +497,8 @@ try {
     [paperRiskValuationRole, paperRiskValuationPassword, 'ctp_paper_risk_valuation'],
     [paperRiskLossRole, paperRiskLossPassword, 'ctp_paper_risk_loss'],
     [paperOrderRiskRole, paperOrderRiskPassword, 'ctp_paper_order_risk'],
+    [paperRuntimeObserverRole, paperRuntimeObserverPassword, 'ctp_paper_runtime_observer'],
+    [paperRuntimeReaderRole, paperRuntimeReaderPassword, 'ctp_paper_runtime_reader'],
     [paperRiskAuthorityRole, paperRiskAuthorityPassword, 'ctp_paper_risk_authority'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
@@ -1918,6 +1939,41 @@ try {
   assert.equal(paperRiskAuthorityOwner.numFailedTests, 0);
   assert.equal(paperRiskAuthorityOwner.numPendingTests, 0);
 
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-runtime.integration.test.ts',
+      '--outputFile.json=test-results/paper-runtime-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
+        DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 90000,
+    },
+  );
+  const paperRuntimeOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-runtime-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperRuntimeOwner.success, true);
+  assert.equal(paperRuntimeOwner.numPassedTests, 1);
+  assert.equal(paperRuntimeOwner.numFailedTests, 0);
+  assert.equal(paperRuntimeOwner.numPendingTests, 0);
+
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
   const paperPrior = await mkdtemp(path.join(workspace, '.cache', 'db-paper-upgrade-'));
@@ -2924,6 +2980,89 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await authorityUpgrade.close();
   }
+  // Published-47 -> additive 48 must preserve retained native/draft/book state.
+  const beforeRuntimeAuthority = (
+    await paperUpgrade.query(
+      "SELECT pg_get_functiondef('ctp_paper.capture_risk_authority(jsonb)'::regprocedure) definition",
+    )
+  ).rows[0].definition;
+  const { createPostgresPaperRuntimeObservations, createPostgresPaperRuntimeSource } =
+    await import('../packages/paper-engine/dist/runtime.js');
+  await assert.rejects(
+    createPostgresPaperRuntimeObservations({
+      connectionString: paperRuntimeObserverUrl(databases[4]),
+      environment: 'test',
+    }),
+    /PAPER_RUNTIME_ROLE_UNSAFE/,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[47]),
+    path.join(paperMigrations, expectedMigrations[47]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  assert.equal(
+    (
+      await paperUpgrade.query(
+        "SELECT pg_get_functiondef('ctp_paper.capture_risk_authority(jsonb)'::regprocedure) definition",
+      )
+    ).rows[0].definition,
+    beforeRuntimeAuthority,
+  );
+  const runtimeObserverUpgrade = await createPostgresPaperRuntimeObservations({
+    connectionString: paperRuntimeObserverUrl(databases[4]),
+    environment: 'test',
+  });
+  const runtimeReaderUpgrade = await createPostgresPaperRuntimeSource({
+    connectionString: paperRuntimeReaderUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    assert.equal(await runtimeObserverUpgrade.head(paperInput.owner, policyIo()), null);
+    assert.equal(
+      (await runtimeObserverUpgrade.context(paperInput.owner, policyIo())).configuration
+        .configuration.id,
+      paperInput.id,
+    );
+    await assert.rejects(
+      runtimeReaderUpgrade.read(paperInput.owner, policyIo()),
+      /PAPER_RUNTIME_MISSING/,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT id,revision::text,state,state_hash FROM ctp_portfolio.book WHERE "accountId"=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      bookBefore43,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          'SELECT receipt_text FROM ctp_paper.book_origin WHERE account_id=$1',
+          [paperInput.owner.accountId],
+        )
+      ).rows,
+      originBefore43,
+    );
+    const retained = await createPostgresOrderStore({
+      connectionString: dbUrl(databases[4], false, false, false, false, false, true),
+      environment: 'test',
+    });
+    try {
+      assert.deepEqual(
+        await retained.findCreate(retainedDraftBinding, retainedDraft, policyIo()),
+        retainedOrder,
+      );
+    } finally {
+      await retained.close();
+    }
+  } finally {
+    await runtimeObserverUpgrade.close();
+    await runtimeReaderUpgrade.close();
+  }
   const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
     connectionString: paperPortfolioUrl(databases[4]),
     environment: 'test',
@@ -3052,6 +3191,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[0]),
         DATABASE_PAPER_RISK_LOSS_URL: paperRiskLossUrl(databases[0]),
         DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[0]),
+        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[0]),
+        DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[0]),
         DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[0]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
       },
@@ -3209,6 +3350,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperRiskLossPopulatedUpgradeFromPublished44: 'PASS',
     paperOrderRiskNonBypassOwner: 'PASS',
     paperOrderRiskPopulatedUpgradeFromPublished45: 'PASS',
+    paperRuntimeNonBypassOwner: 'PASS',
+    paperRuntimePopulatedUpgradeFromPublished47: 'PASS',
     paperRiskAuthorityNonBypassOwner: 'PASS',
     paperRiskAuthorityPopulatedUpgradeFromPublished46: 'PASS',
     paperRiskValuationNonBypassOwner: 'PASS',

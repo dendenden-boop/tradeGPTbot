@@ -1,3 +1,7 @@
+import {
+  createPostgresPaperRuntimeObservations,
+  createPostgresPaperRuntimeSource,
+} from '@ctp/paper-engine/runtime';
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
 import { createDatabase, createAuthDatabase } from '@ctp/database';
@@ -46,6 +50,16 @@ afterAll(() => admin.end());
 type Options = { connectionString: string; environment: 'test' };
 type Handle = { close(): Promise<void> };
 const cases: readonly [string, string, (options: Options) => Promise<Handle>][] = [
+  [
+    'ctp_paper_runtime_observer',
+    'DATABASE_PAPER_RUNTIME_OBSERVER_URL',
+    createPostgresPaperRuntimeObservations,
+  ],
+  [
+    'ctp_paper_runtime_reader',
+    'DATABASE_PAPER_RUNTIME_READER_URL',
+    createPostgresPaperRuntimeSource,
+  ],
   [
     'ctp_paper_risk_authority',
     'DATABASE_PAPER_RISK_AUTHORITY_URL',
