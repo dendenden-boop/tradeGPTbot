@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Runtime collector candidate
+
+The [collector contract](runtime-collector.md) exposes only bounded collect, exact lookup reconciliation and close through a separate server subpath backed by the existing PostgreSQL observer. All nine probes must bind the exact current context and original sample time. Four account flights, one per account, retain capacity until underlying promises settle. UNKNOWN never triggers automatic publication retry; PUBLISHED is a journal receipt, not healthy/certified evidence. Actual sensor/periodic worker composition remains outstanding. No financial authority, new migration, default HEALTHY fixture or LIVE enablement is introduced. Full exact-head CI is required before source acceptance; **NOT READY FOR PHASE 14**.
+
 ## Accepted PAPER runtime observation source checkpoint
 
 Source **0f4529d7dae6b831aeee6f6baf2623328b43c393** passed full [source CI 38795514761](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514761), [source CodeQL 38795514785](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514785), [PR CI 38795523955](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523955) and [PR CodeQL 38795523966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523966). Verified exact-head artifacts/digests show **4019 unit / 904 Paper / 41 HTTP per OS**, **1192 native PostgreSQL**, **40 new runtime contracts** fresh and under a non-BYPASSRLS function owner, **206 role-graph cases**, populated published-47→48 preservation, all earlier owner/upgrade stages, twelve clean deployments, audit zero and no open CodeQL alerts. Every required job passed; cancelled preliminary runs are not acceptance.

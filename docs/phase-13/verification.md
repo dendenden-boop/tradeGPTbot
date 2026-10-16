@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Runtime collector candidate
+
+Starting main **c1db3edb291c6a404e2c451e39388a58b1188a8d** passed all thirteen baseline commands. The [server collector](runtime-collector.md) has three missing-implementation RED contracts and separate corrupt-receipt/final-deadline/exact-probe-keys RED→GREEN regressions; **63 new targeted unit contracts passed**. Five native contracts are added and repeated under the existing non-BYPASSRLS owner, but are not claimed passed before complete CI. Full local regression, Ubuntu/Windows/native/real-services/Docker and CodeQL remain required. Published migrations 1–48, native financial runtime/adapters, dependencies, workflows and deadlines are unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER financial dispatch/positive native credit disabled. Real private exchange acceptance and production soak are not claimed. Earlier checkpoints retain their historical scope/results.
+
 ## Accepted native acceptance source checkpoint
 
 Source **6d360d5bc67555e3a9ffde6b6ca899910ca7b639** passed complete [source CI 38868520039](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38868520039) and [CodeQL 38868520050](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38868520050). Exact-SHA artifacts, successful-job windows and ZIP SHA256 digests were verified **2026-10-16T08:04:25.988Z**. Results: **4040 unit / 904 Paper / 41 HTTP per OS**, **1192 native assertions / 38 files**, including **963 main + 23 registry + 206 role-graph** cases. Every original native file/assertion identity matches the accepted baseline; all earlier owner/upgrade, Auth and Docker stages passed. Twelve clean deployments, audit zero and no open CodeQL alerts were verified.
