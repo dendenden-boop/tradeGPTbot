@@ -1,6 +1,16 @@
 # PHASE 13 verification
 
-## Native acceptance capacity candidate
+## Accepted native acceptance source checkpoint
+
+Source **6d360d5bc67555e3a9ffde6b6ca899910ca7b639** passed complete [source CI 38868520039](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38868520039) and [CodeQL 38868520050](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38868520050). Exact-SHA artifacts, successful-job windows and ZIP SHA256 digests were verified **2026-10-16T08:04:25.988Z**. Results: **4040 unit / 904 Paper / 41 HTTP per OS**, **1192 native assertions / 38 files**, including **963 main + 23 registry + 206 role-graph** cases. Every original native file/assertion identity matches the accepted baseline; all earlier owner/upgrade, Auth and Docker stages passed. Twelve clean deployments, audit zero and no open CodeQL alerts were verified.
+
+The native aggregate took **400721ms** against the unchanged **480000ms** cap; the registry cohort took **102170ms**. Separate database/login identities and real overlapping process lifetimes were verified, with role-graph start after both parallel processes settled. These are CI measurements, not a production performance/soak guarantee. Per-test/SQL/Auth, parent and job deadlines remain unchanged. Published migrations **1–48**, production runtime/adapters, dependencies and workflows are unchanged.
+
+Local baseline and regression passed all thirteen commands; after final cleanup hardening, 22 targeted tests (21 new plus the existing budget contract) and format/docs/lint/typecheck passed again. The two missing-entrypoint RED results and original failed 480s main run remain historical evidence. No local PostgreSQL/Docker execution is claimed. Final documentation-head/PR/protected-main checks are separate required acceptance; their exact heads/run IDs are retained in the PR and completion checkpoint after verification.
+
+This checkpoint accepts harness orchestration only. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**: certified PAPER capture, atomic reservations/Portfolio holds, final validation and virtual execution remain outstanding. LIVE/PAPER financial dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak claimed.
+
+## Initial native acceptance capacity candidate checkpoint
 
 The [native acceptance isolation contract](native-acceptance.md) records the confirmed 480s exact-main CI exhaustion, separate registry database/login, one aggregate budget, serial cluster-role checks and strict complete-report merger. Starting main **bb5caad21e0c83985134a80d62fd1c0911c1e02e** passed all thirteen baseline commands. Two executed missing-entrypoint RED contracts became GREEN; 21 targeted process/report contracts passed. Complete changed-head local regression and native/Ubuntu/Windows/Docker/CodeQL CI remain required. Production code, published migrations 1–48, workflows, pins and deadlines are unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; LIVE/PAPER financial dispatch and positive native credit disabled. Earlier results below remain historical checkpoints.
 
