@@ -403,6 +403,11 @@ try {
     const negativeProbes=Object.fromEntries(paperRuntime.paperRuntimeDependencies.map(d=>[d,paperRuntime.createUnavailablePaperRuntimeProbe(d)]));
     await assert.rejects(paperRuntime.createPostgresPaperRuntimeCollector({database:{connectionString:'https://example.invalid',environment:'test'},probes:negativeProbes}),/PAPER_RUNTIME_DATABASE_URL/);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/runtime-collector-core.js'));
+    assert.equal(typeof paperRuntime.createPostgresPaperRuntimeWorker,'function');
+    assert.equal('createPostgresPaperRuntimeWorker' in paper,false);
+    for(const name of ['createPaperRuntimeWorkerCore','paperRuntimeWorkerSettingsSchema']) assert.equal(name in paperRuntime,false);
+    await assert.rejects(paperRuntime.createPostgresPaperRuntimeWorker({database:{connectionString:'https://example.invalid',environment:'test'},probes:negativeProbes,owners:[],intervalMs:100}),/PAPER_RUNTIME_WORKER_INPUT/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/runtime-worker-core.js'));
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');

@@ -11,12 +11,14 @@ import {
   createPostgresPaperRuntimeObservations,
   createPostgresPaperRuntimeSource,
   createPostgresPaperRuntimeCollector,
+  createPostgresPaperRuntimeWorker,
   createUnavailablePaperRuntimeProbe,
   paperRuntimeDependencies,
   type PaperRuntimePublication,
   type PaperRuntimeProbe,
   type PaperRuntimeProbes,
 } from '@ctp/paper-engine/runtime';
+import type { PaperOwner } from '@ctp/paper-engine/configuration';
 import { fixture as modelFixture } from '../../paper-engine/test/fixtures.js';
 
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
@@ -879,4 +881,178 @@ it('native collector abort physically settles blocked head acquisition and permi
   expect(await f.writer.head(f.c.owner, io())).toBeNull();
   const restarted = await collector(collectorProbes());
   expect((await restarted.collect(f.c.owner, io())).kind).toBe('PUBLISHED');
+});
+
+async function runtimeWorker(
+  owner: PaperOwner,
+  probes: PaperRuntimeProbes,
+  connectionString = required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+) {
+  const h = await createPostgresPaperRuntimeWorker({
+    database: { connectionString, environment: 'test' },
+    probes,
+    owners: [owner],
+    intervalMs: 100,
+  });
+  handles.push(h);
+  return h;
+}
+async function waitRuntimeRevision(owner: PaperOwner, minimum: bigint) {
+  const end = Date.now() + 5000;
+  while (Date.now() < end) {
+    const r = await admin.query<{ revision: string }>(
+      'SELECT revision::text FROM ctp_paper.runtime_observation_head WHERE tenant_id=$1 AND account_id=$2',
+      [owner.tenantId, owner.accountId],
+    );
+    if (r.rows[0] && BigInt(r.rows[0].revision) >= minimum) return;
+    await wait(25);
+  }
+  throw new Error('PAPER_RUNTIME_WORKER_NATIVE_REVISION_TIMEOUT');
+}
+it('native periodic worker restarts from durable revision, keeps unavailable executor negative and has no monetary writes', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId);
+  const a = await runtimeWorker(
+      f.c.owner,
+      collectorProbes(createUnavailablePaperRuntimeProbe('executor')),
+    ),
+    ac = new AbortController(),
+    first = a.run(ac.signal);
+  try {
+    await waitRuntimeRevision(f.c.owner, 2n);
+    expect((await (await reader()).read(f.c.owner, io())).blockedBy).toEqual(['executor']);
+  } finally {
+    ac.abort();
+    await a.close();
+  }
+  expect((await first).closed).toBe(true);
+  const stopped = await f.writer.head(f.c.owner, io());
+  expect(stopped).not.toBeNull();
+  await wait(150);
+  expect((await f.writer.head(f.c.owner, io()))?.id).toBe(stopped!.id);
+  const b = await runtimeWorker(
+      f.c.owner,
+      collectorProbes(createUnavailablePaperRuntimeProbe('executor')),
+    ),
+    bc = new AbortController(),
+    second = b.run(bc.signal);
+  try {
+    await waitRuntimeRevision(f.c.owner, BigInt(stopped!.revision) + 1n);
+  } finally {
+    bc.abort();
+    await b.close();
+  }
+  expect((await second).closed).toBe(true);
+  expect((await f.writer.head(f.c.owner, io()))?.id).not.toBe(stopped!.id);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+it('native worker lost COMMIT halts at one publication and restart reconciles its exact original without retry', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId),
+    proxy = await registryCommitProxy(
+      required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+      'PAPER_RUNTIME_OBSERVATION',
+    );
+  try {
+    const h = await runtimeWorker(f.c.owner, collectorProbes(), proxy.connectionString);
+    proxy.arm();
+    const result = await h.run(new AbortController().signal);
+    expect(result.state).toBe('UNCERTAIN');
+    expect(result.closed).toBe(true);
+    expect(result.uncertain).toHaveLength(1);
+    expect(proxy.dropped()).toBe(1);
+    await wait(250);
+    const count = await admin.query<{ n: number }>(
+      'SELECT count(*)::int n FROM ctp_paper.runtime_observation WHERE tenant_id=$1',
+      [f.c.owner.tenantId],
+    );
+    expect(count.rows[0]!.n).toBe(1);
+    const restarted = await collector(collectorProbes()),
+      original = result.uncertain[0]!;
+    expect(await restarted.reconcile(original, io())).toMatchObject({
+      id: original.id,
+      replayed: true,
+    });
+    expect((await f.writer.head(f.c.owner, io()))?.id).toBe(original.id);
+    expect(await effects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+it('native worker stops after permission epoch replacement during probes without publishing or retrying', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId);
+  let samples = 0;
+  const executor: PaperRuntimeProbe = {
+    dependency: 'executor',
+    async sample(context) {
+      samples++;
+      await admin.query(
+        'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+        [f.c.owner.accountId],
+      );
+      return {
+        dependency: 'executor',
+        contextHash: context.hash,
+        fact: { sourceId: 'worker-test:old-epoch', asOf: Date.now(), status: 'HEALTHY' },
+      };
+    },
+    close: () => Promise.resolve(),
+  };
+  const h = await runtimeWorker(f.c.owner, collectorProbes(executor));
+  expect(await h.run(new AbortController().signal)).toEqual({
+    state: 'FAILED',
+    uncertain: [],
+    collectionFailed: true,
+    closed: true,
+  });
+  await wait(250);
+  expect(samples).toBe(1);
+  expect(await f.writer.head(f.c.owner, io())).toBeNull();
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+it('native worker abort drains a physically blocked PostgreSQL head and prevents future ticks before a fresh worker', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId),
+    h = await runtimeWorker(f.c.owner, collectorProbes()),
+    lock = await admin.connect(),
+    c = new AbortController();
+  try {
+    await lock.query('BEGIN');
+    await lock.query('SELECT id FROM public.exchange_account WHERE id=$1 FOR UPDATE', [
+      f.c.owner.accountId,
+    ]);
+    const task = h.run(c.signal);
+    await wait(50);
+    const start = Date.now();
+    c.abort();
+    expect(await task).toEqual({
+      state: 'STOPPED',
+      uncertain: [],
+      collectionFailed: false,
+      closed: true,
+    });
+    expect(Date.now() - start).toBeLessThan(1500);
+    await h.close();
+  } finally {
+    c.abort();
+    await lock.query('ROLLBACK');
+    lock.release();
+  }
+  await wait(150);
+  expect(await f.writer.head(f.c.owner, io())).toBeNull();
+  const next = await runtimeWorker(
+      f.c.owner,
+      collectorProbes(createUnavailablePaperRuntimeProbe('executor')),
+    ),
+    nc = new AbortController(),
+    task = next.run(nc.signal);
+  try {
+    await waitRuntimeRevision(f.c.owner, 1n);
+  } finally {
+    nc.abort();
+    await next.close();
+  }
+  expect((await task).closed).toBe(true);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
 });
