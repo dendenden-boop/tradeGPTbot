@@ -389,6 +389,13 @@ try {
     const portfolio=await import('@ctp/paper-engine/portfolio');
     const evidence=await import('@ctp/paper-engine/evidence');
     const paperRisk=await import('@ctp/paper-engine/risk');
+    const paperRuntime=await import('@ctp/paper-engine/runtime');
+    for(const name of ['createPostgresPaperRuntimeObservations','createPostgresPaperRuntimeSource']) {
+      assert.equal(typeof paperRuntime[name],'function');
+      assert.equal(name in paper,false);
+      await assert.rejects(paperRuntime[name]({connectionString:'https://example.invalid',environment:'test'}),/PAPER_RUNTIME_DATABASE_URL/);
+    }
+    for(const name of ['approve','decodePaperRuntimeSource','decodePaperRuntimeContext']) assert.equal(name in paperRuntime,false);
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');

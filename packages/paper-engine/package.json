@@ -27,6 +27,10 @@
     "./funding": {
       "types": "./dist/funding.d.ts",
       "default": "./dist/funding.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "default": "./dist/runtime.js"
     }
   },
   "files": [

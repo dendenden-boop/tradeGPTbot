@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "paths": {
+      "@ctp/paper-engine/runtime": ["./packages/paper-engine/src/runtime.ts"],
       "@ctp/paper-engine/risk": ["./packages/paper-engine/src/risk.ts"],
       "@ctp/paper-engine/evidence": ["./packages/paper-engine/src/evidence.ts"],
       "@ctp/paper-engine/portfolio": ["./packages/paper-engine/src/portfolio.ts"],
