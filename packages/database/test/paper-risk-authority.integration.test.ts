@@ -663,6 +663,7 @@ it('context: runtime publication waits through capture COMMIT and the next read 
     next.id = randomUUID();
     next.expectedRevision = e.receipt.revision;
     next.observation.health.executor.status = 'UNKNOWN';
+    next.observation.health.executor.asOf = Date.now();
     let settled = false;
     pending = e.h.publish(next, io()).then(
       (r) => {

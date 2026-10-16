@@ -1,5 +1,11 @@
 # Atomic PAPER Risk context
 
+## Native context fixture correction
+
+Candidate source **bda5cb8325ab6569f6bd4b5afe3fb461bb1c4c9c**, [CI 38929787681](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38929787681), passed Ubuntu/Windows/CodeQL but failed one new native owner fixture: **59 PASS /1 FAIL /zero pending**. The second runtime publication changed executor status at the original identical fact timestamp; the accepted journal correctly rejected the conflict with PAPER_RUNTIME_ORDERING. Raw logs, exact-head artifact IDs, successful/failed-job windows and ZIP SHA256 evidence are retained. The failed run is not acceptance.
+
+The fixture now records a new executor observation at its actual later timestamp before publication. The common transaction still blocks the writer until COMMIT, after which the exact new revision/UNKNOWN head must be observed. Production source, candidate migration49 bytes, published1–48, accepted runtime journal/ordering guard, native financial runtime, workflows and deadlines remain unchanged. All24 new native context cases and earlier36 authority cases remain required under the restricted owner and fresh DB. Full new-head local regression/source/PR/protected-main CI is required. **PHASE13 IN_PROGRESS /NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch/positive native credit disabled.
+
 ## Scope
 
 `createPostgresPaperRiskContextSource` is a server-only `@ctp/paper-engine/risk` reader over the fixed `ctp_paper.capture_risk_context(jsonb)` RPC. It accepts only the exact PAPER owner and immutable intent ID, plus AbortSignal/deadline. Connection credentials/profile are server controlled. It exposes no caller clock, store, health, policy, price or inventory override.
