@@ -10,8 +10,12 @@ import {
 import {
   createPostgresPaperRuntimeObservations,
   createPostgresPaperRuntimeSource,
+  createPostgresPaperRuntimeCollector,
+  createUnavailablePaperRuntimeProbe,
   paperRuntimeDependencies,
   type PaperRuntimePublication,
+  type PaperRuntimeProbe,
+  type PaperRuntimeProbes,
 } from '@ctp/paper-engine/runtime';
 import { fixture as modelFixture } from '../../paper-engine/test/fixtures.js';
 
@@ -708,4 +712,171 @@ it('reader bounds four waiting physical sockets and close settles all before res
     p.release();
   }
   expect((await (await reader()).read(f.c.owner, io())).reference.id).toBe(receipt.id);
+});
+
+// These are isolated server probe fixtures, not real service health acceptance.
+function collectorProbes(executor?: PaperRuntimeProbe): PaperRuntimeProbes {
+  return Object.fromEntries(
+    paperRuntimeDependencies.map((dependency) => {
+      const probe: PaperRuntimeProbe = {
+        dependency,
+        sample: (context) =>
+          Promise.resolve({
+            dependency,
+            contextHash: context.hash,
+            fact: { sourceId: `collector-test:${dependency}`, asOf: Date.now(), status: 'HEALTHY' },
+          }),
+        close: () => Promise.resolve(),
+      };
+      return [dependency, dependency === 'executor' && executor ? executor : probe];
+    }),
+  ) as unknown as PaperRuntimeProbes;
+}
+async function collector(
+  probes: PaperRuntimeProbes,
+  connectionString = required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+) {
+  const h = await createPostgresPaperRuntimeCollector({
+    database: { connectionString, environment: 'test' },
+    probes,
+  });
+  handles.push(h);
+  return h;
+}
+
+it('native server collector restarts from durable revision and preserves explicit unavailable executor without financial writes', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId);
+  const a = await collector(collectorProbes(createUnavailablePaperRuntimeProbe('executor')));
+  const first = await a.collect(f.c.owner, io());
+  expect(first.kind).toBe('PUBLISHED');
+  expect(first.publication.expectedRevision).toBe('0');
+  expect((await (await reader()).read(f.c.owner, io())).blockedBy).toEqual(['executor']);
+  await a.close();
+  await wait(2);
+  const b = await collector(collectorProbes(createUnavailablePaperRuntimeProbe('executor')));
+  const second = await b.collect(f.c.owner, io());
+  expect(second.kind).toBe('PUBLISHED');
+  expect(second.publication.expectedRevision).toBe('1');
+  expect(second.publication.id).not.toBe(first.publication.id);
+  expect((await f.writer.head(f.c.owner, io()))?.id).toBe(second.publication.id);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+
+it('native collector lost server COMMIT returns UNCERTAIN and restart reconciles original publication exactly once', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId);
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+    'PAPER_RUNTIME_OBSERVATION',
+  );
+  try {
+    const a = await collector(collectorProbes(), proxy.connectionString);
+    proxy.arm();
+    const result = await a.collect(f.c.owner, io());
+    expect(result.kind).toBe('UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await a.close();
+    const restarted = await collector(collectorProbes());
+    const receipt = await restarted.reconcile(result.publication, io());
+    expect(receipt?.id).toBe(result.publication.id);
+    expect(receipt?.replayed).toBe(true);
+    const count = await admin.query<{ n: number }>(
+      'SELECT count(*)::int n FROM ctp_paper.runtime_observation WHERE tenant_id=$1',
+      [f.c.owner.tenantId],
+    );
+    expect(count.rows[0]!.n).toBe(1);
+    expect(await effects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+
+it('native collector cannot publish facts from an epoch replaced during probe acquisition', async () => {
+  const f = await fixture(),
+    before = await effects(f.c.owner.tenantId);
+  const executor: PaperRuntimeProbe = {
+    dependency: 'executor',
+    async sample(context) {
+      await admin.query(
+        'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+        [f.c.owner.accountId],
+      );
+      return {
+        dependency: 'executor',
+        contextHash: context.hash,
+        fact: { sourceId: 'collector-test:old-epoch', asOf: Date.now(), status: 'HEALTHY' },
+      };
+    },
+    close: () => Promise.resolve(),
+  };
+  const h = await collector(collectorProbes(executor));
+  await expect(h.collect(f.c.owner, io())).rejects.toThrow('PAPER_RUNTIME_EPOCH');
+  expect(await f.writer.head(f.c.owner, io())).toBeNull();
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+
+it('native concurrent collector instances share durable CAS and never retry the losing publication', async () => {
+  const f = await fixture();
+  let arrived = 0,
+    release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const executor = (): PaperRuntimeProbe => ({
+    dependency: 'executor',
+    async sample(context) {
+      if (++arrived === 2) release();
+      await barrier;
+      return {
+        dependency: 'executor',
+        contextHash: context.hash,
+        fact: { sourceId: 'collector-test:concurrent', asOf: Date.now(), status: 'HEALTHY' },
+      };
+    },
+    close: () => Promise.resolve(),
+  });
+  const a = await collector(collectorProbes(executor())),
+    b = await collector(collectorProbes(executor()));
+  const results = await Promise.allSettled([
+    a.collect(f.c.owner, io()),
+    b.collect(f.c.owner, io()),
+  ]);
+  expect(
+    results.filter((r) => r.status === 'fulfilled' && r.value.kind === 'PUBLISHED'),
+  ).toHaveLength(1);
+  const failed = results.find((r) => r.status === 'rejected');
+  expect(
+    failed?.status === 'rejected' && failed.reason instanceof Error && failed.reason.message,
+  ).toBe('PAPER_RUNTIME_CONFLICT');
+  expect(arrived).toBe(2);
+  expect((await f.writer.head(f.c.owner, io()))?.revision).toBe('1');
+});
+
+it('native collector abort physically settles blocked head acquisition and permits a fresh later cycle', async () => {
+  const f = await fixture(),
+    h = await collector(collectorProbes()),
+    lock = await admin.connect();
+  const controller = new AbortController();
+  try {
+    await lock.query('BEGIN');
+    await lock.query('SELECT id FROM public.exchange_account WHERE id=$1 FOR UPDATE', [
+      f.c.owner.accountId,
+    ]);
+    const pending = h.collect(f.c.owner, io(controller.signal));
+    const rejection = expect(pending).rejects.toThrow('PAPER_RUNTIME_COLLECTOR_ABORTED');
+    await wait(50);
+    const start = Date.now();
+    controller.abort();
+    await rejection;
+    expect(Date.now() - start).toBeLessThan(1500);
+    await h.close();
+  } finally {
+    controller.abort();
+    await lock.query('ROLLBACK');
+    lock.release();
+  }
+  expect(await f.writer.head(f.c.owner, io())).toBeNull();
+  const restarted = await collector(collectorProbes());
+  expect((await restarted.collect(f.c.owner, io())).kind).toBe('PUBLISHED');
 });

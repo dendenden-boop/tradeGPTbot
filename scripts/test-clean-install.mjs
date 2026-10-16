@@ -396,6 +396,13 @@ try {
       await assert.rejects(paperRuntime[name]({connectionString:'https://example.invalid',environment:'test'}),/PAPER_RUNTIME_DATABASE_URL/);
     }
     for(const name of ['approve','decodePaperRuntimeSource','decodePaperRuntimeContext']) assert.equal(name in paperRuntime,false);
+    assert.equal(typeof paperRuntime.createPostgresPaperRuntimeCollector,'function');
+    assert.equal(typeof paperRuntime.createUnavailablePaperRuntimeProbe,'function');
+    for(const name of ['createPostgresPaperRuntimeCollector','createUnavailablePaperRuntimeProbe']) assert.equal(name in paper,false);
+    for(const name of ['createPaperRuntimeCollectorCore','bindPaperRuntimeProbes','reserve','permit','execute']) assert.equal(name in paperRuntime,false);
+    const negativeProbes=Object.fromEntries(paperRuntime.paperRuntimeDependencies.map(d=>[d,paperRuntime.createUnavailablePaperRuntimeProbe(d)]));
+    await assert.rejects(paperRuntime.createPostgresPaperRuntimeCollector({database:{connectionString:'https://example.invalid',environment:'test'},probes:negativeProbes}),/PAPER_RUNTIME_DATABASE_URL/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/runtime-collector-core.js'));
     const { existsSync }=await import('node:fs');
     assert.equal(typeof paper.preparePaperFrame,'function');
     assert.equal(typeof paper.evaluatePaperOrder,'function');
