@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { run, report, workspace } from './docker-test-utils.mjs';
+import {
+  discoverDatabaseFiles,
+  planDatabaseCohorts,
+  runDatabaseCohorts,
+  mergeDatabaseReports,
+} from './database-cohorts.mjs';
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
 import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
 import { preparePortfolioUpgrade, verifyPortfolioUpgrade } from './portfolio-upgrade.mjs';
@@ -106,6 +112,7 @@ const evidencePassword = randomBytes(24).toString('hex');
 const snapshotPassword = randomBytes(24).toString('hex');
 const riskSnapshotPassword = randomBytes(24).toString('hex');
 const registryPassword = randomBytes(24).toString('hex');
+const registryCohortPassword = randomBytes(24).toString('hex');
 const certificationPassword = randomBytes(24).toString('hex');
 const observationPassword = randomBytes(24).toString('hex');
 const admissionPassword = randomBytes(24).toString('hex');
@@ -138,6 +145,7 @@ const secrets = [
   snapshotPassword,
   riskSnapshotPassword,
   registryPassword,
+  registryCohortPassword,
   certificationPassword,
   observationPassword,
   admissionPassword,
@@ -162,6 +170,7 @@ const databases = [
   `ctp_p2_owner_${suffix}`,
   `ctp_p2_lifecycle_${suffix}`,
   `ctp_p2_paper_upgrade_${suffix}`,
+  `ctp_p2_registry_cohort_${suffix}`,
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
@@ -177,6 +186,7 @@ const evidenceRole = `ctp_p2_evidence_${suffix}`;
 const snapshotRole = `ctp_p2_snapshot_${suffix}`;
 const riskSnapshotRole = `ctp_p2_risk_snapshot_${suffix}`;
 const registryRole = `ctp_p2_registry_${suffix}`;
+const registryCohortRole = `ctp_p2_registry_cohort_${suffix}`;
 const certificationRole = `ctp_p2_certification_${suffix}`;
 const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
@@ -294,6 +304,12 @@ const registryUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = registryRole;
   url.password = registryPassword;
+  return url.href;
+};
+const registryCohortUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = registryCohortRole;
+  url.password = registryCohortPassword;
   return url.href;
 };
 const certificationUrl = (name, observer = false) => {
@@ -485,6 +501,7 @@ try {
     [snapshotRole, snapshotPassword, 'ctp_market_snapshot'],
     [riskSnapshotRole, riskSnapshotPassword, 'ctp_risk_snapshot_reader'],
     [registryRole, registryPassword, 'ctp_instrument_registry'],
+    [registryCohortRole, registryCohortPassword, 'ctp_instrument_registry'],
     [certificationRole, certificationPassword, 'ctp_risk_certifier'],
     [observationRole, observationPassword, 'ctp_risk_observer'],
     [admissionRole, admissionPassword, 'ctp_risk_admission'],
@@ -3153,61 +3170,103 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(lifecycleUpgrade.numPassedTests, 1);
   assert.equal(lifecycleUpgrade.numPendingTests, 0);
 
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-    ],
+  // Dedicated DB + login: registry activity/privilege probes cannot observe the
+  // legacy cohort. Cluster-wide role mutation tests run only after both settle.
+  await migrate(databases[5]);
+  const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles());
+  const nativeEnv = {
+    ...process.env,
+    NODE_ENV: 'test',
+    DATABASE_MIGRATION_URL: dbUrl(databases[0]),
+    DATABASE_RUNTIME_URL: dbUrl(databases[0], true),
+    DATABASE_INGEST_URL: dbUrl(databases[0], false, false, false, true),
+    DATABASE_PORTFOLIO_URL: dbUrl(databases[0], false, false, false, false, true),
+    DATABASE_EXECUTION_URL: dbUrl(databases[0], false, false, false, false, false, true),
+    DATABASE_RISK_CONTROL_URL: controlUrl(databases[0]),
+    DATABASE_RISK_OPERATOR_URL: controlUrl(databases[0], true),
+    DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[0], true),
+    DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
+    DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
+    DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
+    DATABASE_RISK_SNAPSHOT_URL: riskSnapshotUrl(databases[0]),
+    DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[0]),
+    DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[0]),
+    DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
+    DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
+    DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
+    DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
+    DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
+    DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
+    DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[0]),
+    DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[0]),
+    DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[0]),
+    DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[0]),
+    DATABASE_PAPER_RISK_LOSS_URL: paperRiskLossUrl(databases[0]),
+    DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[0]),
+    DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[0]),
+    DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[0]),
+    DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[0]),
+    DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
+  };
+  const registryEnv = {
+    ...process.env,
+    NODE_ENV: 'test',
+    DATABASE_MIGRATION_URL: dbUrl(databases[5]),
+    DATABASE_INSTRUMENT_REGISTRY_URL: registryCohortUrl(databases[5]),
+  };
+  const cohortReports = cohortPlan.map(
+    ({ id }) => new URL('../test-results/database-' + id + '-tests.json', import.meta.url),
+  );
+  // Remove only known output files; a prior invocation cannot supply acceptance.
+  for (const output of [
+    ...cohortReports,
+    new URL('../test-results/database-tests.json', import.meta.url),
+    new URL('../test-results/database-cohorts.json', import.meta.url),
+  ]) {
+    await unlink(output).catch((error) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+  const cohortRun = await runDatabaseCohorts(
+    cohortPlan.map((cohort, index) => ({
+      ...cohort,
+      binary: process.execPath,
+      args: [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        ...cohort.files,
+        '--outputFile.json=' + fileURLToPath(cohortReports[index]),
+      ],
+      env: cohort.id === 'registry' ? registryEnv : nativeEnv,
+    })),
     {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[0]),
-        DATABASE_RUNTIME_URL: dbUrl(databases[0], true),
-        DATABASE_INGEST_URL: dbUrl(databases[0], false, false, false, true),
-        DATABASE_PORTFOLIO_URL: dbUrl(databases[0], false, false, false, false, true),
-        DATABASE_EXECUTION_URL: dbUrl(databases[0], false, false, false, false, false, true),
-        DATABASE_RISK_CONTROL_URL: controlUrl(databases[0]),
-        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[0], true),
-        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[0], true),
-        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[0]),
-        DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[0]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[0]),
-        DATABASE_RISK_SNAPSHOT_URL: riskSnapshotUrl(databases[0]),
-        DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[0]),
-        DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[0]),
-        DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
-        DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
-        DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
-        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[0]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[0]),
-        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[0]),
-        DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[0]),
-        DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[0]),
-        DATABASE_PAPER_RISK_LOSS_URL: paperRiskLossUrl(databases[0]),
-        DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[0]),
-        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[0]),
-        DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[0]),
-        DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[0]),
-        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
-      },
       secrets,
       echo: true,
-      // Whole serial suite budget; 1036 cases outgrew the 360s aggregate on CI.
-      // This finite orchestration budget does not change any test/SQL/abort deadline.
+      // Whole native suite budget; retained as ONE aggregate across all cohorts.
+      // No child receives a fresh 480s budget; test/SQL/abort deadlines are unchanged.
       timeoutMs: 480000,
     },
   );
-  const tests = JSON.parse(
-    await readFile(new URL('../test-results/database-tests.json', import.meta.url), 'utf8'),
+  const tests = mergeDatabaseReports(
+    cohortPlan,
+    await Promise.all(
+      cohortReports.map(async (output) => JSON.parse(await readFile(output, 'utf8'))),
+    ),
   );
-  assert.equal(tests.success, true);
-  assert.ok(tests.numPassedTests > 0);
+  await report('database-tests', tests);
+  await report('database-cohorts', {
+    status: 'PASS',
+    ...cohortRun,
+    files: cohortPlan.flatMap((cohort) => cohort.files).length,
+    tests: tests.numPassedTests,
+    cohorts: cohortPlan.map((cohort) => ({
+      ...cohort,
+      database: cohort.id === 'registry' ? databases[5] : databases[0],
+      registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
+    })),
+  });
 
   // Exercise the actual compiled entrypoint with separate login roles before this
   // owned database is reset. The child owns its loopback SMTP sink and API listener.
