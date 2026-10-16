@@ -10,7 +10,7 @@ Every probe receives the current immutable database context, a composed AbortSig
 
 `createUnavailablePaperRuntimeProbe` explicitly records UNKNOWN for a component which has no implementation or operational evidence. Missing configuration rejects construction; it never creates an implicit HEALTHY/default sensor. FAILED and UNKNOWN facts are published unchanged. PUBLISHED means only that the observation journal committed, including negative facts; it is not readiness. The accepted reader preserves `blockedBy` and original expiry.
 
-Actual application sensor wiring, authenticated operational acquisition and periodic worker scheduling remain separate work. In particular, the absent virtual executor cannot be represented by a positive fixture. Test probes do not establish production operational health, real exchange acceptance or soak.
+The separate [runtime worker](runtime-worker.md) schedules this collector; its acceptance is recorded separately. Actual application sensor wiring and authenticated operational acquisition remain outstanding. In particular, the absent virtual executor cannot be represented by a positive fixture. Test probes do not establish production operational health, real exchange acceptance or soak.
 
 ## Ordering, restart and unknown publication
 

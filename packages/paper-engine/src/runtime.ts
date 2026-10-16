@@ -7,6 +7,13 @@ export {
   createUnavailablePaperRuntimeProbe,
 } from './runtime-collector.js';
 export type { PaperRuntimeCollectorOptions } from './runtime-collector.js';
+export { createPostgresPaperRuntimeWorker } from './runtime-worker.js';
+export type { PaperRuntimeWorkerOptions } from './runtime-worker.js';
+export type {
+  PaperRuntimeWorker,
+  PaperRuntimeWorkerReport,
+  PaperRuntimeWorkerState,
+} from './runtime-worker-core.js';
 export type {
   PaperRuntimeCollector,
   PaperRuntimeCollection,

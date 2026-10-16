@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Runtime worker candidate
+
+The [worker contract](runtime-worker.md) exposes one-shot run, bounded idempotent close and scheduler state only through the server subpath. One fresh collection per account at a time; one post-settlement timer, at most four accounts. First error/UNKNOWN stops the group and drains all original ambiguous outcomes before reporting; close failure never discards them or claims closure. No automatic retry/recovery, financial authority, account-discovery permission or default positive probe is added. Full exact-head CI/native owner acceptance remains required. Published migrations 1–48 remain immutable; **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**.
+
 ## Accepted runtime collector source checkpoint
 
 Source **4d491ccc15cbca5482ee896bb03310045ed12410** passed complete [source CI 38892129015](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38892129015) and [CodeQL 38892128988](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38892128988). Exact-SHA artifacts, successful-job windows and ZIP SHA256 digests were verified **2026-10-16T11:36:25.863Z**. Results: **4103 unit / 967 Paper / 41 HTTP per OS**, **1197 native PostgreSQL assertions / 38 files**, including **968 main + 23 registry + 206 role-graph** cases. All 1192 earlier native assertion identities remain; five collector contracts passed fresh and under the non-BYPASSRLS owner (45 runtime-owner cases). All other owner/upgrade, Auth and Docker stages, twelve clean deployments and audits passed; no open CodeQL alerts. Native aggregate: **409647ms / unchanged 480000ms**. These measurements do not establish production soak.

@@ -1987,7 +1987,7 @@ try {
     ),
   );
   assert.equal(paperRuntimeOwner.success, true);
-  assert.equal(paperRuntimeOwner.numPassedTests, 45);
+  assert.equal(paperRuntimeOwner.numPassedTests, 49);
   assert.equal(paperRuntimeOwner.numFailedTests, 0);
   assert.equal(paperRuntimeOwner.numPendingTests, 0);
 
