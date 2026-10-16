@@ -15,7 +15,10 @@ import { createPostgresPortfolioStore } from '@ctp/portfolio';
 import { createPostgresOrderStore } from '@ctp/order-engine';
 import { createPostgresPaperConfiguration } from '@ctp/paper-engine/configuration';
 import { createPostgresPaperFunding } from '@ctp/paper-engine/funding';
-import { createPostgresPaperRiskAuthoritySource } from '@ctp/paper-engine/risk';
+import {
+  createPostgresPaperRiskAuthoritySource,
+  createPostgresPaperRiskContextSource,
+} from '@ctp/paper-engine/risk';
 import {
   createPostgresPaperInitialPortfolio,
   createPostgresPaperPortfolioBootstrap,
@@ -50,6 +53,11 @@ afterAll(() => admin.end());
 type Options = { connectionString: string; environment: 'test' };
 type Handle = { close(): Promise<void> };
 const cases: readonly [string, string, (options: Options) => Promise<Handle>][] = [
+  [
+    'ctp_paper_risk_context',
+    'DATABASE_PAPER_RISK_CONTEXT_URL',
+    createPostgresPaperRiskContextSource,
+  ],
   [
     'ctp_paper_runtime_observer',
     'DATABASE_PAPER_RUNTIME_OBSERVER_URL',

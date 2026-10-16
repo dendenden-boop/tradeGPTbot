@@ -2,6 +2,11 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import * as authority from '@ctp/paper-engine/risk';
 import {
+  createPostgresPaperRuntimeObservations,
+  paperRuntimeDependencies,
+  type PaperRuntimePublication,
+} from '@ctp/paper-engine/runtime';
+import {
   createPostgresPolicies,
   createPostgresControls,
   policyUpdateSchema,
@@ -296,6 +301,50 @@ async function openAuthority(connectionString = required('DATABASE_PAPER_RISK_AU
   handles.push(h);
   return h;
 }
+async function openContext(connectionString = required('DATABASE_PAPER_RISK_CONTEXT_URL')) {
+  const h = await authority.createPostgresPaperRiskContextSource({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(h);
+  return h;
+}
+async function runtimeEvidence(
+  f: Awaited<ReturnType<typeof ready>>,
+  status: 'HEALTHY' | 'FAILED' | 'UNKNOWN' = 'HEALTHY',
+) {
+  const h = await createPostgresPaperRuntimeObservations({
+    connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+    environment: 'test',
+  });
+  handles.push(h);
+  const ctx = await h.context(f.c.owner, io());
+  const publication: PaperRuntimePublication = {
+    id: randomUUID(),
+    expectedRevision: (await h.head(f.c.owner, io()))?.revision ?? '0',
+    observation: {
+      owner: f.c.owner,
+      configurationId: ctx.configuration.configuration.id,
+      configurationHash: ctx.configurationHash,
+      permissionEpoch: ctx.current.permissionEpoch,
+      userSessionEpoch: ctx.current.userSessionEpoch,
+      accountVersion: ctx.current.accountVersion,
+      // Explicit test-only observations, never operational health certification.
+      health: Object.fromEntries(
+        paperRuntimeDependencies.map((k) => [
+          k,
+          {
+            sourceId: k + ':native-fixture:v1',
+            asOf: Date.now(),
+            status: k === 'executor' ? status : 'HEALTHY',
+          },
+        ]),
+      ) as PaperRuntimePublication['observation']['health'],
+    },
+  };
+  const receipt = await h.publish(publication, io());
+  return { h, publication, receipt };
+}
 async function effects(tenantId: string) {
   return (
     await admin.query<{
@@ -353,6 +402,340 @@ it('authority compatibility: actual durable PAPER PLACE and public heads yield c
   expect(r).not.toHaveProperty('certificate');
   expect(r).not.toHaveProperty('grant');
 });
+
+it('context: one locked transaction captures exact authority and runtime without any monetary effect', async () => {
+  const f = await ready(),
+    evidence = await runtimeEvidence(f),
+    before = await effects(f.c.owner.tenantId);
+  const r = await (await openContext()).read(f.request, io());
+  expect(r.runtime.reference.id).toBe(evidence.receipt.id);
+  expect(r.authority.orderRisk.target.orderId).toBe(f.order!.id);
+  expect(r.runtime.configuration).toEqual(r.authority.orderRisk.book.origin.configuration);
+  expect(r.runtime.current.permissionEpoch).toBe(r.authority.identity.permissionEpoch);
+  expect(r.runtime.blockedBy).toEqual([]);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+  for (const name of ['certificate', 'grant', 'reservation', 'permit', 'capabilities'])
+    expect(name in r).toBe(false);
+});
+it('context: absent runtime journal cannot fall back to healthy defaults', async () => {
+  const f = await ready();
+  await expect((await openContext()).read(f.request, io())).rejects.toThrow(
+    'PAPER_RISK_CONTEXT_MISSING',
+  );
+});
+it('context: restart rereads policy and preserves original runtime publication, order, funding and counter', async () => {
+  const f = await ready();
+  await runtimeEvidence(f);
+  const h = await openContext(),
+    before = await h.read(f.request, io()),
+    effectsBefore = await effects(f.c.owner.tenantId);
+  await h.close();
+  const policy = await updatePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  const after = await (await openContext()).read(f.request, io());
+  expect(after.authority.policies.user.version).toBe(policy.version);
+  expect(after.authority.orderRisk.target).toEqual(before.authority.orderRisk.target);
+  expect(after.runtime.reference).toEqual(before.runtime.reference);
+  expect(after.hash).not.toBe(before.hash);
+  expect(await effects(f.c.owner.tenantId)).toEqual(effectsBefore);
+});
+it.each(['permission', 'session', 'version'] as const)(
+  'context: durable %s replacement rejects retained runtime facts after restart',
+  async (kind) => {
+    const f = await ready();
+    await runtimeEvidence(f);
+    const h = await openContext();
+    await h.read(f.request, io());
+    await h.close();
+    if (kind === 'session')
+      await admin.query('UPDATE public."user" SET "sessionEpoch"="sessionEpoch"+1 WHERE id=$1', [
+        f.c.owner.tenantId,
+      ]);
+    else
+      await admin.query(
+        `UPDATE public.exchange_account SET ${kind === 'permission' ? '"permissionEpoch"="permissionEpoch"+1' : 'version=version+1'} WHERE id=$1`,
+        [f.c.owner.accountId],
+      );
+    await expect((await openContext()).read(f.request, io())).rejects.toThrow(
+      'PAPER_RISK_CONTEXT_EPOCH',
+    );
+    await runtimeEvidence(f);
+    expect(
+      (await (await openContext()).read(f.request, io())).authority.orderRisk.target.orderId,
+    ).toBe(f.order!.id);
+  },
+);
+it.each(['FAILED', 'UNKNOWN'] as const)(
+  'context: %s executor and paused controls remain negative evidence',
+  async (status) => {
+    const f = await ready();
+    await runtimeEvidence(f, status);
+    await updateControl(f.c.owner.tenantId, 'PAUSED');
+    const r = await (await openContext()).read(f.request, io());
+    expect(r.runtime.blockedBy).toEqual(['executor']);
+    expect(r.authority.controls.pauses.user).toBe(true);
+    expect(r).not.toHaveProperty('approved');
+  },
+);
+it.each(['tenant', 'account', 'intent', 'override'] as const)(
+  'context: rejects foreign or caller-controlled %s',
+  async (kind) => {
+    const f = await ready();
+    await runtimeEvidence(f);
+    const request = structuredClone(f.request);
+    if (kind === 'tenant') request.owner.tenantId = randomUUID();
+    if (kind === 'account') request.owner.accountId = randomUUID();
+    if (kind === 'intent') request.intentId = randomUUID();
+    if (kind === 'override') Object.assign(request, { runtime: {} });
+    await expect((await openContext()).read(request, io())).rejects.toThrow(
+      /PAPER_RISK_CONTEXT_(OWNERSHIP|INPUT)/,
+    );
+  },
+);
+it('context: UNKNOWN order cannot bypass the accepted pristine draft guard', async () => {
+  const f = await ready();
+  await runtimeEvidence(f);
+  await admin.query(
+    'UPDATE public."order" SET status=\'UNKNOWN\',version=1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.order!.id],
+  );
+  await expect((await openContext()).read(f.request, io())).rejects.toThrow(
+    'PAPER_RISK_CONTEXT_INCOMPLETE',
+  );
+});
+it('context: tighter policy expires old runtime facts even after public heads refresh', async () => {
+  const f = await ready();
+  await runtimeEvidence(f);
+  await updatePolicy(f.c.owner.tenantId, 'USER', { maxEvidenceAgeMs: 1000 });
+  await wait(1100);
+  const now = Date.now();
+  f.f.s.id = randomUUID();
+  f.f.p.id = randomUUID();
+  f.f.p.trade.tradeId = randomUUID();
+  f.f.p.trade.sourceSequence = '9007199254740994';
+  f.f.s.book.sourceSequence = '9007199254740994';
+  f.f.s.expectedRevision = f.f.p.expectedRevision = '1';
+  f.f.s.timestamp = f.f.p.timestamp = now;
+  for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;
+  await f.snapshots.publish(f.f.s, io());
+  await f.trades.publish(f.f.p, io());
+  await (await openAuthority()).read(f.request, io());
+  await expect((await openContext()).read(f.request, io())).rejects.toThrow(
+    'PAPER_RISK_CONTEXT_STALE',
+  );
+});
+it('context: lost acknowledged read COMMIT returns no context and restart has no monetary effect', async () => {
+  const f = await ready();
+  await runtimeEvidence(f);
+  const before = await effects(f.c.owner.tenantId),
+    proxy = await registryCommitProxy(
+      required('DATABASE_PAPER_RISK_CONTEXT_URL'),
+      'PAPER_RISK_CONTEXT',
+    );
+  try {
+    const h = await openContext(proxy.connectionString);
+    proxy.arm();
+    await expect(h.read(f.request, io())).rejects.toThrow('PAPER_RISK_CONTEXT_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await h.close();
+    expect(
+      (await (await openContext()).read(f.request, io())).authority.orderRisk.target.orderId,
+    ).toBe(f.order!.id);
+    expect(await effects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+it.each(['abort', 'deadline'] as const)(
+  'context: %s physically settles a blocked read and frees its slot',
+  async (kind) => {
+    const f = await ready();
+    await runtimeEvidence(f);
+    const h = await openContext(),
+      p = await admin.connect(),
+      controller = new AbortController();
+    try {
+      await p.query('BEGIN');
+      await p.query('SELECT id FROM ctp_portfolio.book WHERE id=$1 FOR UPDATE', [f.fundingId]);
+      const rejected = expect(
+        h.read(f.request, io(controller.signal, kind === 'deadline' ? 150 : 2500)),
+      ).rejects.toThrow('PAPER_RISK_CONTEXT_ABORTED');
+      await wait(50);
+      const start = Date.now();
+      if (kind === 'abort') controller.abort();
+      await rejected;
+      expect(Date.now() - start).toBeLessThan(1500);
+    } finally {
+      controller.abort();
+      await p.query('ROLLBACK');
+      p.release();
+    }
+    expect((await h.read(f.request, io())).authority.orderRisk.target.orderId).toBe(f.order!.id);
+  },
+);
+it('context: four physical slots remain bounded and close drains pending work before restart', async () => {
+  const f = await ready();
+  await runtimeEvidence(f);
+  const h = await openContext(),
+    p = await admin.connect();
+  try {
+    await p.query('BEGIN');
+    await p.query('SELECT id FROM ctp_portfolio.book WHERE id=$1 FOR UPDATE', [f.fundingId]);
+    const pending = Promise.allSettled(Array.from({ length: 4 }, () => h.read(f.request, io())));
+    await wait(60);
+    await expect(h.read(f.request, io())).rejects.toThrow('PAPER_RISK_CONTEXT_BUSY');
+    await h.close();
+    expect((await pending).every((v) => v.status === 'rejected')).toBe(true);
+    await expect(h.read(f.request, io())).rejects.toThrow('PAPER_RISK_CONTEXT_CLOSED');
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+  }
+  expect(
+    (await (await openContext()).read(f.request, io())).authority.orderRisk.target.orderId,
+  ).toBe(f.order!.id);
+});
+it.each(['LOGIN', 'extra-function'] as const)(
+  'context: SQL rechecks %s role authority after startup',
+  async (kind) => {
+    const f = await ready();
+    await runtimeEvidence(f);
+    const h = await openContext();
+    await admin.query(
+      kind === 'LOGIN'
+        ? 'ALTER ROLE ctp_paper_risk_context LOGIN'
+        : 'GRANT EXECUTE ON FUNCTION ctp_paper.capture_risk_authority(jsonb) TO ctp_paper_risk_context',
+    );
+    try {
+      await expect(h.read(f.request, io())).rejects.toThrow('PAPER_RISK_CONTEXT_ROLE_UNSAFE');
+    } finally {
+      await admin.query(
+        kind === 'LOGIN'
+          ? 'ALTER ROLE ctp_paper_risk_context NOLOGIN'
+          : 'REVOKE EXECUTE ON FUNCTION ctp_paper.capture_risk_authority(jsonb) FROM ctp_paper_risk_context',
+      );
+    }
+  },
+);
+it('context: capture-only login has no private helper, old RPC, financial or table authority', async () => {
+  const pool = new Pool({ connectionString: required('DATABASE_PAPER_RISK_CONTEXT_URL') });
+  try {
+    for (const fn of [
+      'context_authority_capture',
+      'context_runtime_capture',
+      'authority_order_capture',
+      'capture_risk_authority',
+      'capture_runtime_observation',
+    ]) {
+      expect(
+        (
+          await pool.query<{ allowed: boolean }>(
+            "SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed",
+            [`ctp_paper.${fn}(jsonb)`],
+          )
+        ).rows[0]!.allowed,
+      ).toBe(false);
+    }
+    expect(
+      (
+        await pool.query<{ allowed: boolean }>(
+          "SELECT has_schema_privilege(current_user,'ctp_admission','USAGE') allowed",
+        )
+      ).rows[0]!.allowed,
+    ).toBe(false);
+    await expect(pool.query('INSERT INTO public.order_intent DEFAULT VALUES')).rejects.toThrow(
+      /permission denied/u,
+    );
+  } finally {
+    await pool.end();
+  }
+});
+it('context: runtime publication waits through capture COMMIT and the next read sees its exact new revision', async () => {
+  const f = await ready(),
+    e = await runtimeEvidence(f),
+    pool = new Pool({ connectionString: required('DATABASE_PAPER_RISK_CONTEXT_URL') }),
+    p = await pool.connect();
+  let pending: Promise<unknown> | undefined;
+  try {
+    await p.query('BEGIN');
+    await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    await p.query('SELECT ctp_paper.capture_risk_context($1::jsonb)', [JSON.stringify(f.request)]);
+    const next = structuredClone(e.publication);
+    next.id = randomUUID();
+    next.expectedRevision = e.receipt.revision;
+    next.observation.health.executor.status = 'UNKNOWN';
+    let settled = false;
+    pending = e.h.publish(next, io()).then(
+      (r) => {
+        settled = true;
+        return r;
+      },
+      (error) => {
+        settled = true;
+        throw error;
+      },
+    );
+    // Observe a possible rejection immediately while deliberately holding locks.
+    void pending.catch(() => {});
+    await wait(80);
+    expect(settled).toBe(false);
+    await p.query('COMMIT');
+    await pending;
+    const after = await (await openContext()).read(f.request, io());
+    expect(after.runtime.reference.revision).toBe('2');
+    expect(after.runtime.blockedBy).toEqual(['executor']);
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+    await pool.end();
+    await pending?.catch(() => {});
+  }
+});
+it.each(['policy', 'global-control'] as const)(
+  'context: %s writer waits through the common transaction',
+  async (kind) => {
+    const f = await ready();
+    await runtimeEvidence(f);
+    const pool = new Pool({ connectionString: required('DATABASE_PAPER_RISK_CONTEXT_URL') }),
+      p = await pool.connect();
+    let pending: Promise<unknown> | undefined;
+    try {
+      await p.query('BEGIN');
+      await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+      await p.query('SELECT ctp_paper.capture_risk_context($1::jsonb)', [
+        JSON.stringify(f.request),
+      ]);
+      let settled = false;
+      pending = (
+        kind === 'policy'
+          ? updatePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' })
+          : updateControl(null, 'PAUSED')
+      ).then(
+        (r) => {
+          settled = true;
+          return r;
+        },
+        (error) => {
+          settled = true;
+          throw error;
+        },
+      );
+      void pending.catch(() => {});
+      await wait(80);
+      expect(settled).toBe(false);
+      await p.query('COMMIT');
+      await pending;
+      const after = await (await openContext()).read(f.request, io());
+      if (kind === 'policy') expect(after.authority.policies.effective.maxOrderNotional).toBe('1');
+      else expect(after.authority.controls.pauses.global).toBe(true);
+    } finally {
+      await p.query('ROLLBACK');
+      p.release();
+      await pool.end();
+      await pending?.catch(() => {});
+      if (kind !== 'policy') await updateControl(null, 'RUNNING');
+    }
+  },
+);
 it('authority compatibility: restart and concurrent reads preserve immutable original command, seed and client counter', async () => {
   const f = await ready(),
     before = await effects(f.c.owner.tenantId),
