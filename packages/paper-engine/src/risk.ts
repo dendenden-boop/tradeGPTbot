@@ -4,3 +4,9 @@ export type {
   PaperRiskAuthoritySource,
   PaperRiskAuthorityReader,
 } from './risk-authority-domain.js';
+export { createPostgresPaperRiskContextSource } from './postgres-risk-context.js';
+export type {
+  PaperRiskContextRequest,
+  PaperRiskContextSource,
+  PaperRiskContextReader,
+} from './risk-context-domain.js';
