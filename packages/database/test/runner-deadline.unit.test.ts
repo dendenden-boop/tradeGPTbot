@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 
-it('database acceptance parent leaves bounded owner/upgrade room beyond serial native and Auth child deadlines', () => {
+it('database acceptance parent leaves bounded owner/upgrade room beyond aggregate native and Auth child deadlines', () => {
   const read = (name: string) =>
     readFileSync(new URL('../../../scripts/' + name, import.meta.url), 'utf8');
   const integration = read('test-integration.mjs'),
@@ -14,7 +14,7 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond serial n
     return Number(value?.replaceAll('_', ''));
   };
   const parent = deadline(integration, "['scripts/test-database.mjs']"),
-    native = deadline(database, '// Whole serial suite budget;'),
+    native = deadline(database, '// Whole native suite budget;'),
     auth = deadline(database, "['scripts/test-auth-runtime.mjs']"),
     hardening = deadline(database, "['scripts/test-auth-hardening.mjs']");
   // With 1138 cases and the extra owner/upgrade stage, two independent runs

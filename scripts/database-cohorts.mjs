@@ -1,0 +1,225 @@
+// Private native acceptance orchestration, not a production runtime export.
+import assert from 'node:assert/strict';
+import { spawn, execFileSync } from 'node:child_process';
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { sanitize, workspace } from './docker-test-utils.mjs';
+
+const registry = 'packages/database/test/instrument-registry.integration.test.ts';
+const roles = 'packages/database/test/runtime-role-graph.integration.test.ts';
+const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
+
+export function planDatabaseCohorts(files) {
+  assert.ok(Array.isArray(files) && files.every((file) => nativeFile.test(file)));
+  assert.equal(new Set(files).size, files.length, 'Duplicate native input');
+  assert.ok(files.includes(registry) && files.includes(roles), 'Missing isolation contracts');
+  const main = files.filter((file) => file !== registry && file !== roles).sort();
+  assert.ok(main.length > 0);
+  return [
+    { id: 'main', files: main, parallel: true },
+    { id: 'registry', files: [registry], parallel: true },
+    { id: 'roles', files: [roles], parallel: false },
+  ];
+}
+
+export async function discoverDatabaseFiles(root = workspace) {
+  const files = [];
+  for (const dir of ['packages/database/test', 'packages/auth/test']) {
+    for (const entry of await readdir(path.join(root, dir), { withFileTypes: true })) {
+      if (!entry.name.endsWith('.integration.test.ts')) continue;
+      assert.ok(entry.isFile(), 'Native input must be a regular file');
+      files.push(`${dir}/${entry.name}`);
+    }
+  }
+  return files.sort();
+}
+
+// Report validation is independent of child exit status. A partial/stale report
+// cannot turn an interrupted invocation into acceptance.
+export function mergeDatabaseReports(plan, reports, root = workspace) {
+  assert.equal(reports.length, plan.length);
+  const expected = plan.flatMap((cohort) => cohort.files);
+  assert.equal(new Set(expected).size, expected.length);
+  const results = [];
+  const seen = new Set();
+  const countKeys = [
+    'numTotalTestSuites',
+    'numPassedTestSuites',
+    'numTotalTests',
+    'numPassedTests',
+  ];
+  const totals = Object.fromEntries(countKeys.map((key) => [key, 0]));
+  for (const [index, report] of reports.entries()) {
+    assert.equal(report.success, true, 'Incomplete native report');
+    for (const key of [
+      'numFailedTestSuites',
+      'numPendingTestSuites',
+      'numFailedTests',
+      'numPendingTests',
+      'numTodoTests',
+    ])
+      assert.equal(report[key], 0, key);
+    for (const key of countKeys) {
+      assert.ok(Number.isSafeInteger(report[key]) && report[key] > 0, key);
+      totals[key] += report[key];
+    }
+    assert.equal(report.numTotalTests, report.numPassedTests);
+    assert.equal(report.numTotalTestSuites, report.numPassedTestSuites);
+    assert.ok(Number.isSafeInteger(report.startTime) && report.startTime > 0);
+    assert.ok(
+      report.snapshot &&
+        Object.values(report.snapshot).every(
+          (value) => value === 0 || value === false || (Array.isArray(value) && value.length === 0),
+        ),
+      'Unexpected snapshot work',
+    );
+    assert.ok(Array.isArray(report.testResults));
+    const actual = [];
+    let assertions = 0;
+    for (const result of report.testResults) {
+      const name = path.relative(root, result.name).replaceAll('\\', '/');
+      assert.ok(nativeFile.test(name) && !seen.has(name), 'Duplicate or unexpected native file');
+      seen.add(name);
+      actual.push(name);
+      assert.equal(result.status, 'passed');
+      assert.ok(!result.message);
+      assert.ok(Array.isArray(result.assertionResults) && result.assertionResults.length > 0);
+      const names = new Set();
+      for (const assertion of result.assertionResults) {
+        assert.equal(assertion.status, 'passed');
+        assert.ok(typeof assertion.fullName === 'string' && assertion.fullName.length > 0);
+        assert.ok(!names.has(assertion.fullName), 'Duplicate assertion identity');
+        assert.deepEqual(assertion.failureMessages, []);
+        names.add(assertion.fullName);
+        assertions++;
+      }
+      results.push(result);
+    }
+    assert.deepEqual(actual.sort(), [...plan[index].files].sort(), 'Incomplete cohort coverage');
+    assert.equal(assertions, report.numPassedTests);
+  }
+  assert.deepEqual([...seen].sort(), [...expected].sort());
+  return {
+    ...reports[0],
+    ...totals,
+    startTime: Math.min(...reports.map((report) => report.startTime)),
+    testResults: results.sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+export async function runDatabaseCohorts(
+  jobs,
+  { timeoutMs, signal, secrets = [], echo = false, cwd = workspace },
+) {
+  assert.deepEqual(
+    jobs.map(({ id, parallel }) => ({ id, parallel })),
+    [
+      { id: 'main', parallel: true },
+      { id: 'registry', parallel: true },
+      { id: 'roles', parallel: false },
+    ],
+  );
+  assert.ok(Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 480000);
+  const started = performance.now();
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  signal?.addEventListener('abort', stop, { once: true });
+  if (signal?.aborted) stop();
+  const timer = setTimeout(stop, timeoutMs);
+  const completed = [];
+  const run = (job) =>
+    new Promise((resolve, reject) => {
+      if (controller.signal.aborted || performance.now() - started >= timeoutMs) {
+        stop();
+        reject(new Error('Native cohort deadline/abort before start'));
+        return;
+      }
+      const startMs = performance.now() - started;
+      const child = spawn(job.binary, job.args, {
+        env: job.env ?? process.env,
+        cwd,
+        windowsHide: true,
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let output = '',
+        failure,
+        cleanupTimer;
+      let terminating = false;
+      const terminate = () => {
+        if (terminating) return;
+        terminating = true;
+        failure ??= new Error(`Native cohort ${job.id} deadline/abort`);
+        if (child.pid) {
+          try {
+            if (process.platform === 'win32') {
+              execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+                windowsHide: true,
+                stdio: 'ignore',
+                timeout: 2000,
+              });
+            } else process.kill(-child.pid, 'SIGKILL');
+          } catch {
+            // A settled tree is harmless; an unkillable child still fails closed.
+            child.kill('SIGKILL');
+          }
+        }
+        cleanupTimer ??= setTimeout(
+          () => finish(new Error(`Native cohort ${job.id} did not physically close`)),
+          5000,
+        );
+      };
+      let finished = false;
+      const finish = (error) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(cleanupTimer);
+        controller.signal.removeEventListener('abort', terminate);
+        if (echo && output) console.log(sanitize(output, secrets));
+        if (error) {
+          stop();
+          reject(error);
+        } else {
+          completed.push({ id: job.id, startMs, settledMs: performance.now() - started });
+          resolve();
+        }
+      };
+      controller.signal.addEventListener('abort', terminate, { once: true });
+      const receive = (chunk) => {
+        output += chunk.toString();
+        if (output.length > 2_000_000) {
+          output = output.slice(0, 2_000_000);
+          failure = new Error(`Native cohort ${job.id} output bound`);
+          stop();
+        }
+      };
+      child.stdout.on('data', receive);
+      child.stderr.on('data', receive);
+      child.once('error', () => {
+        failure = new Error(`Cannot start native cohort ${job.id}`);
+        stop();
+      });
+      child.once('close', (code) => {
+        if (code !== 0) failure ??= new Error(`Native cohort ${job.id} failed (${code})`);
+        if (controller.signal.aborted || performance.now() - started >= timeoutMs)
+          failure ??= new Error(`Native cohort ${job.id} deadline/abort`);
+        // Also clean the failed child's own process group, even if its leader
+        // exited before a descendant. Sibling cancellation alone is insufficient.
+        if (failure) terminate();
+        finish(failure);
+      });
+    });
+  try {
+    const parallel = await Promise.allSettled(jobs.filter((job) => job.parallel).map(run));
+    const failure = parallel.find((result) => result.status === 'rejected');
+    if (failure) throw failure.reason;
+    await run(jobs[2]);
+    if (controller.signal.aborted || performance.now() - started >= timeoutMs)
+      throw new Error('Native cohort aggregate deadline/abort');
+    return { timeoutMs, elapsedMs: performance.now() - started, completed };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', stop);
+  }
+}

@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Native acceptance capacity candidate
+
+The [native acceptance isolation contract](native-acceptance.md) records the confirmed 480s exact-main CI exhaustion, separate registry database/login, one aggregate budget, serial cluster-role checks and strict complete-report merger. Starting main **bb5caad21e0c83985134a80d62fd1c0911c1e02e** passed all thirteen baseline commands. Two executed missing-entrypoint RED contracts became GREEN; 21 targeted process/report contracts passed. Complete changed-head local regression and native/Ubuntu/Windows/Docker/CodeQL CI remain required. Production code, published migrations 1–48, workflows, pins and deadlines are unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; LIVE/PAPER financial dispatch and positive native credit disabled. Earlier results below remain historical checkpoints.
+
 ## Accepted PAPER runtime observation source checkpoint
 
 Source **0f4529d7dae6b831aeee6f6baf2623328b43c393** passed full [source CI 38795514761](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514761), [source CodeQL 38795514785](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514785), [PR CI 38795523955](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523955) and [PR CodeQL 38795523966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523966). Verified exact-head artifacts/digests show **4019 unit / 904 Paper / 41 HTTP per OS**, **1192 native PostgreSQL**, **40 new runtime contracts** fresh and under a non-BYPASSRLS function owner, **206 role-graph cases**, populated published-47→48 preservation, all earlier owner/upgrade stages, twelve clean deployments, audit zero and no open CodeQL alerts. Every required job passed; cancelled preliminary runs are not acceptance.
