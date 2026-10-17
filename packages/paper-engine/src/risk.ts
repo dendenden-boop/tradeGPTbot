@@ -10,3 +10,9 @@ export type {
   PaperRiskContextSource,
   PaperRiskContextReader,
 } from './risk-context-domain.js';
+export { createPostgresPaperTenantRiskContextSource } from './postgres-tenant-risk-context.js';
+export type {
+  PaperTenantRiskContextRequest,
+  PaperTenantRiskContextSource,
+  PaperTenantRiskContextReader,
+} from './tenant-risk-context-domain.js';

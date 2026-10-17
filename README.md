@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Atomic tenant cash Risk context candidate
+
+Starting protected main **71d7facda2511d8173993d1fd134f6225ed8dada** passed all thirteen baseline commands. The new [tenant cash context](docs/phase-13/tenant-risk-context.md) captures complete bounded pristine tenant PAPER books/retained cash UTC loss and the accepted target authority/runtime context in one locked PostgreSQL transaction. Target book content must match exactly; stricter current policy and original model/runtime/market deadlines and UTC midnight bound validity. Missing/disabled/noncash/UNKNOWN sibling rejects wholly. This is read-only source evidence, never a certified RiskSnapshot, approval, reservation, hold or permit.
+
+The missing-factory RED became GREEN; **41 new targeted unit contracts passed**, including conflicting independently valid captures, 100-account exact sums, UTC boundary and physical hung-TCP abort/deadline. Eighteen new native contracts, seven role-graph cases, populated published-49→50 preservation and full regression/CI remain required before source acceptance. Native PostgreSQL/Docker results are not claimed locally. Additive **50** preserves published **1–49**, old source RPCs, native financial runtime/adapters, pins, workflows and deadlines. Historical checkpoints below retain their actual results.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. General active/UNKNOWN exposure and economic history, capabilities/certification, atomic vector reservations/Portfolio holds, final validation, operational sensors/bootstrap and virtual execution remain outstanding. LIVE/PAPER financial dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed.
+
 ## Accepted atomic PAPER Risk context source checkpoint
 
 Source **5dc70b88d626650748fd88824c431ddbe377de60** passed full [source CI 38932028272](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38932028272) and [CodeQL 38932028277](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38932028277). Exact-SHA artifacts, successful-job windows and ZIP SHA256 digests were verified **2026-10-16T16:53:20.529Z**. Results: **4192 unit / 1056 Paper / 41 HTTP per OS**, **1232 native PostgreSQL assertions / 38 files**, including **996 main + 23 registry + 213 role-graph** cases. Every earlier 1201 native assertion identity remains; 24 context cases pass fresh and under the non-BYPASSRLS owner (60 authority/context-owner cases), plus seven new role-graph cases. All other owner/upgrade, Auth and Docker stages, twelve clean deployments and audits passed; no open CodeQL alerts. Native aggregate **427609ms / unchanged 480000ms**. These results do not establish production soak.
