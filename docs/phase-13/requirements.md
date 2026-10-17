@@ -1,5 +1,19 @@
 # PHASE 13 requirements
 
+## CI suite isolation correction candidate
+
+Source e60d3c73b6b269ae430f72f222d59b59298da9c3 [run39012976517 attempt2](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39012976517/attempts/2) completed integration successfully but was cancelled at the unchanged20-minute serial job cap during Docker smoke completion/cleanup. Docker printed PASS, but the cancelled job is **NOT acceptance**. Attempt1's cumulative1020s failure and the independent successful PR run remain historical evidence below. Both failed/cancelled attempts retain raw logs, exact job metadata and artifact/digest evidence; neither is promoted to acceptance. No further unchanged retry is used.
+
+A RED workflow contract precedes splitting the independent, uniquely named/credentialed/ported Compose projects into parallel isolated **Native PostgreSQL and real services** and **Docker smoke** jobs. The existing required context **Real services and Docker smoke** becomes an always-run aggregate gate: only two definitive success results pass; failure/cancelled/skipped/missing/unknown results fail. Native job cap20min, cumulative database parent1020s, native480s, Auth120/180s and test/operation budgets remain unchanged; separate smoke job10min and gate1min are bounded. Existing assertions, commands, image/action/runtime pins, security scans and required contexts remain mandatory. This changes CI scheduling, not financial runtime.
+
+Eighteen gate contracts passed RED→GREEN, including the actual process exit and dependency/budget contract. The41 tenant-source contracts remain. Full local regression and complete new-source/PR/final-head/protected-main CI are required before acceptance. Published1–49 and candidate migration50 bytes, source ports, native Risk/Order/Portfolio/adapters remain unchanged from the tested source. **PHASE13 IN_PROGRESS /NOT READY FOR PHASE14**, LIVE/PAPER dispatch/positive native credit disabled.
+
+## Source attempt1 cumulative deadline — not acceptance
+
+Source **e60d3c73b6b269ae430f72f222d59b59298da9c3**, [CI 39012976517 attempt1](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39012976517/attempts/1), passed Ubuntu/Windows/CodeQL and all1257 native PostgreSQL assertions, including78 restricted-owner authority/context cases and the populated upgrade. Native aggregate **458732ms /unchanged480000ms**. After compiled Auth runtime passed, the unchanged **1020s cumulative database parent** expired. The final database report and remaining Docker completion were not established; this attempt is **NOT acceptance**. Exact-SHA raw logs, artifact IDs, job windows and ZIP SHA256 evidence are retained.
+
+The same source passed full independent [PR CI39012979470](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39012979470):1257 native, all owner/upgrade/Auth/Docker stages and audits0, native aggregate378582ms. One unchanged Real services job rerun is used for source verification; no code/test assertion, workflow or deadline is relaxed. Its complete result must be verified before acceptance. This paragraph is a historical checkpoint, not a claim that a pending rerun passed. **PHASE13 IN_PROGRESS /NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch/positive native credit disabled.
+
 ## Atomic tenant cash Risk context candidate
 
 Starting protected main **71d7facda2511d8173993d1fd134f6225ed8dada** passed all thirteen baseline commands. The new [tenant cash context](tenant-risk-context.md) captures complete bounded pristine tenant PAPER books/retained cash UTC loss and the accepted target authority/runtime context in one locked PostgreSQL transaction. Target book content must match exactly; stricter current policy and original model/runtime/market deadlines and UTC midnight bound validity. Missing/disabled/noncash/UNKNOWN sibling rejects wholly. This is read-only source evidence, never a certified RiskSnapshot, approval, reservation, hold or permit.
