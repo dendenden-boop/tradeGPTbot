@@ -65,6 +65,7 @@ const expectedMigrations = [
   '202610150001_paper_risk_authority',
   '202610150002_paper_runtime_observations',
   '202610160001_paper_risk_context',
+  '202610160002_paper_tenant_risk_context',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -126,6 +127,7 @@ const paperRiskPortfolioPassword = randomBytes(24).toString('hex');
 const paperRiskValuationPassword = randomBytes(24).toString('hex');
 const paperRiskLossPassword = randomBytes(24).toString('hex');
 const paperOrderRiskPassword = randomBytes(24).toString('hex');
+const paperTenantRiskContextPassword = randomBytes(24).toString('hex');
 const paperRiskContextPassword = randomBytes(24).toString('hex');
 const paperRiskAuthorityPassword = randomBytes(24).toString('hex');
 const paperRuntimeObserverPassword = randomBytes(24).toString('hex');
@@ -161,6 +163,7 @@ const secrets = [
   paperRiskLossPassword,
   paperOrderRiskPassword,
   paperRiskContextPassword,
+  paperTenantRiskContextPassword,
   paperRiskAuthorityPassword,
   paperRuntimeObserverPassword,
   paperRuntimeReaderPassword,
@@ -201,6 +204,7 @@ const paperRiskPortfolioRole = `ctp_p2_paper_risk_portfolio_${suffix}`;
 const paperRiskValuationRole = `ctp_p2_paper_risk_valuation_${suffix}`;
 const paperRiskLossRole = `ctp_p2_paper_risk_loss_${suffix}`;
 const paperOrderRiskRole = `ctp_p2_paper_order_risk_${suffix}`;
+const paperTenantRiskContextRole = `ctp_p2_paper_tenant_risk_context_${suffix}`;
 const paperRiskContextRole = `ctp_p2_paper_risk_context_${suffix}`;
 const paperRiskAuthorityRole = `ctp_p2_paper_risk_authority_${suffix}`;
 const paperRuntimeObserverRole = `ctp_p2_paper_runtime_observer_${suffix}`;
@@ -362,6 +366,12 @@ const paperRiskContextUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperRiskContextRole;
   url.password = paperRiskContextPassword;
+  return url.href;
+};
+const paperTenantRiskContextUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperTenantRiskContextRole;
+  url.password = paperTenantRiskContextPassword;
   return url.href;
 };
 const paperRiskAuthorityUrl = (name) => {
@@ -528,6 +538,7 @@ try {
     [paperRuntimeReaderRole, paperRuntimeReaderPassword, 'ctp_paper_runtime_reader'],
     [paperRiskAuthorityRole, paperRiskAuthorityPassword, 'ctp_paper_risk_authority'],
     [paperRiskContextRole, paperRiskContextPassword, 'ctp_paper_risk_context'],
+    [paperTenantRiskContextRole, paperTenantRiskContextPassword, 'ctp_paper_tenant_risk_context'],
     [marketTradeRole, marketTradePassword, 'ctp_market_trade'],
   ]) {
     await admin.query(
@@ -1945,6 +1956,7 @@ try {
         DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
         DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[2]),
         DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[2]),
+        DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[2]),
         DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
         DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
         DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
@@ -1965,7 +1977,7 @@ try {
     ),
   );
   assert.equal(paperRiskAuthorityOwner.success, true);
-  assert.equal(paperRiskAuthorityOwner.numPassedTests, 60);
+  assert.equal(paperRiskAuthorityOwner.numPassedTests, 78);
   assert.equal(paperRiskAuthorityOwner.numFailedTests, 0);
   assert.equal(paperRiskAuthorityOwner.numPendingTests, 0);
 
@@ -3230,6 +3242,55 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await contextUpgrade.close();
   }
+  // Published-49 -> additive50: preserve all 173 prior functions and populated
+  // original ledger/order/book/configuration/funding/runtime rows, twice applied.
+  const tenantBeforeFunctions = (
+    await paperUpgrade.query(`SELECT n.nspname,p.proname,oidvectortypes(p.proargtypes) args,pg_get_functiondef(p.oid) definition
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE left(n.nspname,4)='ctp_' ORDER BY n.nspname,p.proname,args`)
+  ).rows;
+  assert.equal(tenantBeforeFunctions.length, 173);
+  const retainedBeforeTenant = await captureRetained();
+  const { createPostgresPaperTenantRiskContextSource } =
+    await import('../packages/paper-engine/dist/risk.js');
+  await assert.rejects(
+    createPostgresPaperTenantRiskContextSource({
+      connectionString: paperTenantRiskContextUrl(databases[4]),
+      environment: 'test',
+    }),
+    /PAPER_TENANT_RISK_CONTEXT_ROLE_UNSAFE/,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[49]),
+    path.join(paperMigrations, expectedMigrations[49]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  const tenantAfterFunctions = (
+    await paperUpgrade.query(`SELECT n.nspname,p.proname,oidvectortypes(p.proargtypes) args,pg_get_functiondef(p.oid) definition
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE left(n.nspname,4)='ctp_' ORDER BY n.nspname,p.proname,args`)
+  ).rows;
+  assert.equal(tenantAfterFunctions.length, 176);
+  for (const prior of tenantBeforeFunctions)
+    assert.deepEqual(
+      tenantAfterFunctions.find(
+        (f) => f.nspname === prior.nspname && f.proname === prior.proname && f.args === prior.args,
+      ),
+      prior,
+    );
+  assert.deepEqual(await captureRetained(), retainedBeforeTenant);
+  const tenantUpgrade = await createPostgresPaperTenantRiskContextSource({
+    connectionString: paperTenantRiskContextUrl(databases[4]),
+    environment: 'test',
+  });
+  try {
+    await assert.rejects(
+      tenantUpgrade.read({ owner: paperInput.owner, intentId: retainedOrder.intentId }, policyIo()),
+      /PAPER_TENANT_RISK_CONTEXT_(MISSING|STALE|MARKET)/,
+    );
+  } finally {
+    await tenantUpgrade.close();
+  }
   const retainedInitialGuard = await createPostgresPaperInitialPortfolio({
     connectionString: paperPortfolioUrl(databases[4]),
     environment: 'test',
@@ -3357,6 +3418,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[0]),
     DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[0]),
     DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[0]),
+    DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[0]),
     DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
   };
   const registryEnv = {
@@ -3560,6 +3622,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperRiskLossPopulatedUpgradeFromPublished44: 'PASS',
     paperOrderRiskNonBypassOwner: 'PASS',
     paperOrderRiskPopulatedUpgradeFromPublished45: 'PASS',
+    paperTenantRiskContextNonBypassOwner: 'PASS',
+    paperTenantRiskContextPopulatedUpgradeFromPublished49: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
