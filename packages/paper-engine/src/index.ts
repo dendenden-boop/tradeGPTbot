@@ -4,3 +4,7 @@ export * from './reservation-coverage.js';
 export { calculatePaperRiskBudget } from './risk-budget.js';
 export * from './competition.js';
 export { calculatePaperInventoryValuation } from './inventory-valuation.js';
+export {
+  calculatePaperRiskEvaluation,
+  type PaperRiskEvaluationCalculation,
+} from './risk-evaluation.js';

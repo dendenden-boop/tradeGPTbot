@@ -1,5 +1,9 @@
 # Risk Engine
 
+## PAPER pure calculation source acceptance
+
+Source **dd1b97fd69390b1f3d34afec1df7b1f1abf09a04** passed full source/PR CI, including 1260 native PostgreSQL assertions and 4354 unit tests per OS; final documentation-head/protected-main acceptance is recorded in [PR #30](https://github.com/dendenden-boop/tradeGPTbot/pull/30). The [PHASE 13 evaluation contract](phase-13/risk-evaluation.md) composes the pristine tenant cash capture, conservative full debit vector and common pure Risk policy. PAPER requires the exact simulator profile and synthetic model capabilities; TESTNET/DEMO/LIVE still reject synthetic evidence. The result grants no financial authority. The existing production SQL admission and Order Engine PAPER dispatch remain disabled. Certification, atomic vector reservations/Portfolio holds and final validation are still required. Historical checkpoints below retain their original scope and evidence.
+
 ## Accepted PAPER runtime observation source checkpoint
 
 Source **0f4529d7dae6b831aeee6f6baf2623328b43c393** passed full [source CI 38795514761](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514761), [source CodeQL 38795514785](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514785), [PR CI 38795523955](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523955) and [PR CodeQL 38795523966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523966). Verified exact-head artifacts/digests show **4019 unit / 904 Paper / 41 HTTP per OS**, **1192 native PostgreSQL**, **40 new runtime contracts** fresh and under a non-BYPASSRLS function owner, **206 role-graph cases**, populated published-47→48 preservation, all earlier owner/upgrade stages, twelve clean deployments, audit zero and no open CodeQL alerts. Every required job passed; cancelled preliminary runs are not acceptance.
