@@ -1,8 +1,8 @@
 # Risk Engine
 
-## PAPER calculation candidate
+## PAPER pure calculation source acceptance
 
-The [PHASE 13 evaluation contract](phase-13/risk-evaluation.md) composes the pristine tenant cash capture, conservative full debit vector and common pure Risk policy. PAPER requires the exact simulator profile and synthetic model capabilities; TESTNET/DEMO/LIVE still reject synthetic evidence. The result grants no financial authority. The existing production SQL admission and Order Engine PAPER dispatch remain disabled. Certification, atomic vector reservations/Portfolio holds and final validation are still required. Historical checkpoints below retain their original scope and evidence.
+Source **dd1b97fd69390b1f3d34afec1df7b1f1abf09a04** passed full source/PR CI, including 1260 native PostgreSQL assertions and 4354 unit tests per OS; final documentation-head/protected-main acceptance is recorded in [PR #30](https://github.com/dendenden-boop/tradeGPTbot/pull/30). The [PHASE 13 evaluation contract](phase-13/risk-evaluation.md) composes the pristine tenant cash capture, conservative full debit vector and common pure Risk policy. PAPER requires the exact simulator profile and synthetic model capabilities; TESTNET/DEMO/LIVE still reject synthetic evidence. The result grants no financial authority. The existing production SQL admission and Order Engine PAPER dispatch remain disabled. Certification, atomic vector reservations/Portfolio holds and final validation are still required. Historical checkpoints below retain their original scope and evidence.
 
 ## Accepted PAPER runtime observation source checkpoint
 
