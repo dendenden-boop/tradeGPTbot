@@ -58,8 +58,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  docker:
-    name: Real services and Docker smoke
+  native:
+    name: Native PostgreSQL and real services
     needs: checks
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -85,8 +85,6 @@ jobs:
       - run: pnpm build
       - name: Verify migrations, authorization, SMTP flows and service recovery
         run: pnpm test:integration
-      - name: Exercise authentication in the built API container and shutdown
-        run: pnpm test:smoke
       - name: Upload sanitized integration reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -95,3 +93,57 @@ jobs:
           path: test-results/
           if-no-files-found: error
           retention-days: 7
+
+  smoke:
+    name: Docker smoke
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0 --ignore-scripts
+      - name: Record runtime identifiers
+        run: |
+          mkdir -p test-results
+          node --version > test-results/node-version.txt
+          pnpm --version > test-results/pnpm-version.txt
+          docker version --format '{{json .}}' > test-results/docker-version.json
+          docker compose version > test-results/compose-version.txt
+      - run: pnpm install --frozen-lockfile
+      - name: Exercise authentication in the built API container and shutdown
+        run: pnpm test:smoke
+      - name: Upload sanitized integration reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bootstrap-smoke
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    name: Real services and Docker smoke
+    needs: [native, smoke]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Require definitive success of both isolated suites
+        env:
+          CTP_NATIVE_RESULT: ${{ needs.native.result }}
+          CTP_SMOKE_RESULT: ${{ needs.smoke.result }}
+        run: node scripts/real-services-gate.mjs

@@ -35,7 +35,9 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond aggregat
     new URL('../../../.github/workflows/ci.yml', import.meta.url),
     'utf8',
   );
-  expect(workflow.slice(workflow.indexOf('  docker:'))).toContain('timeout-minutes: 20');
-  // Reserve three minutes within the unchanged job cap for setup and smoke.
+  const nativeJob = workflow.slice(workflow.indexOf('  native:'), workflow.indexOf('  smoke:'));
+  expect(nativeJob).toContain('timeout-minutes: 20');
+  expect(nativeJob).toContain('run: pnpm test:integration');
+  // Reserve three minutes within the unchanged native job cap for setup and cleanup.
   expect(parent + 180000).toBeLessThanOrEqual(20 * 60000);
 });

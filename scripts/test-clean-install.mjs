@@ -416,6 +416,10 @@ try {
       assert.equal(typeof paper.calculatePaperRiskBudget,'function');
       assert.equal(typeof paperRisk.createPostgresPaperRiskAuthoritySource,'function');
       assert.equal(typeof paperRisk.createPostgresPaperRiskContextSource,'function');
+      assert.equal(typeof paperRisk.createPostgresPaperTenantRiskContextSource,'function');
+      assert.equal('createPostgresPaperTenantRiskContextSource' in paper,false);
+      assert.equal('decodePaperTenantRiskContextSource' in paperRisk,false);
+      await assert.rejects(paperRisk.createPostgresPaperTenantRiskContextSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_TENANT_RISK_CONTEXT_DATABASE_URL/);
       assert.equal('createPostgresPaperRiskContextSource' in paper,false);
       assert.equal('decodePaperRiskContextSource' in paperRisk,false);
       assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/risk-context-domain.js'));
