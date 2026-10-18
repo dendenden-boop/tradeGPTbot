@@ -1984,9 +1984,58 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperRiskAuthorityOwner.success, true);
-  assert.equal(paperRiskAuthorityOwner.numPassedTests, 81);
+  assert.equal(paperRiskAuthorityOwner.numPassedTests, 78);
   assert.equal(paperRiskAuthorityOwner.numFailedTests, 0);
   assert.equal(paperRiskAuthorityOwner.numPendingTests, 0);
+
+  // Separate bounded PAPER calculation owner proof; preserve the original 78-case invocation.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-risk-evaluation.integration.test.ts',
+      '--outputFile.json=test-results/paper-risk-evaluation-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+        DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[2]),
+        DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[2]),
+        DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[2]),
+        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
+        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
+        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
+        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+        DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 30000,
+    },
+  );
+  const paperRiskEvaluationOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-risk-evaluation-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperRiskEvaluationOwner.success, true);
+  assert.equal(paperRiskEvaluationOwner.numPassedTests, 3);
+  assert.equal(paperRiskEvaluationOwner.numFailedTests, 0);
+  assert.equal(paperRiskEvaluationOwner.numPendingTests, 0);
+
+  // End separate PAPER calculation owner proof.
 
   await run(
     process.execPath,
@@ -3553,6 +3602,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperOrderRiskPopulatedUpgradeFromPublished45: 'PASS',
     paperTenantRiskContextNonBypassOwner: 'PASS',
     paperTenantRiskContextPopulatedUpgradeFromPublished49: 'PASS',
+    paperRiskEvaluationNonBypassOwner: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
