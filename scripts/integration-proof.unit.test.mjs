@@ -23,6 +23,19 @@ it('gives Auth its own environment and budget under the existing required gate',
   expect(workflow).toContain('CTP_AUTH_RESULT: ${{ needs.auth.result }}');
 });
 
+it('isolated Auth retains the database reset proof after creating real Auth data', async () => {
+  const runner = await readFile(new URL('./test-database.mjs', import.meta.url), 'utf8');
+  const isolated = runner.slice(
+    runner.indexOf('async function runIsolatedAuthenticationProof()'),
+    runner.indexOf('\ntry {\n  await prepareDatabaseProof();'),
+  );
+  expect(isolated.indexOf('await runAuthenticationAcceptance()')).toBeGreaterThanOrEqual(0);
+  expect(isolated.indexOf('await resetDatabaseProof(fresh)')).toBeGreaterThan(
+    isolated.indexOf('await runAuthenticationAcceptance()'),
+  );
+  expect(isolated).toContain('isolatedReset:');
+});
+
 it.each([
   [[], 'full', true, 1020000],
   [['--proof=full'], 'full', true, 1020000],

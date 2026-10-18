@@ -3492,57 +3492,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // mandatory Auth job. Default/legacy runs retain their inline execution.
   if (proof.mode === 'full') await runAuthenticationAcceptance();
 
-  // Reset ONLY the DB name created above, then reapply the same versioned migrations.
-  await fresh.end();
-  pools.delete(fresh);
-  const resetStorageStarted = Date.now();
-  await admin.query(`DROP DATABASE ${identifier(databases[0])} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${identifier(databases[0])}`);
-  const resetStorageMs = Date.now() - resetStorageStarted;
-  await migrate(databases[0]);
-  const reset = connect(dbUrl(databases[0]));
-  assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
-  assert.deepEqual((await reset.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
-    { state: 'PAUSED', epoch: '1' },
-  ]);
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
-    0,
-  );
-  assert.equal((await reset.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n, 0);
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_market.snapshot_head')).rows[0].n,
-    0,
-  );
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_registry.current_record')).rows[0].n,
-    0,
-  );
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_registry.version_history')).rows[0].n,
-    0,
-  );
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration')).rows[0].n,
-    0,
-  );
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration_seal')).rows[0].n,
-    0,
-  );
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_paper.initial_funding')).rows[0].n,
-    0,
-  );
-  assert.equal(
-    (await reset.query('SELECT count(*)::int n FROM ctp_paper.funding_seal')).rows[0].n,
-    0,
-  );
-  for (const table of ['trade_event', 'trade_seal', 'native_trade_seen', 'trade_head'])
-    assert.equal(
-      (await reset.query(`SELECT count(*)::int n FROM ctp_market.${table}`)).rows[0].n,
-      0,
-    );
+  const resetStorageMs = await resetDatabaseProof(fresh);
   outcome = {
     ...outcome,
     status: 'PASS',
@@ -3619,6 +3569,61 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   };
 }
 
+async function resetDatabaseProof(fresh) {
+  // Reset ONLY the DB name created above, then reapply the same versioned migrations.
+  await fresh.end();
+  pools.delete(fresh);
+  const resetStorageStarted = Date.now();
+  await admin.query(`DROP DATABASE ${identifier(databases[0])} WITH (FORCE)`);
+  await admin.query(`CREATE DATABASE ${identifier(databases[0])}`);
+  const resetStorageMs = Date.now() - resetStorageStarted;
+  await migrate(databases[0]);
+  const reset = connect(dbUrl(databases[0]));
+  assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
+  assert.deepEqual((await reset.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
+    { state: 'PAUSED', epoch: '1' },
+  ]);
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_risk.policy_head')).rows[0].n,
+    0,
+  );
+  assert.equal((await reset.query('SELECT count(*)::int n FROM ctp_risk.loss_head')).rows[0].n, 0);
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_market.snapshot_head')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_registry.current_record')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_registry.version_history')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.configuration_seal')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.initial_funding')).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.funding_seal')).rows[0].n,
+    0,
+  );
+  for (const table of ['trade_event', 'trade_seal', 'native_trade_seen', 'trade_head'])
+    assert.equal(
+      (await reset.query(`SELECT count(*)::int n FROM ctp_market.${table}`)).rows[0].n,
+      0,
+    );
+  return resetStorageMs;
+}
+
 async function runAuthenticationAcceptance() {
   const invokedAt = Date.now();
   await run(process.execPath, ['scripts/test-auth-runtime.mjs'], {
@@ -3678,11 +3683,17 @@ async function runIsolatedAuthenticationProof() {
     expectedMigrations.length,
   );
   await runAuthenticationAcceptance();
+  const authUsersBeforeReset = (await fresh.query('SELECT count(*)::int n FROM "user"')).rows[0].n;
+  assert.ok(authUsersBeforeReset >= 100, 'Auth proof must populate real users before reset');
+  const resetStorageMs = await resetDatabaseProof(fresh);
   outcome = {
     ...outcome,
     status: 'PASS',
     fresh: 'PASS',
     repeatedDeploy: 'PASS',
+    isolatedReset: 'PASS',
+    authUsersBeforeReset,
+    resetStorageMs,
     migrations: expectedMigrations.length,
     authenticatedRuntime: 'PASS',
     authenticationHardening: 'PASS',

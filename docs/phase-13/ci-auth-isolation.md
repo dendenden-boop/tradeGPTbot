@@ -6,7 +6,9 @@ Starting protected main: **fe5bc77d76e39aeddcf165811c4e3e70319b2c3a**, accepted 
 
 The previous serial database parent had a 1020-second limit. Source run [39016868170 attempt 1](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39016868170/attempts/1) and review PR run [39124276205 attempt 1](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39124276205/attempts/1) exhausted it after all 1257 native assertions and 78 authority/context-owner cases passed. Compiled Auth passed, but Auth load reported expected 202 / received 503 during enumeration as the parent expired. The failed PR native suite took 467565 ms, compared with 316764 ms in its successful independent source run. These failed attempts remain **NOT acceptance**. They do not establish an Auth runtime defect or a runtime fix.
 
-Two new RED contracts require a separately budgeted Auth job and its explicit result in the existing aggregate gate. Both failed before implementation. The corrected 61 targeted contracts pass, including the existing deadline identity, proof selection, partial reports and actual gate process. Full new-head native/CI acceptance is pending until executed and recorded.
+Two new RED contracts require a separately budgeted Auth job and its explicit result in the existing aggregate gate. Both failed before implementation. The corrected 62 targeted contracts pass, including the existing deadline identity, proof selection, partial reports and actual gate process. Full new-head native/CI acceptance is pending until executed and recorded.
+
+A further review contract reproduced a coverage gap in split candidate `fec57bb`: isolated Auth created real data but did not run the original post-Auth reset. That candidate is superseded and is not acceptance. The third RED contract failed before correction. The shared original reset proof now runs after Auth, after verifying at least 100 real users exist; the isolated report records that count and successful reset. The native/default reset assertions remain unchanged.
 
 ## Execution contract
 
@@ -19,9 +21,9 @@ The integration runner accepts only these explicit scopes; conflicting, unknown 
 | `pnpm test:integration --proof=database`  | Service probes and every owner/upgrade/native/reset assertion; explicitly delegate compiled Auth/load | 1020 seconds |
 | `pnpm test:integration --proof=auth`      | Fresh owned database, all migrations applied twice, existing compiled Auth and Auth load scripts      | 360 seconds  |
 
-Auth keeps its existing 120/180-second child deadlines; its separate parent includes 60 seconds for owned setup. The native suite remains 480 seconds, each native test 15 seconds and each hook 30 seconds. Default/legacy serial execution is preserved and can still exhaust its bounded parent on a slow host; the CI correction gives Auth its own environment and budget.
+Auth keeps its existing 120/180-second child deadlines; its separate parent includes 60 seconds for owned setup and reset. The native suite remains 480 seconds, each native test 15 seconds and each hook 30 seconds. Default/legacy serial execution is preserved and can still exhaust its bounded parent on a slow host; the CI correction gives Auth its own environment and budget.
 
-The existing setup and Auth commands are extracted, not replaced. The database assertions and original Auth invocation blocks are compared against the starting source. No owner/upgrade/native/reset assertion, public API authorization check, SMTP flow, queue/load refusal, Redis fault or recovery assertion is removed. The additional Auth proof validates a fresh database with all 50 migrations and successful reports from this invocation.
+The existing setup and Auth commands are extracted, not replaced. The database assertions and original Auth invocation blocks are compared against the starting source. No owner/upgrade/native/reset assertion, public API authorization check, SMTP flow, queue/load refusal, Redis fault or recovery assertion is removed. The additional Auth proof validates a fresh database with all 50 migrations and successful reports from this invocation, followed by the original reset proof.
 
 ## Isolation and reports
 
@@ -30,7 +32,7 @@ Native, Auth and smoke jobs own separate runner environments and independent Com
 Reports declare `proofScope`:
 
 - `database.json` in database scope marks `authenticatedRuntime` and `authenticationHardening` as `DELEGATED`, with required job `Auth runtime and faults`. It never claims those checks passed there.
-- `database-auth.json` contains only the isolated Auth proof. It requires successful compiled/runtime and load reports and does not claim the 1257 native cases.
+- `database-auth.json` contains only the isolated Auth proof. It requires successful compiled/runtime and load reports and the populated post-Auth reset, and does not claim the 1257 native cases.
 - Default full scope retains both original Auth `PASS` fields and the full database report.
 - The parent validates the expected report scope, status and delegation fields. Missing, conflicting or incomplete reports reject.
 
