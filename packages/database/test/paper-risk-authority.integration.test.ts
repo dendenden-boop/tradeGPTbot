@@ -1,6 +1,8 @@
 import { setTimeout as wait } from 'node:timers/promises';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import * as authority from '@ctp/paper-engine/risk';
+import { calculatePaperRiskEvaluation } from '@ctp/paper-engine';
+import { parseDecimal } from '@ctp/exchange-core';
 import {
   createPostgresPaperRuntimeObservations,
   paperRuntimeDependencies,
@@ -1491,11 +1493,20 @@ async function fundCash(c: PaperConfiguration, noncash = false) {
   }
   return fundingId;
 }
-async function tenantReady() {
+async function tenantReady(liquid = false) {
   const f = await fixture(),
     fundingId = await fundCash(f.c),
     orders = await openOrders(),
-    order = await orders.create(f.binding, f.draft, io());
+    order = await orders.create(
+      f.binding,
+      liquid
+        ? draftSchema.parse({
+            ...f.draft,
+            order: { ...f.draft.order, type: 'LIMIT', limitPrice: '10.5', timeInForce: 'GTC' },
+          })
+        : f.draft,
+      io(),
+    );
   await (await openBook()).initialize(f.c.owner, io());
   const snapshots = await createPostgresMarketSnapshots({
       connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
@@ -1510,6 +1521,11 @@ async function tenantReady() {
   const now = Date.now();
   f.f.s.timestamp = f.f.p.timestamp = now;
   for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;
+  if (liquid) {
+    f.f.s.book.bids = f.f.s.book.bids.map((v) => ({ ...v, quantity: parseDecimal('100') }));
+    f.f.s.book.asks = f.f.s.book.asks.map((v) => ({ ...v, quantity: parseDecimal('100') }));
+    f.f.p.trade.quantity = parseDecimal('100');
+  }
   await snapshots.publish(f.f.s, io());
   await trades.publish(f.f.p, io());
   return {
@@ -1647,4 +1663,68 @@ it('tenant-context: held capture closes account FK insertion phantoms until COMM
     p.release();
     await pool.end();
   }
+});
+
+async function calculateCaptured(f: Awaited<ReturnType<typeof tenantReady>>) {
+  const pool = new Pool({
+    connectionString: required('DATABASE_PAPER_TENANT_RISK_CONTEXT_URL'),
+    max: 1,
+    query_timeout: 5000,
+  });
+  const p = await pool.connect();
+  try {
+    await p.query('BEGIN');
+    await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    const r = await p.query<{ capture: unknown }>(
+      'SELECT ctp_paper.capture_tenant_risk_context($1::jsonb) AS capture',
+      [JSON.stringify(f.request)],
+    );
+    await p.query('COMMIT');
+    return calculatePaperRiskEvaluation({
+      now: Date.now(),
+      request: f.request,
+      capture: r.rows[0]!.capture,
+    });
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+    await pool.end();
+  }
+}
+it('paper-evaluation: native cash capture never invents a positive opening from today funding', async () => {
+  const f = await tenantReady(true);
+  await cashSibling(f);
+  await runtimeEvidence(f);
+  const before = await effects(f.c.owner.tenantId);
+  const r = await calculateCaptured(f);
+  expect(r.result).toEqual({ kind: 'REJECTED', reasons: ['RISK_LOSS_BASELINE'] });
+  expect(r.sourceHash).toMatch(/^[a-f0-9]{64}$/u);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-evaluation: original UNKNOWN health remains rejected after connection restart without financial effects', async () => {
+  const f = await tenantReady(true);
+  await runtimeEvidence(f, 'UNKNOWN');
+  const before = await effects(f.c.owner.tenantId);
+  const r = await calculateCaptured(f),
+    restarted = await calculateCaptured(f);
+  expect(r.result).toEqual({ kind: 'REJECTED', reasons: ['RISK_HEALTH'] });
+  expect(restarted.result).toEqual(r.result);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-evaluation: fresh native capture rechecks current pause and tighter policy without admission', async () => {
+  const f = await tenantReady(true);
+  await runtimeEvidence(f);
+  const before = await effects(f.c.owner.tenantId);
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  expect((await calculateCaptured(f)).result).toEqual({
+    kind: 'REJECTED',
+    reasons: ['RISK_PAUSED'],
+  });
+  await updateControl(f.c.owner.tenantId, 'RUNNING');
+  await updatePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  expect((await calculateCaptured(f)).result).toEqual({
+    kind: 'REJECTED',
+    reasons: ['PAPER_BUDGET_MAX_ORDER'],
+  });
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
 });

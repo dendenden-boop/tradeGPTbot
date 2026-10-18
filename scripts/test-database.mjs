@@ -1984,7 +1984,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperRiskAuthorityOwner.success, true);
-  assert.equal(paperRiskAuthorityOwner.numPassedTests, 78);
+  assert.equal(paperRiskAuthorityOwner.numPassedTests, 81);
   assert.equal(paperRiskAuthorityOwner.numFailedTests, 0);
   assert.equal(paperRiskAuthorityOwner.numPendingTests, 0);
 

@@ -410,6 +410,19 @@ function evaluatePolicy(raw: unknown, retained: boolean): RiskEvaluation {
       s.valuationAsset !== p.valuationAsset
     )
       return reject('RISK_SCOPE');
+    // PAPER models have their own capability namespace. Native exchange
+    // evidence cannot establish simulator semantics (or vice versa).
+    const paper = binding.mode === 'PAPER';
+    if (
+      paper &&
+      (binding.profile.market !== 'SPOT' ||
+        binding.profile.accountMode !== 'SIMULATED' ||
+        binding.profile.endpointProfileId !== 'paper-spot-v1' ||
+        binding.profile.profileVersion !== 'spot-l2-taker-v1' ||
+        binding.profile.credentialRef !== undefined ||
+        parsed.adapterVersion !== 'paper-spot-l2-taker-v1')
+    )
+      return reject('RISK_SCOPE');
     const position = s.positionEvidence;
     const oneWayAccountMode = {
       BINANCE: 'ONE_WAY',
@@ -445,6 +458,7 @@ function evaluatePolicy(raw: unknown, retained: boolean): RiskEvaluation {
       const matching = parsed.capabilities.filter((c) => c.feature === feature);
       if (
         matching.length !== 1 ||
+        (paper && matching[0]!.implementation !== 'SYNTHETIC') ||
         !evaluateCapability({
           profile: binding.profile,
           record: matching[0],
@@ -452,7 +466,7 @@ function evaluatePolicy(raw: unknown, retained: boolean): RiskEvaluation {
           now,
           adapterVersion: parsed.adapterVersion,
           instrumentId: order.instrumentId,
-          allowSynthetic: false,
+          allowSynthetic: paper,
         }).allowed
       )
         return reject('RISK_CAPABILITY');

@@ -428,6 +428,10 @@ try {
       assert.equal('approve' in paperRisk,false);
     assert.equal(typeof paper.calculatePaperCompetition,'function');
     assert.equal(typeof paper.calculatePaperInventoryValuation,'function');
+    assert.equal(typeof paper.calculatePaperRiskEvaluation,'function');
+    assert.throws(()=>paper.calculatePaperRiskEvaluation({}),/PAPER_EVALUATION_INPUT/);
+    assert.equal('calculatePaperRiskEvaluation' in paperRisk,false);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/risk-evaluation.js'));
     assert.equal(paper.PAPER_COMPETITION_MAX_ORDERS,300);
     assert.equal(typeof configuration.createPostgresPaperConfiguration,'function');
     assert.equal(typeof funding.createPostgresPaperFunding,'function');

@@ -1,5 +1,13 @@
 # PHASE 13 requirements
 
+## PAPER Risk calculation candidate
+
+Starting protected main **8dd14f4b77c3bda8a5f0df3003be54adde55bd07** passed all thirteen local baseline commands. The previous CI increment is fully accepted through [PR #29](https://github.com/dendenden-boop/tradeGPTbot/pull/29), [exact-main CI 39149926485](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39149926485) and [CodeQL 39149926492](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39149926492); pending statements in historical source checkpoints below describe their original review time.
+
+The [PAPER Risk evaluation contract](risk-evaluation.md) composes pristine tenant cash context, conservative vector budgets and the common policy with a distinct synthetic model capability namespace. The result is a pure calculation; no certificate, admission, reservation, hold or dispatch is enabled. Native financial profiles, all 50 published migrations and CI/security workflows remain unchanged. RED evidence is retained; new-head full regression and native/source/PR/protected-main CI are required before increment acceptance.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** General active/UNKNOWN history, certification, atomic vector reservations/Portfolio holds, final validation, operational sensors/bootstrap/supervisor and virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND stays Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed.
+
 ## Accepted isolated Auth CI source checkpoint
 
 Starting protected main **fe5bc77d76e39aeddcf165811c4e3e70319b2c3a**. Corrected source **e4f3a746270d5cff07b3283546b05b510d7eb1c6** passed [source CI 39132678725](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39132678725), [source CodeQL 39132678729](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39132678729), [PR CI 39132682288](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39132682288) and [PR CodeQL 39132682289](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39132682289). Exact-SHA artifacts, successful-job windows and ZIP SHA256 digests were verified. Both OS suites passed **4294 unit (1097 Paper) / 41 HTTP**; native PostgreSQL passed the same **1257 assertions in 38 files**, including all earlier identities, owner and upgrade proofs. Twelve clean deployments and audits pass; no open CodeQL alerts. All thirteen local baseline/regression commands and 62 targeted contracts pass. Sandbox EPERM was a launcher failure, not product RED.
