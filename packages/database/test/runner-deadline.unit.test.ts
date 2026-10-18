@@ -13,7 +13,10 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond aggregat
     expect(value, marker).toBeDefined();
     return Number(value?.replaceAll('_', ''));
   };
-  const parent = deadline(integration, "['scripts/test-database.mjs']"),
+  const proof = read('integration-proof.mjs');
+  const parent = Number(/database:\s*([\d_]+)/u.exec(proof)?.[1]?.replaceAll('_', '')),
+    fullParent = Number(/full:\s*([\d_]+)/u.exec(proof)?.[1]?.replaceAll('_', '')),
+    authParent = Number(/auth:\s*([\d_]+)/u.exec(proof)?.[1]?.replaceAll('_', '')),
     native = deadline(database, '// Whole native suite budget;'),
     auth = deadline(database, "['scripts/test-auth-runtime.mjs']"),
     hardening = deadline(database, "['scripts/test-auth-hardening.mjs']");
@@ -21,6 +24,11 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond aggregat
   // passed native assertions but exhausted the 900s parent during Auth.
   // This aggregate is separate from each test/transaction/abort deadline.
   expect([native, auth, hardening]).toEqual([480000, 120000, 180000]);
+  expect(integration).toContain('timeoutMs: proof.timeoutMs');
+  expect(integration).toContain("['scripts/test-database.mjs', ...proof.databaseArgs]");
+  expect(fullParent).toBe(parent);
+  expect(authParent).toBeGreaterThanOrEqual(auth + hardening + 60000);
+  expect(authParent).toBeLessThanOrEqual(360000);
   const config = readFileSync(
     new URL('../../../vitest.database.config.ts', import.meta.url),
     'utf8',
@@ -35,9 +43,13 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond aggregat
     new URL('../../../.github/workflows/ci.yml', import.meta.url),
     'utf8',
   );
-  const nativeJob = workflow.slice(workflow.indexOf('  native:'), workflow.indexOf('  smoke:'));
+  const nativeJob = workflow.slice(workflow.indexOf('  native:'), workflow.indexOf('  auth:'));
+  const authJob = workflow.slice(workflow.indexOf('  auth:'), workflow.indexOf('  smoke:'));
   expect(nativeJob).toContain('timeout-minutes: 20');
-  expect(nativeJob).toContain('run: pnpm test:integration');
+  expect(nativeJob).toContain('run: pnpm test:integration --proof=database');
+  expect(authJob).toContain('run: pnpm test:integration --proof=auth');
+  expect(authJob).toContain('timeout-minutes: 10');
+  expect(authParent + 180000).toBeLessThanOrEqual(10 * 60000);
   // Reserve three minutes within the unchanged native job cap for setup and cleanup.
   expect(parent + 180000).toBeLessThanOrEqual(20 * 60000);
 });

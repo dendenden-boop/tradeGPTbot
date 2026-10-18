@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
+import { readFile } from 'node:fs/promises';
+import { integrationProof, requireDatabaseProofReport } from './integration-proof.mjs';
 import {
   composeArgs,
   localPort,
@@ -10,12 +12,13 @@ import {
   testEnvironment,
 } from './docker-test-utils.mjs';
 
+const proof = integrationProof(process.argv.slice(2));
 const test = testEnvironment('integration');
 const file = 'infra/compose.test.yml';
 const options = { env: test.env, secrets: test.secrets };
 const startedAt = new Date().toISOString();
 let resourcesMayExist = false;
-let outcome = { status: 'FAIL', startedAt, project: test.project };
+let outcome = { status: 'FAIL', startedAt, project: test.project, proofScope: proof.mode };
 
 async function selectPorts() {
   const reservations = [];
@@ -60,7 +63,7 @@ try {
   const redisPort = localPort(
     await run('docker', composeArgs(file, test.project, ['port', 'redis', '6379']), options),
   );
-  if (!process.argv.includes('--database-only'))
+  if (proof.dependencies)
     await run(
       process.execPath,
       [
@@ -81,16 +84,13 @@ try {
         },
       },
     );
-  await run(process.execPath, ['scripts/test-database.mjs'], {
+  await run(process.execPath, ['scripts/test-database.mjs', ...proof.databaseArgs], {
     ...options,
     echo: true,
-    // Includes native owner repeats, upgrades, the full DB suite and paced
-    // authentication recovery. The serial SQL/Auth child budgets already sum
-    // to 780s. With 1138 cases, two independent runs exhausted the old 900s
-    // parent after all native assertions passed; retain 240s bounded room for
-    // owner/upgrade/setup/reset stages rather than omitting any checks.
-    // Individual SQL/Auth deadlines and the 20-minute CI job cap are unchanged.
-    timeoutMs: 1020000,
+    // Default/legacy full runs retain the 1020s serial parent. CI delegates
+    // Auth explicitly into a separate owned cluster with its own 360s parent;
+    // the native 480s and Auth 120/180s child deadlines remain unchanged.
+    timeoutMs: proof.timeoutMs,
     env: {
       ...test.env,
       NODE_ENV: 'test',
@@ -99,6 +99,18 @@ try {
       REDIS_URL: `redis://:${test.env.REDIS_PASSWORD}@127.0.0.1:${redisPort}/0`,
     },
   });
+  requireDatabaseProofReport(
+    JSON.parse(
+      await readFile(
+        new URL(
+          `../test-results/${proof.mode === 'auth' ? 'database-auth' : 'database'}.json`,
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    ),
+    proof.mode,
+  );
   outcome.status = 'PASS';
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Integration runner failed';

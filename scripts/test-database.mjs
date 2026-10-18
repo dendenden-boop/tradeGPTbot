@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { databaseProof } from './integration-proof.mjs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -14,6 +15,8 @@ import {
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
 import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
 import { preparePortfolioUpgrade, verifyPortfolioUpgrade } from './portfolio-upgrade.mjs';
+
+const proof = databaseProof(process.argv.slice(2));
 
 const expectedMigrations = [
   '202609070001_initial',
@@ -218,7 +221,7 @@ const identifier = (name) => {
 const prisma = databaseRequire.resolve('prisma/build/index.js');
 const config = 'packages/database/prisma.config.ts';
 const startedAt = new Date().toISOString();
-let outcome = { status: 'FAIL', startedAt, project };
+let outcome = { status: 'FAIL', startedAt, project, proofScope: proof.mode };
 const pools = new Set();
 const connect = (url, maintenance = false) => {
   const pool = new Pool({
@@ -462,8 +465,9 @@ const migrate = async (name, selectedConfig = config, owner = false) => {
   }
 };
 
-try {
-  await report('auth-database-hardening', { status: 'RUNNING', startedAt, project });
+async function prepareDatabaseProof() {
+  if (proof.mode !== 'auth')
+    await report('auth-database-hardening', { status: 'RUNNING', startedAt, project });
   // Verify the destination port against the exact owned Compose project before creating any DB.
   const port = await run(
     'docker',
@@ -549,6 +553,9 @@ try {
   // Cluster roles outlive databases. PostgreSQL 17 requires existing role SET
   // membership before a different non-super DDL owner can transfer functions.
   await admin.query(`GRANT ctp_auth_owner TO ${identifier(ownerRole)}`);
+}
+
+async function runDatabaseProof() {
   const fresh = connect(dbUrl(databases[0]));
   assert.deepEqual((await fresh.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
     { state: 'PAUSED', epoch: '1' },
@@ -3481,38 +3488,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     })),
   });
 
-  // Exercise the actual compiled entrypoint with separate login roles before this
-  // owned database is reset. The child owns its loopback SMTP sink and API listener.
-  await run(process.execPath, ['scripts/test-auth-runtime.mjs'], {
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      DATABASE_MIGRATION_URL: dbUrl(databases[0]),
-      DATABASE_URL: dbUrl(databases[0], true),
-      DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
-    },
-    secrets,
-    echo: true,
-    timeoutMs: 120000,
-  });
-  const authRuntime = JSON.parse(
-    await readFile(new URL('../test-results/auth-runtime.json', import.meta.url), 'utf8'),
-  );
-  assert.equal(authRuntime.status, 'PASS');
-
-  await run(process.execPath, ['scripts/test-auth-hardening.mjs'], {
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      DATABASE_MIGRATION_URL: dbUrl(databases[0]),
-      DATABASE_URL: dbUrl(databases[0], true),
-      DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
-    },
-    secrets,
-    echo: true,
-    // Includes fixed-window mail capacity recovery and paced enumeration.
-    timeoutMs: 180000,
-  });
+  // The database-only CI scope delegates these exact scripts to an isolated
+  // mandatory Auth job. Default/legacy runs retain their inline execution.
+  if (proof.mode === 'full') await runAuthenticationAcceptance();
 
   // Reset ONLY the DB name created above, then reapply the same versioned migrations.
   await fresh.end();
@@ -3576,8 +3554,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     nonBypassMigrationOwner: 'PASS',
     repeatedDeploy: 'PASS',
     isolatedReset: 'PASS',
-    authenticatedRuntime: 'PASS',
-    authenticationHardening: 'PASS',
+    authenticatedRuntime: proof.mode === 'database' ? 'DELEGATED' : 'PASS',
+    authenticationHardening: proof.mode === 'database' ? 'DELEGATED' : 'PASS',
+    requiredAuthJob: proof.mode === 'database' ? 'Auth runtime and faults' : undefined,
     orderEngineUpgradeFromPhase10: 'PASS',
     riskControlsFreshAndResetPaused: 'PASS',
     riskControlsUpgradePaused: 'PASS',
@@ -3638,6 +3617,82 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
   };
+}
+
+async function runAuthenticationAcceptance() {
+  const invokedAt = Date.now();
+  await run(process.execPath, ['scripts/test-auth-runtime.mjs'], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_MIGRATION_URL: dbUrl(databases[0]),
+      DATABASE_URL: dbUrl(databases[0], true),
+      DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
+    },
+    secrets,
+    echo: true,
+    timeoutMs: 120000,
+  });
+  const authRuntime = JSON.parse(
+    await readFile(new URL('../test-results/auth-runtime.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(authRuntime.status, 'PASS');
+
+  await run(process.execPath, ['scripts/test-auth-hardening.mjs'], {
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_MIGRATION_URL: dbUrl(databases[0]),
+      DATABASE_URL: dbUrl(databases[0], true),
+      DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
+    },
+    secrets,
+    echo: true,
+    // Includes fixed-window mail capacity recovery and paced enumeration.
+    timeoutMs: 180000,
+  });
+
+  const authHardening = JSON.parse(
+    await readFile(new URL('../test-results/auth-hardening-load.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(authHardening.status, 'PASS');
+  for (const report of [authRuntime, authHardening]) {
+    assert.ok(
+      Date.parse(report.startedAt) >= invokedAt,
+      'Auth report must belong to this invocation',
+    );
+    assert.ok(Date.parse(report.completedAt) >= Date.parse(report.startedAt));
+    assert.ok(Date.parse(report.completedAt) <= Date.now());
+  }
+}
+
+async function runIsolatedAuthenticationProof() {
+  const fresh = connect(dbUrl(databases[0]));
+  assert.equal((await fresh.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
+  assert.equal(
+    (
+      await fresh.query(
+        'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL',
+      )
+    ).rows[0].n,
+    expectedMigrations.length,
+  );
+  await runAuthenticationAcceptance();
+  outcome = {
+    ...outcome,
+    status: 'PASS',
+    fresh: 'PASS',
+    repeatedDeploy: 'PASS',
+    migrations: expectedMigrations.length,
+    authenticatedRuntime: 'PASS',
+    authenticationHardening: 'PASS',
+  };
+}
+
+try {
+  await prepareDatabaseProof();
+  if (proof.mode === 'auth') await runIsolatedAuthenticationProof();
+  else await runDatabaseProof();
 } catch (error) {
   const reason =
     error instanceof Error
@@ -3649,5 +3704,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
 } finally {
   for (const pool of pools) await pool.end().catch(() => {});
   // The parent runner removes the entire owned Compose project, even after partial setup.
-  await report('database', { ...outcome, completedAt: new Date().toISOString() });
+  await report(proof.mode === 'auth' ? 'database-auth' : 'database', {
+    ...outcome,
+    completedAt: new Date().toISOString(),
+  });
 }

@@ -1,5 +1,13 @@
 # Atomic tenant cash Risk context
 
+## Isolated Auth CI candidate
+
+Starting protected main **fe5bc77d76e39aeddcf165811c4e3e70319b2c3a** passed all thirteen baseline commands. The [isolated Auth acceptance contract](ci-auth-isolation.md) addresses confirmed cumulative database/Auth parent timeouts while preserving the complete suite and every existing deadline. CI gives the original compiled Auth/load scripts a separate owned PostgreSQL/Redis/SMTP environment; native reports explicitly delegate those stages. The same required **Real services and Docker smoke** gate accepts only successful native, Auth and smoke results. Default/legacy integration commands retain their full inline Auth execution.
+
+Both new RED contracts failed before implementation; **61 targeted contracts now pass**, including explicit scope/report validation, actual CLI refusal, missing/failed Auth gate behavior and the unchanged deadline assertion identity. Extraction review preserves the earlier database assertions, Auth commands and owned setup. All 50 migrations, accepted financial runtime/adapters/PAPER source, dependencies and CodeQL configuration remain unchanged. Full new-head regression and native/source/PR/protected-main CI are required; no pending run is acceptance. Historical checkpoints below retain their original results and CI composition.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** This increment changes test orchestration only. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND stays Binance Spot TESTNET only. Real private exchange acceptance, shared-host timing reliability and production soak are not claimed.
+
 ## Accepted tenant cash Risk context and isolated CI checkpoint
 
 Source **973e8d827e1ee12e73a3680e6a5b8948d0f1fa36** passed [source CI 39016868170](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39016868170) (attempt 2), [CodeQL 39016868183](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39016868183) and [PR CI 39016870962](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39016870962). Exact-SHA artifacts, successful-job windows and ZIP SHA256 digests were verified on 2026-10-18. Both OS suites passed **4251 unit (1097 Paper) and 41 HTTP tests**; native PostgreSQL passed **1257 assertions in 38 files** (1014 main, 23 registry, 220 role-graph). All prior assertion identities remain. The 18 new tenant cases also pass under the restricted owner (78 authority/context cases); all owner/upgrade/Auth stages, Docker smoke, twelve clean deployments and audits pass. No open CodeQL alerts. Native elapsed time: 419685 ms within the unchanged 480000 ms limit. All thirteen local baseline and regression commands passed.
