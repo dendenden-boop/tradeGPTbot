@@ -70,6 +70,7 @@ const expectedMigrations = [
   '202610160001_paper_risk_context',
   '202610160002_paper_tenant_risk_context',
   '202610190001_paper_reservation_vectors',
+  '202610190002_paper_reservation_state',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2084,6 +2085,39 @@ async function runDatabaseProof() {
   assert.equal(paperReservationOwner.numFailedTests, 0);
   assert.equal(paperReservationOwner.numPendingTests, 0);
 
+  // Separate conservative reservation-state proof; all 18 prior owner reports stay mandatory.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-reservation-state.integration.test.ts',
+      '--outputFile.json=test-results/paper-reservation-state-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2], false, true),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 30000,
+    },
+  );
+  const paperReservationStateOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-reservation-state-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperReservationStateOwner.success, true);
+  assert.equal(paperReservationStateOwner.numPassedTests, 33);
+  assert.equal(paperReservationStateOwner.numFailedTests, 0);
+  assert.equal(paperReservationStateOwner.numPendingTests, 0);
+
   await run(
     process.execPath,
     [
@@ -3598,6 +3632,166 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     }
   }
 
+  // Published51 -> additive52 retains exact original vectors and legacy quarantine.
+  // No state is inferred/backfilled; these are owner-only storage fixtures, not approvals.
+  const stateOwnerPool = connect(dbUrl(databases[4], false, true)),
+    stateOwner = await stateOwnerPool.connect();
+  try {
+    assert.deepEqual(
+      (
+        await stateOwner.query(
+          'SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user',
+        )
+      ).rows,
+      [{ rolsuper: false, rolbypassrls: false }],
+    );
+    await stateOwner.query('BEGIN');
+    const stateSeed = await createPaperReservationFixture(stateOwner);
+    await stateOwner.query(
+      `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"vectorSize","expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',2,now()+interval '1 hour',now())`,
+      [
+        stateSeed.reservation,
+        stateSeed.tenant,
+        stateSeed.decision,
+        stateSeed.intent,
+        stateSeed.account,
+      ],
+    );
+    for (const [ordinal, asset, amount] of [
+      [1, 'BTC', '1.000000000000000001'],
+      [2, 'USDT', '0.010000000000000001'],
+    ])
+      await stateOwner.query(
+        `INSERT INTO ctp_paper.reservation_debit(tenant_id,reservation_id,intent_id,account_id,mode,ordinal,asset,amount,hold_id) VALUES($1,$2,$3,$4,'PAPER',$5,$6,$7::numeric,$8)`,
+        [
+          stateSeed.tenant,
+          stateSeed.reservation,
+          stateSeed.intent,
+          stateSeed.account,
+          ordinal,
+          asset,
+          amount,
+          randomUUID(),
+        ],
+      );
+    await stateOwner.query('COMMIT');
+    const stateRows = async () => ({
+      parents: (
+        await paperUpgrade.query(
+          'SELECT to_jsonb(r)::text raw FROM public.risk_reservation r ORDER BY id',
+        )
+      ).rows,
+      debits: (
+        await paperUpgrade.query(
+          'SELECT to_jsonb(d)::text raw FROM ctp_paper.reservation_debit d ORDER BY tenant_id,reservation_id,ordinal',
+        )
+      ).rows,
+    });
+    const stateBefore = await stateRows(),
+      applicationBeforeState = await captureRetained();
+    const stateFunctions = async () =>
+      (
+        await paperUpgrade.query(
+          `SELECT n.nspname,p.proname,oidvectortypes(p.proargtypes) args,pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE left(n.nspname,4)='ctp_' ORDER BY n.nspname,p.proname,args`,
+        )
+      ).rows;
+    const functionsBeforeState = await stateFunctions();
+    assert.equal(functionsBeforeState.length, 178);
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[51]),
+      path.join(paperMigrations, expectedMigrations[51]),
+      { recursive: true },
+    );
+    await migrate(databases[4], paperConfig, true);
+    await migrate(databases[4], paperConfig, true);
+    const functionsAfterState = await stateFunctions();
+    assert.equal(functionsAfterState.length, 180);
+    for (const previous of functionsBeforeState)
+      assert.deepEqual(
+        functionsAfterState.find(
+          (f) =>
+            f.nspname === previous.nspname &&
+            f.proname === previous.proname &&
+            f.args === previous.args,
+        ),
+        previous,
+      );
+    assert.deepEqual(await stateRows(), stateBefore);
+    assert.deepEqual(await captureRetained(), applicationBeforeState);
+    assert.equal(
+      (await paperUpgrade.query('SELECT count(*)::int n FROM ctp_paper.reservation_state_event'))
+        .rows[0].n,
+      0,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          `SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ctp_paper.reservation_state_event'::regclass`,
+        )
+      ).rows,
+      [{ relrowsecurity: true, relforcerowsecurity: true }],
+    );
+    const legacyState = (
+      await paperUpgrade.query(
+        `SELECT "tenantId",id FROM public.risk_reservation WHERE "paperLegacy" ORDER BY id LIMIT 1`,
+      )
+    ).rows;
+    assert.equal(legacyState.length, 1);
+    await stateOwner.query('BEGIN');
+    await stateOwner.query("SELECT set_config('app.tenant_id',$1,true)", [legacyState[0].tenantId]);
+    await assert.rejects(
+      stateOwner.query(
+        `SELECT ctp_paper.append_reservation_state($1::uuid,$2::uuid,$3::uuid,0::bigint,'ACTIVE'::text,floor(extract(epoch FROM clock_timestamp())*1000)::bigint)`,
+        [legacyState[0].tenantId, legacyState[0].id, randomUUID()],
+      ),
+      (e) => e.code === '23514' && e.message === 'PAPER_RESERVATION_STATE_SCOPE',
+    );
+    await stateOwner.query('ROLLBACK');
+    await stateOwner.query('BEGIN');
+    await stateOwner.query("SELECT set_config('app.tenant_id',$1,true)", [stateSeed.tenant]);
+    const seedEvent = randomUUID();
+    const seedStamp = (
+      await stateOwner.query(
+        `SELECT floor(extract(epoch FROM "createdAt")*1000)::text ms FROM public.risk_reservation WHERE id=$1`,
+        [stateSeed.reservation],
+      )
+    ).rows[0].ms;
+    const seedReceipt = (
+      await stateOwner.query(
+        `SELECT ctp_paper.append_reservation_state($1::uuid,$2::uuid,$3::uuid,0::bigint,'ACTIVE'::text,$4::bigint) receipt`,
+        [stateSeed.tenant, stateSeed.reservation, seedEvent, seedStamp],
+      )
+    ).rows[0].receipt;
+    assert.equal(seedReceipt.status, 'ACTIVE');
+    assert.equal(seedReceipt.revision, '1');
+    await stateOwner.query('COMMIT');
+    await stateOwner.query('BEGIN');
+    await stateOwner.query("SELECT set_config('app.tenant_id',$1,true)", [randomUUID()]);
+    assert.equal(
+      (
+        await stateOwner.query(
+          'SELECT count(*)::int n FROM ctp_paper.reservation_state_event WHERE tenant_id=$1',
+          [stateSeed.tenant],
+        )
+      ).rows[0].n,
+      0,
+    );
+    await stateOwner.query('COMMIT');
+    assert.deepEqual(await stateRows(), stateBefore);
+    assert.deepEqual(await captureRetained(), applicationBeforeState);
+  } finally {
+    try {
+      await stateOwner.query('ROLLBACK');
+    } finally {
+      stateOwner.release();
+      try {
+        await stateOwnerPool.end();
+      } finally {
+        pools.delete(stateOwnerPool);
+      }
+    }
+  }
+
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -3842,6 +4036,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperReservationVectorsNonBypassOwner: 'PASS',
     paperReservationVectorsPopulatedUpgradeFromPublished50: 'PASS',
     paperReservationVectorsLegacyQuarantine: 'PASS',
+    paperReservationStateNonBypassOwner: 'PASS',
+    paperReservationStatePopulatedUpgradeFromPublished51: 'PASS',
+    paperReservationStateNoInferredHistory: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
@@ -3869,6 +4066,10 @@ async function resetDatabaseProof(fresh) {
   await migrate(databases[0]);
   const reset = connect(dbUrl(databases[0]));
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.reservation_state_event')).rows[0].n,
+    0,
+  );
   assert.equal(
     (await reset.query('SELECT count(*)::int n FROM ctp_paper.reservation_debit')).rows[0].n,
     0,
