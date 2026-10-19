@@ -403,3 +403,19 @@ it('paper-reservation: concurrent alternative parents serialize to one complete 
     await Promise.all([close(first), ...(second ? [close(second)] : [])]);
   }
 });
+it('paper-reservation: a new caller cannot manufacture a legacy scalar exemption', async () => {
+  await expect(
+    transaction(async (p) => {
+      const x = await fixture(p),
+        budget = randomUUID();
+      await p.query(
+        `INSERT INTO public.risk_budget(id,"tenantId","accountId","profileId",mode,scope,"scopeKey",asset,"windowStart","windowEnd","limitAmount","updatedAt") VALUES($1,$2,$3::uuid,$4,'PAPER','ACCOUNT',$3::text,'USDT',now(),now()+interval '1 day',1000,now())`,
+        [budget, x.tenant, x.account, x.profile],
+      );
+      await p.query(
+        `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"paperLegacy","budgetId",asset,amount,"expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',true,$6,'USDT',100,now()+interval '1 hour',now())`,
+        [x.reservation, x.tenant, x.decision, x.intent, x.account, budget],
+      );
+    }),
+  ).rejects.toMatchObject({ code: '23514', message: 'PAPER_RESERVATION_LEGACY_WRITE_FORBIDDEN' });
+});
