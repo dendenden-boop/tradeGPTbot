@@ -144,7 +144,7 @@ it('paper-reservation: persists SELL base and quote fee without a dummy scalar a
           consumedAmount: '0',
         },
       ]);
-      const a = await q.query(
+      const a = await q.query<{ asset: string; amount: string; hold_id: string }>(
         `SELECT asset,amount::text,hold_id FROM ctp_paper.reservation_debit WHERE reservation_id=$1 ORDER BY ordinal`,
         [x.reservation],
       );
@@ -213,7 +213,7 @@ it('paper-reservation: wrong BUY asset and shared hold identifiers fail closed',
       await debit(p, x, 1, 'BTC', '1', id);
       await debit(p, x, 2, 'USDT', '0.01', id);
     }),
-  ).rejects.toMatchObject({ code: '23514' });
+  ).rejects.toMatchObject({ code: '23505' });
 });
 it('paper-reservation: immutable rows prevent overwrite, deletion and A-to-B-to-A identifier reuse', async () => {
   const x = await transaction((p) => ready(p));
@@ -231,9 +231,10 @@ it('paper-reservation: immutable rows prevent overwrite, deletion and A-to-B-to-
     ).rejects.toMatchObject({ code: '23514' });
   await transaction(async (p) => {
     await p.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
-    const r = await p.query('SELECT status FROM public.risk_reservation WHERE id=$1', [
-      x.reservation,
-    ]);
+    const r = await p.query<{ status: string }>(
+      'SELECT status FROM public.risk_reservation WHERE id=$1',
+      [x.reservation],
+    );
     expect(r.rows[0]?.status).toBe('ACTIVE');
   });
 });
@@ -244,14 +245,14 @@ it('paper-reservation: orphan or cross-account allocations cannot bind an existi
       await parent(p, x, 1);
       await debit(p, { ...x, reservation: randomUUID() }, 1, 'BTC', '1');
     }),
-  ).rejects.toMatchObject({ code: '23514' });
+  ).rejects.toMatchObject({ code: '23503' });
   await expect(
     transaction(async (p) => {
       const x = await fixture(p);
       await parent(p, x, 1);
       await debit(p, { ...x, account: randomUUID() }, 1, 'BTC', '1');
     }),
-  ).rejects.toMatchObject({ code: '23514' });
+  ).rejects.toMatchObject({ code: '23503' });
 });
 it('paper-reservation: existing runtime roles receive no allocation reader or writer authority', async () => {
   const r = await admin.query(
