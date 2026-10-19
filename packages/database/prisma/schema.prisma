@@ -1401,6 +1401,8 @@ model RiskReservation {
   budgetId           String?             @db.Uuid
   /// PAPER uses an immutable private debit vector; native scalar fields remain mandatory in SQL.
   vectorSize         Int?
+  /// Migration-only quarantine for pre-vector PAPER rows; never source completeness or approval.
+  paperLegacy        Boolean             @default(false)
   status             ReservationStatus   @default(ACTIVE)
   asset              String?             @db.VarChar(32)
   /// @decimal aggregate 48,18 nonnegative

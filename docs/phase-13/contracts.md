@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Legacy PAPER compatibility correction
+
+Initial source5bc3956 failed the real legacy-upgrade gate and is not accepted. Candidate51 now preserves existing scalar PAPER values/IDs/FKs as immutable `paperLegacy` quarantine; it never guesses a cash vector. New PAPER vectors for that tenant, forged legacy exemptions and guessed legacy debits reject. Native modes keep their scalar invariants. [Current storage contract](reservation-storage.md) and PR32 record actual corrected evidence after execution. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER dispatch and positive credit disabled.
+
 ## Initial PAPER reservation representation
 
 [Storage contract](reservation-storage.md): shared RiskReservation and SubmissionAttempt FK identities are retained. Native budgetId/asset/amount remain required by SQL CHECK. PAPER uses nullable scalar fields plus exact1..2 immutable positive cash debits, a permanent per-intent identity, exact tenant/account/intent/mode relationships and deferred complete-vector commit. Shape, metadata fingerprints and persisted original terms do not prove model coverage, complete current liabilities or authorization. No private allocation table/function grant or PAPER lifecycle/admission writer is introduced. Published1-50/native financial source remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER dispatch/positive credit disabled.

@@ -3,27 +3,34 @@ BEGIN;
 -- dispatch authority is added. Existing native scalar semantics are unchanged.
 LOCK TABLE public.risk_reservation IN ACCESS EXCLUSIVE MODE;
 ALTER TABLE public.risk_reservation NO FORCE ROW LEVEL SECURITY;
-DO $$ BEGIN
- IF EXISTS(SELECT 1 FROM public.risk_reservation WHERE mode='PAPER') THEN
-  RAISE EXCEPTION 'PAPER_RESERVATION_LEGACY_REQUIRES_RECONCILIATION';
- END IF;
-END $$;
 ALTER TABLE public.risk_reservation
  ADD COLUMN "vectorSize" integer,
+ ADD COLUMN "paperLegacy" boolean NOT NULL DEFAULT false,
  ALTER COLUMN "budgetId" DROP NOT NULL,
  ALTER COLUMN asset DROP NOT NULL,
- ALTER COLUMN amount DROP NOT NULL,
+ ALTER COLUMN amount DROP NOT NULL;
+-- Preserve every old economic field and FK. This is an explicit untrusted
+-- legacy tag, never a reconstructed vector, cash credit or admission.
+UPDATE public.risk_reservation SET "paperLegacy"=true WHERE mode='PAPER';
+-- Validate all queued original constraints before subsequent DDL; do not skip them.
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+ALTER TABLE public.risk_reservation
  ADD CONSTRAINT risk_reservation_representation CHECK (
-  (mode='PAPER' AND status='ACTIVE' AND version=0 AND "releasedAt" IS NULL AND "vectorSize" IS NOT NULL AND "vectorSize" IN(1,2)
+  (mode='PAPER' AND "paperLegacy" AND "vectorSize" IS NULL
+   AND "budgetId" IS NOT NULL AND asset IS NOT NULL AND amount IS NOT NULL)
+  OR (mode='PAPER' AND NOT "paperLegacy" AND status='ACTIVE' AND version=0 AND "releasedAt" IS NULL AND "vectorSize" IS NOT NULL AND "vectorSize" IN(1,2)
    AND "budgetId" IS NULL AND asset IS NULL AND amount IS NULL AND "consumedAmount"=0)
-  OR (mode<>'PAPER' AND "vectorSize" IS NULL
+  OR (mode<>'PAPER' AND NOT "paperLegacy" AND "vectorSize" IS NULL
    AND "budgetId" IS NOT NULL AND asset IS NOT NULL AND amount IS NOT NULL)
  );
 
 ALTER TABLE public.risk_reservation FORCE ROW LEVEL SECURITY;
 
 CREATE UNIQUE INDEX risk_reservation_paper_intent_identity
- ON public.risk_reservation("tenantId","intentId") WHERE mode='PAPER';
+ ON public.risk_reservation("tenantId","intentId") WHERE mode='PAPER' AND NOT "paperLegacy";
+CREATE INDEX risk_reservation_paper_legacy_tenant ON public.risk_reservation("tenantId")
+ WHERE mode='PAPER' AND "paperLegacy";
 
 CREATE TABLE ctp_paper.reservation_debit (
  tenant_id uuid NOT NULL,
@@ -57,13 +64,24 @@ CREATE TRIGGER reservation_debit_no_truncate BEFORE TRUNCATE ON ctp_paper.reserv
 CREATE FUNCTION ctp_paper.immutable_reservation_vector() RETURNS trigger
  LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
+ IF TG_OP='INSERT' THEN
+  IF NEW."paperLegacy" THEN
+   RAISE EXCEPTION 'PAPER_RESERVATION_LEGACY_WRITE_FORBIDDEN' USING ERRCODE='23514';
+  END IF;
+  IF NEW.mode='PAPER' THEN
+   IF EXISTS(SELECT 1 FROM public.risk_reservation r WHERE r."tenantId"=NEW."tenantId" AND r.mode='PAPER' AND r."paperLegacy") THEN
+    RAISE EXCEPTION 'PAPER_RESERVATION_LEGACY_SCOPE' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  RETURN NEW;
+ END IF;
  IF TG_TABLE_NAME='reservation_debit' OR OLD.mode='PAPER'
   OR (TG_OP='UPDATE' AND NEW.mode='PAPER') THEN
   RAISE EXCEPTION 'PAPER_RESERVATION_IMMUTABLE' USING ERRCODE='23514';
  END IF;
  RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $$;
-CREATE TRIGGER immutable_paper_reservation BEFORE UPDATE OR DELETE ON public.risk_reservation
+CREATE TRIGGER immutable_paper_reservation BEFORE INSERT OR UPDATE OR DELETE ON public.risk_reservation
  FOR EACH ROW EXECUTE FUNCTION ctp_paper.immutable_reservation_vector();
 CREATE TRIGGER immutable_paper_reservation_debit BEFORE UPDATE OR DELETE ON ctp_paper.reservation_debit
  FOR EACH ROW EXECUTE FUNCTION ctp_paper.immutable_reservation_vector();
@@ -81,6 +99,9 @@ BEGIN
   IF NOT FOUND OR r.mode<>'PAPER' THEN
    RAISE EXCEPTION 'PAPER_RESERVATION_SCOPE' USING ERRCODE='23514';
   END IF;
+ END IF;
+ IF r."paperLegacy" OR r."vectorSize" IS NULL THEN
+  RAISE EXCEPTION 'PAPER_RESERVATION_LEGACY_VECTOR_FORBIDDEN' USING ERRCODE='23514';
  END IF;
  SELECT * INTO i FROM public.order_intent WHERE "tenantId"=r."tenantId" AND id=r."intentId"
   AND "accountId"=r."accountId" AND mode='PAPER';

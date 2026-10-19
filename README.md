@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## Legacy PAPER compatibility correction
+
+Initial source5bc3956 failed the real legacy-upgrade gate and is not accepted. Candidate51 now preserves existing scalar PAPER values/IDs/FKs as immutable `paperLegacy` quarantine; it never guesses a cash vector. New PAPER vectors for that tenant, forged legacy exemptions and guessed legacy debits reject. Native modes keep their scalar invariants. [Current storage contract](docs/phase-13/reservation-storage.md) and PR32 record actual corrected evidence after execution. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER dispatch and positive credit disabled.
+
 ## PHASE13 initial reservation storage
 
 The [initial PAPER vector storage contract](docs/phase-13/reservation-storage.md) preserves common Order/Risk identity and native scalar invariants while storing PAPER base/quote debits without a dummy monetary scalar. It provides immutable original terms and database identity/complete-vector constraints. Certified current inventory, atomic Risk/Portfolio reservation lifecycle, final dispatch validation and virtual execution remain outstanding. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak is claimed. Final new-head CI proof is recorded after execution; historical checkpoints below retain their original results.

@@ -1,5 +1,15 @@
 # PHASE 13 verification
 
+## Legacy upgrade RED and quarantine correction
+
+Source **5bc39562a1960c2640ec8459daa761fddc3cab56** / [Platform39250051896](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39250051896) failed during the existing generic populated upgrade: it contains valid scalar PAPER reservations and their attempt/FK history, so unconditional refusal prevented migration. Exact head/job-window/ZIP SHA256 proof is retained; no new owner/native suite was reached. Source/PR Ubuntu, Windows, Auth, smoke and CodeQL passed, but neither Platform39250051896 nor PR39250058148 is acceptance.
+
+Test-first **85ab700** specifies lossless quarantine, no guessed vector, no legacy exemption forgery and cross-account tenant blocking before the migration correction. Candidate51 preserves all original scalar values/status/timestamps/IDs/FKs and adds only the immutable legacy tag. A PGlite-only diagnostic additionally caught queued trigger events before DDL; the candidate validates them with SET CONSTRAINTS ALL IMMEDIATE and restores deferral. That diagnostic is not native evidence. Full corrected local regression and source/PR/protected-main CI remain required. Final suite29/fresh+owner, prior1260 native identities and all17 old owner reports must pass unchanged. Actual corrected results are published after execution in [PR32](https://github.com/dendenden-boop/tradeGPTbot/pull/32); no prior source is reused as acceptance.
+
+Corrected local regression completed all thirteen commands on 2026-10-19: **4438 unit / 41 HTTP**, twelve clean deployments, database validation, runtime, build and audits **0**. Five LF-normalized code/DDL/fixture hashes match the executed inputs. This accepts neither native PostgreSQL nor the migration's owner/upgrade behavior; exact corrected source/PR/protected-main CI remains required.
+
+PHASE13 IN_PROGRESS / NOT READY FOR PHASE14. No certified admission/remaining-UNKNOWN lifecycle/Portfolio holds/final dispatch/virtual execution is claimed. LIVE/PAPER dispatch and positive credit disabled. Earlier5bc/e3 records below are historical checkpoints.
+
 ## Initial vector storage RED and acceptance requirements
 
 Complete local regression passed all thirteen commands: **4438 unit / 41 HTTP**, twelve clean deployments, database validation, runtime and audits **0**. Prisma generated with pinned Node24.20.0/pnpm11.25.0. Five code/DDL/fixture source hashes bind the local regression inputs; native GREEN is not inferred from local/PGlite results. Exact source/PR/protected-main acceptance results are published after execution in [PR #32](https://github.com/dendenden-boop/tradeGPTbot/pull/32).
@@ -8,7 +18,7 @@ Starting protected main **cd733bb07ba052b97e7cfa59c6dd14da4d903c83** passed the 
 
 Diagnostic c9fe056 /CI39221846591 stopped at fixture lint (native skipped). ed705e2 /CI39243576896 contained a separately reproduced fixture parser42P08, was superseded/cancelled, and is not RED/acceptance. Four first-use UUID casts fixed the fixture. PGlite complete-DDL rehearsals are parser/content checks only.
 
-Additive51 implements the [initial shared-parent/full-vector storage](reservation-storage.md) contract. Final acceptance requires28 new native cases in fresh and non-BYPASSRLS owner databases; old1260 native identities and17 owner reports unchanged; actual populated50->51/repeated deploy/legacy refusal, all old rows/176 private functions retained, forced RLS/no new runtime grants; full local and exact source/PR/protected-main CI with artifact/SHA/digest proof. Final actual counts, SHAs and CI IDs are published after execution in the implementation PR/completion checkpoint. No pending run is marked passed here. Existing deadlines/cohorts/workflows/pins and all50 published migrations remain unchanged.
+Additive51 implements the [initial shared-parent/full-vector storage](reservation-storage.md) contract. Final acceptance requires29 new native cases in fresh and non-BYPASSRLS owner databases; old1260 native identities and17 owner reports unchanged; actual populated50->51/repeated deploy/legacy quarantine, all old rows/176 private functions retained, forced RLS/no new runtime grants; full local and exact source/PR/protected-main CI with artifact/SHA/digest proof. Final actual counts, SHAs and CI IDs are published after execution in the implementation PR/completion checkpoint. No pending run is marked passed here. Existing deadlines/cohorts/workflows/pins and all50 published migrations remain unchanged.
 
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. No certified active/UNKNOWN source, atomic admission/Portfolio holds, final dispatch validation or virtual execution is claimed by storage tests. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak. Historical checkpoints below preserve their actual outcomes.
 

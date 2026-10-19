@@ -1,8 +1,12 @@
 # PHASE 13 requirements
 
+## Legacy PAPER compatibility correction
+
+Initial source5bc3956 failed the real legacy-upgrade gate and is not accepted. Candidate51 now preserves existing scalar PAPER values/IDs/FKs as immutable `paperLegacy` quarantine; it never guesses a cash vector. New PAPER vectors for that tenant, forged legacy exemptions and guessed legacy debits reject. Native modes keep their scalar invariants. [Current storage contract](reservation-storage.md) and PR32 record actual corrected evidence after execution. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER dispatch and positive credit disabled.
+
 ## Initial PAPER vector storage checkpoint
 
-Starting protected main **cd733bb0** passed all thirteen baseline commands. [Initial reservation storage](reservation-storage.md) preserves the common reservation/decision/intent/account/mode/attempt identities while representing PAPER cash as an immutable full vector, with no dummy scalar. Native scalar fields remain required by SQL; published 1-50 and native financial source remain unchanged. Corrected real PostgreSQL RED: CI39244692851, 15 missing-schema failures and all1017 previous main assertions preserved. All28 new native contracts, separate owner proof and populated50->51/legacy-refusal checks require exact new-head acceptance; actual outcomes are recorded only after execution.
+Starting protected main **cd733bb0** passed all thirteen baseline commands. [Initial reservation storage](reservation-storage.md) preserves the common reservation/decision/intent/account/mode/attempt identities while representing PAPER cash as an immutable full vector, with no dummy scalar. Native scalar fields remain required by SQL; published 1-50 and native financial source remain unchanged. Corrected real PostgreSQL RED: CI39244692851, 15 missing-schema failures and all1017 previous main assertions preserved. All29 new native contracts, separate owner proof and populated50->51/legacy-quarantine checks require exact new-head acceptance; actual outcomes are recorded only after execution.
 
 This is original-allocation storage, without certified admission, current remaining/UNKNOWN lifecycle, Portfolio holds, grant, permit or PAPER dispatch. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Prior checkpoints retain their original scope/results.
 

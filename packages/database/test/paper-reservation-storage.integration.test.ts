@@ -74,7 +74,7 @@ it('paper-reservation: persists SELL base and quote fee without a dummy scalar a
       await q.query('BEGIN');
       await q.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
       const r = await q.query(
-        `SELECT r."tenantId",r."intentId",r."accountId",r.mode,r.asset,r.amount::text,r."budgetId",r."vectorSize",r."consumedAmount"::text FROM public.risk_reservation r WHERE r.id=$1`,
+        `SELECT r."tenantId",r."intentId",r."accountId",r.mode,r.asset,r.amount::text,r."budgetId",r."vectorSize",r."paperLegacy",r."consumedAmount"::text FROM public.risk_reservation r WHERE r.id=$1`,
         [x.reservation],
       );
       expect(r.rows).toEqual([
@@ -87,6 +87,7 @@ it('paper-reservation: persists SELL base and quote fee without a dummy scalar a
           amount: null,
           budgetId: null,
           vectorSize: 2,
+          paperLegacy: false,
           consumedAmount: '0',
         },
       ]);

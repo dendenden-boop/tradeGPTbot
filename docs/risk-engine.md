@@ -1,5 +1,9 @@
 # Risk Engine
 
+## Legacy PAPER compatibility correction
+
+Initial source5bc3956 failed the real legacy-upgrade gate and is not accepted. Candidate51 now preserves existing scalar PAPER values/IDs/FKs as immutable `paperLegacy` quarantine; it never guesses a cash vector. New PAPER vectors for that tenant, forged legacy exemptions and guessed legacy debits reject. Native modes keep their scalar invariants. [Current storage contract](phase-13/reservation-storage.md) and PR32 record actual corrected evidence after execution. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER dispatch and positive credit disabled.
+
 ## PHASE13 initial vector storage boundary
 
 [Initial PAPER reservation storage](phase-13/reservation-storage.md) retains common RiskGrant reservation identity/FKs and adds a separate immutable cash vector. PAPER has no scalar cash debit; native scalar budget/asset/amount remain required by SQL. Per-intent uniqueness and complete-vector constraints provide original storage integrity, not a certified snapshot, current remaining/UNKNOWN lifecycle, budget admission, Portfolio hold or financial grant. The existing pristine source and PAPER dispatch guards remain closed. Published1-50/native financial source remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER dispatch/positive credit disabled, native AMEND Binance Spot TESTNET only.
