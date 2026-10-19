@@ -344,6 +344,14 @@ it('preserves a final decimal atom above Number precision', () => {
     '9007199254740993.000000000000000001',
   );
 });
+it.each(['NaN', '1.5', '1e3', 'untrusted-counter'])(
+  'sanitizes an unparseable revision without exposing its value: %s',
+  (revision) => {
+    const f = commitmentFixture();
+    f.revision = revision;
+    expect(() => projectPaperRiskCommitments(f)).toThrow('PAPER_COMMITMENT_INPUT');
+  },
+);
 it.each(['root', 'reservation', 'proof', 'debit'])(
   'rejects caller authority overrides at %s',
   (kind) => {

@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## PAPER full-vector commitment projection checkpoint
+
+Initial source `65f5b5b04228578897b2072316bbbe410c5e1399` is superseded and is **not acceptance**: review found that a non-integer revision string could reach BigInt inside a continuable refinement and leak an unsanitized conversion error. Four regression cases reproduced RED (80 prior cases passed). The format stage now gates the BigInt bound check through a schema pipeline. **84 new contracts / 221 targeted assertions in four suites pass**; all thirteen corrected-source local regression commands pass: **4438 unit / 41 HTTP**, build/runtime, twelve clean deployments and audits 0. Exact-SHA source/PR/protected-main CI run IDs, artifact verification and protection proof are published after execution in [PR #31](https://github.com/dendenden-boop/tradeGPTbot/pull/31) and the completion checkpoint. Source and final review use the same frozen HEAD; no result from another SHA establishes its acceptance. The initial 80-case source/checkpoints below retain their historical scope; green results for that source cannot accept the corrected contract.
+
+PHASE 13 remains IN_PROGRESS / NOT READY FOR PHASE 14. No financial writer, grant, permit or dispatch is introduced; LIVE/PAPER financial dispatch and positive native credit remain disabled. All 50 migrations and native financial runtime remain unchanged.
+
 ## PAPER full-vector commitment projection candidate
 
 Starting protected main **619ff1a0c0837af2f05e15b999fa619bc52dc426** passed all thirteen baseline commands. The [commitment projection contract](commitment-projection.md) connects account-local reservation vectors with actual common Portfolio holds/latest-event watermarks, retaining UNKNOWN and checking released tombstones without another monetary effect. It is a pure content projection, without source/completeness certification, financial writes, grant, permit or dispatch. The accepted pristine source and PAPER financial guards remain unchanged.

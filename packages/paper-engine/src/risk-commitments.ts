@@ -24,7 +24,7 @@ const uuid = z.uuid().transform((v) => v.toLowerCase());
 const revision = z
   .string()
   .regex(/^[1-9][0-9]{0,18}$/u)
-  .refine((v) => BigInt(v) <= 9223372036854775807n);
+  .pipe(z.string().refine((v) => BigInt(v) <= 9223372036854775807n));
 const debit = z.strictObject({ asset: idSchema, amount: positiveAmountSchema, holdId: idSchema });
 const reservation = z.strictObject({
   id: uuid,
