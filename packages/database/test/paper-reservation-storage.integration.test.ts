@@ -54,11 +54,11 @@ async function fixture(p: PoolClient, side = 'SELL') {
   await p.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
   await p.query('INSERT INTO public."user"(id,"updatedAt") VALUES($1,now())', [x.tenant]);
   await p.query(
-    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode","clientIdEpoch","updatedAt") VALUES($1,$2,'BINANCE','PAPER',$1::text,'global','SIMULATED','vector-storage',now())`,
+    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode","clientIdEpoch","updatedAt") VALUES($1::uuid,$2,'BINANCE','PAPER',$1::text,'global','SIMULATED','vector-storage',now())`,
     [x.account, x.tenant],
   );
   await p.query(
-    `INSERT INTO public.instrument(id,exchange,market,mode,"exchangeSymbol","baseAsset","quoteAsset",active,"updatedAt") VALUES($1,'BINANCE','SPOT','LIVE',$1::text,'BTC','USDT',true,now())`,
+    `INSERT INTO public.instrument(id,exchange,market,mode,"exchangeSymbol","baseAsset","quoteAsset",active,"updatedAt") VALUES($1::uuid,'BINANCE','SPOT','LIVE',$1::text,'BTC','USDT',true,now())`,
     [x.instrument],
   );
   await p.query(
@@ -70,7 +70,7 @@ async function fixture(p: PoolClient, side = 'SELL') {
     [x.state, x.tenant, x.account, hash],
   );
   await p.query(
-    `INSERT INTO public.capability_snapshot(id,exchange,market,mode,region,"accountMode",version,"profileVersion","verifiedAt","expiresAt",capabilities,"evidenceHash") VALUES($1,'BINANCE','SPOT','PAPER',left($1::text,32),'SIMULATED',1,'v1',now(),now()+interval '1 hour','{}',$2)`,
+    `INSERT INTO public.capability_snapshot(id,exchange,market,mode,region,"accountMode",version,"profileVersion","verifiedAt","expiresAt",capabilities,"evidenceHash") VALUES($1::uuid,'BINANCE','SPOT','PAPER',left($1::text,32),'SIMULATED',1,'v1',now(),now()+interval '1 hour','{}',$2)`,
     [x.capability, hash],
   );
   await p.query(
@@ -78,7 +78,7 @@ async function fixture(p: PoolClient, side = 'SELL') {
     [x.profile, x.tenant, hash],
   );
   await p.query(
-    `INSERT INTO public.order_intent(id,"tenantId","accountId",mode,"instrumentId","ruleVersionId",origin,destination,operation,"idempotencyKey","commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice") VALUES($1,$2,$3,'PAPER',$4,$5,'USER','PAPER_ENGINE','PLACE',$1::text,$6,$7,'LIMIT','BTC','USDT',1,100)`,
+    `INSERT INTO public.order_intent(id,"tenantId","accountId",mode,"instrumentId","ruleVersionId",origin,destination,operation,"idempotencyKey","commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice") VALUES($1::uuid,$2,$3,'PAPER',$4,$5,'USER','PAPER_ENGINE','PLACE',$1::text,$6,$7,'LIMIT','BTC','USDT',1,100)`,
     [x.intent, x.tenant, x.account, x.instrument, x.rule, hash, side],
   );
   await p.query(
