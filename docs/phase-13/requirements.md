@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Initial PAPER vector storage checkpoint
+
+Starting protected main **cd733bb0** passed all thirteen baseline commands. [Initial reservation storage](reservation-storage.md) preserves the common reservation/decision/intent/account/mode/attempt identities while representing PAPER cash as an immutable full vector, with no dummy scalar. Native scalar fields remain required by SQL; published 1-50 and native financial source remain unchanged. Corrected real PostgreSQL RED: CI39244692851, 15 missing-schema failures and all1017 previous main assertions preserved. All28 new native contracts, separate owner proof and populated50->51/legacy-refusal checks require exact new-head acceptance; actual outcomes are recorded only after execution.
+
+This is original-allocation storage, without certified admission, current remaining/UNKNOWN lifecycle, Portfolio holds, grant, permit or PAPER dispatch. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER dispatch/positive native credit disabled; native AMEND Binance Spot TESTNET only. Prior checkpoints retain their original scope/results.
+
 ## PAPER full-vector commitment projection checkpoint
 
 Initial source `65f5b5b04228578897b2072316bbbe410c5e1399` is superseded and is **not acceptance**: review found that a non-integer revision string could reach BigInt inside a continuable refinement and leak an unsanitized conversion error. Four regression cases reproduced RED (80 prior cases passed). The format stage now gates the BigInt bound check through a schema pipeline. **84 new contracts / 221 targeted assertions in four suites pass**; all thirteen corrected-source local regression commands pass: **4438 unit / 41 HTTP**, build/runtime, twelve clean deployments and audits 0. Exact-SHA source/PR/protected-main CI run IDs, artifact verification and protection proof are published after execution in [PR #31](https://github.com/dendenden-boop/tradeGPTbot/pull/31) and the completion checkpoint. Source and final review use the same frozen HEAD; no result from another SHA establishes its acceptance. The initial 80-case source/checkpoints below retain their historical scope; green results for that source cannot accept the corrected contract.

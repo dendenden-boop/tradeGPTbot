@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## PHASE13 initial reservation storage
+
+The [initial PAPER vector storage contract](docs/phase-13/reservation-storage.md) preserves common Order/Risk identity and native scalar invariants while storing PAPER base/quote debits without a dummy monetary scalar. It provides immutable original terms and database identity/complete-vector constraints. Certified current inventory, atomic Risk/Portfolio reservation lifecycle, final dispatch validation and virtual execution remain outstanding. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance or production soak is claimed. Final new-head CI proof is recorded after execution; historical checkpoints below retain their original results.
+
 ## PAPER full-vector commitment projection checkpoint
 
 Initial source `65f5b5b04228578897b2072316bbbe410c5e1399` is superseded and is **not acceptance**: review found that a non-integer revision string could reach BigInt inside a continuable refinement and leak an unsanitized conversion error. Four regression cases reproduced RED (80 prior cases passed). The format stage now gates the BigInt bound check through a schema pipeline. **84 new contracts / 221 targeted assertions in four suites pass**; all thirteen corrected-source local regression commands pass: **4438 unit / 41 HTTP**, build/runtime, twelve clean deployments and audits 0. Exact-SHA source/PR/protected-main CI run IDs, artifact verification and protection proof are published after execution in [PR #31](https://github.com/dendenden-boop/tradeGPTbot/pull/31) and the completion checkpoint. Source and final review use the same frozen HEAD; no result from another SHA establishes its acceptance. The initial 80-case source/checkpoints below retain their historical scope; green results for that source cannot accept the corrected contract.

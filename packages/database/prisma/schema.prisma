@@ -1398,11 +1398,13 @@ model RiskReservation {
   intentId           String              @db.Uuid
   accountId          String              @db.Uuid
   mode               TradingMode
-  budgetId           String              @db.Uuid
+  budgetId           String?             @db.Uuid
+  /// PAPER uses an immutable private debit vector; native scalar fields remain mandatory in SQL.
+  vectorSize         Int?
   status             ReservationStatus   @default(ACTIVE)
-  asset              String              @db.VarChar(32)
+  asset              String?             @db.VarChar(32)
   /// @decimal aggregate 48,18 nonnegative
-  amount             Decimal             @db.Decimal
+  amount             Decimal?            @db.Decimal
   /// @decimal aggregate 48,18 nonnegative
   consumedAmount     Decimal             @default(0) @db.Decimal
   expiresAt          DateTime            @db.Timestamptz(3)
@@ -1415,7 +1417,7 @@ model RiskReservation {
   submissionAttempts SubmissionAttempt[] @relation("SubmissionAttempt_reservation")
   decision           RiskDecision        @relation("RiskReservation_decision", fields: [tenantId, decisionId, intentId, accountId, mode], references: [tenantId, id, intentId, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
   intent             OrderIntent         @relation("RiskReservation_intent", fields: [tenantId, intentId, accountId, mode], references: [tenantId, id, accountId, mode], onDelete: Restrict, onUpdate: Restrict)
-  budget             RiskBudget          @relation("RiskReservation_budget", fields: [tenantId, budgetId, mode, asset], references: [tenantId, id, mode, asset], onDelete: Restrict, onUpdate: Restrict)
+  budget             RiskBudget?         @relation("RiskReservation_budget", fields: [tenantId, budgetId, mode, asset], references: [tenantId, id, mode, asset], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, id])
   @@unique([tenantId, decisionId])

@@ -1,11 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { afterAll, expect, it } from 'vitest';
+import { createPaperReservationFixture as fixture } from './fixtures/paper-reservation.js';
 
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/u.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw Error('ISOLATED_PAPER_RESERVATION_RUNNER_REQUIRED');
 const url = process.env['DATABASE_MIGRATION_URL'];
 if (!url) throw Error('ISOLATED_PAPER_RESERVATION_DATABASE_REQUIRED');
+const isolated = new URL(url);
+if (
+  process.env['NODE_ENV'] !== 'test' ||
+  !['postgres:', 'postgresql:'].includes(isolated.protocol) ||
+  isolated.hostname !== '127.0.0.1' ||
+  !/^\/ctp_p2_(fresh|owner)_[a-f0-9]{12}$/u.test(isolated.pathname) ||
+  !isolated.port
+)
+  throw Error('ISOLATED_PAPER_RESERVATION_DATABASE_REQUIRED');
 const admin = new Pool({ connectionString: url, max: 2, query_timeout: 5000 });
 afterAll(() => admin.end());
 
@@ -22,70 +32,6 @@ async function transaction<T>(f: (p: PoolClient) => Promise<T>) {
   } finally {
     p.release();
   }
-}
-async function fixture(p: PoolClient, side = 'SELL') {
-  const x = Object.fromEntries(
-    [
-      'tenant',
-      'account',
-      'instrument',
-      'rule',
-      'state',
-      'capability',
-      'profile',
-      'intent',
-      'decision',
-      'reservation',
-    ].map((k) => [k, randomUUID()]),
-  ) as Record<
-    | 'tenant'
-    | 'account'
-    | 'instrument'
-    | 'rule'
-    | 'state'
-    | 'capability'
-    | 'profile'
-    | 'intent'
-    | 'decision'
-    | 'reservation',
-    string
-  >;
-  const hash = Buffer.alloc(32, 7);
-  await p.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
-  await p.query('INSERT INTO public."user"(id,"updatedAt") VALUES($1,now())', [x.tenant]);
-  await p.query(
-    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode","clientIdEpoch","updatedAt") VALUES($1::uuid,$2,'BINANCE','PAPER',$1::text,'global','SIMULATED','vector-storage',now())`,
-    [x.account, x.tenant],
-  );
-  await p.query(
-    `INSERT INTO public.instrument(id,exchange,market,mode,"exchangeSymbol","baseAsset","quoteAsset",active,"updatedAt") VALUES($1::uuid,'BINANCE','SPOT','LIVE',$1::text,'BTC','USDT',true,now())`,
-    [x.instrument],
-  );
-  await p.query(
-    `INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity",rules) VALUES($1,$2,1,now(),now(),$3,'0.01','0.001','0.001','{}')`,
-    [x.rule, x.instrument, hash],
-  );
-  await p.query(
-    `INSERT INTO public.account_state_version(id,"tenantId","accountId",mode,version,"sourceCursor","sourceAt","receivedAt","reconciliationEpoch","stateHash") VALUES($1,$2,$3,'PAPER',0,'vector-storage',now(),now(),0,$4)`,
-    [x.state, x.tenant, x.account, hash],
-  );
-  await p.query(
-    `INSERT INTO public.capability_snapshot(id,exchange,market,mode,region,"accountMode",version,"profileVersion","verifiedAt","expiresAt",capabilities,"evidenceHash") VALUES($1::uuid,'BINANCE','SPOT','PAPER',left($1::text,32),'SIMULATED',1,'v1',now(),now()+interval '1 hour','{}',$2)`,
-    [x.capability, hash],
-  );
-  await p.query(
-    `INSERT INTO public.risk_profile(id,"tenantId",name,version,"policyHash","valuationAsset","maxNotional","maxDailyLoss","maxDrawdownRate","maxOpenOrders",policy,"effectiveAt") VALUES($1,$2,'vector-storage',1,$3,'USDT',1000,100,0.5,10,'{}',now())`,
-    [x.profile, x.tenant, hash],
-  );
-  await p.query(
-    `INSERT INTO public.order_intent(id,"tenantId","accountId",mode,"instrumentId","ruleVersionId",origin,destination,operation,"idempotencyKey","commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice") VALUES($1::uuid,$2,$3,'PAPER',$4,$5,'USER','PAPER_ENGINE','PLACE',$1::text,$6,$7,'LIMIT','BTC','USDT',1,100)`,
-    [x.intent, x.tenant, x.account, x.instrument, x.rule, hash, side],
-  );
-  await p.query(
-    `INSERT INTO public.risk_decision(id,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt") VALUES($1,$2,$3,$4,'PAPER',$5,$6,$7,$8,'APPROVE',1,$9,0,now()+interval '1 hour')`,
-    [x.decision, x.tenant, x.intent, x.account, x.profile, x.state, x.rule, x.capability, hash],
-  );
-  return x;
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function parent(p: PoolClient, x: Fixture, count = 2) {
@@ -119,7 +65,7 @@ async function ready(p: PoolClient, side = 'SELL') {
   return x;
 }
 
-it('paper-reservation: persists SELL base and quote fee without a dummy scalar and keeps exact parent FKs after restart', async () => {
+it('paper-reservation: persists SELL base and quote fee without a dummy scalar and keeps exact parent FKs after connection restart', async () => {
   const x = await transaction((p) => ready(p));
   const restarted = new Pool({ connectionString: url, max: 1, query_timeout: 5000 });
   try {
@@ -153,6 +99,24 @@ it('paper-reservation: persists SELL base and quote fee without a dummy scalar a
         { asset: 'USDT', amount: '0.01' },
       ]);
       expect(new Set(a.rows.map((v) => v.hold_id)).size).toBe(2);
+      const effects = await q.query<{
+        ledger: number;
+        entries: number;
+        outbox: number;
+        attempts: number;
+        portfolio: number;
+      }>(
+        `SELECT
+       (SELECT count(*)::int FROM public.ledger_transaction WHERE "tenantId"=$1) ledger,
+       (SELECT count(*)::int FROM public.ledger_entry WHERE "tenantId"=$1) entries,
+       (SELECT count(*)::int FROM public.outbox_event WHERE "tenantId"=$1) outbox,
+       (SELECT count(*)::int FROM public.submission_attempt WHERE "tenantId"=$1) attempts,
+       (SELECT count(*)::int FROM ctp_portfolio.evidence WHERE "tenantId"=$1) portfolio`,
+        [x.tenant],
+      );
+      expect(effects.rows).toEqual([
+        { ledger: 0, entries: 0, outbox: 0, attempts: 0, portfolio: 0 },
+      ]);
       await q.query('COMMIT');
     } finally {
       await q.query('ROLLBACK');
@@ -185,18 +149,24 @@ it.each([0, 1, 3])(
     ).rejects.toMatchObject({ code: '23514' });
   },
 );
-it.each(['0', '-1', '0.0000000000000000001', '1000000000000000000000000000000', 'NaN', 'Infinity'])(
-  'paper-reservation: invalid cash amount %s fails without rounding',
-  async (amount) => {
-    await expect(
-      transaction(async (p) => {
-        const x = await fixture(p);
-        await parent(p, x, 1);
-        await debit(p, x, 1, 'BTC', amount);
-      }),
-    ).rejects.toMatchObject({ code: '23514' });
-  },
-);
+it.each([
+  '0',
+  '-1',
+  '0.0000000000000000001',
+  '1000000000000000000000000000000',
+  'NaN',
+  'Infinity',
+  '-Infinity',
+  '100000000000000000000',
+])('paper-reservation: invalid cash amount %s fails without rounding', async (amount) => {
+  await expect(
+    transaction(async (p) => {
+      const x = await fixture(p);
+      await parent(p, x, 1);
+      await debit(p, x, 1, 'BTC', amount);
+    }),
+  ).rejects.toMatchObject({ code: '23514' });
+});
 it('paper-reservation: wrong BUY asset and shared hold identifiers fail closed', async () => {
   await expect(
     transaction(async (p) => {
@@ -237,6 +207,20 @@ it('paper-reservation: immutable rows prevent overwrite, deletion and A-to-B-to-
     );
     expect(r.rows[0]?.status).toBe('ACTIVE');
   });
+  // Additional original-identity proof belongs inside the existing immutability
+  // case, so the native case inventory remains 27 (assertions are stronger).
+  await expect(
+    transaction(async (p) => {
+      await p.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
+      const decision = randomUUID(),
+        reservation = randomUUID();
+      await p.query(
+        `INSERT INTO public.risk_decision(id,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt") SELECT $1::uuid,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt" FROM public.risk_decision WHERE id=$2`,
+        [decision, x.decision],
+      );
+      await parent(p, { ...x, decision, reservation });
+    }),
+  ).rejects.toMatchObject({ code: '23505' });
 });
 it('paper-reservation: orphan or cross-account allocations cannot bind an existing parent', async () => {
   await expect(
@@ -259,4 +243,163 @@ it('paper-reservation: existing runtime roles receive no allocation reader or wr
     `SELECT rolname FROM pg_roles WHERE left(rolname,4)='ctp_' AND (has_table_privilege(oid,'ctp_paper.reservation_debit','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege(oid,'ctp_paper.reservation_debit','SELECT,INSERT,UPDATE,REFERENCES')) AND NOT rolsuper AND NOT oid=(SELECT relowner FROM pg_class WHERE oid='ctp_paper.reservation_debit'::regclass)`,
   );
   expect(r.rows).toEqual([]);
+});
+
+it.each(['TESTNET', 'DEMO', 'LIVE'])(
+  'paper-reservation: native %s cannot omit its scalar debit and budget',
+  async (mode) => {
+    await expect(
+      transaction(async (p) => {
+        const x = await fixture(p);
+        await p.query(
+          `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,$6,now()+interval '1 hour',now())`,
+          [x.reservation, x.tenant, x.decision, x.intent, x.account, mode],
+        );
+      }),
+    ).rejects.toMatchObject({ code: '23514' });
+  },
+);
+it('paper-reservation: PAPER cannot fall back to a missing vector size', async () => {
+  await expect(
+    transaction(async (p) => {
+      const x = await fixture(p);
+      await p.query(
+        `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',now()+interval '1 hour',now())`,
+        [x.reservation, x.tenant, x.decision, x.intent, x.account],
+      );
+    }),
+  ).rejects.toMatchObject({ code: '23514' });
+});
+it('paper-reservation: scalar and vector cash representations cannot be mixed', async () => {
+  await expect(
+    transaction(async (p) => {
+      const x = await fixture(p);
+      await p.query(
+        `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"vectorSize",asset,amount,"expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',1,'BTC',1,now()+interval '1 hour',now())`,
+        [x.reservation, x.tenant, x.decision, x.intent, x.account],
+      );
+    }),
+  ).rejects.toMatchObject({ code: '23514' });
+});
+it('paper-reservation: an ordinal gap cannot claim a complete one-element vector', async () => {
+  await expect(
+    transaction(async (p) => {
+      const x = await fixture(p, 'BUY');
+      await parent(p, x, 1);
+      await debit(p, x, 2, 'USDT', '100.01');
+    }),
+  ).rejects.toMatchObject({ code: '23514' });
+});
+it('paper-reservation: minimum and maximum Portfolio cash atoms persist exactly', async () => {
+  for (const amount of ['0.000000000000000001', '99999999999999999999.999999999999999999'])
+    await transaction(async (p) => {
+      const x = await fixture(p, 'BUY');
+      await parent(p, x, 1);
+      await debit(p, x, 1, 'USDT', amount);
+      await p.query('SET CONSTRAINTS ALL IMMEDIATE');
+      const r = await p.query<{ amount: string }>(
+        'SELECT amount::text FROM ctp_paper.reservation_debit WHERE reservation_id=$1',
+        [x.reservation],
+      );
+      expect(r.rows).toEqual([{ amount }]);
+    });
+});
+it.each(['UNRESOLVED', 'RELEASED'])(
+  'paper-reservation: initial storage cannot manufacture a %s lifecycle outcome',
+  async (status) => {
+    await expect(
+      transaction(async (p) => {
+        const x = await fixture(p);
+        await p.query(
+          `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"vectorSize",status,"expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',1,$6,now()+interval '1 hour',now())`,
+          [x.reservation, x.tenant, x.decision, x.intent, x.account, status],
+        );
+      }),
+    ).rejects.toMatchObject({ code: '23514' });
+  },
+);
+it('paper-reservation: a one-base SELL is a stored shape, never proof of zero fees or admission', async () => {
+  await transaction(async (p) => {
+    const x = await fixture(p);
+    await parent(p, x, 1);
+    await debit(p, x, 1, 'BTC', '1');
+    await p.query('SET CONSTRAINTS ALL IMMEDIATE');
+    const r = await p.query<{ asset: string; amount: string }>(
+      'SELECT asset,amount::text FROM ctp_paper.reservation_debit WHERE reservation_id=$1',
+      [x.reservation],
+    );
+    expect(r.rows).toEqual([{ asset: 'BTC', amount: '1' }]);
+  });
+});
+it('paper-reservation: concurrent alternative parents serialize to one complete original vector', async () => {
+  const x = await transaction((p) => fixture(p));
+  const first = await admin.connect();
+  let second: PoolClient | undefined;
+  try {
+    second = await admin.connect();
+    await first.query('BEGIN');
+    await second.query('BEGIN');
+    for (const p of [first, second])
+      await p.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
+    await parent(first, x, 1);
+    await debit(first, x, 1, 'BTC', '1');
+    const decision = randomUUID(),
+      reservation = randomUUID();
+    await second.query(
+      `INSERT INTO public.risk_decision(id,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt") SELECT $1::uuid,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt" FROM public.risk_decision WHERE id=$2`,
+      [decision, x.decision],
+    );
+    const pid = (await second.query<{ pid: number }>('SELECT pg_backend_pid() pid')).rows[0]!.pid;
+    let settled = false;
+    const pending = parent(second, { ...x, decision, reservation }, 1).then(
+      () => {
+        settled = true;
+        return { ok: true as const };
+      },
+      (error: unknown) => {
+        settled = true;
+        return { ok: false as const, error };
+      },
+    );
+    let blocked = false;
+    const end = Date.now() + 2000;
+    while (Date.now() < end && !blocked && !settled) {
+      blocked = (
+        await first.query<{ blocked: boolean }>(
+          "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock') blocked",
+          [pid],
+        )
+      ).rows[0]!.blocked;
+      if (!blocked) await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(blocked).toBe(true);
+    expect(settled).toBe(false);
+    await first.query('COMMIT');
+    const outcome = await pending;
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error).toMatchObject({ code: '23505' });
+    await second.query('ROLLBACK');
+    await first.query('BEGIN');
+    await first.query("SELECT set_config('app.tenant_id',$1,true)", [x.tenant]);
+    const r = await first.query<{ id: string }>(
+      'SELECT id FROM public.risk_reservation WHERE "tenantId"=$1 AND "intentId"=$2',
+      [x.tenant, x.intent],
+    );
+    expect(r.rows).toEqual([{ id: x.reservation }]);
+    const d = await first.query<{ asset: string; amount: string }>(
+      'SELECT asset,amount::text FROM ctp_paper.reservation_debit WHERE reservation_id=$1',
+      [x.reservation],
+    );
+    expect(d.rows).toEqual([{ asset: 'BTC', amount: '1' }]);
+    await first.query('COMMIT');
+  } finally {
+    const close = async (p: PoolClient) => {
+      try {
+        await p.query('ROLLBACK');
+      } finally {
+        p.release();
+      }
+    };
+    await Promise.all([close(first), ...(second ? [close(second)] : [])]);
+  }
 });

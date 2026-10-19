@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Initial PAPER reservation representation
+
+[Storage contract](reservation-storage.md): shared RiskReservation and SubmissionAttempt FK identities are retained. Native budgetId/asset/amount remain required by SQL CHECK. PAPER uses nullable scalar fields plus exact1..2 immutable positive cash debits, a permanent per-intent identity, exact tenant/account/intent/mode relationships and deferred complete-vector commit. Shape, metadata fingerprints and persisted original terms do not prove model coverage, complete current liabilities or authorization. No private allocation table/function grant or PAPER lifecycle/admission writer is introduced. Published1-50/native financial source remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER dispatch/positive credit disabled.
+
 ## PAPER full-vector commitment projection checkpoint
 
 Initial source `65f5b5b04228578897b2072316bbbe410c5e1399` is superseded and is **not acceptance**: review found that a non-integer revision string could reach BigInt inside a continuable refinement and leak an unsanitized conversion error. Four regression cases reproduced RED (80 prior cases passed). The format stage now gates the BigInt bound check through a schema pipeline. **84 new contracts / 221 targeted assertions in four suites pass**; all thirteen corrected-source local regression commands pass: **4438 unit / 41 HTTP**, build/runtime, twelve clean deployments and audits 0. Exact-SHA source/PR/protected-main CI run IDs, artifact verification and protection proof are published after execution in [PR #31](https://github.com/dendenden-boop/tradeGPTbot/pull/31) and the completion checkpoint. Source and final review use the same frozen HEAD; no result from another SHA establishes its acceptance. The initial 80-case source/checkpoints below retain their historical scope; green results for that source cannot accept the corrected contract.
