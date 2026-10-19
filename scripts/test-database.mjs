@@ -947,6 +947,18 @@ async function runDatabaseProof() {
       ).rows,
     );
   await migrate(databases[1]);
+  // The historical full-row assertions below still compare every original
+  // value. Add only the exact new migration-51 metadata to their expectations;
+  // do not omit columns or normalize actual rows after the upgrade.
+  for (const snapshots of [previousPortfolioAuthority, beforeAdmissionUpgrade]) {
+    const reservations = snapshots[portfolioAuthorityTables.indexOf('public.risk_reservation')];
+    assert.ok(reservations.length > 0, 'Upgrade requires retained reservation evidence');
+    for (const { evidence } of reservations) {
+      assert.equal(Object.hasOwn(evidence, 'paperLegacy'), false);
+      assert.equal(Object.hasOwn(evidence, 'vectorSize'), false);
+      Object.assign(evidence, { paperLegacy: evidence.mode === 'PAPER', vectorSize: null });
+    }
+  }
   for (const [index, table] of [
     ...portfolioAuthorityTables,
     'ctp_certification.identity',
