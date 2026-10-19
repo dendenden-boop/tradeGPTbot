@@ -8,3 +8,4 @@ export {
   calculatePaperRiskEvaluation,
   type PaperRiskEvaluationCalculation,
 } from './risk-evaluation.js';
+export { projectPaperRiskCommitments } from './risk-commitments.js';

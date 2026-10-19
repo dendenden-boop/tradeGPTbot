@@ -1,5 +1,13 @@
 # Risk Engine
 
+## PAPER full-vector commitment projection candidate
+
+Starting protected main **619ff1a0c0837af2f05e15b999fa619bc52dc426** passed all thirteen baseline commands. The [commitment projection contract](phase-13/commitment-projection.md) connects account-local reservation vectors with actual common Portfolio holds/latest-event watermarks, retaining UNKNOWN and checking released tombstones without another monetary effect. It is a pure content projection, without source/completeness certification, financial writes, grant, permit or dispatch. The accepted pristine source and PAPER financial guards remain unchanged.
+
+The missing export reproduced before implementation (one product RED). **80 new contracts / 217 targeted assertions in four actual suites pass**, including common Portfolio ordering and existing PAPER budget/evaluation. JSON restart is a content round-trip, not native persistence acceptance. One frozen-profile fixture failure is retained separately. Full new-head local regression and source/PR/protected-main CI remain pending and are not acceptance. All **50 published migrations**, native Risk/Order/Portfolio source, adapters, dependencies, workflow/check definitions and existing test deadlines remain frozen. Historical checkpoints below retain their original scope/results.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Certified active/UNKNOWN source/history, atomic vector reservations/Portfolio holds, final validation, operational sensors/bootstrap/supervisor and virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND stays Binance Spot TESTNET only. No local native PostgreSQL/Docker, real private exchange acceptance or production soak is claimed.
+
 ## PAPER pure calculation source acceptance
 
 Source **dd1b97fd69390b1f3d34afec1df7b1f1abf09a04** passed full source/PR CI, including 1260 native PostgreSQL assertions and 4354 unit tests per OS; final documentation-head/protected-main acceptance is recorded in [PR #30](https://github.com/dendenden-boop/tradeGPTbot/pull/30). The [PHASE 13 evaluation contract](phase-13/risk-evaluation.md) composes the pristine tenant cash capture, conservative full debit vector and common pure Risk policy. PAPER requires the exact simulator profile and synthetic model capabilities; TESTNET/DEMO/LIVE still reject synthetic evidence. The result grants no financial authority. The existing production SQL admission and Order Engine PAPER dispatch remain disabled. Certification, atomic vector reservations/Portfolio holds and final validation are still required. Historical checkpoints below retain their original scope and evidence.
