@@ -2080,7 +2080,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperReservationOwner.success, true);
-  assert.equal(paperReservationOwner.numPassedTests, 29);
+  assert.equal(paperReservationOwner.numPassedTests, 30);
   assert.equal(paperReservationOwner.numFailedTests, 0);
   assert.equal(paperReservationOwner.numPendingTests, 0);
 

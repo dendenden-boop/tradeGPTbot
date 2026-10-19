@@ -420,3 +420,30 @@ it('paper-reservation: a new caller cannot manufacture a legacy scalar exemption
     }),
   ).rejects.toMatchObject({ code: '23514', message: 'PAPER_RESERVATION_LEGACY_WRITE_FORBIDDEN' });
 });
+
+it('paper-reservation: initial PLACE vector storage rejects PAPER AMEND without a scalar fallback', async () => {
+  await expect(
+    transaction(async (p) => {
+      const x = await fixture(p),
+        orderId = randomUUID(),
+        intentId = randomUUID(),
+        decisionId = randomUUID();
+      await p.query(
+        `INSERT INTO public."order" (id,"tenantId","intentId","accountId",mode,"instrumentId","ruleVersionId","clientIdNamespace","clientId",market,side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice","updatedAt") SELECT $1::uuid,"tenantId",id,"accountId",mode,"instrumentId","ruleVersionId",'vector-fixture',$1::text,'SPOT',side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice",now() FROM public.order_intent WHERE id=$2`,
+        [orderId, x.intent],
+      );
+      await p.query(
+        `INSERT INTO public.order_intent (id,"tenantId","accountId",mode,"instrumentId","ruleVersionId",origin,destination,operation,"idempotencyKey","commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice","targetOrderId") SELECT $1::uuid,"tenantId","accountId",mode,"instrumentId","ruleVersionId",origin,destination,'AMEND',$1::text,"commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice",$3::uuid FROM public.order_intent WHERE id=$2`,
+        [intentId, x.intent, orderId],
+      );
+      await p.query(
+        `INSERT INTO public.risk_decision (id,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt") SELECT $1::uuid,"tenantId",$2::uuid,"accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt" FROM public.risk_decision WHERE id=$3`,
+        [decisionId, intentId, x.decision],
+      );
+      const amended = { ...x, intent: intentId, decision: decisionId };
+      await parent(p, amended);
+      await debit(p, amended, 1, 'BTC', '1');
+      await debit(p, amended, 2, 'USDT', '0.01');
+    }),
+  ).rejects.toMatchObject({ code: '23514', message: 'PAPER_RESERVATION_SCOPE' });
+});

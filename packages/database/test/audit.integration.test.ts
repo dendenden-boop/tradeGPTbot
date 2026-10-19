@@ -209,6 +209,23 @@ async function reservation(
      VALUES ($1::uuid,$2,$3,$4,$5,'ACCOUNT',$1::text,'USDT',now(),now()+interval '1 day',1000,now())`,
     [budgetId, fixture.tenant, account.id, profileId, account.mode],
   );
+  if (account.mode === 'PAPER') {
+    // Only the isolated owner fixture session may write private vector storage.
+    // This is valid shape, not a certified financial decision or runtime grant.
+    await client.query(
+      `INSERT INTO risk_reservation (id,"tenantId","decisionId","intentId","accountId",mode,
+         "vectorSize","expiresAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,'PAPER',1,now()+interval '1 hour',now())`,
+      [reservationId, fixture.tenant, decisionId, intentId, account.id],
+    );
+    await client.query(
+      `INSERT INTO ctp_paper.reservation_debit
+       (tenant_id,reservation_id,intent_id,account_id,mode,ordinal,asset,amount,hold_id)
+       VALUES ($1,$2,$3,$4,'PAPER',1,'USDT',100,$5)`,
+      [fixture.tenant, reservationId, intentId, account.id, randomUUID()],
+    );
+    return reservationId;
+  }
   await client.query(
     `INSERT INTO risk_reservation (id,"tenantId","decisionId","intentId","accountId",mode,
        "budgetId",asset,amount,"expiresAt","updatedAt")
@@ -216,6 +233,30 @@ async function reservation(
     [reservationId, fixture.tenant, decisionId, intentId, account.id, account.mode, budgetId],
   );
   return reservationId;
+}
+
+async function reservationFixture(account: Account, intentId: string): Promise<string> {
+  const client = await admin.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.tenant_id',$1,true)", [fixture.tenant]);
+    const id = await reservation(client, account, intentId);
+    await client.query('COMMIT');
+    return id;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function reservedPlacement() {
+  const prepared = await transaction(async (client) => {
+    const intentId = await intent(client, paperA);
+    return { intentId, orderId: await order(client, paperA, intentId) };
+  });
+  return { ...prepared, reservationId: await reservationFixture(paperA, prepared.intentId) };
 }
 
 async function attempt(
@@ -247,11 +288,8 @@ async function attempt(
 }
 
 async function committedAttempt(): Promise<string> {
-  return transaction(async (client) => {
-    const intentId = await intent(client, paperA);
-    const orderId = await order(client, paperA, intentId);
-    return attempt(client, orderId, await reservation(client, paperA, intentId));
-  });
+  const prepared = await reservedPlacement();
+  return transaction((client) => attempt(client, prepared.orderId, prepared.reservationId));
 }
 
 async function committedOrder(): Promise<string> {
@@ -287,6 +325,11 @@ async function committedReceipt(): Promise<string> {
 }
 
 beforeAll(async () => {
+  for (const sql of [
+    'SELECT 1 FROM ctp_paper.reservation_debit LIMIT 0',
+    'INSERT INTO ctp_paper.reservation_debit DEFAULT VALUES',
+  ])
+    await expect(runtime.query(sql)).rejects.toMatchObject({ code: '42501' });
   await admin.query(`INSERT INTO "user" (id,"emailNormalized","updatedAt") VALUES ($1,$2,now())`, [
     fixture.tenant,
     `${fixture.tenant}@example.invalid`,
@@ -363,20 +406,20 @@ describe('audit regression: financial evidence parent scope', () => {
   });
 
   it('accepts a submission attempt backed by its own intent reservation', async () => {
-    await transaction(async (client) => {
-      const intentId = await intent(client, paperA);
-      const orderId = await order(client, paperA, intentId);
-      await attempt(client, orderId, await reservation(client, paperA, intentId));
-    });
+    const prepared = await reservedPlacement();
+    await transaction((client) => attempt(client, prepared.orderId, prepared.reservationId));
   });
 
   it('accepts an amendment with its own command and reservation on the existing order', async () => {
+    // PAPER AMEND admission is not implemented by initial PLACE vector storage.
+    // The existing disabled native account exercises the common AMEND FK scope;
+    // this fixture never calls an adapter or dispatches to an exchange.
     await transaction(async (client) => {
-      const placementId = await intent(client, paperA);
-      const orderId = await order(client, paperA, placementId);
-      await attempt(client, orderId, await reservation(client, paperA, placementId));
-      const amendmentId = await intent(client, paperA, 'AMEND', orderId);
-      const reservationId = await reservation(client, paperA, amendmentId);
+      const placementId = await intent(client, live);
+      const orderId = await order(client, live, placementId);
+      await attempt(client, orderId, await reservation(client, live, placementId));
+      const amendmentId = await intent(client, live, 'AMEND', orderId);
+      const reservationId = await reservation(client, live, amendmentId);
       const attemptId = await attempt(client, orderId, reservationId, {
         intentId: amendmentId,
         operation: 'AMEND',
@@ -422,10 +465,10 @@ describe('audit regression: financial evidence parent scope', () => {
   it('rejects an amendment targeting another order in the same account', async () => {
     await expectScopeRejection(() =>
       transaction(async (client) => {
-        const orderId = await order(client, paperA, await intent(client, paperA));
-        const otherOrderId = await order(client, paperA, await intent(client, paperA));
-        const amendmentId = await intent(client, paperA, 'AMEND', otherOrderId);
-        await attempt(client, orderId, await reservation(client, paperA, amendmentId), {
+        const orderId = await order(client, live, await intent(client, live));
+        const otherOrderId = await order(client, live, await intent(client, live));
+        const amendmentId = await intent(client, live, 'AMEND', otherOrderId);
+        await attempt(client, orderId, await reservation(client, live, amendmentId), {
           intentId: amendmentId,
           operation: 'AMEND',
         });
@@ -444,12 +487,15 @@ describe('audit regression: financial evidence parent scope', () => {
   });
 
   it('rejects another placement command even when its reservation matches the account', async () => {
+    const prepared = await transaction(async (client) => {
+      const orderId = await order(client, paperA, await intent(client, paperA));
+      return { orderId, unrelatedId: await intent(client, paperA) };
+    });
+    const reservationId = await reservationFixture(paperA, prepared.unrelatedId);
     await expectScopeRejection(() =>
       transaction(async (client) => {
-        const orderId = await order(client, paperA, await intent(client, paperA));
-        const unrelatedId = await intent(client, paperA);
-        await attempt(client, orderId, await reservation(client, paperA, unrelatedId), {
-          intentId: unrelatedId,
+        await attempt(client, prepared.orderId, reservationId, {
+          intentId: prepared.unrelatedId,
           operation: 'PLACE',
         });
       }),
@@ -457,12 +503,11 @@ describe('audit regression: financial evidence parent scope', () => {
   });
 
   it('rejects a dispatch hash different from its immutable command', async () => {
+    const prepared = await reservedPlacement();
     await expectScopeRejection(() =>
       transaction(async (client) => {
-        const intentId = await intent(client, paperA);
-        const orderId = await order(client, paperA, intentId);
-        await attempt(client, orderId, await reservation(client, paperA, intentId), {
-          intentId,
+        await attempt(client, prepared.orderId, prepared.reservationId, {
+          intentId: prepared.intentId,
           operation: 'PLACE',
           hash: Buffer.alloc(32, 18),
         });
@@ -495,12 +540,14 @@ describe('audit regression: financial evidence parent scope', () => {
     { name: 'another account', account: paperB },
     { name: 'another trading mode', account: live },
   ])('rejects a submission attempt backed by a reservation for $name', async ({ account }) => {
+    const prepared = await transaction(async (client) => {
+      const orderId = await order(client, paperA, await intent(client, paperA));
+      return { orderId, otherIntentId: await intent(client, account) };
+    });
+    const reservationId = await reservationFixture(account, prepared.otherIntentId);
     await expectScopeRejection(() =>
       transaction(async (client) => {
-        const intentId = await intent(client, paperA);
-        const orderId = await order(client, paperA, intentId);
-        const otherIntentId = await intent(client, account);
-        await attempt(client, orderId, await reservation(client, account, otherIntentId));
+        await attempt(client, prepared.orderId, reservationId);
       }),
     );
   });
