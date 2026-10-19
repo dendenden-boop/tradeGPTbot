@@ -475,6 +475,9 @@ try {
     assert.throws(()=>paper.calculatePaperRiskEnvelope({}),/PAPER_ENVELOPE_INPUT/);
     assert.throws(()=>paper.calculatePaperReservationCoverage({}),/PAPER_COVERAGE_INPUT/);
       assert.throws(()=>paper.calculatePaperRiskBudget({}),/PAPER_BUDGET_INPUT/);
+    assert.equal(typeof paper.projectPaperRiskCommitments,'function');
+    assert.throws(()=>paper.projectPaperRiskCommitments({}),/PAPER_COMMITMENT_INPUT/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/risk-commitments.js'));
     assert.throws(()=>paper.calculatePaperCompetition({}),/PAPER_COMPETITION_INPUT/);
     assert.throws(()=>paper.calculatePaperInventoryValuation({}),/PAPER_VALUATION_INPUT/);
     for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);
