@@ -87,11 +87,16 @@ async function rows(
   filter: string,
   values: string[],
   published19 = false,
+  expectedVectorMetadata = false,
 ) {
-  const payload =
+  let payload =
     published19 && table === 'ctp_admission.issuance'
       ? "to_jsonb(r)-'primaryReservationId'-'control'"
       : 'to_jsonb(r)';
+  // Enrich only the pre-upgrade expectation with exact additive-51 metadata.
+  // PostgreSQL retains every original numeric atom/text; actual rows remain whole.
+  if (expectedVectorMetadata && table === 'public.risk_reservation')
+    payload = "(to_jsonb(r)||jsonb_build_object('paperLegacy',r.mode='PAPER','vectorSize',NULL))";
   return (
     await client.query<{ payload: string }>(
       `SELECT COALESCE(jsonb_agg(${payload} ORDER BY ${payload}::text),'[]'::jsonb)::text AS payload FROM ${tableName(table)} r WHERE ${filter}`,
@@ -254,8 +259,18 @@ it('populated published 19 upgrades without rewriting proof and recovers legacy 
     transaction.release();
   }
   const before = new Map<string, string>();
+  expect(
+    (
+      await target.query(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='risk_reservation' AND column_name IN ('paperLegacy','vectorSize')",
+      )
+    ).rows,
+  ).toEqual([]);
   for (const table of tenantTables)
-    before.set(table, await rows(target, table, 'r."tenantId"=$1::uuid', [b.tenantId]));
+    before.set(
+      table,
+      await rows(target, table, 'r."tenantId"=$1::uuid', [b.tenantId], false, true),
+    );
   for (const table of [
     'ctp_certification.certificate',
     'ctp_admission.preparation',

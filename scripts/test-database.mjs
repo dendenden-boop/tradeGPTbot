@@ -69,6 +69,7 @@ const expectedMigrations = [
   '202610150002_paper_runtime_observations',
   '202610160001_paper_risk_context',
   '202610160002_paper_tenant_risk_context',
+  '202610190001_paper_reservation_vectors',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -946,6 +947,18 @@ async function runDatabaseProof() {
       ).rows,
     );
   await migrate(databases[1]);
+  // The historical full-row assertions below still compare every original
+  // value. Add only the exact new migration-51 metadata to their expectations;
+  // do not omit columns or normalize actual rows after the upgrade.
+  for (const snapshots of [previousPortfolioAuthority, beforeAdmissionUpgrade]) {
+    const reservations = snapshots[portfolioAuthorityTables.indexOf('public.risk_reservation')];
+    assert.ok(reservations.length > 0, 'Upgrade requires retained reservation evidence');
+    for (const { evidence } of reservations) {
+      assert.equal(Object.hasOwn(evidence, 'paperLegacy'), false);
+      assert.equal(Object.hasOwn(evidence, 'vectorSize'), false);
+      Object.assign(evidence, { paperLegacy: evidence.mode === 'PAPER', vectorSize: null });
+    }
+  }
   for (const [index, table] of [
     ...portfolioAuthorityTables,
     'ctp_certification.identity',
@@ -2036,6 +2049,40 @@ async function runDatabaseProof() {
   assert.equal(paperRiskEvaluationOwner.numPendingTests, 0);
 
   // End separate PAPER calculation owner proof.
+
+  // Initial PAPER vector storage against the actual non-BYPASSRLS DDL owner.
+  // This remains independent of all 17 earlier owner reports and assertions.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-reservation-storage.integration.test.ts',
+      '--outputFile.json=test-results/paper-reservation-storage-owner-tests.json',
+    ],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        DATABASE_MIGRATION_URL: dbUrl(databases[2], false, true),
+      },
+      secrets,
+      echo: true,
+      timeoutMs: 30000,
+    },
+  );
+  const paperReservationOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-reservation-storage-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperReservationOwner.success, true);
+  assert.equal(paperReservationOwner.numPassedTests, 30);
+  assert.equal(paperReservationOwner.numFailedTests, 0);
+  assert.equal(paperReservationOwner.numPendingTests, 0);
 
   await run(
     process.execPath,
@@ -3362,6 +3409,195 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   } finally {
     await retainedInitialGuard.close();
   }
+  // Published50 -> additive51 must retain existing scalar PAPER data without
+  // guessing cash vectors. Quarantine is durable, read-only and never credit.
+  const { createPaperReservationFixture } =
+    await import('../packages/database/test/fixtures/paper-reservation.ts');
+  const vectorOwnerPool = connect(dbUrl(databases[4], false, true)),
+    vectorOwner = await vectorOwnerPool.connect();
+  try {
+    assert.deepEqual(
+      (
+        await vectorOwner.query(
+          'SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user',
+        )
+      ).rows,
+      [{ rolsuper: false, rolbypassrls: false }],
+    );
+    await vectorOwner.query('BEGIN');
+    const legacyVector = await createPaperReservationFixture(vectorOwner),
+      legacyBudget = randomUUID();
+    await vectorOwner.query(
+      `INSERT INTO public.risk_budget(id,"tenantId","accountId","profileId",mode,scope,"scopeKey",asset,"windowStart","windowEnd","limitAmount","updatedAt") VALUES($1,$2,$3::uuid,$4,'PAPER','ACCOUNT',$3::text,'USDT',now(),now()+interval '1 day',1000,now())`,
+      [legacyBudget, legacyVector.tenant, legacyVector.account, legacyVector.profile],
+    );
+    await vectorOwner.query(
+      `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"budgetId",asset,amount,"expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',$6,'USDT',100,now()+interval '1 hour',now())`,
+      [
+        legacyVector.reservation,
+        legacyVector.tenant,
+        legacyVector.decision,
+        legacyVector.intent,
+        legacyVector.account,
+        legacyBudget,
+      ],
+    );
+    // A distinct same-tenant account/intent must also be blocked while any
+    // unknown legacy liability remains; no account-local zero exposure guess.
+    const blocked = {
+      account: randomUUID(),
+      state: randomUUID(),
+      intent: randomUUID(),
+      decision: randomUUID(),
+      reservation: randomUUID(),
+    };
+    await vectorOwner.query(
+      `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode","clientIdEpoch","updatedAt") VALUES($1::uuid,$2,'BINANCE','PAPER',$1::text,'global','SIMULATED','legacy-quarantine',now())`,
+      [blocked.account, legacyVector.tenant],
+    );
+    await vectorOwner.query(
+      `INSERT INTO public.account_state_version(id,"tenantId","accountId",mode,version,"sourceCursor","sourceAt","receivedAt","reconciliationEpoch","stateHash") VALUES($1,$2,$3,'PAPER',0,'legacy-quarantine',now(),now(),0,$4)`,
+      [blocked.state, legacyVector.tenant, blocked.account, Buffer.alloc(32, 9)],
+    );
+    await vectorOwner.query(
+      `INSERT INTO public.order_intent(id,"tenantId","accountId",mode,"instrumentId","ruleVersionId",origin,destination,operation,"idempotencyKey","commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice") SELECT $1::uuid,"tenantId",$2::uuid,mode,"instrumentId","ruleVersionId",origin,destination,operation,$1::text,"commandHash",side,"orderType","quantityAsset","priceAsset",quantity,"limitPrice" FROM public.order_intent WHERE id=$3`,
+      [blocked.intent, blocked.account, legacyVector.intent],
+    );
+    await vectorOwner.query(
+      `INSERT INTO public.risk_decision(id,"tenantId","intentId","accountId",mode,"profileId","stateVersionId","ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt") SELECT $1::uuid,"tenantId",$2::uuid,$3::uuid,mode,"profileId",$4::uuid,"ruleVersionId","capabilitySnapshotId",verdict,"policyVersion","commandHash","permissionEpoch","expiresAt" FROM public.risk_decision WHERE id=$5`,
+      [blocked.decision, blocked.intent, blocked.account, blocked.state, legacyVector.decision],
+    );
+    await vectorOwner.query('COMMIT');
+    const legacyBefore = (
+      await paperUpgrade.query(
+        'SELECT to_jsonb(r) row FROM public.risk_reservation r WHERE id=$1',
+        [legacyVector.reservation],
+      )
+    ).rows;
+    assert.equal(legacyBefore.length, 1);
+    const vectorBefore = await captureRetained();
+    const vectorBeforeFunctions = (
+      await paperUpgrade.query(
+        `SELECT n.nspname,p.proname,oidvectortypes(p.proargtypes) args,pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE left(n.nspname,4)='ctp_' ORDER BY n.nspname,p.proname,args`,
+      )
+    ).rows;
+    assert.equal(vectorBeforeFunctions.length, 176);
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[50]),
+      path.join(paperMigrations, expectedMigrations[50]),
+      { recursive: true },
+    );
+    await migrate(databases[4], paperConfig, true);
+    await migrate(databases[4], paperConfig, true);
+    const vectorAfterFunctions = (
+      await paperUpgrade.query(
+        `SELECT n.nspname,p.proname,oidvectortypes(p.proargtypes) args,pg_get_functiondef(p.oid) definition FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE left(n.nspname,4)='ctp_' ORDER BY n.nspname,p.proname,args`,
+      )
+    ).rows;
+    assert.equal(vectorAfterFunctions.length, 178);
+    for (const prior of vectorBeforeFunctions)
+      assert.deepEqual(
+        vectorAfterFunctions.find(
+          (f) =>
+            f.nspname === prior.nspname && f.proname === prior.proname && f.args === prior.args,
+        ),
+        prior,
+      );
+    assert.deepEqual(await captureRetained(), vectorBefore);
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          `SELECT to_jsonb(r)-'paperLegacy'-'vectorSize' row FROM public.risk_reservation r WHERE id=$1`,
+          [legacyVector.reservation],
+        )
+      ).rows,
+      legacyBefore,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          `SELECT "paperLegacy","vectorSize" FROM public.risk_reservation WHERE id=$1`,
+          [legacyVector.reservation],
+        )
+      ).rows,
+      [{ paperLegacy: true, vectorSize: null }],
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          `SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='public.risk_reservation'::regclass`,
+        )
+      ).rows,
+      [{ relrowsecurity: true, relforcerowsecurity: true }],
+    );
+    const denied = async (sql, params, message) => {
+      await vectorOwner.query('BEGIN');
+      await vectorOwner.query("SELECT set_config('app.tenant_id',$1,true)", [legacyVector.tenant]);
+      try {
+        await assert.rejects(
+          (async () => {
+            await vectorOwner.query(sql, params);
+            await vectorOwner.query('SET CONSTRAINTS ALL IMMEDIATE');
+          })(),
+          (e) => e.code === '23514' && e.message === message,
+        );
+      } finally {
+        await vectorOwner.query('ROLLBACK');
+      }
+    };
+    await denied(
+      'UPDATE public.risk_reservation SET amount=200 WHERE id=$1',
+      [legacyVector.reservation],
+      'PAPER_RESERVATION_IMMUTABLE',
+    );
+    await denied(
+      'DELETE FROM public.risk_reservation WHERE id=$1',
+      [legacyVector.reservation],
+      'PAPER_RESERVATION_IMMUTABLE',
+    );
+    await denied(
+      `INSERT INTO ctp_paper.reservation_debit(tenant_id,reservation_id,intent_id,account_id,mode,ordinal,asset,amount,hold_id) VALUES($1,$2,$3,$4,'PAPER',1,'BTC',1,$5)`,
+      [
+        legacyVector.tenant,
+        legacyVector.reservation,
+        legacyVector.intent,
+        legacyVector.account,
+        randomUUID(),
+      ],
+      'PAPER_RESERVATION_LEGACY_VECTOR_FORBIDDEN',
+    );
+    await denied(
+      `INSERT INTO public.risk_reservation(id,"tenantId","decisionId","intentId","accountId",mode,"vectorSize","expiresAt","updatedAt") VALUES($1,$2,$3,$4,$5,'PAPER',1,now()+interval '1 hour',now())`,
+      [blocked.reservation, legacyVector.tenant, blocked.decision, blocked.intent, blocked.account],
+      'PAPER_RESERVATION_LEGACY_SCOPE',
+    );
+    assert.equal(
+      (await paperUpgrade.query('SELECT count(*)::int n FROM ctp_paper.reservation_debit')).rows[0]
+        .n,
+      0,
+    );
+    assert.deepEqual(
+      (
+        await paperUpgrade.query(
+          `SELECT to_jsonb(r)-'paperLegacy'-'vectorSize' row FROM public.risk_reservation r WHERE id=$1`,
+          [legacyVector.reservation],
+        )
+      ).rows,
+      legacyBefore,
+    );
+  } finally {
+    try {
+      await vectorOwner.query('ROLLBACK');
+    } finally {
+      vectorOwner.release();
+      try {
+        await vectorOwnerPool.end();
+      } finally {
+        pools.delete(vectorOwnerPool);
+      }
+    }
+  }
+
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -3603,6 +3839,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperTenantRiskContextNonBypassOwner: 'PASS',
     paperTenantRiskContextPopulatedUpgradeFromPublished49: 'PASS',
     paperRiskEvaluationNonBypassOwner: 'PASS',
+    paperReservationVectorsNonBypassOwner: 'PASS',
+    paperReservationVectorsPopulatedUpgradeFromPublished50: 'PASS',
+    paperReservationVectorsLegacyQuarantine: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
@@ -3630,6 +3869,10 @@ async function resetDatabaseProof(fresh) {
   await migrate(databases[0]);
   const reset = connect(dbUrl(databases[0]));
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.reservation_debit')).rows[0].n,
+    0,
+  );
   assert.deepEqual((await reset.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows, [
     { state: 'PAUSED', epoch: '1' },
   ]);

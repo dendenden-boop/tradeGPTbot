@@ -1,5 +1,13 @@
 # Risk Engine
 
+## Legacy PAPER compatibility correction
+
+Initial source5bc3956 failed the real legacy-upgrade gate and is not accepted. Candidate51 now preserves existing scalar PAPER values/IDs/FKs as immutable `paperLegacy` quarantine; it never guesses a cash vector. New PAPER vectors for that tenant, forged legacy exemptions and guessed legacy debits reject. Native modes keep their scalar invariants. [Current storage contract](phase-13/reservation-storage.md) and PR32 record actual corrected evidence after execution. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER dispatch and positive credit disabled.
+
+## PHASE13 initial vector storage boundary
+
+[Initial PAPER reservation storage](phase-13/reservation-storage.md) retains common RiskGrant reservation identity/FKs and adds a separate immutable cash vector. PAPER has no scalar cash debit; native scalar budget/asset/amount remain required by SQL. Per-intent uniqueness and complete-vector constraints provide original storage integrity, not a certified snapshot, current remaining/UNKNOWN lifecycle, budget admission, Portfolio hold or financial grant. The existing pristine source and PAPER dispatch guards remain closed. Published1-50/native financial source remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER dispatch/positive credit disabled, native AMEND Binance Spot TESTNET only.
+
 ## PAPER full-vector commitment projection checkpoint
 
 Initial source `65f5b5b04228578897b2072316bbbe410c5e1399` is superseded and is **not acceptance**: review found that a non-integer revision string could reach BigInt inside a continuable refinement and leak an unsanitized conversion error. Four regression cases reproduced RED (80 prior cases passed). The format stage now gates the BigInt bound check through a schema pipeline. **84 new contracts / 221 targeted assertions in four suites pass**; all thirteen corrected-source local regression commands pass: **4438 unit / 41 HTTP**, build/runtime, twelve clean deployments and audits 0. Exact-SHA source/PR/protected-main CI run IDs, artifact verification and protection proof are published after execution in [PR #31](https://github.com/dendenden-boop/tradeGPTbot/pull/31) and the completion checkpoint. Source and final review use the same frozen HEAD; no result from another SHA establishes its acceptance. The initial 80-case source/checkpoints below retain their historical scope; green results for that source cannot accept the corrected contract.
