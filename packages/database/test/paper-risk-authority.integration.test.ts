@@ -47,83 +47,121 @@ const io = (signal = new AbortController().signal, ms = 2500) => ({
   deadline: Date.now() + ms,
 });
 const handles: { close(): Promise<void> }[] = [];
+// Real write-only fixture ports are module-owned, as in the native admission
+// suite. Every register/initialize/update and expected-head read still occurs.
+// Readers and their close/restart/physical-slot tests remain fresh and unchanged.
+let configurationWriter: ReturnType<typeof createPostgresPaperConfiguration> | undefined;
+let fundingWriter: ReturnType<typeof createPostgresPaperFunding> | undefined;
+const policyWriters = new Map<'PLATFORM' | 'USER', ReturnType<typeof createPostgresPolicies>>();
+const controlWriters = new Map<'GLOBAL' | 'TENANT', ReturnType<typeof createPostgresControls>>();
+function ownWriter<T extends { close(): Promise<void> }>(opening: Promise<T>): Promise<T> {
+  return opening.then((handle) => {
+    handles.push(handle);
+    return handle;
+  });
+}
+function configurationPort() {
+  return (configurationWriter ??= ownWriter(
+    createPostgresPaperConfiguration({
+      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function fundingPort() {
+  return (fundingWriter ??= ownWriter(
+    createPostgresPaperFunding({
+      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+
 async function updatePolicy(
   tenantId: string,
   kind: 'PLATFORM' | 'USER',
   changes: Record<string, unknown> = {},
   mode: 'PAPER' | 'DEMO' = 'PAPER',
 ) {
-  const h = await createPostgresPolicies({
-    connectionString: required(
-      kind === 'PLATFORM'
-        ? 'DATABASE_RISK_POLICY_OPERATOR_URL'
-        : 'DATABASE_RISK_POLICY_CONTROLLER_URL',
-    ),
-    environment: 'test',
-    authority: kind,
-  });
-  try {
-    const expected =
-      (
-        await admin.query<{ version: string }>(
-          'SELECT version::text FROM ctp_risk.policy_head WHERE scope=$1 AND target=$2 AND mode=$3',
-          [kind, kind === 'PLATFORM' ? '00000000-0000-0000-0000-000000000000' : tenantId, mode],
-        )
-      ).rows[0]?.version ?? '0';
-    return await h.update(
-      policyUpdateSchema.parse({
-        scope: kind === 'PLATFORM' ? { kind } : { kind, tenantId },
-        mode,
-        expectedVersion: expected,
-        eventId: randomUUID(),
-        reason: 'TEST_PAPER_AUTHORITY',
-        limits: { ...riskFixture().platform, ...changes },
+  const authority = kind;
+  let opening = policyWriters.get(authority);
+  if (!opening) {
+    opening = ownWriter(
+      createPostgresPolicies({
+        connectionString: required(
+          kind === 'PLATFORM'
+            ? 'DATABASE_RISK_POLICY_OPERATOR_URL'
+            : 'DATABASE_RISK_POLICY_CONTROLLER_URL',
+        ),
+        environment: 'test',
+        authority: kind,
       }),
-      io(),
     );
-  } finally {
-    await h.close();
+    policyWriters.set(authority, opening);
   }
+  const h = await opening;
+  const expected =
+    (
+      await admin.query<{ version: string }>(
+        'SELECT version::text FROM ctp_risk.policy_head WHERE scope=$1 AND target=$2 AND mode=$3',
+        [kind, kind === 'PLATFORM' ? '00000000-0000-0000-0000-000000000000' : tenantId, mode],
+      )
+    ).rows[0]?.version ?? '0';
+  return await h.update(
+    policyUpdateSchema.parse({
+      scope: kind === 'PLATFORM' ? { kind } : { kind, tenantId },
+      mode,
+      expectedVersion: expected,
+      eventId: randomUUID(),
+      reason: 'TEST_PAPER_AUTHORITY',
+      limits: { ...riskFixture().platform, ...changes },
+    }),
+    io(),
+  );
 }
 async function updateControl(tenantId: string | null, state: 'RUNNING' | 'PAUSED') {
-  const h = await createPostgresControls({
-    connectionString: required(
-      tenantId === null ? 'DATABASE_RISK_OPERATOR_URL' : 'DATABASE_RISK_CONTROL_URL',
-    ),
-    environment: 'test',
-    authority: tenantId === null ? 'GLOBAL' : 'TENANT',
-  });
-  try {
-    const expected =
-      tenantId === null
-        ? ((
-            await admin.query<{ epoch: string }>(
-              "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
-            )
-          ).rows[0]?.epoch ?? '0')
-        : ((
-            await admin.query<{ epoch: string }>(
-              "SELECT epoch::text FROM ctp_risk.tenant_head WHERE \"tenantId\"=$1 AND scope='USER' AND kind='KILL_SWITCH' AND key='kill'",
-              [tenantId],
-            )
-          ).rows[0]?.epoch ?? '0');
-    return await h.update(
-      controlUpdateSchema.parse({
-        scope:
-          tenantId === null ? { kind: 'GLOBAL' } : { kind: 'USER', tenantId, targetId: tenantId },
-        kind: 'KILL_SWITCH',
-        key: 'kill',
-        state,
-        eventId: randomUUID(),
-        expectedEpoch: expected,
-        reason: 'TEST_PAPER_AUTHORITY',
-        evidenceHash: '1'.repeat(64),
+  const authority = tenantId === null ? 'GLOBAL' : 'TENANT';
+  let opening = controlWriters.get(authority);
+  if (!opening) {
+    opening = ownWriter(
+      createPostgresControls({
+        connectionString: required(
+          tenantId === null ? 'DATABASE_RISK_OPERATOR_URL' : 'DATABASE_RISK_CONTROL_URL',
+        ),
+        environment: 'test',
+        authority: tenantId === null ? 'GLOBAL' : 'TENANT',
       }),
-      io(),
     );
-  } finally {
-    await h.close();
+    controlWriters.set(authority, opening);
   }
+  const h = await opening;
+  const expected =
+    tenantId === null
+      ? ((
+          await admin.query<{ epoch: string }>(
+            "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
+          )
+        ).rows[0]?.epoch ?? '0')
+      : ((
+          await admin.query<{ epoch: string }>(
+            "SELECT epoch::text FROM ctp_risk.tenant_head WHERE \"tenantId\"=$1 AND scope='USER' AND kind='KILL_SWITCH' AND key='kill'",
+            [tenantId],
+          )
+        ).rows[0]?.epoch ?? '0');
+  return await h.update(
+    controlUpdateSchema.parse({
+      scope:
+        tenantId === null ? { kind: 'GLOBAL' } : { kind: 'USER', tenantId, targetId: tenantId },
+      kind: 'KILL_SWITCH',
+      key: 'kill',
+      state,
+      eventId: randomUUID(),
+      expectedEpoch: expected,
+      reason: 'TEST_PAPER_AUTHORITY',
+      evidenceHash: '1'.repeat(64),
+    }),
+    io(),
+  );
 }
 async function ensurePolicies(tenantId: string) {
   await updatePolicy(tenantId, 'PLATFORM');
@@ -171,15 +209,8 @@ async function fixture({
     'INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'SIMULATED\',\'ACTIVE\',\'paper-draft-epoch\',now())',
     [c.owner.accountId, c.owner.tenantId, c.source.exchange, externalAccountId, c.source.region],
   );
-  const config = await createPostgresPaperConfiguration({
-    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-    environment: 'test',
-  });
-  try {
-    if (configure) await config.register(c, io());
-  } finally {
-    await config.close();
-  }
+  const config = await configurationPort();
+  if (configure) await config.register(c, io());
   const i = f.p.record.instrument,
     r = f.p.record.rules;
   await admin.query(
@@ -242,26 +273,19 @@ async function prepared({
   const f = await fixture(region ? { region } : {});
   const fundingId = randomUUID();
   if (fund) {
-    const funding = await createPostgresPaperFunding({
-      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-      environment: 'test',
-    });
-    try {
-      await funding.initialize(
-        paperFundingSchema.parse({
-          id: fundingId,
-          owner: f.c.owner,
-          configurationId: f.c.id,
-          balances: [
-            { asset: 'BTC', amount: '0.000000000000000001' },
-            { asset: 'USDT', amount: '9007199254740993' },
-          ],
-        }),
-        io(),
-      );
-    } finally {
-      await funding.close();
-    }
+    const funding = await fundingPort();
+    await funding.initialize(
+      paperFundingSchema.parse({
+        id: fundingId,
+        owner: f.c.owner,
+        configurationId: f.c.id,
+        balances: [
+          { asset: 'BTC', amount: '0.000000000000000001' },
+          { asset: 'USDT', amount: '9007199254740993' },
+        ],
+      }),
+      io(),
+    );
   }
   const orders = await openOrders();
   const order = draft ? await orders.create(f.binding, f.draft, io()) : null;
@@ -1461,34 +1485,23 @@ async function openTenantContext(
 }
 async function fundCash(c: PaperConfiguration, noncash = false) {
   const fundingId = randomUUID(),
-    config = await createPostgresPaperConfiguration({
-      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-      environment: 'test',
+    config = await configurationPort(),
+    funding = await fundingPort();
+  await config.register(c, io());
+  await funding.initialize(
+    paperFundingSchema.parse({
+      id: fundingId,
+      owner: c.owner,
+      configurationId: c.id,
+      balances: noncash
+        ? [
+            { asset: 'BTC', amount: '1' },
+            { asset: 'USDT', amount: '1000' },
+          ]
+        : [{ asset: 'USDT', amount: '1000' }],
     }),
-    funding = await createPostgresPaperFunding({
-      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-      environment: 'test',
-    });
-  try {
-    await config.register(c, io());
-    await funding.initialize(
-      paperFundingSchema.parse({
-        id: fundingId,
-        owner: c.owner,
-        configurationId: c.id,
-        balances: noncash
-          ? [
-              { asset: 'BTC', amount: '1' },
-              { asset: 'USDT', amount: '1000' },
-            ]
-          : [{ asset: 'USDT', amount: '1000' }],
-      }),
-      io(),
-    );
-  } finally {
-    await config.close();
-    await funding.close();
-  }
+    io(),
+  );
   return fundingId;
 }
 async function tenantReady() {
