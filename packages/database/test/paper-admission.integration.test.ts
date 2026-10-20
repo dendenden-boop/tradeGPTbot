@@ -383,7 +383,7 @@ async function tenantReady(liquid = false) {
   };
 }
 
-import { createPostgresPaperOrderRiskPort } from '../../paper-engine/src/postgres-admission.js';
+import { createPostgresPaperOrderRiskPort } from '@ctp/paper-engine/risk';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 
 afterAll(async () => {
@@ -391,6 +391,26 @@ afterAll(async () => {
   await admin.end();
 });
 async function boundary() {
+  const database = new URL(required('DATABASE_MIGRATION_URL')).pathname;
+  for (const key of [
+    'DATABASE_EXECUTION_URL',
+    'DATABASE_PAPER_ADMISSION_URL',
+    'DATABASE_PAPER_CONFIGURATION_URL',
+    'DATABASE_PAPER_FUNDING_URL',
+    'DATABASE_PAPER_BOOK_URL',
+    'DATABASE_PAPER_RUNTIME_OBSERVER_URL',
+    'DATABASE_PAPER_TENANT_RISK_CONTEXT_URL',
+    'DATABASE_MARKET_SNAPSHOT_URL',
+    'DATABASE_MARKET_TRADE_URL',
+    'DATABASE_RISK_CONTROL_URL',
+    'DATABASE_RISK_OPERATOR_URL',
+    'DATABASE_RISK_POLICY_OPERATOR_URL',
+    'DATABASE_RISK_POLICY_CONTROLLER_URL',
+  ])
+    expect(
+      new URL(required(key)).pathname,
+      'Every admission fixture port must use this isolated database',
+    ).toBe(database);
   const row = await admin.query<{ ready: boolean }>(
     "SELECT to_regprocedure('ctp_paper.evaluate_and_reserve(jsonb)') IS NOT NULL AND to_regprocedure('ctp_paper.reconcile_admission(jsonb)') IS NOT NULL AND to_regrole('ctp_paper_risk_admission') IS NOT NULL ready",
   );

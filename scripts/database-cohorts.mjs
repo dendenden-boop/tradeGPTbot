@@ -8,17 +8,23 @@ import { sanitize, workspace } from './docker-test-utils.mjs';
 
 const registry = 'packages/database/test/instrument-registry.integration.test.ts';
 const roles = 'packages/database/test/runtime-role-graph.integration.test.ts';
+const admission = 'packages/database/test/paper-admission.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 export function planDatabaseCohorts(files) {
   assert.ok(Array.isArray(files) && files.every((file) => nativeFile.test(file)));
   assert.equal(new Set(files).size, files.length, 'Duplicate native input');
   assert.ok(files.includes(registry) && files.includes(roles), 'Missing isolation contracts');
-  const main = files.filter((file) => file !== registry && file !== roles).sort();
+  const main = files
+    .filter((file) => file !== registry && file !== roles && file !== admission)
+    .sort();
   assert.ok(main.length > 0);
   return [
     { id: 'main', files: main, parallel: true },
     { id: 'registry', files: [registry], parallel: true },
+    ...(files.includes(admission)
+      ? [{ id: 'admission', files: [admission], parallel: true, after: 'registry' }]
+      : []),
     { id: 'roles', files: [roles], parallel: false },
   ];
 }
@@ -112,11 +118,17 @@ export async function runDatabaseCohorts(
   jobs,
   { timeoutMs, signal, secrets = [], echo = false, cwd = workspace },
 ) {
+  const hasAdmission = jobs.length === 4;
   assert.deepEqual(
-    jobs.map(({ id, parallel }) => ({ id, parallel })),
+    jobs.map(({ id, parallel, after }) => ({
+      id,
+      parallel,
+      ...(after === undefined ? {} : { after }),
+    })),
     [
       { id: 'main', parallel: true },
       { id: 'registry', parallel: true },
+      ...(hasAdmission ? [{ id: 'admission', parallel: true, after: 'registry' }] : []),
       { id: 'roles', parallel: false },
     ],
   );
@@ -128,6 +140,7 @@ export async function runDatabaseCohorts(
   if (signal?.aborted) stop();
   const timer = setTimeout(stop, timeoutMs);
   const completed = [];
+  let firstFailure;
   const run = (job) =>
     new Promise((resolve, reject) => {
       if (controller.signal.aborted || performance.now() - started >= timeoutMs) {
@@ -178,6 +191,7 @@ export async function runDatabaseCohorts(
         controller.signal.removeEventListener('abort', terminate);
         if (echo && output) console.log(sanitize(output, secrets));
         if (error) {
+          firstFailure ??= error;
           stop();
           reject(error);
         } else {
@@ -211,10 +225,15 @@ export async function runDatabaseCohorts(
       });
     });
   try {
-    const parallel = await Promise.allSettled(jobs.filter((job) => job.parallel).map(run));
+    const main = run(jobs[0]);
+    const registry = run(jobs[1]);
+    // Preserve the original initial overlap. The third worker reuses the
+    // registry's process slot only after its physical close, not on early exit.
+    const admission = hasAdmission ? registry.then(() => run(jobs[2])) : null;
+    const parallel = await Promise.allSettled([main, registry, ...(admission ? [admission] : [])]);
     const failure = parallel.find((result) => result.status === 'rejected');
-    if (failure) throw failure.reason;
-    await run(jobs[2]);
+    if (failure) throw firstFailure ?? failure.reason;
+    await run(jobs.at(-1));
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native cohort aggregate deadline/abort');
     return { timeoutMs, elapsedMs: performance.now() - started, completed };

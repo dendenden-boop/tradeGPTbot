@@ -367,9 +367,9 @@ function verifyReserved(
   if (canonical(state) !== p.afterText || hash(p.afterText) !== p.afterHash) fail();
 }
 
-/** Unfinished PHASE13 implementation: the fixed SQL kernel/schema and native
- * acceptance are still required. No package root export, native mode relaxation
- * or Paper dispatch is introduced. This port never accepts a caller snapshot,
+/** Server-only candidate backed by the fixed additive53 SQL authority. Full
+ * PHASE13 acceptance is still required. No package root export, native mode
+ * relaxation or Paper dispatch is introduced. This port never accepts a caller snapshot,
  * certificate, evaluation, financial writer or transport callback. */
 export async function createPostgresPaperOrderRiskPort(options: unknown) {
   const database = await openPaperAdmissionDatabase(options);

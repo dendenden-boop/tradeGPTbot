@@ -11,6 +11,7 @@ export type {
   PaperRiskContextReader,
 } from './risk-context-domain.js';
 export { createPostgresPaperTenantRiskContextSource } from './postgres-tenant-risk-context.js';
+export { createPostgresPaperOrderRiskPort } from './postgres-admission.js';
 export type {
   PaperTenantRiskContextRequest,
   PaperTenantRiskContextSource,

@@ -19,6 +19,7 @@ import {
   createPostgresPaperRiskAuthoritySource,
   createPostgresPaperRiskContextSource,
   createPostgresPaperTenantRiskContextSource,
+  createPostgresPaperOrderRiskPort,
 } from '@ctp/paper-engine/risk';
 import {
   createPostgresPaperInitialPortfolio,
@@ -54,6 +55,7 @@ afterAll(() => admin.end());
 type Options = { connectionString: string; environment: 'test' };
 type Handle = { close(): Promise<void> };
 const cases: readonly [string, string, (options: Options) => Promise<Handle>][] = [
+  ['ctp_paper_risk_admission', 'DATABASE_PAPER_ADMISSION_URL', createPostgresPaperOrderRiskPort],
   [
     'ctp_paper_tenant_risk_context',
     'DATABASE_PAPER_TENANT_RISK_CONTEXT_URL',
@@ -282,7 +284,7 @@ it('private functions expose no PUBLIC execution and pin every SECURITY DEFINER 
 
 it('all private Portfolio and execution authority tables enforce FORCE RLS', async () => {
   const unsafe = await admin.query(
-    `SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('ctp_portfolio','ctp_execution','ctp_registry') AND c.relkind IN('r','p') AND NOT(c.relrowsecurity AND c.relforcerowsecurity)`,
+    `SELECT n.nspname,c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN('ctp_portfolio','ctp_execution','ctp_registry','ctp_paper') AND c.relkind IN('r','p') AND NOT(c.relrowsecurity AND c.relforcerowsecurity)`,
   );
   expect(unsafe.rows).toEqual([]);
 });
