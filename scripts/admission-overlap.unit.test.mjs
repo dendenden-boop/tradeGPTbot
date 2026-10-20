@@ -109,25 +109,38 @@ it('charges both new-stage children and final roles to one unchanged aggregate d
   const dir = await temp();
   const result = await cohorts.runDatabaseCohorts(
     jobs(dir, ['normal', 'normal', 'cost', 'cost', 'normal']),
-    { timeoutMs: 2200 },
+    { timeoutMs: 3000 },
   );
   expect(result.completed).toHaveLength(5);
-  expect(result.timeoutMs).toBe(2200);
-  expect(result.elapsedMs).toBeLessThan(2200);
+  expect(result.timeoutMs).toBe(3000);
+  expect(result.elapsedMs).toBeLessThan(3000);
 });
-it('a failing admission physically stops its overlapping native sibling before returning', async () => {
-  const dir = await temp();
-  await expect(
-    cohorts.runDatabaseCohorts(jobs(dir, ['normal', 'normal', 'fail', 'hang', 'normal']), {
-      timeoutMs: 3000,
-    }),
-  ).rejects.toThrow(/admission/u);
-  const file = path.join(dir, 'native-admission.heartbeat'),
-    before = await readFile(file, 'utf8');
-  await wait(80);
-  expect(await readFile(file, 'utf8')).toBe(before);
-  expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
-});
+it.each(['admission', 'native-admission'])(
+  'a failing %s physically stops its overlapping sibling before returning',
+  async (failed) => {
+    const dir = await temp();
+    const peer = failed === 'admission' ? 'native-admission' : 'admission';
+    await expect(
+      cohorts.runDatabaseCohorts(
+        jobs(dir, [
+          'normal',
+          'normal',
+          failed === 'admission' ? 'fail' : 'hang',
+          failed === 'admission' ? 'hang' : 'fail',
+          'normal',
+        ]),
+        {
+          timeoutMs: 3000,
+        },
+      ),
+    ).rejects.toThrow(new RegExp('Native cohort ' + failed + ' failed', 'u'));
+    const file = path.join(dir, peer + '.heartbeat'),
+      before = await readFile(file, 'utf8');
+    await wait(80);
+    expect(await readFile(file, 'utf8')).toBe(before);
+    expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
+  },
+);
 it.each(['abort', 'deadline'])(
   '%s physically closes both overlapping children and a descendant',
   async (kind) => {
@@ -141,6 +154,8 @@ it.each(['abort', 'deadline'])(
     );
     try {
       await until(() => exists(path.join(dir, 'descendant.heartbeat')), observed);
+      await until(() => exists(path.join(dir, 'admission.heartbeat')), observed);
+      await until(() => exists(path.join(dir, 'native-admission.heartbeat')), observed);
       if (kind === 'abort') controller.abort();
       expect((await observed).error).toMatchObject({
         message: expect.stringMatching(/deadline|abort/u),
@@ -162,4 +177,24 @@ it('fails closed when reviewed overlap inputs or their SQL fixture helper change
   expect(cohorts.verifyAdmissionParallelFiles).toBeTypeOf('function');
   await cohorts.verifyAdmissionParallelFiles(root);
   await expect(cohorts.verifyAdmissionParallelFiles(await temp())).rejects.toThrow();
+  const copy = await temp();
+  const paths = [native, paper, 'packages/database/test/fixtures/risk-certification.ts'];
+  for (const file of paths) {
+    await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
+    await writeFile(
+      path.join(copy, file),
+      (await readFile(path.join(root, file), 'utf8'))
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\n', '\r\n'),
+    );
+  }
+  await cohorts.verifyAdmissionParallelFiles(copy);
+  for (const file of paths) {
+    const before = await readFile(path.join(copy, file), 'utf8');
+    await writeFile(path.join(copy, file), before + '\n// unreviewed role mutation\n');
+    await expect(cohorts.verifyAdmissionParallelFiles(copy)).rejects.toThrow(
+      /renewed cluster-role review/u,
+    );
+    await writeFile(path.join(copy, file), before);
+  }
 });

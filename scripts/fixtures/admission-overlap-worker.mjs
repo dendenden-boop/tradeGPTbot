@@ -13,7 +13,8 @@ if (id === 'roles')
   for (const dependency of ['main', 'registry', 'admission', 'native-admission'])
     if (readFileSync(file(dependency + '.done'), 'utf8') !== 'done') process.exit(9);
 if (mode === 'fail') {
-  while (!existsSync(file('native-admission.heartbeat'))) await wait(5);
+  const peer = id === 'admission' ? 'native-admission' : 'admission';
+  while (!existsSync(file(peer + '.heartbeat'))) await wait(5);
   process.exit(7);
 }
 if (mode === 'tree')
@@ -29,5 +30,5 @@ if (mode === 'hang' || mode === 'tree') {
   }
 }
 if (mode === 'controlled') while (!existsSync(file(id + '.release'))) await wait(5);
-await wait(mode === 'cost' ? 900 : 30);
+await wait(mode === 'cost' ? 1700 : 30);
 writeFileSync(file(id + '.done'), 'done');

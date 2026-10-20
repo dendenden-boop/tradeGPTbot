@@ -11,6 +11,7 @@ import {
   planDatabaseCohorts,
   runDatabaseCohorts,
   mergeDatabaseReports,
+  verifyAdmissionParallelFiles,
 } from './database-cohorts.mjs';
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
 import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
@@ -3946,6 +3947,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[5]);
   await migrate(databases[6]);
   const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles());
+  if (cohortPlan.some(({ id }) => id === 'native-admission')) await verifyAdmissionParallelFiles();
   const nativeEnv = {
     ...process.env,
     NODE_ENV: 'test',

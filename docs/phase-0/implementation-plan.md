@@ -1,5 +1,9 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Current bounded-cohort correction — 20 October 2026
+
+The canonical PHASE0–22 scope is unchanged. [PHASE13 verification](../phase-13/verification.md) records the verified90e3e09 source CI and both failed PR35 attempts. The current correction overlaps only the reviewed unchanged95case native admission file with isolated PAPER admission, after both mutator scopes physically close; role graph remains last. At most two children, all old cases and the480second native/17minute parent budgets are preserved. Eight new overlap/guard contracts and all38targeted process/readiness tests pass; full corrected-source CI is pending. Accepted main remains4391c24; PHASE13 IN_PROGRESS / NOT READY FOR PHASE14. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Earlier checkpoints retain their original scope.
+
 ## Accepted PAPER runtime observation source checkpoint
 
 Source **0f4529d7dae6b831aeee6f6baf2623328b43c393** passed full [source CI 38795514761](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514761), [source CodeQL 38795514785](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795514785), [PR CI 38795523955](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523955) and [PR CodeQL 38795523966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/38795523966). Verified exact-head artifacts/digests show **4019 unit / 904 Paper / 41 HTTP per OS**, **1192 native PostgreSQL**, **40 new runtime contracts** fresh and under a non-BYPASSRLS function owner, **206 role-graph cases**, populated published-47→48 preservation, all earlier owner/upgrade stages, twelve clean deployments, audit zero and no open CodeQL alerts. Every required job passed; cancelled preliminary runs are not acceptance.

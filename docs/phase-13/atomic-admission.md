@@ -1,5 +1,13 @@
 # Atomic PAPER admission work in progress
 
+## Current bounded-cohort correction — 20 October 2026
+
+Source **90e3e09** passed Platform39433486700 and CodeQL39433486698 with4610unit/41HTTP per OS and1348native PostgreSQL tests; exact-source artifacts and all earlier identities were verified. PR35 remains unaccepted: attempt1 hit the original78case owner deadline; diagnostic attempt2 passed all20owner reports,1081main/23registry/17admission cases, then exhausted the unchanged480second aggregate at role-graph startup. [Verification](verification.md) preserves both failures and their artifact proof.
+
+Tests-only **286caa4** froze seven missing-schedule RED contracts. The correction moves the unchanged95case native admission file to a reviewed parallel cohort on the original main database, alongside PAPER admission on its isolated database, only after both shared-role mutator scopes physically close. Role graph remains last; at most two children run;480second native and17minute parent budgets, all42native files and published1–52 remain unchanged. Hash guards require renewed isolation review if the two overlapping test files or their SQL fixture helper change. All38targeted process/readiness contracts pass, including eight overlap/guard cases; full corrected-source regression/CI remains required. Native financial runtime, adapters and candidate53 SQL are unchanged.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Accepted main remains4391c24. Initial server-only quote-cash Spot BUY admission is implemented; causal remaining/release/control reservations, final dispatch, operational composition and durable virtual execution remain required. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/restore recovery and production soak are not claimed. Earlier sections retain their source-specific checkpoints.
+
 Status: **candidate SQL authority implemented / NOT accepted**. Base is protected main4391c24a7900fadcb46c3112df99bc00356855ad, accepted PR34. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14. This document fixes the intended contract; implementation and tests below do not grant financial authority.
 
 ## Current runner integration candidate

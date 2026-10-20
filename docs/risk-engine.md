@@ -1,5 +1,9 @@
 # Risk Engine
 
+## Current bounded-cohort correction — 20 October 2026
+
+The canonical PHASE0–22 scope is unchanged. [PHASE13 verification](phase-13/verification.md) records the verified90e3e09 source CI and both failed PR35 attempts. The current correction overlaps only the reviewed unchanged95case native admission file with isolated PAPER admission, after both mutator scopes physically close; role graph remains last. At most two children, all old cases and the480second native/17minute parent budgets are preserved. Eight new overlap/guard contracts and all38targeted process/readiness tests pass; full corrected-source CI is pending. Accepted main remains4391c24; PHASE13 IN_PROGRESS / NOT READY FOR PHASE14. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Earlier checkpoints retain their original scope.
+
 ## Current accepted baseline and admission work in progress
 
 Protected main **4391c24a7900fadcb46c3112df99bc00356855ad** accepted [PR #34](https://github.com/dendenden-boop/tradeGPTbot/pull/34). Exact-main [Platform CI39384053653](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39384053653) and [CodeQL39384053713](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39384053713) passed: **4514 unit / 1299 Paper / 41 HTTP per OS, 1324 native PostgreSQL cases in41files, 34 state-owner cases, 19 owner reports**, Auth/populated reset/Docker/twelve clean deployments/audits0. Source CI39380926483 and CodeQL39380926541 passed. PR CI39380932669 retained its successful original OS/native/Auth jobs; after an initial Redis container exit, one qualified Docker/gate retry passed. The failed attempt and unknown root cause remain recorded in the PR; this is not first-pass PR acceptance or a claimed runtime fix. Strict required-check protection was verified. The historical candidate/pending paragraphs below describe their original checkpoints and are superseded by this acceptance.
