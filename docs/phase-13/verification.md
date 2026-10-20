@@ -1,6 +1,16 @@
 # PHASE 13 verification
 
-## Current accepted baseline and admission work in progress
+## Current integrated native acceptance candidate
+
+The server risk subpath now exports the real additive53-backed PAPER admission factory. Original29public RED cases passed. Native runner wiring includes the exclusive login, isolated admission database,17owner cases, seven role checks, textual old-row/180function retention, populated52→53/redeploy and populated isolated database reset. Admission runs after main and registry physically close because legacy main temporarily changes cluster-wide grouping roles; roles run last. The480second native and17minute parent deadlines remain unchanged. No Paper dispatch, final gate or production probes are enabled.
+
+Frozen source20c3514863e64348e1327647dbe8850065b1f7a1 passed all13local commands with784tracked input hashes unchanged:4609unit/41HTTP, build/runtime/schema, twelve clean deployments and audits0. All4514old assertions and blobs,52published migration hashes and native financial runtime/adapters/workflows/pins/deadlines were retained. This local result does not accept its failed full CI.
+
+[Platform39431977886](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39431977886) on20c3514 failed Ubuntu unit tests:4608PASS/1FAIL in the unchanged original abort/descendant process assertion, ENOENT registry.heartbeat. CodeQL39431977930 passed. Native acceptance was not reached; pending/cancelled dependent jobs are not acceptance. The fixture spawned its descendant before the sibling's first heartbeat, allowing the controller to abort before that file existed. Tests-only f98ffcb reproduces the same ENOENT deterministically with a delayed sibling. The fixture now waits for sibling readiness before launching the descendant; all21original process assertions/deadlines stay unchanged and30process/readiness cases pass. Full corrected-source local regression and Ubuntu/Windows/native/real-services/Auth/smoke/CodeQL CI are required; the failed source run is retained without blind retry or relaxed assertions.
+
+PHASE13 IN_PROGRESS / NOT READY FOR PHASE14. LIVE/PAPER financial dispatch and positive native collateral credit remain disabled; native AMEND is Binance Spot TESTNET only.
+
+## Accepted baseline and historical SQL-only candidate checkpoints
 
 Unpublished candidate53 now has actual local PostgreSQL evidence:17admission tests pass under the new functions' NOLOGIN NOSUPERUSER NOBYPASSRLS owner; populated52→53 passed34old tests before and after plus14admission cases, retained every old row/all180old function definitions, and backfilled no authority. A clean physical PostgreSQL restart preserved20issued requests and all checked book/genesis/hold/sequence data; restricted read-only reconciliation added no money effect or grant. Ten missing-kernel native RED cases and two corrected hold-erasure RED cases precede their fixes. These Windows SQL diagnostics use the explicit test-only startup normalization/5ms response proxy described in [atomic admission](atomic-admission.md); production transport and full native CI acceptance are not inferred. The17case multi-account expansion passed after correcting fixtures that correctly hit existing funding/metadata-freshness guards. Full new-candidate regression, native runner/owner/upgrade integration and CI remain pending; public29factory contracts remain RED, no package export/application composition/dispatch is enabled. Earlier9990a9d results below remain historical source-specific evidence.
 
