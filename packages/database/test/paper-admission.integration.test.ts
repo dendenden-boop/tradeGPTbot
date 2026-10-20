@@ -384,6 +384,7 @@ async function tenantReady(liquid = false) {
 }
 
 import { createPostgresPaperOrderRiskPort } from '../../paper-engine/src/postgres-admission.js';
+import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 
 afterAll(async () => {
   await Promise.all(handles.map((h) => h.close()));
@@ -422,6 +423,69 @@ async function openAdmission() {
   });
   handles.push(port);
   return port;
+}
+async function anotherAccount(f: Ready, funded: boolean) {
+  const c = paperConfigurationSchema.parse({
+    ...f.c,
+    id: randomUUID(),
+    owner: { ...f.c.owner, accountId: randomUUID() },
+  });
+  const externalAccountId = 'paper:' + c.owner.accountId;
+  await admin.query(
+    'INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'SIMULATED\',\'ACTIVE\',\'paper-draft-epoch\',now())',
+    [c.owner.accountId, c.owner.tenantId, c.source.exchange, externalAccountId, c.source.region],
+  );
+  const binding = bindingSchema.parse({
+    ...f.binding,
+    accountId: c.owner.accountId,
+    externalAccountId,
+  });
+  const config = await createPostgresPaperConfiguration({
+    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
+    environment: 'test',
+  });
+  try {
+    await config.register(c, io());
+  } finally {
+    await config.close();
+  }
+  if (funded) {
+    await fundCash(c);
+    await (await openBook()).initialize(c.owner, io());
+  }
+  const order = await f.orders.create(
+    binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  return { ...f, c, binding, order };
+}
+async function nextFixtureMarketObservation(f: Ready) {
+  // A new test-only native observation through the actual Market Data ports;
+  // never renew the timestamp of an existing persisted receipt.
+  const snapshot = structuredClone(f.f.s),
+    trade = structuredClone(f.f.p),
+    now = Date.now();
+  snapshot.id = randomUUID();
+  trade.id = randomUUID();
+  snapshot.expectedRevision = trade.expectedRevision = '1';
+  snapshot.timestamp = trade.timestamp = now;
+  for (const record of [snapshot.ticker, snapshot.book, trade.trade])
+    record.exchangeTime = record.receivedAt = now;
+  snapshot.book.sourceSequence = (BigInt(snapshot.book.sourceSequence!) + 1n).toString();
+  trade.trade.sourceSequence = (BigInt(trade.trade.sourceSequence!) + 1n).toString();
+  trade.trade.tradeId = randomUUID();
+  expect((await f.snapshots.publish(snapshot, io())).status).toBe('APPLIED');
+  expect((await f.trades.publish(trade, io())).status).toBe('APPLIED');
 }
 async function inventory(f: Ready) {
   return (
@@ -545,7 +609,12 @@ it('paper-admission: two concurrent claims cannot both consume the last tenant b
     {
       ...f.draft,
       key: randomUUID(),
-      order: { ...f.draft.order, type: 'LIMIT', limitPrice: parseDecimal('10.5'), timeInForce: 'GTC' },
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
     },
     io(),
   );
@@ -557,6 +626,10 @@ it('paper-admission: two concurrent claims cannot both consume the last tenant b
   ]);
   expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  const rejection = results.find((r) => r.status === 'rejected');
+  expect(rejection?.status === 'rejected' && (rejection.reason as Error).message).toBe(
+    'PAPER_ADMISSION_LIMIT',
+  );
   expect(await inventory(f)).toMatchObject({
     reservations: 1,
     decisions: 1,
@@ -598,7 +671,12 @@ it('paper-admission: current UNKNOWN order retains its original hold and prevent
     {
       ...f.draft,
       key: randomUUID(),
-      order: { ...f.draft.order, type: 'LIMIT', limitPrice: parseDecimal('10.5'), timeInForce: 'GTC' },
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
     },
     io(),
   );
@@ -624,4 +702,195 @@ it('paper-admission: MISSING reconciliation is read-only and issues no grant, ho
     },
   });
   expect(await effects(f.c.owner.tenantId)).toEqual(before);
+});
+
+it('paper-admission: authentic current holds admit a second order exactly once when budgets permit', async () => {
+  const f = await nativeReady(),
+    port = await openAdmission();
+  await port.approve(await input(f), io());
+  const second = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  await runtimeEvidence(f);
+  await port.approve(await input(f, second), io());
+  expect(await inventory(f)).toMatchObject({
+    reservations: 2,
+    decisions: 2,
+    issuance: 2,
+    holds: 2,
+    debits: ['5.25525', '5.25525'],
+    ledger: 1,
+    entries: 2,
+  });
+});
+
+it.each(['book', 'watermark'] as const)(
+  'paper-admission: a common Portfolio SQL writer cannot erase issued %s authority',
+  async (kind) => {
+    const f = await nativeReady(),
+      port = await openAdmission();
+    await port.approve(await input(f), io());
+    const before = await inventory(f),
+      p = await admin.connect();
+    try {
+      await p.query('BEGIN');
+      await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+      await p.query('SET LOCAL ROLE ctp_portfolio');
+      if (kind === 'book')
+        await p.query(
+          `UPDATE ctp_portfolio.book SET state=jsonb_set(state::jsonb,'{holds}','[]')::text,
+      state_hash=sha256(convert_to(jsonb_set(state::jsonb,'{holds}','[]')::text,'UTF8')) WHERE "tenantId"=$1`,
+          [f.c.owner.tenantId],
+        );
+      else
+        await p.query(
+          `UPDATE ctp_portfolio.hold_watermark SET released=true,timestamp=timestamp+1,
+      fingerprint=sha256(convert_to('forged-issued-release','UTF8')) WHERE "tenantId"=$1`,
+          [f.c.owner.tenantId],
+        );
+      await expect(p.query('COMMIT')).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+    } finally {
+      await p.query('ROLLBACK');
+      p.release();
+    }
+    expect(await inventory(f)).toEqual(before);
+  },
+);
+
+it('paper-admission: lost acknowledged COMMIT grants nothing and reconciles one durable effect after reconnect', async () => {
+  const f = await nativeReady(),
+    request = await input(f),
+    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'), 'PAPER_ADMISSION');
+  const port = await createPostgresPaperOrderRiskPort({
+    connectionString: proxy.connectionString,
+    environment: 'test',
+  });
+  try {
+    proxy.arm();
+    await expect(port.approve(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    expect(await inventory(f)).toMatchObject({
+      reservations: 1,
+      decisions: 1,
+      issuance: 1,
+      holds: 1,
+      ledger: 1,
+      entries: 2,
+    });
+    const restarted = await openAdmission();
+    const reconciled = await restarted.reconcileApproval(request, io());
+    expect(reconciled.kind).toBe('COMMITTED');
+    expect(await inventory(f)).toMatchObject({
+      reservations: 1,
+      decisions: 1,
+      issuance: 1,
+      holds: 1,
+      ledger: 1,
+      entries: 2,
+    });
+  } finally {
+    await port.close();
+    await proxy.close();
+  }
+});
+
+it('paper-admission: genuine later account funding cannot remint genesis or increase the inception loss reference', async () => {
+  const f = await nativeReady(),
+    port = await openAdmission();
+  await port.approve(await input(f), io());
+  const before = await admin.query(
+    'SELECT to_jsonb(g) AS genesis FROM ctp_paper.admission_genesis g WHERE tenant_id=$1',
+    [f.c.owner.tenantId],
+  );
+  const second = await anotherAccount(f, true);
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(second);
+  const grant = await port.approve(await input(second), io());
+  const result = await admin.query<{
+    response: {
+      loss: { kind: string; initialCapital: string };
+      policy: { snapshot: { adjustedOpeningEquity: string; adjustedCurrentEquity: string } };
+    };
+    source: { inventory: { accountIds: string[] } };
+  }>(
+    'SELECT response,source FROM ctp_paper.admission_issuance WHERE tenant_id=$1 AND reservation_id=$2',
+    [f.c.owner.tenantId, grant.reservationId],
+  );
+  expect(result.rows[0]!.response.loss).toMatchObject({
+    kind: 'PAPER_INCEPTION',
+    initialCapital: '1000',
+  });
+  expect(result.rows[0]!.response.policy.snapshot).toMatchObject({
+    adjustedOpeningEquity: '1000',
+    adjustedCurrentEquity: '1000',
+  });
+  expect(result.rows[0]!.source.inventory.accountIds.sort()).toEqual(
+    [f.c.owner.accountId, second.c.owner.accountId].sort(),
+  );
+  expect(
+    (
+      await admin.query(
+        'SELECT to_jsonb(g) AS genesis FROM ctp_paper.admission_genesis g WHERE tenant_id=$1',
+        [f.c.owner.tenantId],
+      )
+    ).rows,
+  ).toEqual(before.rows);
+  expect((await effects(f.c.owner.tenantId))[0]).toMatchObject({
+    ledger: 2,
+    entries: 4,
+    decisions: 2,
+    reservations: 2,
+  });
+});
+
+it('paper-admission: concurrent distinct accounts share one tenant exposure limit', async () => {
+  const f = await nativeReady(),
+    second = await anotherAccount(f, true),
+    port = await openAdmission();
+  await updatePolicy(f.c.owner.tenantId, 'USER', { maxUserExposure: '6' });
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
+  await runtimeEvidence(second);
+  const result = await Promise.allSettled([
+    port.approve(await input(f), io()),
+    port.approve(await input(second), io()),
+  ]);
+  expect(result.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  const denied = result.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+  expect(denied.reason).toMatchObject({ message: 'PAPER_ADMISSION_LIMIT' });
+  expect((await effects(f.c.owner.tenantId))[0]).toMatchObject({
+    ledger: 2,
+    entries: 4,
+    decisions: 1,
+    reservations: 1,
+  });
+});
+
+it('paper-admission: an unfunded second account cannot disappear from complete tenant inventory', async () => {
+  const f = await nativeReady(),
+    port = await openAdmission();
+  await anotherAccount(f, false);
+  await runtimeEvidence(f);
+  const before = await effects(f.c.owner.tenantId);
+  await expect(port.approve(await input(f), io())).rejects.toThrow(/^PAPER_/u);
+  expect(await effects(f.c.owner.tenantId)).toEqual(before);
+  expect(
+    (
+      await admin.query(
+        'SELECT count(*)::int AS n FROM ctp_paper.admission_genesis WHERE tenant_id=$1',
+        [f.c.owner.tenantId],
+      )
+    ).rows[0]!.n,
+  ).toBe(0);
 });
