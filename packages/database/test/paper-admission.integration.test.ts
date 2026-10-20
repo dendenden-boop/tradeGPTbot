@@ -887,7 +887,7 @@ it('paper-admission: an unfunded second account cannot disappear from complete t
   expect(await effects(f.c.owner.tenantId)).toEqual(before);
   expect(
     (
-      await admin.query(
+      await admin.query<{ n: number }>(
         'SELECT count(*)::int AS n FROM ctp_paper.admission_genesis WHERE tenant_id=$1',
         [f.c.owner.tenantId],
       )
