@@ -437,3 +437,125 @@ it.each(['same event', 'competing event'])(
     }
   },
 );
+
+it('paper-state: persisted SQL history projects UNKNOWN with common Portfolio holds instead of the replayed ACTIVE receipt', async () => {
+  const a = await unknown();
+  await tx(async (p) => {
+    await context(p, a.x.tenant);
+    const { createState, reducePortfolio } = await import('@ctp/portfolio');
+    const { projectPaperRiskJournalInventory } = await import('@ctp/paper-engine');
+    const owner = { tenantId: a.x.tenant, accountId: a.x.account, mode: 'PAPER' as const },
+      bookId = randomUUID(),
+      now = Date.now();
+    const parent = (
+      await p.query<{ value: unknown }>(
+        `SELECT jsonb_build_object('tenantId',"tenantId",'accountId',"accountId",'mode',mode,'id',id,'decisionId',"decisionId",'intentId',"intentId",'status',status,'version',version,'paperLegacy',"paperLegacy",'vectorSize',"vectorSize",'budgetId',"budgetId",'asset',asset,'amount',amount,'consumedAmount',"consumedAmount"::text,'releasedAt',"releasedAt",'createdAt',floor(extract(epoch FROM "createdAt")*1000)::bigint::text,'expiresAt',floor(extract(epoch FROM "expiresAt")*1000)::bigint::text) value FROM public.risk_reservation WHERE "tenantId"=$1 AND id=$2`,
+        [a.x.tenant, a.x.reservation],
+      )
+    ).rows[0]!.value;
+    const debits = (
+      await p.query<{ ordinal: number; asset: string; amount: string; holdId: string }>(
+        `SELECT ordinal,asset,amount::text,"hold_id"::text AS "holdId" FROM ctp_paper.reservation_debit WHERE tenant_id=$1 AND reservation_id=$2 ORDER BY ordinal`,
+        [a.x.tenant, a.x.reservation],
+      )
+    ).rows;
+    const history = (
+      await p.query<{ value: unknown }>(
+        `SELECT jsonb_build_object('kind','PAPER_RESERVATION_STATE_RECORD','tenantId',tenant_id,'accountId',account_id,'mode',mode,'reservationId',reservation_id,'intentId',intent_id,'eventId',event_id,'revision',revision::text,'status',status,'observedAt',observed_ms::text) value FROM ctp_paper.reservation_state_event WHERE tenant_id=$1 AND reservation_id=$2 ORDER BY revision`,
+        [a.x.tenant, a.x.reservation],
+      )
+    ).rows.map((r) => r.value);
+    const state = {
+      ...createState({
+        ...owner,
+        connectionId: null,
+        externalAccountId: 'content-fixture',
+        walletId: 'paper-initial:' + bookId,
+        scope: {
+          exchange: 'BINANCE' as const,
+          market: 'SPOT' as const,
+          region: 'global',
+          environment: 'LIVE' as const,
+        },
+      }),
+      status: 'RECONCILED' as const,
+      snapshotId: randomUUID(),
+      snapshotAt: now,
+      balances: [
+        { asset: 'BTC', total: '2', free: '2', locked: '0', available: '2' },
+        { asset: 'USDT', total: '1000', free: '1000', locked: '0', available: '1000' },
+      ],
+    };
+    let current: ReturnType<typeof createState> = state;
+    const holdProofs = [];
+    // This book is a pure Portfolio fixture, not an authenticated SQL book or
+    // admission. Only the reservation vector and journal below are native rows.
+    for (const d of debits) {
+      const event = {
+        type: 'COMMITMENT' as const,
+        id: randomUUID(),
+        timestamp: Number(a.unknownStamp),
+        hold: {
+          id: d.holdId,
+          asset: d.asset,
+          amount: d.amount,
+          status: 'UNKNOWN' as const,
+          reflected: false,
+        },
+      };
+      const out = reducePortfolio(current, event, { now: () => now, holdWatermark: null });
+      current = { ...current, ...out.state };
+      if (!out.holdWatermark) throw Error('fixture hold');
+      holdProofs.push({ holdId: d.holdId, ...out.holdWatermark, lastEvent: event });
+    }
+    const row = {
+      parent,
+      allocation: {
+        orderId: randomUUID(),
+        instrumentId: a.x.instrument,
+        base: 'BTC',
+        quote: 'USDT',
+        side: 'SELL',
+        notional: '100',
+        notionalAsset: 'USDT',
+      },
+      debits,
+      head: { eventId: a.unknownEvent, revision: '2' },
+      history,
+    };
+    const capture = {
+      now,
+      asOf: now,
+      maxEvidenceAgeMs: 5000,
+      owner,
+      valuationAsset: 'USDT',
+      accountIds: [a.x.account],
+      accounts: [
+        {
+          owner,
+          asOf: now,
+          bookId,
+          revision: '9007199254740993',
+          state: current,
+          holdProofs,
+          reservations: [row],
+        },
+      ],
+    };
+    const result = projectPaperRiskJournalInventory(capture);
+    expect(result.reservations).toMatchObject([
+      { id: a.x.reservation, intentId: a.x.intent, unknown: true },
+    ]);
+    expect(result.holds).toHaveLength(2);
+    expect(result.holds.every((h) => h.unknown)).toBe(true);
+    expect(result.balances.map((b) => b.available)).toEqual(['2', '1000']);
+    expect(await append(p, a.x, a.event)).toEqual(a.record);
+    row.history = [a.record];
+    expect(() => projectPaperRiskJournalInventory(capture)).toThrow(/^PAPER_JOURNAL_INVENTORY_/u);
+    row.history = history;
+    const restored = projectPaperRiskJournalInventory(JSON.parse(JSON.stringify(capture)));
+    expect(restored).toEqual(result);
+    expect(result).not.toHaveProperty('complete');
+    expect(result).not.toHaveProperty('grant');
+  });
+});
