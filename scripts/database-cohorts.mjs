@@ -23,7 +23,7 @@ export function planDatabaseCohorts(files) {
     { id: 'main', files: main, parallel: true },
     { id: 'registry', files: [registry], parallel: true },
     ...(files.includes(admission)
-      ? [{ id: 'admission', files: [admission], parallel: true, after: 'registry' }]
+      ? [{ id: 'admission', files: [admission], parallel: true, after: ['main', 'registry'] }]
       : []),
     { id: 'roles', files: [roles], parallel: false },
   ];
@@ -128,7 +128,7 @@ export async function runDatabaseCohorts(
     [
       { id: 'main', parallel: true },
       { id: 'registry', parallel: true },
-      ...(hasAdmission ? [{ id: 'admission', parallel: true, after: 'registry' }] : []),
+      ...(hasAdmission ? [{ id: 'admission', parallel: true, after: ['main', 'registry'] }] : []),
       { id: 'roles', parallel: false },
     ],
   );
@@ -227,12 +227,14 @@ export async function runDatabaseCohorts(
   try {
     const main = run(jobs[0]);
     const registry = run(jobs[1]);
-    // Preserve the original initial overlap. The third worker reuses the
-    // registry's process slot only after its physical close, not on early exit.
-    const admission = hasAdmission ? registry.then(() => run(jobs[2])) : null;
-    const parallel = await Promise.allSettled([main, registry, ...(admission ? [admission] : [])]);
+    // Legacy main tests also temporarily ALTER shared grouping roles. A
+    // separate database cannot isolate those cluster-wide attributes.
+    // Preserve the original two-worker overlap, then close BOTH scopes before
+    // starting admission. Every stage consumes the same aggregate budget.
+    const parallel = await Promise.allSettled([main, registry]);
     const failure = parallel.find((result) => result.status === 'rejected');
     if (failure) throw firstFailure ?? failure.reason;
+    if (hasAdmission) await run(jobs[2]);
     await run(jobs.at(-1));
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native cohort aggregate deadline/abort');
