@@ -7,7 +7,8 @@ const [root, id, mode = 'normal'] = process.argv.slice(2);
 const file = (name) => path.join(root, name);
 writeFileSync(file(id + '.started'), String(process.pid));
 if (id === 'registry') while (!existsSync(file('main.started'))) await delay(5);
-if (id === 'admission' && !existsSync(file('registry.done'))) process.exit(8);
+if (id === 'admission' && (!existsSync(file('registry.done')) || !existsSync(file('main.done'))))
+  process.exit(8);
 if (id === 'roles')
   for (const dependency of ['main', 'registry', 'admission'])
     if (readFileSync(file(dependency + '.done'), 'utf8') !== 'done') process.exit(9);
@@ -25,6 +26,6 @@ if (mode === 'hang' || mode === 'tree') {
     await delay(10);
   }
 }
-if (id === 'main') while (!existsSync(file('admission.started'))) await delay(5);
-await delay(30);
+if (mode === 'controlled') while (!existsSync(file(id + '.release'))) await delay(5);
+await delay(id === 'main' ? 100 : 30);
 writeFileSync(file(id + '.done'), 'done');

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { access, mkdir, mkdtemp, readFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -30,7 +30,7 @@ const jobs = (dir, modes) =>
   ['main', 'registry', 'admission', 'roles'].map((id, index) => ({
     id,
     parallel: id !== 'roles',
-    ...(id === 'admission' ? { after: 'registry' } : {}),
+    ...(id === 'admission' ? { after: ['main', 'registry'] } : {}),
     binary: process.execPath,
     args: [worker, dir, id, modes[index]],
   }));
@@ -38,11 +38,11 @@ it('isolates admission from every old main file and preserves the original two i
   expect(cohorts.planDatabaseCohorts([other, registry, admission, roles])).toEqual([
     { id: 'main', parallel: true, files: [other] },
     { id: 'registry', parallel: true, files: [registry] },
-    { id: 'admission', parallel: true, after: 'registry', files: [admission] },
+    { id: 'admission', parallel: true, after: ['main', 'registry'], files: [admission] },
     { id: 'roles', parallel: false, files: [roles] },
   ]);
 });
-it('starts admission after physical registry close, overlaps main, and delays roles until all close', async () => {
+it('waits for both shared-role mutators to physically close before admission and roles', async () => {
   const dir = await temp();
   const result = await cohorts.runDatabaseCohorts(
     jobs(dir, ['normal', 'normal', 'normal', 'normal']),
@@ -51,7 +51,7 @@ it('starts admission after physical registry close, overlaps main, and delays ro
   expect(result.completed).toHaveLength(4);
   const byId = Object.fromEntries(result.completed.map((x) => [x.id, x]));
   expect(byId.admission.startMs).toBeGreaterThanOrEqual(byId.registry.settledMs);
-  expect(byId.admission.startMs).toBeLessThan(byId.main.settledMs);
+  expect(byId.admission.startMs).toBeGreaterThanOrEqual(byId.main.settledMs);
   for (const id of ['main', 'registry', 'admission'])
     expect(byId.roles.startMs).toBeGreaterThanOrEqual(byId[id].settledMs);
   const edges = result.completed
@@ -79,25 +79,42 @@ it('failure before the dependency settles never starts queued admission or roles
   expect(await exists(path.join(dir, 'admission.started'))).toBe(false);
   expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
 });
-it('admission failure physically cancels main and never starts role mutation', async () => {
+it('admission failure leaves main closed and never starts role mutation', async () => {
   const dir = await temp();
-  const pending = cohorts.runDatabaseCohorts(jobs(dir, ['hang', 'normal', 'fail', 'normal']), {
+  const pending = cohorts.runDatabaseCohorts(jobs(dir, ['normal', 'normal', 'fail', 'normal']), {
     timeoutMs: 3000,
   });
   await expect(pending).rejects.toThrow(/admission/u);
   expect(await exists(path.join(dir, 'admission.started'))).toBe(true);
   expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
-  const heartbeat = path.join(dir, 'main.heartbeat'),
-    before = await readFile(heartbeat, 'utf8');
-  await delay(80);
-  expect(await readFile(heartbeat, 'utf8')).toBe(before);
+  expect(await readFile(path.join(dir, 'main.done'), 'utf8')).toBe('done');
+});
+it('actual planner never starts admission while the main shared-role mutation scope is live', async () => {
+  const dir = await temp(),
+    work = jobs(dir, ['controlled', 'normal', 'normal', 'normal']);
+  const plan = cohorts.planDatabaseCohorts([other, registry, admission, roles]);
+  work[2].after = plan[2].after;
+  const pending = cohorts.runDatabaseCohorts(work, { timeoutMs: 3000 }).then(
+    () => ({ error: null }),
+    (error) => ({ error }),
+  );
+  await until(() => exists(path.join(dir, 'registry.done')));
+  try {
+    await delay(150);
+    expect(await exists(path.join(dir, 'admission.started'))).toBe(false);
+  } finally {
+    await writeFile(path.join(dir, 'main.release'), 'release');
+    await pending;
+  }
+  expect((await pending).error).toBe(null);
+  expect(await exists(path.join(dir, 'roles.done'))).toBe(true);
 });
 it.each(['abort', 'deadline'])(
   '%s physically closes admission and descendants under the original aggregate budget',
   async (kind) => {
     const dir = await temp(),
       controller = new AbortController();
-    const pending = cohorts.runDatabaseCohorts(jobs(dir, ['hang', 'normal', 'tree', 'normal']), {
+    const pending = cohorts.runDatabaseCohorts(jobs(dir, ['normal', 'normal', 'tree', 'normal']), {
       timeoutMs: kind === 'deadline' ? 2000 : 3000,
       signal: controller.signal,
     });
@@ -115,7 +132,7 @@ it.each(['abort', 'deadline'])(
     expect((await observed).error).toMatchObject({
       message: expect.stringMatching(/abort|deadline/u),
     });
-    for (const id of ['main', 'admission', 'descendant']) {
+    for (const id of ['admission', 'descendant']) {
       const file = path.join(dir, id + '.heartbeat'),
         before = await readFile(file, 'utf8');
       await delay(80);
