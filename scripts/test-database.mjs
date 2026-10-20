@@ -2114,7 +2114,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperReservationStateOwner.success, true);
-  assert.equal(paperReservationStateOwner.numPassedTests, 33);
+  assert.equal(paperReservationStateOwner.numPassedTests, 34);
   assert.equal(paperReservationStateOwner.numFailedTests, 0);
   assert.equal(paperReservationStateOwner.numPendingTests, 0);
 
