@@ -2,7 +2,7 @@
 
 ## PHASE13 withdrawal barrier candidate — 21 October 2026
 
-Protected main **f3db3d5** accepted remaining-liability arithmetic through [PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38) and complete exact-main CI. The next [server-only withdrawal barrier](docs/phase-13/withdrawal-barrier.md) prohibits a pristine issued PLACE while retaining all original collateral; it does not report CANCEL completion or enable release/dispatch. All54published migrations remain immutable. Full candidate acceptance is pending and recorded in [verification](docs/phase-13/verification.md).
+Protected main **f3db3d5** accepted remaining-liability arithmetic through [PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38) and complete exact-main CI. The next [server-only withdrawal barrier](docs/phase-13/withdrawal-barrier.md) prohibits a pristine issued PLACE while retaining all original collateral; it does not report CANCEL completion or enable release/dispatch. All54published migrations remain immutable. Final exact-head source/PR/protected-main publication evidence is tracked in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); [verification](docs/phase-13/verification.md) preserves the pre-CI checkpoints.
 
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Final dispatch, trusted release/terminal lifecycle and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed. Earlier checkpoints remain historical.
 
