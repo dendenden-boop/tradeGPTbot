@@ -11,10 +11,15 @@ import {
   planDatabaseCohorts,
   runDatabaseCohorts,
   mergeDatabaseReports,
+  verifyAdmissionParallelFiles,
 } from './database-cohorts.mjs';
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
 import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
 import { preparePortfolioUpgrade, verifyPortfolioUpgrade } from './portfolio-upgrade.mjs';
+import {
+  capturePaperAdmissionUpgrade,
+  verifyPaperAdmissionUpgrade,
+} from './paper-admission-upgrade.mjs';
 
 const proof = databaseProof(process.argv.slice(2));
 
@@ -71,6 +76,7 @@ const expectedMigrations = [
   '202610160002_paper_tenant_risk_context',
   '202610190001_paper_reservation_vectors',
   '202610190002_paper_reservation_state',
+  '202610200001_paper_atomic_admission',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -123,6 +129,7 @@ const registryCohortPassword = randomBytes(24).toString('hex');
 const certificationPassword = randomBytes(24).toString('hex');
 const observationPassword = randomBytes(24).toString('hex');
 const admissionPassword = randomBytes(24).toString('hex');
+const paperAdmissionPassword = randomBytes(24).toString('hex');
 const paperConfigurationPassword = randomBytes(24).toString('hex');
 const paperFundingPassword = randomBytes(24).toString('hex');
 const paperPortfolioPassword = randomBytes(24).toString('hex');
@@ -158,6 +165,7 @@ const secrets = [
   certificationPassword,
   observationPassword,
   admissionPassword,
+  paperAdmissionPassword,
   paperConfigurationPassword,
   paperFundingPassword,
   paperPortfolioPassword,
@@ -182,6 +190,7 @@ const databases = [
   `ctp_p2_lifecycle_${suffix}`,
   `ctp_p2_paper_upgrade_${suffix}`,
   `ctp_p2_registry_cohort_${suffix}`,
+  `ctp_p2_admission_cohort_${suffix}`,
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
@@ -201,6 +210,7 @@ const registryCohortRole = `ctp_p2_registry_cohort_${suffix}`;
 const certificationRole = `ctp_p2_certification_${suffix}`;
 const observationRole = `ctp_p2_observation_${suffix}`;
 const admissionRole = `ctp_p2_admission_${suffix}`;
+const paperAdmissionRole = `ctp_p2_paper_admission_${suffix}`;
 const paperFundingRole = `ctp_p2_paper_funding_${suffix}`;
 const paperPortfolioRole = `ctp_p2_paper_portfolio_${suffix}`;
 const paperBookRole = `ctp_p2_paper_book_${suffix}`;
@@ -337,6 +347,32 @@ const admissionUrl = (name) => {
   url.password = admissionPassword;
   return url.href;
 };
+const paperAdmissionUrl = (name) => {
+  const url = new URL(dbUrl(name));
+  url.username = paperAdmissionRole;
+  url.password = paperAdmissionPassword;
+  return url.href;
+};
+const paperAdmissionEnvironment = (name) => ({
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('DATABASE_')),
+  ),
+  NODE_ENV: 'test',
+  DATABASE_MIGRATION_URL: dbUrl(name),
+  DATABASE_EXECUTION_URL: dbUrl(name, false, false, false, false, false, true),
+  DATABASE_PAPER_ADMISSION_URL: paperAdmissionUrl(name),
+  DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(name),
+  DATABASE_PAPER_FUNDING_URL: paperFundingUrl(name),
+  DATABASE_PAPER_BOOK_URL: paperBookUrl(name),
+  DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(name),
+  DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(name),
+  DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(name),
+  DATABASE_MARKET_TRADE_URL: marketTradeUrl(name),
+  DATABASE_RISK_CONTROL_URL: controlUrl(name),
+  DATABASE_RISK_OPERATOR_URL: controlUrl(name, true),
+  DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(name, true),
+  DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(name),
+});
 const paperFundingUrl = (name) => {
   const url = new URL(dbUrl(name));
   url.username = paperFundingRole;
@@ -531,6 +567,7 @@ async function prepareDatabaseProof() {
     [certificationRole, certificationPassword, 'ctp_risk_certifier'],
     [observationRole, observationPassword, 'ctp_risk_observer'],
     [admissionRole, admissionPassword, 'ctp_risk_admission'],
+    [paperAdmissionRole, paperAdmissionPassword, 'ctp_paper_risk_admission'],
     [paperConfigurationRole, paperConfigurationPassword, 'ctp_paper_configuration'],
     [paperFundingRole, paperFundingPassword, 'ctp_paper_funding'],
     [paperPortfolioRole, paperPortfolioPassword, 'ctp_paper_portfolio_reader'],
@@ -2152,6 +2189,31 @@ async function runDatabaseProof() {
   assert.equal(paperRuntimeOwner.numPassedTests, 49);
   assert.equal(paperRuntimeOwner.numFailedTests, 0);
   assert.equal(paperRuntimeOwner.numPendingTests, 0);
+
+  // Real atomic admission under functions created by the original restricted
+  // DDL owner. Every previous owner report/assertion remains mandatory above.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-admission.integration.test.ts',
+      '--outputFile.json=test-results/paper-admission-owner-tests.json',
+    ],
+    { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+  );
+  const paperAdmissionOwner = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-admission-owner-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(paperAdmissionOwner.success, true);
+  assert.equal(paperAdmissionOwner.numPassedTests, 17);
+  assert.equal(paperAdmissionOwner.numFailedTests, 0);
+  assert.equal(paperAdmissionOwner.numPendingTests, 0);
 
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
@@ -3792,6 +3854,19 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     }
   }
 
+  // Published52 -> additive53: exact populated rows/180 functions survive a
+  // real Prisma deploy/redeploy under the same restricted DDL owner. This
+  // includes original legacy/scalar/vector/journal evidence from above.
+  const beforePaperAdmission = await capturePaperAdmissionUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[52]),
+    path.join(paperMigrations, expectedMigrations[52]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperAdmissionUpgrade(paperUpgrade, beforePaperAdmission);
+
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -3870,7 +3945,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // Dedicated DB + login: registry activity/privilege probes cannot observe the
   // legacy cohort. Cluster-wide role mutation tests run only after both settle.
   await migrate(databases[5]);
+  await migrate(databases[6]);
   const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles());
+  if (cohortPlan.some(({ id }) => id === 'native-admission')) await verifyAdmissionParallelFiles();
   const nativeEnv = {
     ...process.env,
     NODE_ENV: 'test',
@@ -3890,6 +3967,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[0]),
     DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[0], true),
     DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[0]),
+    DATABASE_PAPER_ADMISSION_URL: paperAdmissionUrl(databases[0]),
     DATABASE_AUTH_URL: dbUrl(databases[0], false, false, true),
     DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[0]),
     DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[0]),
@@ -3913,6 +3991,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     DATABASE_MIGRATION_URL: dbUrl(databases[5]),
     DATABASE_INSTRUMENT_REGISTRY_URL: registryCohortUrl(databases[5]),
   };
+  const admissionEnv = paperAdmissionEnvironment(databases[6]);
+  for (const [key, value] of Object.entries(admissionEnv))
+    if (key.startsWith('DATABASE_')) assert.equal(new URL(value).pathname, '/' + databases[6]);
   const cohortReports = cohortPlan.map(
     ({ id }) => new URL('../test-results/database-' + id + '-tests.json', import.meta.url),
   );
@@ -3938,7 +4019,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         ...cohort.files,
         '--outputFile.json=' + fileURLToPath(cohortReports[index]),
       ],
-      env: cohort.id === 'registry' ? registryEnv : nativeEnv,
+      env:
+        cohort.id === 'registry'
+          ? registryEnv
+          : cohort.id === 'admission'
+            ? admissionEnv
+            : nativeEnv,
     })),
     {
       secrets,
@@ -3962,10 +4048,50 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     tests: tests.numPassedTests,
     cohorts: cohortPlan.map((cohort) => ({
       ...cohort,
-      database: cohort.id === 'registry' ? databases[5] : databases[0],
+      database:
+        cohort.id === 'registry'
+          ? databases[5]
+          : cohort.id === 'admission'
+            ? databases[6]
+            : databases[0],
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
     })),
   });
+
+  // This is destruction/recreation of an owned test DB, NOT application Paper
+  // reset or permission to forget a live tenant genesis/history.
+  const admissionBeforeReset = connect(dbUrl(databases[6]));
+  assert.ok(
+    (await admissionBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.admission_issuance'))
+      .rows[0].n > 0,
+  );
+  assert.ok(
+    (await admissionBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.admission_genesis'))
+      .rows[0].n > 0,
+  );
+  await admissionBeforeReset.end();
+  pools.delete(admissionBeforeReset);
+  await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
+  await admin.query(`CREATE DATABASE ${identifier(databases[6])}`);
+  await migrate(databases[6]);
+  await migrate(databases[6]);
+  const admissionReset = connect(dbUrl(databases[6]));
+  for (const table of [
+    'admission_issuance',
+    'admission_book_event',
+    'admission_book_head',
+    'admission_genesis',
+  ])
+    assert.equal(
+      (await admissionReset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,
+      0,
+    );
+  assert.deepEqual(
+    (await admissionReset.query('SELECT state,epoch::text FROM ctp_risk.global_head')).rows,
+    [{ state: 'PAUSED', epoch: '1' }],
+  );
+  await admissionReset.end();
+  pools.delete(admissionReset);
 
   // The database-only CI scope delegates these exact scripts to an isolated
   // mandatory Auth job. Default/legacy runs retain their inline execution.
@@ -4039,6 +4165,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperReservationStateNonBypassOwner: 'PASS',
     paperReservationStatePopulatedUpgradeFromPublished51: 'PASS',
     paperReservationStateNoInferredHistory: 'PASS',
+    paperAtomicAdmissionNonBypassOwner: 'PASS',
+    paperAtomicAdmissionPopulatedUpgradeFromPublished52: 'PASS',
+    paperAtomicAdmissionFreshAndPopulatedIsolatedReset: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
@@ -4066,6 +4195,16 @@ async function resetDatabaseProof(fresh) {
   await migrate(databases[0]);
   const reset = connect(dbUrl(databases[0]));
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
+  for (const table of [
+    'admission_issuance',
+    'admission_book_event',
+    'admission_book_head',
+    'admission_genesis',
+  ])
+    assert.equal(
+      (await reset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,
+      0,
+    );
   assert.equal(
     (await reset.query('SELECT count(*)::int n FROM ctp_paper.reservation_state_event')).rows[0].n,
     0,

@@ -8,6 +8,11 @@ const [root, id, mode, wait = '0'] = process.argv.slice(2);
 const file = (name) => path.join(root, name);
 writeFileSync(file(`${id}.started`), String(process.pid));
 if (mode === 'tree') {
+  // The controller aborts as soon as the descendant becomes ready. Ensure the
+  // sibling is also live first, so all three physical-stop assertions observe
+  // existing heartbeats regardless of OS process scheduling order.
+  const peer = id === 'main' ? 'registry' : 'main';
+  while (!existsSync(file(`${peer}.heartbeat`))) await delay(5);
   const child = spawn(process.execPath, [import.meta.filename, root, 'descendant', 'hang'], {
     windowsHide: true,
     stdio: 'ignore',

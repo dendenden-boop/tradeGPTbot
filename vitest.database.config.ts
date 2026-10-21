@@ -12,7 +12,7 @@ export default defineConfig({
     maxWorkers: 1,
     testTimeout: 15000,
     hookTimeout: 30000,
-    reporters: ['default', 'json'],
+    reporters: ['verbose', 'json'],
     outputFile: { json: 'test-results/database-tests.json' },
   },
 });

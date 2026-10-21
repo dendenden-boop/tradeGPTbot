@@ -10,6 +10,7 @@ export async function registryCommitProxy(
     | 'MARKET'
     | 'CERTIFICATE'
     | 'ADMISSION'
+    | 'PAPER_ADMISSION'
     | 'UNSENT_RECOVERY'
     | 'AMEND_APPLICATION'
     | 'PAPER_CONFIGURATION'
@@ -36,6 +37,7 @@ export async function registryCommitProxy(
     MARKET: 'UPDATE ctp_market.partition SET state',
     CERTIFICATE: 'SELECT ctp_certification.insert_certificate(',
     ADMISSION: 'SELECT ctp_admission.persist(',
+    PAPER_ADMISSION: 'SELECT ctp_paper.evaluate_and_reserve(',
     UNSENT_RECOVERY: "UPDATE public.submission_attempt SET status='REJECTED'",
     AMEND_APPLICATION: 'SELECT ctp_execution.apply_amendment(',
     PAPER_CONFIGURATION: 'SELECT ctp_paper.register_configuration(',
