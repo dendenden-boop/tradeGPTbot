@@ -180,6 +180,44 @@ it('zero-fee SELL needs no artificial quote debit', () => {
     { asset: 'BTC', original: '0.5', spent: '0.2', remaining: '0.3', surplus: '0' },
   ]);
 });
+it('partial FOK progress cannot represent a complete accepted model result', () => {
+  const x = input();
+  x.fills = executed(x).slice(0, 4);
+  x.original.order = newOrderSchema.parse({ ...x.original.order, timeInForce: 'FOK' });
+  expect(() => calculate(x)).toThrow('PAPER_PROGRESS_FILL');
+});
+it('FOK permits empty or complete arithmetic progress only', () => {
+  const x = input();
+  x.original.order = newOrderSchema.parse({ ...x.original.order, timeInForce: 'FOK' });
+  expect(calculate(x).filledQuantity).toBe('0');
+  x.fills = executed(x);
+  expect(calculate(x).remainingQuantity).toBe('0');
+});
+it.each(['IOC', 'MARKET'] as const)(
+  'model expiry for %s cannot itself release an unfilled remainder',
+  (kind) => {
+    const x = input();
+    x.original.order = newOrderSchema.parse({
+      ...x.original.order,
+      type: kind === 'MARKET' ? 'MARKET' : 'LIMIT',
+      limitPrice: kind === 'MARKET' ? null : '10.5',
+      timeInForce: kind === 'MARKET' ? null : 'IOC',
+    });
+    x.original.trade.quantity = '0.2';
+    const { order, ...market } = x.original;
+    const result = paper.evaluatePaperOrder({
+      ...fixture().execution,
+      order,
+      frame: paper.preparePaperFrame(market),
+    });
+    expect(result.status).toBe('EXPIRED');
+    x.fills = result.fills.map((fill) => ({ ...fill }));
+    const progress = calculate(x);
+    expect(progress.remainingQuantity).toBe('0.3');
+    expect(progress.debits.every((d) => new D(d.remaining).gt(0))).toBe(true);
+    expect(progress).not.toHaveProperty('released');
+  },
+);
 it('identical permanent fill replay is idempotent, not a second monetary debit', () => {
   const x = input();
   x.fills = executed(x).slice(0, 4);
@@ -218,7 +256,7 @@ it('large original lot count stays lossless without iteration proportional to lo
     ...x.original.order,
     size: { ...x.original.order.size, value: '9007199254740993.05' },
   });
-  x.original.record.rules = { ...x.original.record.rules, maxQuantity: null, maxNotional: null };
+  x.original.record = { ...x.original.record, rules: { ...x.original.record.rules, maxQuantity: '99999999999999999999', maxNotional: null } };
   x.fills = executed(input()).slice(0, 1);
   const r = calculate(x);
   expect(r.remainingQuantity).toBe('9007199254740993');
@@ -297,7 +335,7 @@ it('rejects stale original evidence rather than creating a replacement bound', (
 });
 it('rejects replaced original command rules rather than validating against a new envelope', () => {
   const x = input();
-  x.original.record.rules = { ...x.original.record.rules, version: 'rules-v2' };
+  x.original.record = { ...x.original.record, rules: { ...x.original.record.rules, version: 'rules-v2' } };
   expect(() => calculate(x)).toThrow('PAPER_PROGRESS_EVIDENCE');
 });
 
