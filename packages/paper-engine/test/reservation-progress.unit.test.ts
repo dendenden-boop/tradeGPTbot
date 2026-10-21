@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { expect, it } from 'vitest';
-import { newOrderSchema } from '@ctp/exchange-core';
+import { newOrderSchema, parseDecimal } from '@ctp/exchange-core';
 import * as paper from '../src/index.js';
 import type { PaperFillCalculation, PaperRiskEnvelopeCalculation } from '../src/index.js';
 import { fixture } from './fixtures.js';
@@ -256,7 +256,14 @@ it('large original lot count stays lossless without iteration proportional to lo
     ...x.original.order,
     size: { ...x.original.order.size, value: '9007199254740993.05' },
   });
-  x.original.record = { ...x.original.record, rules: { ...x.original.record.rules, maxQuantity: '99999999999999999999', maxNotional: null } };
+  x.original.record = {
+    ...x.original.record,
+    rules: {
+      ...x.original.record.rules,
+      maxQuantity: parseDecimal('99999999999999999999'),
+      maxNotional: null,
+    },
+  };
   x.fills = executed(input()).slice(0, 1);
   const r = calculate(x);
   expect(r.remainingQuantity).toBe('9007199254740993');
@@ -335,7 +342,10 @@ it('rejects stale original evidence rather than creating a replacement bound', (
 });
 it('rejects replaced original command rules rather than validating against a new envelope', () => {
   const x = input();
-  x.original.record = { ...x.original.record, rules: { ...x.original.record.rules, version: 'rules-v2' } };
+  x.original.record = {
+    ...x.original.record,
+    rules: { ...x.original.record.rules, version: 'rules-v2' },
+  };
   expect(() => calculate(x)).toThrow('PAPER_PROGRESS_EVIDENCE');
 });
 

@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Pure remaining-liability contract — 21 October 2026
+
+[Remaining-liability arithmetic](reservation-progress.md) accepts strict original market/model/command content and at most1000fill entries. It recomputes the original envelope, validates fill economics/lot/tick/bounds and rounded fees, rejects identity conflicts, and returns immutable per-asset `original = spent + remaining + surplus`. Fill arrival order and identical replay do not change arithmetic; JSON reconstruction is not durable recovery. Original freshness is never renewed. Empty/full FOK only; IOC/MARKET expiry and zero remaining are not release authority. No current-source certificate, UNKNOWN resolution, hold writer, tombstone, monetary posting, RiskGrant or permit is produced. Published1–54 and accepted financial admission/runtime stay unchanged.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** A future fixed writer must prove authentic complete execution/terminal evidence and preserve exactly-once posting, uncertainty and monotone durable holds before any reduction. LIVE/PAPER financial dispatch and positive native credit remain disabled. Earlier sections retain their original source-specific checkpoints.
+
 ## Verified conservative UNKNOWN source and PR — 21 October 2026
 
 Source **92cbee28bdc3ac65b36e470f5d0a9d39702e6cda** passed [Platform39568535472](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568535472) and [CodeQL39568535532](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568535532). Its [PR37 Platform39568542228](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568542228) and [CodeQL39568543379](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568543379) also passed. Exact HEAD, all five artifact ZIP digests and their producer windows were independently verified for each run; strict main protection was confirmed through GitHub API.

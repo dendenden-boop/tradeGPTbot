@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Remaining-liability arithmetic checkpoint — 21 October 2026
+
+Starting protected main **f304cf670017b8e040ee530e9d155dc1a6654c63** is accepted by [PR37](https://github.com/dendenden-boop/tradeGPTbot/pull/37), [Platform39606907931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39606907931) and [CodeQL39606908023](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39606908023). The fresh thirteen-command local baseline passed with795tracked inputs unchanged. [New calculation contract](reservation-progress.md) records81tests-first missing-export RED cases at `a173fc0`, the separately retained fixture/type diagnostics and the partial-FOK RED at `ce63bf1`. No published runtime defect or full acceptance is inferred from those diagnostics.
+
+Final targeted GREEN is **418cases in six suites**, including85new progress cases. All32BUY/SELL/type/fee scenarios test each prefix of ten real model fills for exact original-vector conservation and coverage of future costs. Conflicting replay, commissions, large lot counts, below-minimum remainder, FOK and retained IOC/MARKET remainder, bounded inputs and caller authority rejection pass. Full frozen-source regression and exact source/PR/protected-main artifact/protection verification remain requirements; actual execution results are recorded in the implementation PR/completion checkpoint. All54published migrations, native financial source, durable UNKNOWN holds, dependencies and CI budgets stay unchanged.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** This is pure arithmetic, with no durable remaining/release writer or financial dispatch. Trusted lifecycle/tombstones, CANCEL controls, final dispatch/attempt/permit ordering, operational composition and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch/positive native credit remain disabled; native AMEND Binance Spot TESTNET only. No private exchange, crash/restore or production-soak claim.
+
 ## Verified conservative UNKNOWN source and PR — 21 October 2026
 
 Source **92cbee28bdc3ac65b36e470f5d0a9d39702e6cda** passed [Platform39568535472](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568535472) and [CodeQL39568535532](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568535532). Its [PR37 Platform39568542228](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568542228) and [CodeQL39568543379](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568543379) also passed. Exact HEAD, all five artifact ZIP digests and their producer windows were independently verified for each run; strict main protection was confirmed through GitHub API.
