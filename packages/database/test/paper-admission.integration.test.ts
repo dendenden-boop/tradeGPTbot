@@ -383,7 +383,10 @@ async function tenantReady(liquid = false) {
   };
 }
 
-import { createPostgresPaperOrderRiskPort } from '@ctp/paper-engine/risk';
+import {
+  createPostgresPaperOrderRiskPort,
+  createPostgresPaperReservationLifecycle,
+} from '@ctp/paper-engine/risk';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 
 afterAll(async () => {
@@ -443,6 +446,24 @@ async function openAdmission() {
   });
   handles.push(port);
   return port;
+}
+async function openLifecycle(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const port = await createPostgresPaperReservationLifecycle({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function unknownRequest(f: Ready, reservationId: string) {
+  const { state, ...request } = await input(f);
+  return {
+    kind: 'PAPER_RESERVATION_UNKNOWN' as const,
+    admission: { ...request, orderId: state.id },
+    reservationId,
+    eventId: randomUUID(),
+    expectedRevision: '1' as const,
+  };
 }
 async function anotherAccount(f: Ready, funded: boolean) {
   const c = paperConfigurationSchema.parse({
@@ -913,4 +934,266 @@ it('paper-admission: an unfunded second account cannot disappear from complete t
       )
     ).rows[0]!.n,
   ).toBe(0);
+});
+
+it('paper-unknown: durable quarantine retains the original entire vector and cash, and exact replay survives restart', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    before = await inventory(f);
+  const request = await unknownRequest(f, original.reservationId),
+    port = await openLifecycle();
+  const receipt = await port.markUnknown(request, io());
+  expect(receipt).toMatchObject({
+    reservationId: original.reservationId,
+    revision: '2',
+    intentId: f.order.intentId,
+    eventId: request.eventId,
+  });
+  expect(await inventory(f)).toEqual(before);
+  const rows = await admin.query<{
+    status: string;
+    amount: string;
+    watermark: boolean;
+    count: number;
+  }>(
+    `SELECT s.status,trim_scale(d.amount)::text amount,w.unknown watermark,
+    (SELECT count(*)::int FROM ctp_paper.reservation_state_event WHERE tenant_id=$1 AND reservation_id=$2) count
+    FROM ctp_paper.reservation_state_event s JOIN ctp_paper.reservation_debit d USING(tenant_id,reservation_id)
+    JOIN ctp_portfolio.hold_watermark w ON w."tenantId"=d.tenant_id AND w."holdId"=d.hold_id::text
+    WHERE s.tenant_id=$1 AND s.reservation_id=$2 AND s.revision=2`,
+    [f.c.owner.tenantId, original.reservationId],
+  );
+  expect(rows.rows).toEqual([
+    { status: 'UNKNOWN', amount: before.debits[0], watermark: true, count: 2 },
+  ]);
+  await port.close();
+  const restarted = await openLifecycle();
+  expect(await restarted.markUnknown(request, io())).toEqual(receipt);
+  expect(await restarted.reconcileUnknown(request, io())).toEqual({
+    kind: 'COMMITTED',
+    request,
+    receipt,
+  });
+  expect(await inventory(f)).toEqual(before);
+  await expect(admission.approve(await input(f), io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect((await admission.reconcileApproval(await input(f), io())).kind).toBe('COMMITTED');
+  const next = await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, io());
+  await expect(admission.approve(await input(f, next), io())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+});
+
+it('paper-unknown: a permanent event conflict, stale revision and wrong reservation cannot change the hold', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission(),
+    port = await openLifecycle();
+  const original = await admission.approve(await input(f), io()),
+    request = await unknownRequest(f, original.reservationId);
+  await port.markUnknown(request, io());
+  const before = await inventory(f);
+  await expect(port.markUnknown({ ...request, eventId: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+  await expect(port.markUnknown({ ...request, reservationId: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+  await expect(port.markUnknown({ ...request, expectedRevision: '2' }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_INPUT',
+  );
+  expect(await inventory(f)).toEqual(before);
+});
+
+it('paper-unknown: concurrent distinct events produce exactly one durable UNKNOWN and no second reserve', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await unknownRequest(f, original.reservationId);
+  const before = await inventory(f),
+    a = await openLifecycle(),
+    b = await openLifecycle();
+  const results = await Promise.allSettled([
+    a.markUnknown(request, io()),
+    b.markUnknown({ ...request, eventId: randomUUID() }, io()),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await inventory(f)).toEqual(before);
+  expect(
+    (
+      await admin.query<{ n: number }>(
+        'SELECT count(*)::int n FROM ctp_paper.admission_unknown_event WHERE tenant_id=$1',
+        [f.c.owner.tenantId],
+      )
+    ).rows[0]?.n,
+  ).toBe(1);
+});
+
+it('paper-unknown: lost COMMIT returns no receipt and only read-only reconciliation observes its durable result', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await unknownRequest(f, original.reservationId),
+    before = await inventory(f);
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_ADMISSION_URL'),
+    'PAPER_ADMISSION',
+  );
+  const port = await openLifecycle(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(port.markUnknown(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    const restarted = await openLifecycle(),
+      result = await restarted.reconcileUnknown(request, io());
+    expect(result.kind).toBe('COMMITTED');
+    expect(await inventory(f)).toEqual(before);
+    expect(
+      (
+        await admin.query<{ n: number }>(
+          'SELECT count(*)::int n FROM ctp_paper.admission_unknown_event WHERE tenant_id=$1',
+          [f.c.owner.tenantId],
+        )
+      ).rows[0]?.n,
+    ).toBe(1);
+  } finally {
+    await port.close();
+    await proxy.close();
+  }
+});
+
+it('paper-unknown: pause and rule replacement cannot prevent conservative retention or turn it into a new grant', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await unknownRequest(f, original.reservationId),
+    port = await openLifecycle();
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  expect(await port.markUnknown(request, io())).toMatchObject({ revision: '2' });
+  await expect(admission.approve(await input(f), io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+});
+
+it('paper-unknown: MISSING and a pre-aborted call have no monetary or lifecycle effect', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission(),
+    port = await openLifecycle();
+  const original = await admission.approve(await input(f), io()),
+    request = await unknownRequest(f, original.reservationId),
+    before = await inventory(f);
+  expect(await port.reconcileUnknown(request, io())).toEqual({ kind: 'MISSING', request });
+  const abort = new AbortController();
+  abort.abort();
+  await expect(port.markUnknown(request, io(abort.signal))).rejects.toThrow(
+    'PAPER_ADMISSION_ABORTED',
+  );
+  expect(await port.reconcileUnknown(request, io())).toEqual({ kind: 'MISSING', request });
+  expect(await inventory(f)).toEqual(before);
+});
+
+it('paper-unknown: a common writer cannot release, resurrect ACTIVE or erase the durable watermark', async () => {
+  const f = await nativeReady(),
+    admission = await openAdmission(),
+    port = await openLifecycle();
+  const original = await admission.approve(await input(f), io()),
+    request = await unknownRequest(f, original.reservationId);
+  const receipt = await port.markUnknown(request, io()),
+    before = await inventory(f);
+  for (const [mutation, failure] of [
+    [
+      `UPDATE ctp_portfolio.book SET state=jsonb_set(state::jsonb,'{holds}','[]')::text,state_hash=sha256(convert_to(jsonb_set(state::jsonb,'{holds}','[]')::text,'UTF8')) WHERE "tenantId"=$1`,
+      'PAPER_ADMISSION_EVIDENCE',
+    ],
+    [
+      `UPDATE ctp_portfolio.hold_watermark SET unknown=false,timestamp=timestamp+1 WHERE "tenantId"=$1`,
+      'Hold watermark cannot regress',
+    ],
+    [
+      `DELETE FROM ctp_portfolio.hold_watermark WHERE "tenantId"=$1`,
+      'permission denied for table hold_watermark',
+    ],
+  ] as const) {
+    const p = await admin.connect();
+    try {
+      await p.query('BEGIN');
+      await p.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+      await p.query('SET LOCAL ROLE ctp_portfolio');
+      await expect(
+        (async () => {
+          await p.query(mutation, [f.c.owner.tenantId]);
+          await p.query('COMMIT');
+        })(),
+      ).rejects.toThrow(failure);
+    } finally {
+      await p.query('ROLLBACK');
+      p.release();
+    }
+  }
+  expect(await port.reconcileUnknown(request, io())).toMatchObject({ kind: 'COMMITTED', receipt });
+  expect(await inventory(f)).toEqual(before);
+  expect(
+    (
+      await admin.query<{ revision: string }>(
+        'SELECT revision::text FROM ctp_portfolio.book WHERE "tenantId"=$1',
+        [f.c.owner.tenantId],
+      )
+    ).rows[0]!.revision,
+  ).toBe(receipt.bookRevision);
+});
+
+it('paper-unknown: restricted runtime cannot bypass the public wrapper or forge the private lifecycle witness', async () => {
+  const p = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
+  try {
+    for (const signature of [
+      'ctp_paper.evaluate_and_reserve_v53(jsonb)',
+      'ctp_paper.reconcile_admission_v53(jsonb)',
+      'ctp_paper.reservation_unknown(jsonb,boolean)',
+    ])
+      expect(
+        (
+          await p.query<{ allowed: boolean }>(
+            "SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed",
+            [signature],
+          )
+        ).rows[0]!.allowed,
+      ).toBe(false);
+    await expect(p.query('SELECT * FROM ctp_paper.admission_unknown_event')).rejects.toThrow(
+      /permission denied/u,
+    );
+  } finally {
+    await p.end();
+  }
+});
+
+it('paper-unknown: additive lifecycle retains the original state hash constraint and authentic predecessor chain', async () => {
+  const checks = (
+    await admin.query<{
+      definition: string;
+    }>(`SELECT pg_get_constraintdef(oid) definition FROM pg_constraint
+    WHERE conrelid='ctp_paper.admission_book_event'::regclass AND contype='c'`)
+  ).rows.map((r) => r.definition);
+  expect(
+    checks.some(
+      (s) => s.includes('state_hash') && s.includes('sha256') && s.includes('state_text'),
+    ),
+  ).toBe(true);
+  expect(
+    checks.some(
+      (s) =>
+        s.includes('previous_revision') && s.includes('UNKNOWN') && s.includes('previous_hash'),
+    ),
+  ).toBe(true);
+  // Preserve the published52 owner-visible BEFORE TRUNCATE guard.
+  const p = await admin.connect();
+  try {
+    await p.query('BEGIN');
+    await expect(p.query('TRUNCATE ctp_paper.reservation_state_event')).rejects.toMatchObject({
+      code: '23514',
+    });
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+  }
 });
