@@ -62,8 +62,11 @@ CREATE TRIGGER withdrawal_cause BEFORE INSERT ON ctp_paper.withdrawal_barrier
  FOR EACH ROW EXECUTE FUNCTION ctp_paper.check_withdrawal_cause();
 
 -- All newly received PAPER execution evidence and dispatch transitions share
--- the Risk tenant lock. Try-locks avoid row-lock/advisory-lock inversion for
--- direct common-writer updates: contention aborts instead of waiting to dispatch.
+-- the Risk tenant lock. Acquire the mandatory parent lock before try-locking
+-- advisory locks, preserving published cash-reader/FK lock-timeout behavior.
+-- This also covers not-yet-issued orders: skipping them would permit an insert
+-- begun before issuance to resume after a concurrent barrier without rechecking.
+-- Try-locks avoid waiting with an inverted parent/advisory-lock order.
 -- Native modes take no additional locks and retain their published semantics.
 CREATE FUNCTION ctp_paper.guard_withdrawal() RETURNS trigger
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -82,10 +85,10 @@ BEGIN
   IF target IS NULL THEN CONTINUE; END IF;
   SELECT mode='PAPER' INTO paper FROM public."order" WHERE "tenantId"=t AND id=target;
   IF paper IS DISTINCT FROM true THEN CONTINUE; END IF;
+  PERFORM 1 FROM public."order" WHERE "tenantId"=t AND id=target FOR UPDATE;
   IF NOT pg_try_advisory_xact_lock_shared(1129599058,12)
    OR NOT pg_try_advisory_xact_lock(hashtextextended('ctp:risk:'||t::text,0))
   THEN RAISE EXCEPTION 'PAPER_ADMISSION_CONFLICT' USING ERRCODE='23514'; END IF;
-  PERFORM 1 FROM public."order" WHERE "tenantId"=t AND id=target FOR UPDATE;
   IF EXISTS(SELECT 1 FROM ctp_paper.withdrawal_barrier WHERE tenant_id=t AND order_id=target)
   THEN RAISE EXCEPTION 'PAPER_WITHDRAWN_NOT_SENT' USING ERRCODE='23514'; END IF;
  END LOOP;

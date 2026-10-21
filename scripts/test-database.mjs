@@ -2196,6 +2196,28 @@ async function runDatabaseProof() {
 
   // Real atomic admission under functions created by the original restricted
   // DDL owner. Every previous owner report/assertion remains mandatory above.
+  const withdrawalOwner = connect(dbUrl(databases[2]));
+  assert.deepEqual(
+    (
+      await withdrawalOwner.query(
+        `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+         WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
+        [
+          [
+            'evaluate_and_reserve',
+            'reconcile_admission',
+            'withdraw_before_dispatch',
+            'guard_withdrawal',
+            'check_withdrawal_cause',
+          ],
+        ],
+      )
+    ).rows,
+    [{ count: 5, safe: true }],
+  );
+  await withdrawalOwner.end();
+  pools.delete(withdrawalOwner);
   await run(
     process.execPath,
     [
@@ -4166,6 +4188,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       )
     ).rows[0].n > 0,
   );
+  assert.ok(
+    (await admissionBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.withdrawal_barrier'))
+      .rows[0].n > 0,
+  );
   await admissionBeforeReset.end();
   pools.delete(admissionBeforeReset);
   await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
@@ -4179,6 +4205,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     'admission_book_head',
     'admission_genesis',
     'admission_unknown_event',
+    'withdrawal_barrier',
   ])
     assert.equal(
       (await admissionReset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,
@@ -4269,6 +4296,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperReservationUnknownNonBypassOwner: 'PASS',
     paperReservationUnknownPopulatedUpgradeFromPublished53: 'PASS',
     paperReservationUnknownNoInferredHistory: 'PASS',
+    paperWithdrawalBarrierNonBypassOwner: 'PASS',
+    paperWithdrawalBarrierPopulatedUpgradeFromPublished54: 'PASS',
+    paperWithdrawalBarrierNoInferredHistory: 'PASS',
+    paperWithdrawalBarrierFreshAndPopulatedIsolatedReset: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
