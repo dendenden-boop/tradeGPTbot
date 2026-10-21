@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Conservative issued-reservation UNKNOWN candidate — 21 October 2026
+
+The [UNKNOWN lifecycle contract](reservation-unknown.md) authenticates the actual migration53 issuance, immutable command/vector and current private Portfolio book head through the existing fixed server-only two-RPC boundary. One transaction appends state2 UNKNOWN, retains the full common hold and durable watermark, and advances an immutable causal book event. Permanent exact replay returns the original historical receipt; conflict rejects. No release, resolution, grant or dispatch is exposed. Quarantined approval replay and new risk fail closed, while historical original-issuance reconciliation remains available. Migrations1–53 and native financial contracts remain unchanged; candidate54 requires full acceptance. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.**
+
 ## Published admission and security maintenance — 21 October 2026
 
 [PR35](https://github.com/dendenden-boop/tradeGPTbot/pull/35) merged as main **6a4085b00d4e394b96376ee0868d9cd1b2697916** after exact82ea59f source/PR Platform and CodeQL passed with1348native tests. Migration53 is now published and immutable. Its exact-main [Platform39550794190](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39550794190) failed dependency audit on both operating systems: Vite7.3.6 now has one HIGH and two MODERATE advisories. Native/Auth/Docker were skipped and the aggregate failed; this is not accepted main CI. CodeQL39550794196 passed. Earlier source-specific GREEN reports remain historical evidence and do not override this failure.

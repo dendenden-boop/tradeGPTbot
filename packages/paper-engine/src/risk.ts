@@ -12,6 +12,11 @@ export type {
 } from './risk-context-domain.js';
 export { createPostgresPaperTenantRiskContextSource } from './postgres-tenant-risk-context.js';
 export { createPostgresPaperOrderRiskPort } from './postgres-admission.js';
+export { createPostgresPaperReservationLifecycle } from './postgres-reservation-lifecycle.js';
+export type {
+  PaperReservationUnknownRequest,
+  PaperReservationUnknownReceipt,
+} from './postgres-reservation-lifecycle.js';
 export type {
   PaperTenantRiskContextRequest,
   PaperTenantRiskContextSource,

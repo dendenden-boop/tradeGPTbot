@@ -20,6 +20,7 @@ import {
   capturePaperAdmissionUpgrade,
   verifyPaperAdmissionUpgrade,
 } from './paper-admission-upgrade.mjs';
+import { verifyPaperUnknownUpgrade } from './paper-unknown-upgrade.mjs';
 
 const proof = databaseProof(process.argv.slice(2));
 
@@ -77,6 +78,7 @@ const expectedMigrations = [
   '202610190001_paper_reservation_vectors',
   '202610190002_paper_reservation_state',
   '202610200001_paper_atomic_admission',
+  '202610210001_paper_reservation_unknown',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2211,7 +2213,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperAdmissionOwner.success, true);
-  assert.equal(paperAdmissionOwner.numPassedTests, 17);
+  assert.equal(paperAdmissionOwner.numPassedTests, 26);
   assert.equal(paperAdmissionOwner.numFailedTests, 0);
   assert.equal(paperAdmissionOwner.numPendingTests, 0);
 
@@ -3867,6 +3869,46 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperAdmissionUpgrade(paperUpgrade, beforePaperAdmission);
 
+  // Exercise the original17 real admission contracts on published53 first.
+  // Their actual issued vectors/holds/heads must survive additive54 unchanged.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-admission.integration.test.ts',
+      '-t',
+      '^paper-admission:',
+      '--outputFile.json=test-results/paper-unknown-upgrade-before-tests.json',
+    ],
+    { env: paperAdmissionEnvironment(databases[4]), secrets, echo: true, timeoutMs: 90000 },
+  );
+  const beforeUnknownTests = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-unknown-upgrade-before-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(beforeUnknownTests.success, true);
+  assert.equal(beforeUnknownTests.numPassedTests, 17);
+  assert.equal(beforeUnknownTests.numFailedTests, 0);
+  assert.equal(beforeUnknownTests.numPendingTests, 9); // Explicitly excluded post54 contracts only.
+  const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
+  assert.ok(
+    beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
+      0,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[53]),
+    path.join(paperMigrations, expectedMigrations[53]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperUnknownUpgrade(paperUpgrade, beforePaperUnknown);
+
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
   // neither its certificates nor its reservations are empty placeholders.
@@ -4069,6 +4111,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     (await admissionBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.admission_genesis'))
       .rows[0].n > 0,
   );
+  assert.ok(
+    (
+      await admissionBeforeReset.query(
+        'SELECT count(*)::int n FROM ctp_paper.admission_unknown_event',
+      )
+    ).rows[0].n > 0,
+  );
   await admissionBeforeReset.end();
   pools.delete(admissionBeforeReset);
   await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
@@ -4081,6 +4130,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     'admission_book_event',
     'admission_book_head',
     'admission_genesis',
+    'admission_unknown_event',
   ])
     assert.equal(
       (await admissionReset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,
@@ -4168,6 +4218,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperAtomicAdmissionNonBypassOwner: 'PASS',
     paperAtomicAdmissionPopulatedUpgradeFromPublished52: 'PASS',
     paperAtomicAdmissionFreshAndPopulatedIsolatedReset: 'PASS',
+    paperReservationUnknownNonBypassOwner: 'PASS',
+    paperReservationUnknownPopulatedUpgradeFromPublished53: 'PASS',
+    paperReservationUnknownNoInferredHistory: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
@@ -4200,6 +4253,7 @@ async function resetDatabaseProof(fresh) {
     'admission_book_event',
     'admission_book_head',
     'admission_genesis',
+    'admission_unknown_event',
   ])
     assert.equal(
       (await reset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,

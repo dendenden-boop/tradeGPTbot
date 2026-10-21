@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Conservative lifecycle candidate — 21 October 2026
+
+Starting accepted main is **6c14e7c2819ec33324e5b9951ec2ea1abac6f700**, with exact-main Platform39555795133/CodeQL39555795089 GREEN and all thirteen clean local baseline checks passed. The [new UNKNOWN requirements and boundaries](reservation-unknown.md) add only durable conservative retention: exact issuance scope, permanent event identity, monotone server time/state, one bounded transaction, unchanged complete original debit vector/cash, restart-safe history, read-only uncertain-COMMIT reconciliation and rejection of common-writer release/resurrection. Fresh/non-BYPASSRLS owner, populated53→54 deploy/redeploy, original regression identities and full Ubuntu/Windows/services/Docker/CodeQL remain mandatory before accepting this candidate. Trusted release, final dispatch and durable execution remain separate outstanding PHASE13 requirements. **NOT READY FOR PHASE14**; LIVE and PAPER financial dispatch remain disabled.
+
 ## Published admission and security maintenance — 21 October 2026
 
 [PR35](https://github.com/dendenden-boop/tradeGPTbot/pull/35) merged as main **6a4085b00d4e394b96376ee0868d9cd1b2697916** after exact82ea59f source/PR Platform and CodeQL passed with1348native tests. Migration53 is now published and immutable. Its exact-main [Platform39550794190](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39550794190) failed dependency audit on both operating systems: Vite7.3.6 now has one HIGH and two MODERATE advisories. Native/Auth/Docker were skipped and the aggregate failed; this is not accepted main CI. CodeQL39550794196 passed. Earlier source-specific GREEN reports remain historical evidence and do not override this failure.

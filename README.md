@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Conservative reservation lifecycle candidate — 21 October 2026
+
+Accepted main **6c14e7c2819ec33324e5b9951ec2ea1abac6f700** passed [Platform39555795133](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39555795133) and [CodeQL39555795089](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39555795089). Its exact clean baseline passed all thirteen local checks with 790 tracked inputs unchanged. This supersedes the pending publication status of the older security-maintenance checkpoint below without changing its history.
+
+The next [conservative UNKNOWN candidate](docs/phase-13/reservation-unknown.md) adds a server-only, permanent and atomic quarantine of an actual issued PAPER reservation. Its full original hold is retained, with no second cash movement, usable approval or release. Candidate54 is additive; published migrations1–53 and native financial runtime remain unchanged. Full candidate regression/CI acceptance remains required.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Trusted remaining/release/tombstones, CANCEL controls, final dispatch, operational composition and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, crash/restore recovery and production soak are not claimed.
+
 ## Published admission and security maintenance — 21 October 2026
 
 [PR35](https://github.com/dendenden-boop/tradeGPTbot/pull/35) merged as main **6a4085b00d4e394b96376ee0868d9cd1b2697916** after exact82ea59f source/PR Platform and CodeQL passed with1348native tests. Migration53 is now published and immutable. Its exact-main [Platform39550794190](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39550794190) failed dependency audit on both operating systems: Vite7.3.6 now has one HIGH and two MODERATE advisories. Native/Auth/Docker were skipped and the aggregate failed; this is not accepted main CI. CodeQL39550794196 passed. Earlier source-specific GREEN reports remain historical evidence and do not override this failure.
