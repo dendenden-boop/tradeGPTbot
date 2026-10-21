@@ -47,6 +47,46 @@ const io = (signal = new AbortController().signal, ms = 2500) => ({
 });
 
 const handles: { close(): Promise<void> }[] = [];
+// Private, isolated fixture ownership only. Every command/context/head read is
+// still executed against PostgreSQL. No financial reader, admission/lifecycle
+// handle, observation, snapshot or result is cached. All eight possible fixture
+// handles drain through the existing afterAll before the role-mutator cohort.
+let configurationWriter: ReturnType<typeof createPostgresPaperConfiguration> | undefined;
+let fundingWriter: ReturnType<typeof createPostgresPaperFunding> | undefined;
+let bookWriter: ReturnType<typeof createPostgresPaperPortfolioBootstrap> | undefined;
+let runtimeWriter: ReturnType<typeof createPostgresPaperRuntimeObservations> | undefined;
+const policyWriters = new Map<'PLATFORM' | 'USER', ReturnType<typeof createPostgresPolicies>>();
+const controlWriters = new Map<'GLOBAL' | 'TENANT', ReturnType<typeof createPostgresControls>>();
+function ownWriter<T extends { close(): Promise<void> }>(opening: Promise<T>): Promise<T> {
+  return opening.then((handle) => {
+    handles.push(handle);
+    return handle;
+  });
+}
+function configurationPort() {
+  return (configurationWriter ??= ownWriter(
+    createPostgresPaperConfiguration({
+      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function fundingPort() {
+  return (fundingWriter ??= ownWriter(
+    createPostgresPaperFunding({
+      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function runtimePort() {
+  return (runtimeWriter ??= ownWriter(
+    createPostgresPaperRuntimeObservations({
+      connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+      environment: 'test',
+    }),
+  ));
+}
 
 async function updatePolicy(
   tenantId: string,
@@ -54,78 +94,85 @@ async function updatePolicy(
   changes: Record<string, unknown> = {},
   mode: 'PAPER' | 'DEMO' = 'PAPER',
 ) {
-  const h = await createPostgresPolicies({
-    connectionString: required(
-      kind === 'PLATFORM'
-        ? 'DATABASE_RISK_POLICY_OPERATOR_URL'
-        : 'DATABASE_RISK_POLICY_CONTROLLER_URL',
-    ),
-    environment: 'test',
-    authority: kind,
-  });
-  try {
-    const expected =
-      (
-        await admin.query<{ version: string }>(
-          'SELECT version::text FROM ctp_risk.policy_head WHERE scope=$1 AND target=$2 AND mode=$3',
-          [kind, kind === 'PLATFORM' ? '00000000-0000-0000-0000-000000000000' : tenantId, mode],
-        )
-      ).rows[0]?.version ?? '0';
-    return await h.update(
-      policyUpdateSchema.parse({
-        scope: kind === 'PLATFORM' ? { kind } : { kind, tenantId },
-        mode,
-        expectedVersion: expected,
-        eventId: randomUUID(),
-        reason: 'TEST_PAPER_AUTHORITY',
-        limits: { ...riskFixture().platform, ...changes },
+  let opening = policyWriters.get(kind);
+  if (!opening) {
+    opening = ownWriter(
+      createPostgresPolicies({
+        connectionString: required(
+          kind === 'PLATFORM'
+            ? 'DATABASE_RISK_POLICY_OPERATOR_URL'
+            : 'DATABASE_RISK_POLICY_CONTROLLER_URL',
+        ),
+        environment: 'test',
+        authority: kind,
       }),
-      io(),
     );
-  } finally {
-    await h.close();
+    policyWriters.set(kind, opening);
   }
+  const h = await opening;
+  const expected =
+    (
+      await admin.query<{ version: string }>(
+        'SELECT version::text FROM ctp_risk.policy_head WHERE scope=$1 AND target=$2 AND mode=$3',
+        [kind, kind === 'PLATFORM' ? '00000000-0000-0000-0000-000000000000' : tenantId, mode],
+      )
+    ).rows[0]?.version ?? '0';
+  return await h.update(
+    policyUpdateSchema.parse({
+      scope: kind === 'PLATFORM' ? { kind } : { kind, tenantId },
+      mode,
+      expectedVersion: expected,
+      eventId: randomUUID(),
+      reason: 'TEST_PAPER_AUTHORITY',
+      limits: { ...riskFixture().platform, ...changes },
+    }),
+    io(),
+  );
 }
 
 async function updateControl(tenantId: string | null, state: 'RUNNING' | 'PAUSED') {
-  const h = await createPostgresControls({
-    connectionString: required(
-      tenantId === null ? 'DATABASE_RISK_OPERATOR_URL' : 'DATABASE_RISK_CONTROL_URL',
-    ),
-    environment: 'test',
-    authority: tenantId === null ? 'GLOBAL' : 'TENANT',
-  });
-  try {
-    const expected =
-      tenantId === null
-        ? ((
-            await admin.query<{ epoch: string }>(
-              "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
-            )
-          ).rows[0]?.epoch ?? '0')
-        : ((
-            await admin.query<{ epoch: string }>(
-              "SELECT epoch::text FROM ctp_risk.tenant_head WHERE \"tenantId\"=$1 AND scope='USER' AND kind='KILL_SWITCH' AND key='kill'",
-              [tenantId],
-            )
-          ).rows[0]?.epoch ?? '0');
-    return await h.update(
-      controlUpdateSchema.parse({
-        scope:
-          tenantId === null ? { kind: 'GLOBAL' } : { kind: 'USER', tenantId, targetId: tenantId },
-        kind: 'KILL_SWITCH',
-        key: 'kill',
-        state,
-        eventId: randomUUID(),
-        expectedEpoch: expected,
-        reason: 'TEST_PAPER_AUTHORITY',
-        evidenceHash: '1'.repeat(64),
+  const authority = tenantId === null ? 'GLOBAL' : 'TENANT';
+  let opening = controlWriters.get(authority);
+  if (!opening) {
+    opening = ownWriter(
+      createPostgresControls({
+        connectionString: required(
+          tenantId === null ? 'DATABASE_RISK_OPERATOR_URL' : 'DATABASE_RISK_CONTROL_URL',
+        ),
+        environment: 'test',
+        authority,
       }),
-      io(),
     );
-  } finally {
-    await h.close();
+    controlWriters.set(authority, opening);
   }
+  const h = await opening;
+  const expected =
+    tenantId === null
+      ? ((
+          await admin.query<{ epoch: string }>(
+            "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
+          )
+        ).rows[0]?.epoch ?? '0')
+      : ((
+          await admin.query<{ epoch: string }>(
+            "SELECT epoch::text FROM ctp_risk.tenant_head WHERE \"tenantId\"=$1 AND scope='USER' AND kind='KILL_SWITCH' AND key='kill'",
+            [tenantId],
+          )
+        ).rows[0]?.epoch ?? '0');
+  return await h.update(
+    controlUpdateSchema.parse({
+      scope:
+        tenantId === null ? { kind: 'GLOBAL' } : { kind: 'USER', tenantId, targetId: tenantId },
+      kind: 'KILL_SWITCH',
+      key: 'kill',
+      state,
+      eventId: randomUUID(),
+      expectedEpoch: expected,
+      reason: 'TEST_PAPER_AUTHORITY',
+      evidenceHash: '1'.repeat(64),
+    }),
+    io(),
+  );
 }
 
 async function ensurePolicies(tenantId: string) {
@@ -172,15 +219,8 @@ async function fixture({
     'INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'SIMULATED\',\'ACTIVE\',\'paper-draft-epoch\',now())',
     [c.owner.accountId, c.owner.tenantId, c.source.exchange, externalAccountId, c.source.region],
   );
-  const config = await createPostgresPaperConfiguration({
-    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-    environment: 'test',
-  });
-  try {
-    if (configure) await config.register(c, io());
-  } finally {
-    await config.close();
-  }
+  const config = await configurationPort();
+  if (configure) await config.register(c, io());
   const i = f.p.record.instrument,
     r = f.p.record.rules;
   await admin.query(
@@ -236,20 +276,20 @@ async function fixture({
 }
 
 async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) {
-  const h = await createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' });
-  handles.push(h);
-  return h;
+  if (connectionString !== required('DATABASE_PAPER_BOOK_URL'))
+    return ownWriter(
+      createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+    );
+  return (bookWriter ??= ownWriter(
+    createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+  ));
 }
 
 async function runtimeEvidence(
   f: Awaited<ReturnType<typeof tenantReady>>,
   status: 'HEALTHY' | 'FAILED' | 'UNKNOWN' = 'HEALTHY',
 ) {
-  const h = await createPostgresPaperRuntimeObservations({
-    connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
-    environment: 'test',
-  });
-  handles.push(h);
+  const h = await runtimePort();
   const ctx = await h.context(f.c.owner, io());
   const publication: PaperRuntimePublication = {
     id: randomUUID(),
@@ -306,34 +346,23 @@ async function effects(tenantId: string) {
 
 async function fundCash(c: PaperConfiguration, noncash = false) {
   const fundingId = randomUUID(),
-    config = await createPostgresPaperConfiguration({
-      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-      environment: 'test',
+    config = await configurationPort(),
+    funding = await fundingPort();
+  await config.register(c, io());
+  await funding.initialize(
+    paperFundingSchema.parse({
+      id: fundingId,
+      owner: c.owner,
+      configurationId: c.id,
+      balances: noncash
+        ? [
+            { asset: 'BTC', amount: '1' },
+            { asset: 'USDT', amount: '1000' },
+          ]
+        : [{ asset: 'USDT', amount: '1000' }],
     }),
-    funding = await createPostgresPaperFunding({
-      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-      environment: 'test',
-    });
-  try {
-    await config.register(c, io());
-    await funding.initialize(
-      paperFundingSchema.parse({
-        id: fundingId,
-        owner: c.owner,
-        configurationId: c.id,
-        balances: noncash
-          ? [
-              { asset: 'BTC', amount: '1' },
-              { asset: 'USDT', amount: '1000' },
-            ]
-          : [{ asset: 'USDT', amount: '1000' }],
-      }),
-      io(),
-    );
-  } finally {
-    await config.close();
-    await funding.close();
-  }
+    io(),
+  );
   return fundingId;
 }
 
