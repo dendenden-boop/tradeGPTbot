@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Pre-dispatch withdrawal candidate — 21 October 2026
+
+Accepted protected main **f3db3d5a9c55944f196991bb64dd36bed99b102b** includes the remaining-liability arithmetic of [PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38). The next [withdrawal barrier](withdrawal-barrier.md) must irreversibly prohibit a genuinely issued pristine PAPER PLACE while retaining its entire collateral. Permanent replay, restart, UNKNOWN/dispatch races, uncertain COMMIT and immutable private provenance require native acceptance; a receipt alone cannot authorize release or report public CANCEL completion. All54published migrations remain immutable; candidate55 is additive. Full local baseline passed on the starting HEAD. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; final dispatch and trusted monetary lifecycle remain outstanding. Earlier sections preserve historical checkpoints.
+
 ## Remaining-liability arithmetic prerequisite — 21 October 2026
 
 Starting accepted protected main **f304cf670017b8e040ee530e9d155dc1a6654c63** retains full UNKNOWN collateral and all54published migrations. The [remaining-liability calculation](reservation-progress.md) must conserve each original debit across actual fill costs, future original lifetime bounds and mathematical surplus; preserve rounded commission, asset separation, exact lot counts and sub-minimum remainders; deduplicate identical fills and reject conflicting/invalid/over-capacity input. It must not authenticate caller history, renew freshness, post economics, release a hold, resolve UNKNOWN or enable dispatch. Terminal/expiry labels cannot replace a trusted durable outcome. Full source/PR/protected-main regression and CI are mandatory; actual publication evidence is recorded in the implementation PR/completion checkpoint.

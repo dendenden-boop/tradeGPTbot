@@ -1403,8 +1403,8 @@ it('paper-withdrawal: durable barrier rejects later dispatch, progress, order ch
   const before = await withdrawalInventory(f);
   for (const sql of [
     `UPDATE public."order" SET status='SUBMITTING',version=1 WHERE "tenantId"=$1 AND id=$2`,
-    `UPDATE ctp_execution.progress SET "nativeAt"=1,"nativeHash"=decode(repeat('a',64),'hex'),"nativeStatus"='OPEN' WHERE "tenantId"=$1 AND "orderId"=$2`,
-    `INSERT INTO public.order_event("tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,1,'CREATED','CANCELLED','TEST','withdrawal-forgery',decode(repeat('a',64),'hex'),now())`,
+    `UPDATE ctp_execution.progress SET "nativeAt"=1,"nativeHash"=decode(repeat('a',64),'hex'),"nativeStatus"='SUBMITTED' WHERE "tenantId"=$1 AND "orderId"=$2`,
+    `INSERT INTO public.order_event("tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,1,'CREATED','CANCELED','TEST','withdrawal-forgery',decode(repeat('a',64),'hex'),now())`,
     `INSERT INTO public.submission_attempt("tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","workerId","commandHash","deadlineAt") SELECT "tenantId",id,"intentId","accountId",mode,"instrumentId",1,'PLACE',0,'test',decode(repeat('a',64),'hex'),now()+interval '1 second' FROM public."order" WHERE "tenantId"=$1 AND id=$2`,
   ])
     await expect(admin.query(sql, [f.c.owner.tenantId, f.order.id])).rejects.toThrow(

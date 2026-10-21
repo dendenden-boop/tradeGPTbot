@@ -21,6 +21,7 @@ import {
   verifyPaperAdmissionUpgrade,
 } from './paper-admission-upgrade.mjs';
 import { verifyPaperUnknownUpgrade } from './paper-unknown-upgrade.mjs';
+import { verifyPaperWithdrawalUpgrade } from './paper-withdrawal-upgrade.mjs';
 
 const proof = databaseProof(process.argv.slice(2));
 
@@ -79,6 +80,7 @@ const expectedMigrations = [
   '202610190002_paper_reservation_state',
   '202610200001_paper_atomic_admission',
   '202610210001_paper_reservation_unknown',
+  '202610210002_paper_withdrawal_barrier',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -3908,6 +3910,52 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await migrate(databases[4], paperConfig, true);
   await verifyPaperUnknownUpgrade(paperUpgrade, beforePaperUnknown);
+
+  // Populate actual published54 ACTIVE and UNKNOWN authority before55, without
+  // invoking any post55 factory or inferring a barrier from historical rows.
+  // This is an explicitly filtered upgrade producer; the full33-case owner and
+  // cohort invocations above/below must independently pass with zero skips.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-admission.integration.test.ts',
+      '-t',
+      '^paper-unknown: (durable quarantine|MISSING and a pre-aborted)',
+      '--outputFile.json=test-results/paper-withdrawal-upgrade-before-tests.json',
+    ],
+    { env: paperAdmissionEnvironment(databases[4]), secrets, echo: true, timeoutMs: 90000 },
+  );
+  const beforeWithdrawalTests = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-withdrawal-upgrade-before-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(beforeWithdrawalTests.success, true);
+  assert.equal(beforeWithdrawalTests.numPassedTests, 2);
+  assert.equal(beforeWithdrawalTests.numFailedTests, 0);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 31);
+  const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
+  assert.ok(
+    beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
+      .length > 0,
+  );
+  assert.ok(
+    beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows
+      .length > 1,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[54]),
+    path.join(paperMigrations, expectedMigrations[54]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperWithdrawalUpgrade(paperUpgrade, beforePaperWithdrawal);
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;

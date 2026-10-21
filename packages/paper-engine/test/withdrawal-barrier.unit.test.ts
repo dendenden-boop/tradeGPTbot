@@ -30,8 +30,8 @@ const options = {
 };
 const io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2000 });
 type Barrier = {
-  withdraw(raw: unknown, io: ReturnType<typeof io>): Promise<unknown>;
-  reconcile(raw: unknown, io: ReturnType<typeof io>): Promise<unknown>;
+  withdraw(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
   close(): Promise<void>;
 };
 async function open(o: unknown = options) {

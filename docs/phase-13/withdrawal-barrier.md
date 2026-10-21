@@ -1,0 +1,29 @@
+# PAPER pre-dispatch withdrawal barrier
+
+## Scope and prerequisite
+
+This PHASE13 increment starts from accepted protected main `f3db3d5a9c55944f196991bb64dd36bed99b102b` ([PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38)). All54published migrations are immutable. Additive55 must be deployed before the new server-only `@ctp/paper-engine/risk` factory `createPostgresPaperWithdrawalBarrier`. It reuses the existing physically bounded admission transport and its two fixed RPCs, without a role/client/SQL override or caller-provided authority.
+
+This is an irreversible negative capability for an actually issued pristine PAPER Spot PLACE. It is a prerequisite for future trusted terminal/release handling, **not a CANCEL acknowledgement or a completed Order lifecycle**. The public Order remains CREATED. Full original ACTIVE reservation, immutable parent/debits, RESERVED Portfolio hold/watermark, cash, current book/head, common evidence/outbox and client sequence remain unchanged. No new Intent, grant, posting, permit, financial dispatch or collateral release is produced. The [remaining-liability calculator](reservation-progress.md) remains arithmetic only.
+
+## Durable request and result
+
+`withdraw(request, io)` accepts only `kind: PAPER_WITHDRAW_BEFORE_DISPATCH`, the exact immutable original admission `{binding, orderId, intentId, operation: PLACE, commandHash}`, actual reservationId, permanent tenant-scoped eventId and expectedRevision `1`. Exact active verified tenant/account/PAPER/null connection/server profile ownership is checked through the existing admission lock. UUIDs/hashes and strict keys are validated; caller status, fills, snapshot, resolution, tenant override and release instructions cannot establish authority.
+
+Lock order is GLOBAL shared → tenant → user → sorted bounded PAPER accounts → target Order → current causal book → original reservation. The transaction authenticates the genuine private issuance, immutable command, initial CREATED/version0 Order and original creation event, absence of attempts/fills/native evidence/control intents, current ACTIVE revision1, complete unchanged debit/hold/watermark and private book provenance. Missing/conflicting/UNKNOWN state rejects. Current public price/rule freshness or a trading pause is not required to prohibit sending while retaining all collateral; neither can renew a grant.
+
+Only an immutable private forced-tenant-RLS barrier is inserted. Its receipt contains `outcome: NOT_SENT`, `collateral: RETAINED`, original event/reservation/order/intent/decision/command identities, stateRevision `1`, server observedAt and the causal book revision/hash observed without changing the book. The new role gains no private table/helper access. The permanent same-event exact replay returns the original receipt across connections, rule refresh and pause; different content or a second event for the same reservation conflicts. Readonly `reconcile(request, io)` returns COMMITTED with the historical receipt or MISSING. An uncertain COMMIT returns no receipt; only explicit readonly reconciliation establishes what committed. There is no automatic mutation retry.
+
+## Irreversibility and races
+
+Database guards serialize PAPER attempts, Order updates, fills, progress, execution evidence, control commands/intents and legacy Paper/algo projections with the same tenant lock. After a barrier, later mutation is rejected with `PAPER_WITHDRAWN_NOT_SENT`. Both old/new target identities are checked for updates. Try-locks fail closed rather than wait with an inverted existing row lock. Native target modes retain their published path without additional advisory locks.
+
+UNKNOWN and withdrawal share the same original reservation serialization: an already UNKNOWN order cannot be certified NOT_SENT, and a withdrawn order cannot acquire a new UNKNOWN mutation or fresh approval. Exactly one concurrent operation can win; neither branch releases collateral. Historical original approval reconciliation remains readable and is never dispatch authority. The future final dispatcher must check the durable barrier immediately before consuming any permit, including when an earlier admission receipt was captured before withdrawal. No dispatcher is enabled here.
+
+## Verification and remaining work
+
+Tests are added before implementation: seven native PostgreSQL contracts and twenty unit protocol contracts. Native contracts cover permanent replay/restart, pause/rule replacement, unchanged financial inventory, conflicts, concurrent keys, UNKNOWN race, lost COMMIT, readonly MISSING/pre-abort, private authority boundaries and post-barrier dispatch/progress/event rejection. Unit contracts reject mismatched/future/extra authority replies before COMMIT and preserve the two fixed RPCs. Populated54→55 deploy/redeploy must retain every historical row/function body (old wrappers preserved as private v54 aliases) and create zero inferred barriers. The full owner/cohort suites must have zero skips; filtered historical upgrade producers are reported separately.
+
+Acceptance requires full frozen local regression, native fresh/non-BYPASSRLS owner/upgrade/redeploy/reset and exact source/PR/protected-main Ubuntu/Windows/services/Docker/CodeQL CI. See [verification](verification.md) for actual evidence, not this required test inventory.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Trusted remaining/release/tombstones, public CANCEL completion, final dispatch/attempt/permit ordering, durable shared execution and operational composition remain outstanding. LIVE/PAPER financial dispatch and positive native collateral credit stay disabled. Native AMEND is Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
