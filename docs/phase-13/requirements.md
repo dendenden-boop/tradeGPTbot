@@ -1,5 +1,13 @@
 # PHASE 13 requirements
 
+## Verified withdrawal source and PR checkpoint — 21 October 2026
+
+The [withdrawal requirements](withdrawal-barrier.md) passed complete source/PR acceptance on **3233e166f7342d37ae470c3759f5e8c88090cc93**:4749unit/1506Paper/41HTTP per OS;1364PostgreSQL in42files;33admission/lifecycle cases and all19owner reports. Genuine pristine issuance, irreversible NOT_SENT, full unchanged collateral, permanent replay, restart, UNKNOWN/dispatch races and readonly uncertain-COMMIT recovery are verified. This does not complete public CANCEL, trusted release/tombstones, final dispatch or virtual execution. Final documentation-head/protected-main publication evidence is tracked in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); historical checkpoints below retain their original scope. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER dispatch and positive native credit disabled.
+
+## Pre-dispatch withdrawal candidate — 21 October 2026
+
+Accepted protected main **f3db3d5a9c55944f196991bb64dd36bed99b102b** includes the remaining-liability arithmetic of [PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38). The next [withdrawal barrier](withdrawal-barrier.md) must irreversibly prohibit a genuinely issued pristine PAPER PLACE while retaining its entire collateral. Permanent replay, restart, UNKNOWN/dispatch races, uncertain COMMIT and immutable private provenance require native acceptance; a receipt alone cannot authorize release or report public CANCEL completion. All54published migrations remain immutable; candidate55 is additive. Full local baseline passed on the starting HEAD. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; final dispatch and trusted monetary lifecycle remain outstanding. Earlier sections preserve historical checkpoints.
+
 ## Remaining-liability arithmetic prerequisite — 21 October 2026
 
 Starting accepted protected main **f304cf670017b8e040ee530e9d155dc1a6654c63** retains full UNKNOWN collateral and all54published migrations. The [remaining-liability calculation](reservation-progress.md) must conserve each original debit across actual fill costs, future original lifetime bounds and mathematical surplus; preserve rounded commission, asset separation, exact lot counts and sub-minimum remainders; deduplicate identical fills and reject conflicting/invalid/over-capacity input. It must not authenticate caller history, renew freshness, post economics, release a hold, resolve UNKNOWN or enable dispatch. Terminal/expiry labels cannot replace a trusted durable outcome. Full source/PR/protected-main regression and CI are mandatory; actual publication evidence is recorded in the implementation PR/completion checkpoint.

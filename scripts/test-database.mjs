@@ -21,6 +21,7 @@ import {
   verifyPaperAdmissionUpgrade,
 } from './paper-admission-upgrade.mjs';
 import { verifyPaperUnknownUpgrade } from './paper-unknown-upgrade.mjs';
+import { verifyPaperWithdrawalUpgrade } from './paper-withdrawal-upgrade.mjs';
 
 const proof = databaseProof(process.argv.slice(2));
 
@@ -79,6 +80,7 @@ const expectedMigrations = [
   '202610190002_paper_reservation_state',
   '202610200001_paper_atomic_admission',
   '202610210001_paper_reservation_unknown',
+  '202610210002_paper_withdrawal_barrier',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2194,6 +2196,28 @@ async function runDatabaseProof() {
 
   // Real atomic admission under functions created by the original restricted
   // DDL owner. Every previous owner report/assertion remains mandatory above.
+  const withdrawalOwner = connect(dbUrl(databases[2]));
+  assert.deepEqual(
+    (
+      await withdrawalOwner.query(
+        `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+         WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
+        [
+          [
+            'evaluate_and_reserve',
+            'reconcile_admission',
+            'withdraw_before_dispatch',
+            'guard_withdrawal',
+            'check_withdrawal_cause',
+          ],
+        ],
+      )
+    ).rows,
+    [{ count: 5, safe: true }],
+  );
+  await withdrawalOwner.end();
+  pools.delete(withdrawalOwner);
   await run(
     process.execPath,
     [
@@ -2213,7 +2237,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperAdmissionOwner.success, true);
-  assert.equal(paperAdmissionOwner.numPassedTests, 26);
+  assert.equal(paperAdmissionOwner.numPassedTests, 33);
   assert.equal(paperAdmissionOwner.numFailedTests, 0);
   assert.equal(paperAdmissionOwner.numPendingTests, 0);
 
@@ -3894,7 +3918,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 9); // Explicitly excluded post54 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 16); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
@@ -3908,6 +3932,52 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await migrate(databases[4], paperConfig, true);
   await verifyPaperUnknownUpgrade(paperUpgrade, beforePaperUnknown);
+
+  // Populate actual published54 ACTIVE and UNKNOWN authority before55, without
+  // invoking any post55 factory or inferring a barrier from historical rows.
+  // This is an explicitly filtered upgrade producer; the full33-case owner and
+  // cohort invocations above/below must independently pass with zero skips.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-admission.integration.test.ts',
+      '-t',
+      '^paper-unknown: (durable quarantine|MISSING and a pre-aborted)',
+      '--outputFile.json=test-results/paper-withdrawal-upgrade-before-tests.json',
+    ],
+    { env: paperAdmissionEnvironment(databases[4]), secrets, echo: true, timeoutMs: 90000 },
+  );
+  const beforeWithdrawalTests = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-withdrawal-upgrade-before-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(beforeWithdrawalTests.success, true);
+  assert.equal(beforeWithdrawalTests.numPassedTests, 2);
+  assert.equal(beforeWithdrawalTests.numFailedTests, 0);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 31);
+  const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
+  assert.ok(
+    beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
+      .length > 0,
+  );
+  assert.ok(
+    beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows
+      .length > 1,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[54]),
+    path.join(paperMigrations, expectedMigrations[54]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperWithdrawalUpgrade(paperUpgrade, beforePaperWithdrawal);
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4118,6 +4188,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       )
     ).rows[0].n > 0,
   );
+  assert.ok(
+    (await admissionBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.withdrawal_barrier'))
+      .rows[0].n > 0,
+  );
   await admissionBeforeReset.end();
   pools.delete(admissionBeforeReset);
   await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
@@ -4131,6 +4205,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     'admission_book_head',
     'admission_genesis',
     'admission_unknown_event',
+    'withdrawal_barrier',
   ])
     assert.equal(
       (await admissionReset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,
@@ -4221,6 +4296,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperReservationUnknownNonBypassOwner: 'PASS',
     paperReservationUnknownPopulatedUpgradeFromPublished53: 'PASS',
     paperReservationUnknownNoInferredHistory: 'PASS',
+    paperWithdrawalBarrierNonBypassOwner: 'PASS',
+    paperWithdrawalBarrierPopulatedUpgradeFromPublished54: 'PASS',
+    paperWithdrawalBarrierNoInferredHistory: 'PASS',
+    paperWithdrawalBarrierFreshAndPopulatedIsolatedReset: 'PASS',
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',

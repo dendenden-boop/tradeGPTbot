@@ -47,6 +47,46 @@ const io = (signal = new AbortController().signal, ms = 2500) => ({
 });
 
 const handles: { close(): Promise<void> }[] = [];
+// Private, isolated fixture ownership only. Every command/context/head read is
+// still executed against PostgreSQL. No financial reader, admission/lifecycle
+// handle, observation, snapshot or result is cached. All eight possible fixture
+// handles drain through the existing afterAll before the role-mutator cohort.
+let configurationWriter: ReturnType<typeof createPostgresPaperConfiguration> | undefined;
+let fundingWriter: ReturnType<typeof createPostgresPaperFunding> | undefined;
+let bookWriter: ReturnType<typeof createPostgresPaperPortfolioBootstrap> | undefined;
+let runtimeWriter: ReturnType<typeof createPostgresPaperRuntimeObservations> | undefined;
+const policyWriters = new Map<'PLATFORM' | 'USER', ReturnType<typeof createPostgresPolicies>>();
+const controlWriters = new Map<'GLOBAL' | 'TENANT', ReturnType<typeof createPostgresControls>>();
+function ownWriter<T extends { close(): Promise<void> }>(opening: Promise<T>): Promise<T> {
+  return opening.then((handle) => {
+    handles.push(handle);
+    return handle;
+  });
+}
+function configurationPort() {
+  return (configurationWriter ??= ownWriter(
+    createPostgresPaperConfiguration({
+      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function fundingPort() {
+  return (fundingWriter ??= ownWriter(
+    createPostgresPaperFunding({
+      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function runtimePort() {
+  return (runtimeWriter ??= ownWriter(
+    createPostgresPaperRuntimeObservations({
+      connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+      environment: 'test',
+    }),
+  ));
+}
 
 async function updatePolicy(
   tenantId: string,
@@ -54,78 +94,85 @@ async function updatePolicy(
   changes: Record<string, unknown> = {},
   mode: 'PAPER' | 'DEMO' = 'PAPER',
 ) {
-  const h = await createPostgresPolicies({
-    connectionString: required(
-      kind === 'PLATFORM'
-        ? 'DATABASE_RISK_POLICY_OPERATOR_URL'
-        : 'DATABASE_RISK_POLICY_CONTROLLER_URL',
-    ),
-    environment: 'test',
-    authority: kind,
-  });
-  try {
-    const expected =
-      (
-        await admin.query<{ version: string }>(
-          'SELECT version::text FROM ctp_risk.policy_head WHERE scope=$1 AND target=$2 AND mode=$3',
-          [kind, kind === 'PLATFORM' ? '00000000-0000-0000-0000-000000000000' : tenantId, mode],
-        )
-      ).rows[0]?.version ?? '0';
-    return await h.update(
-      policyUpdateSchema.parse({
-        scope: kind === 'PLATFORM' ? { kind } : { kind, tenantId },
-        mode,
-        expectedVersion: expected,
-        eventId: randomUUID(),
-        reason: 'TEST_PAPER_AUTHORITY',
-        limits: { ...riskFixture().platform, ...changes },
+  let opening = policyWriters.get(kind);
+  if (!opening) {
+    opening = ownWriter(
+      createPostgresPolicies({
+        connectionString: required(
+          kind === 'PLATFORM'
+            ? 'DATABASE_RISK_POLICY_OPERATOR_URL'
+            : 'DATABASE_RISK_POLICY_CONTROLLER_URL',
+        ),
+        environment: 'test',
+        authority: kind,
       }),
-      io(),
     );
-  } finally {
-    await h.close();
+    policyWriters.set(kind, opening);
   }
+  const h = await opening;
+  const expected =
+    (
+      await admin.query<{ version: string }>(
+        'SELECT version::text FROM ctp_risk.policy_head WHERE scope=$1 AND target=$2 AND mode=$3',
+        [kind, kind === 'PLATFORM' ? '00000000-0000-0000-0000-000000000000' : tenantId, mode],
+      )
+    ).rows[0]?.version ?? '0';
+  return await h.update(
+    policyUpdateSchema.parse({
+      scope: kind === 'PLATFORM' ? { kind } : { kind, tenantId },
+      mode,
+      expectedVersion: expected,
+      eventId: randomUUID(),
+      reason: 'TEST_PAPER_AUTHORITY',
+      limits: { ...riskFixture().platform, ...changes },
+    }),
+    io(),
+  );
 }
 
 async function updateControl(tenantId: string | null, state: 'RUNNING' | 'PAUSED') {
-  const h = await createPostgresControls({
-    connectionString: required(
-      tenantId === null ? 'DATABASE_RISK_OPERATOR_URL' : 'DATABASE_RISK_CONTROL_URL',
-    ),
-    environment: 'test',
-    authority: tenantId === null ? 'GLOBAL' : 'TENANT',
-  });
-  try {
-    const expected =
-      tenantId === null
-        ? ((
-            await admin.query<{ epoch: string }>(
-              "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
-            )
-          ).rows[0]?.epoch ?? '0')
-        : ((
-            await admin.query<{ epoch: string }>(
-              "SELECT epoch::text FROM ctp_risk.tenant_head WHERE \"tenantId\"=$1 AND scope='USER' AND kind='KILL_SWITCH' AND key='kill'",
-              [tenantId],
-            )
-          ).rows[0]?.epoch ?? '0');
-    return await h.update(
-      controlUpdateSchema.parse({
-        scope:
-          tenantId === null ? { kind: 'GLOBAL' } : { kind: 'USER', tenantId, targetId: tenantId },
-        kind: 'KILL_SWITCH',
-        key: 'kill',
-        state,
-        eventId: randomUUID(),
-        expectedEpoch: expected,
-        reason: 'TEST_PAPER_AUTHORITY',
-        evidenceHash: '1'.repeat(64),
+  const authority = tenantId === null ? 'GLOBAL' : 'TENANT';
+  let opening = controlWriters.get(authority);
+  if (!opening) {
+    opening = ownWriter(
+      createPostgresControls({
+        connectionString: required(
+          tenantId === null ? 'DATABASE_RISK_OPERATOR_URL' : 'DATABASE_RISK_CONTROL_URL',
+        ),
+        environment: 'test',
+        authority,
       }),
-      io(),
     );
-  } finally {
-    await h.close();
+    controlWriters.set(authority, opening);
   }
+  const h = await opening;
+  const expected =
+    tenantId === null
+      ? ((
+          await admin.query<{ epoch: string }>(
+            "SELECT epoch::text FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
+          )
+        ).rows[0]?.epoch ?? '0')
+      : ((
+          await admin.query<{ epoch: string }>(
+            "SELECT epoch::text FROM ctp_risk.tenant_head WHERE \"tenantId\"=$1 AND scope='USER' AND kind='KILL_SWITCH' AND key='kill'",
+            [tenantId],
+          )
+        ).rows[0]?.epoch ?? '0');
+  return await h.update(
+    controlUpdateSchema.parse({
+      scope:
+        tenantId === null ? { kind: 'GLOBAL' } : { kind: 'USER', tenantId, targetId: tenantId },
+      kind: 'KILL_SWITCH',
+      key: 'kill',
+      state,
+      eventId: randomUUID(),
+      expectedEpoch: expected,
+      reason: 'TEST_PAPER_AUTHORITY',
+      evidenceHash: '1'.repeat(64),
+    }),
+    io(),
+  );
 }
 
 async function ensurePolicies(tenantId: string) {
@@ -172,15 +219,8 @@ async function fixture({
     'INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'SIMULATED\',\'ACTIVE\',\'paper-draft-epoch\',now())',
     [c.owner.accountId, c.owner.tenantId, c.source.exchange, externalAccountId, c.source.region],
   );
-  const config = await createPostgresPaperConfiguration({
-    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-    environment: 'test',
-  });
-  try {
-    if (configure) await config.register(c, io());
-  } finally {
-    await config.close();
-  }
+  const config = await configurationPort();
+  if (configure) await config.register(c, io());
   const i = f.p.record.instrument,
     r = f.p.record.rules;
   await admin.query(
@@ -236,20 +276,20 @@ async function fixture({
 }
 
 async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) {
-  const h = await createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' });
-  handles.push(h);
-  return h;
+  if (connectionString !== required('DATABASE_PAPER_BOOK_URL'))
+    return ownWriter(
+      createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+    );
+  return (bookWriter ??= ownWriter(
+    createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+  ));
 }
 
 async function runtimeEvidence(
   f: Awaited<ReturnType<typeof tenantReady>>,
   status: 'HEALTHY' | 'FAILED' | 'UNKNOWN' = 'HEALTHY',
 ) {
-  const h = await createPostgresPaperRuntimeObservations({
-    connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
-    environment: 'test',
-  });
-  handles.push(h);
+  const h = await runtimePort();
   const ctx = await h.context(f.c.owner, io());
   const publication: PaperRuntimePublication = {
     id: randomUUID(),
@@ -306,34 +346,23 @@ async function effects(tenantId: string) {
 
 async function fundCash(c: PaperConfiguration, noncash = false) {
   const fundingId = randomUUID(),
-    config = await createPostgresPaperConfiguration({
-      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-      environment: 'test',
+    config = await configurationPort(),
+    funding = await fundingPort();
+  await config.register(c, io());
+  await funding.initialize(
+    paperFundingSchema.parse({
+      id: fundingId,
+      owner: c.owner,
+      configurationId: c.id,
+      balances: noncash
+        ? [
+            { asset: 'BTC', amount: '1' },
+            { asset: 'USDT', amount: '1000' },
+          ]
+        : [{ asset: 'USDT', amount: '1000' }],
     }),
-    funding = await createPostgresPaperFunding({
-      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-      environment: 'test',
-    });
-  try {
-    await config.register(c, io());
-    await funding.initialize(
-      paperFundingSchema.parse({
-        id: fundingId,
-        owner: c.owner,
-        configurationId: c.id,
-        balances: noncash
-          ? [
-              { asset: 'BTC', amount: '1' },
-              { asset: 'USDT', amount: '1000' },
-            ]
-          : [{ asset: 'USDT', amount: '1000' }],
-      }),
-      io(),
-    );
-  } finally {
-    await config.close();
-    await funding.close();
-  }
+    io(),
+  );
   return fundingId;
 }
 
@@ -1196,4 +1225,229 @@ it('paper-unknown: additive lifecycle retains the original state hash constraint
     await p.query('ROLLBACK');
     p.release();
   }
+});
+
+// The withdrawal is a negative capability, not a terminal CANCEL or release.
+// This file still uses only its isolated database; no cluster-role DDL is added.
+type Withdrawal = {
+  withdraw(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  close(): Promise<void>;
+};
+async function openWithdrawal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+  const factory = exports['createPostgresPaperWithdrawalBarrier'];
+  expect(factory, 'Real durable PAPER withdrawal factory is required').toBeTypeOf('function');
+  const port = await (factory as (options: unknown) => Promise<Withdrawal>)({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function withdrawalRequest(f: Ready, reservationId: string) {
+  return { ...(await unknownRequest(f, reservationId)), kind: 'PAPER_WITHDRAW_BEFORE_DISPATCH' };
+}
+async function withdrawalInventory(f: Ready) {
+  return {
+    inventory: await inventory(f),
+    effects: await effects(f.c.owner.tenantId),
+    rows: (
+      await admin.query(
+        `SELECT
+        (SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM public."order" o WHERE "tenantId"=$1) orders,
+        (SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM ctp_portfolio.book b WHERE "tenantId"=$1) books,
+        (SELECT jsonb_agg(to_jsonb(w) ORDER BY "holdId") FROM ctp_portfolio.hold_watermark w WHERE "tenantId"=$1) watermarks,
+        (SELECT count(*)::int FROM public.submission_attempt WHERE "tenantId"=$1) attempts,
+        (SELECT count(*)::int FROM public.order_event WHERE "tenantId"=$1) events`,
+        [f.c.owner.tenantId],
+      )
+    ).rows,
+  };
+}
+
+it('paper-withdrawal: irreversible NOT_SENT retains the full original hold and exact replay survives restart, pause and rule refresh', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f);
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  const receipt = await port.withdraw(request, io());
+  expect(receipt).toMatchObject({
+    outcome: 'NOT_SENT',
+    collateral: 'RETAINED',
+    eventId: request.eventId,
+    reservationId: original.reservationId,
+    orderId: f.order.id,
+    intentId: f.order.intentId,
+    stateRevision: '1',
+    commandHash: request.admission.commandHash,
+  });
+  expect(await withdrawalInventory(f)).toEqual(before);
+  await port.close();
+  const restarted = await openWithdrawal();
+  expect(await restarted.withdraw(request, io())).toEqual(receipt);
+  expect(await restarted.reconcile(request, io())).toEqual({ kind: 'COMMITTED', request, receipt });
+  await expect(admission.approve(await input(f), io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect((await admission.reconcileApproval(await input(f), io())).kind).toBe('COMMITTED');
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+
+it('paper-withdrawal: permanent event and target conflicts cannot change collateral or make a second barrier', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId);
+  await port.withdraw(request, io());
+  const before = await withdrawalInventory(f);
+  for (const changed of [
+    { ...request, eventId: randomUUID() },
+    { ...request, reservationId: randomUUID() },
+    { ...request, admission: { ...request.admission, commandHash: 'f'.repeat(64) } },
+  ])
+    await expect(port.withdraw(changed, io())).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+  await expect(port.withdraw({ ...request, expectedRevision: '2' }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_INPUT',
+  );
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+
+it('paper-withdrawal: concurrent distinct keys commit exactly one barrier and identical replay is idempotent', async () => {
+  const a = await openWithdrawal(),
+    b = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f);
+  const results = await Promise.allSettled([
+    a.withdraw(request, io()),
+    b.withdraw({ ...request, eventId: randomUUID() }, io()),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await withdrawalInventory(f)).toEqual(before);
+  expect(
+    (
+      await admin.query(
+        'SELECT count(*)::int n FROM ctp_paper.withdrawal_barrier WHERE tenant_id=$1',
+        [f.c.owner.tenantId],
+      )
+    ).rows,
+  ).toEqual([{ n: 1 }]);
+});
+
+it('paper-withdrawal: UNKNOWN and withdrawal serialize to one winner without weakening or releasing its hold', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission(),
+    lifecycle = await openLifecycle();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    unknown = await unknownRequest(f, original.reservationId),
+    before = await inventory(f);
+  const result = await Promise.allSettled([
+    port.withdraw(request, io()),
+    lifecycle.markUnknown(unknown, io()),
+  ]);
+  expect(result.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(result.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await inventory(f)).toEqual(before);
+  if (result[0].status === 'fulfilled')
+    await expect(lifecycle.markUnknown(unknown, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  else await expect(port.withdraw(request, io())).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+});
+
+it('paper-withdrawal: lost COMMIT returns no authority; read-only reconciliation finds one durable barrier', async () => {
+  await openWithdrawal();
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f),
+    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'), 'PAPER_ADMISSION');
+  const port = await openWithdrawal(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(port.withdraw(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    expect(await (await openWithdrawal()).reconcile(request, io())).toMatchObject({
+      kind: 'COMMITTED',
+    });
+    expect(await withdrawalInventory(f)).toEqual(before);
+  } finally {
+    await port.close();
+    await proxy.close();
+  }
+});
+
+it('paper-withdrawal: MISSING and pre-abort have no effect; fixed private helpers and witness are inaccessible', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f);
+  expect(await port.reconcile(request, io())).toEqual({ kind: 'MISSING', request });
+  const abort = new AbortController();
+  abort.abort();
+  await expect(port.withdraw(request, io(abort.signal))).rejects.toThrow('PAPER_ADMISSION_ABORTED');
+  expect(await port.reconcile(request, io())).toEqual({ kind: 'MISSING', request });
+  expect(await withdrawalInventory(f)).toEqual(before);
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
+  try {
+    for (const signature of [
+      'ctp_paper.evaluate_and_reserve_v54(jsonb)',
+      'ctp_paper.reconcile_admission_v54(jsonb)',
+      'ctp_paper.withdraw_before_dispatch(jsonb,boolean)',
+    ])
+      expect(
+        (
+          await runtime.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed", [
+            signature,
+          ])
+        ).rows,
+      ).toEqual([{ allowed: false }]);
+    await expect(runtime.query('SELECT * FROM ctp_paper.withdrawal_barrier')).rejects.toThrow(
+      /permission denied/u,
+    );
+  } finally {
+    await runtime.end();
+  }
+});
+
+it('paper-withdrawal: durable barrier rejects later dispatch, progress, order changes and synthetic terminal events', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId);
+  await port.withdraw(request, io());
+  const before = await withdrawalInventory(f);
+  for (const sql of [
+    `UPDATE public."order" SET status='SUBMITTING',version=1 WHERE "tenantId"=$1 AND id=$2`,
+    `UPDATE ctp_execution.progress SET "nativeAt"=1,"nativeHash"=decode(repeat('a',64),'hex'),"nativeStatus"='SUBMITTED' WHERE "tenantId"=$1 AND "orderId"=$2`,
+    `INSERT INTO public.order_event("tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,1,'CREATED','CANCELED','TEST','withdrawal-forgery',decode(repeat('a',64),'hex'),now())`,
+    `INSERT INTO public.submission_attempt("tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","workerId","commandHash","deadlineAt") SELECT "tenantId",id,"intentId","accountId",mode,"instrumentId",1,'PLACE',0,'test',decode(repeat('a',64),'hex'),now()+interval '1 second' FROM public."order" WHERE "tenantId"=$1 AND id=$2`,
+  ]) {
+    const writer = await admin.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+      await writer.query('SET LOCAL ROLE ctp_execution');
+      await expect(writer.query(sql, [f.c.owner.tenantId, f.order.id])).rejects.toThrow(
+        'PAPER_WITHDRAWN_NOT_SENT',
+      );
+    } finally {
+      await writer.query('ROLLBACK');
+      writer.release();
+    }
+  }
+  expect(await withdrawalInventory(f)).toEqual(before);
 });

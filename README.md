@@ -1,5 +1,17 @@
 # Crypto Trading Platform
 
+## PHASE13 withdrawal source and PR checkpoint — 21 October 2026
+
+Source **3233e166f7342d37ae470c3759f5e8c88090cc93** passed complete Ubuntu/Windows/native PostgreSQL/services/Docker/CodeQL source and PR checks, independently verified in [verification](docs/phase-13/verification.md). The [withdrawal barrier](docs/phase-13/withdrawal-barrier.md) irreversibly blocks a pristine issued PLACE while preserving its entire original collateral; public Order stays CREATED. It does not acknowledge CANCEL, release money or enable dispatch. Additive55 follows immutable1–54. Final documentation-head/protected-main publication evidence is maintained in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); earlier sections preserve historical checkpoints.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Trusted release/terminal lifecycle, public CANCEL completion, final dispatch and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
+## PHASE13 withdrawal barrier candidate — 21 October 2026
+
+Protected main **f3db3d5** accepted remaining-liability arithmetic through [PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38) and complete exact-main CI. The next [server-only withdrawal barrier](docs/phase-13/withdrawal-barrier.md) prohibits a pristine issued PLACE while retaining all original collateral; it does not report CANCEL completion or enable release/dispatch. All54published migrations remain immutable. Final exact-head source/PR/protected-main publication evidence is tracked in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); [verification](docs/phase-13/verification.md) preserves the pre-CI checkpoints.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Final dispatch, trusted release/terminal lifecycle and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed. Earlier checkpoints remain historical.
+
 ## PHASE13 remaining-liability calculation — 21 October 2026
 
 Protected main **f304cf6** accepted conservative durable UNKNOWN through [PR37](https://github.com/dendenden-boop/tradeGPTbot/pull/37) and complete exact-main CI. The next [remaining-liability contract](docs/phase-13/reservation-progress.md) adds only bounded historical arithmetic: exact original vector conservation through partial fills and rounded fees, fill-ID content deduplication, and no inferred release from model expiry or zero remainder. All54published migrations and accepted financial runtime remain unchanged. Fresh thirteen-check baseline passed;418targeted cases pass. Full implementation publication evidence is recorded in its PR/completion checkpoint, not inferred from targeted tests.
