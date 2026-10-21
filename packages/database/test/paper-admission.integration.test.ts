@@ -1189,6 +1189,11 @@ it('paper-unknown: additive lifecycle retains the original state hash constraint
   const p = await admin.connect();
   try {
     await p.query('BEGIN');
-    await expect(p.query('TRUNCATE ctp_paper.reservation_state_event')).rejects.toMatchObject({ code: '23514' });
-  } finally { await p.query('ROLLBACK'); p.release(); }
+    await expect(p.query('TRUNCATE ctp_paper.reservation_state_event')).rejects.toMatchObject({
+      code: '23514',
+    });
+  } finally {
+    await p.query('ROLLBACK');
+    p.release();
+  }
 });

@@ -12,7 +12,9 @@ CREATE TABLE ctp_paper.admission_unknown_event (
  response_hash bytea NOT NULL CHECK(response_hash=sha256(convert_to(response::text,'UTF8'))),
  PRIMARY KEY(tenant_id,event_id), UNIQUE(tenant_id,reservation_id),
  FOREIGN KEY(tenant_id,reservation_id) REFERENCES ctp_paper.admission_issuance(tenant_id,reservation_id),
- FOREIGN KEY(tenant_id,reservation_id,state_revision) REFERENCES ctp_paper.reservation_state_event(tenant_id,reservation_id,revision),
+ -- Exact immutable state revision/event/time is validated by the deferred
+ -- causal guard below. An inbound FK would mask published52's owner-visible
+ -- BEFORE TRUNCATE SQLSTATE23514 with PostgreSQL's earlier FK SQLSTATE0A000.
  FOREIGN KEY(tenant_id,book_id,book_revision,book_hash)
   REFERENCES ctp_paper.admission_book_event(tenant_id,book_id,revision,state_hash) DEFERRABLE INITIALLY DEFERRED
 );

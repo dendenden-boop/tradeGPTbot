@@ -42,7 +42,8 @@ safe book-revision bound apply. Equal/regressed server time fails closed; no
 future time is synthesized. Original reservation parent, decision, debit amounts,
 capital, cash postings and ledger entries remain immutable and unchanged.
 
-The new private event has exact issuance/state/book foreign keys, forced tenant
+The new private event has exact issuance/book foreign keys, deferred exact
+immutable state-event/revision/time checks, forced tenant
 RLS, permanent event/reservation uniqueness, immutable rows and no runtime table
 access. Deferred consistency checks admit UNKNOWN only with that genuine cause.
 A common Portfolio writer cannot release the hold, resurrect ACTIVE, erase its
@@ -86,6 +87,15 @@ CHECK; a separate catalog RED pinned both original hash and predecessor
 constraints before correction. A mixed local function-owner diagnostic is not
 fresh/restricted-owner acceptance. Failed evidence remains in the local
 `test-results/phase13-reservation-lifecycle` checkpoint directory.
+
+Initial full source39563734944/PR39563847431 CI additionally caught a cross-phase
+compatibility regression: an inbound FK on the published52 state journal caused
+PostgreSQL0A000 before its required immutable TRUNCATE guard could return23514.
+Tests-first42b5585 pins the original guard in the new lifecycle case. The corrected
+unpublished54 retains exact deferred state-event/revision/time validation without
+that inbound FK. All26fresh54 lifecycle/admission and34unchanged state cases pass
+locally, including the original guard; both earlier failed CI runs remain failures.
+Full new-head regression and CI are still required.
 
 Candidate verification includes exact replay/connection restart, concurrent
 distinct event keys, conflict/stale revision, authoritative full hold retention,
