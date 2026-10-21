@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Verified negative-capability source and PR — 21 October 2026
+
+Source **3233e166f7342d37ae470c3759f5e8c88090cc93** passed full source/PR CI for the [withdrawal contract](withdrawal-barrier.md): one immutable private barrier, original Order CREATED/command unchanged, entire ACTIVE vector and RESERVED hold retained, no grant/posting/release. Native role/ownership/UNKNOWN/lost-COMMIT/dispatch guards and populated54→55 deploy/redeploy/reset are verified. All4720previous unit/1357native identities and54published migrations remain intact. This is a source/PR checkpoint; exact final-documentation/protected-main publication evidence is maintained in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39). **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; terminal/release/public CANCEL/final dispatch/execution remain outstanding, LIVE/PAPER dispatch disabled.
+
 ## Negative pre-dispatch capability candidate — 21 October 2026
 
 The server-only [durable withdrawal contract](withdrawal-barrier.md) accepts exact original issuance identities and permanently blocks later dispatch/evidence for a pristine PLACE. It does not acknowledge CANCEL, change public Order status, release/consume the ACTIVE vector, weaken UNKNOWN or create a grant. Entire RESERVED collateral/cash/book and original immutable command remain intact. Exact event replay and readonly reconciliation are durable; unknown COMMIT yields no receipt. Additive55 follows immutable1–54. Full source/PR/protected-main acceptance is still required. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER financial dispatch disabled.

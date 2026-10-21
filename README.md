@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## PHASE13 withdrawal source and PR checkpoint — 21 October 2026
+
+Source **3233e166f7342d37ae470c3759f5e8c88090cc93** passed complete Ubuntu/Windows/native PostgreSQL/services/Docker/CodeQL source and PR checks, independently verified in [verification](docs/phase-13/verification.md). The [withdrawal barrier](docs/phase-13/withdrawal-barrier.md) irreversibly blocks a pristine issued PLACE while preserving its entire original collateral; public Order stays CREATED. It does not acknowledge CANCEL, release money or enable dispatch. Additive55 follows immutable1–54. Final documentation-head/protected-main publication evidence is maintained in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); earlier sections preserve historical checkpoints.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Trusted release/terminal lifecycle, public CANCEL completion, final dispatch and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## PHASE13 withdrawal barrier candidate — 21 October 2026
 
 Protected main **f3db3d5** accepted remaining-liability arithmetic through [PR38](https://github.com/dendenden-boop/tradeGPTbot/pull/38) and complete exact-main CI. The next [server-only withdrawal barrier](docs/phase-13/withdrawal-barrier.md) prohibits a pristine issued PLACE while retaining all original collateral; it does not report CANCEL completion or enable release/dispatch. All54published migrations remain immutable. Final exact-head source/PR/protected-main publication evidence is tracked in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); [verification](docs/phase-13/verification.md) preserves the pre-CI checkpoints.
