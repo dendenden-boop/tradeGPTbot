@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Remaining-liability arithmetic prerequisite — 21 October 2026
+
+Starting accepted protected main **f304cf670017b8e040ee530e9d155dc1a6654c63** retains full UNKNOWN collateral and all54published migrations. The [remaining-liability calculation](reservation-progress.md) must conserve each original debit across actual fill costs, future original lifetime bounds and mathematical surplus; preserve rounded commission, asset separation, exact lot counts and sub-minimum remainders; deduplicate identical fills and reject conflicting/invalid/over-capacity input. It must not authenticate caller history, renew freshness, post economics, release a hold, resolve UNKNOWN or enable dispatch. Terminal/expiry labels cannot replace a trusted durable outcome. Full source/PR/protected-main regression and CI are mandatory; actual publication evidence is recorded in the implementation PR/completion checkpoint.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Trusted remaining/release/tombstones, CANCEL controls, final dispatch, operational composition and durable virtual execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Earlier sections retain historical checkpoints.
+
 ## Verified conservative UNKNOWN source and PR — 21 October 2026
 
 Source **92cbee28bdc3ac65b36e470f5d0a9d39702e6cda** passed [Platform39568535472](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568535472) and [CodeQL39568535532](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568535532). Its [PR37 Platform39568542228](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568542228) and [CodeQL39568543379](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39568543379) also passed. Exact HEAD, all five artifact ZIP digests and their producer windows were independently verified for each run; strict main protection was confirmed through GitHub API.
