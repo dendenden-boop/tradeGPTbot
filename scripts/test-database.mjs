@@ -2213,7 +2213,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperAdmissionOwner.success, true);
-  assert.equal(paperAdmissionOwner.numPassedTests, 26);
+  assert.equal(paperAdmissionOwner.numPassedTests, 33);
   assert.equal(paperAdmissionOwner.numFailedTests, 0);
   assert.equal(paperAdmissionOwner.numPendingTests, 0);
 
@@ -3894,7 +3894,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 9); // Explicitly excluded post54 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 16); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >

@@ -1197,3 +1197,218 @@ it('paper-unknown: additive lifecycle retains the original state hash constraint
     p.release();
   }
 });
+
+// The withdrawal is a negative capability, not a terminal CANCEL or release.
+// This file still uses only its isolated database; no cluster-role DDL is added.
+type Withdrawal = {
+  withdraw(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  close(): Promise<void>;
+};
+async function openWithdrawal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+  const factory = exports['createPostgresPaperWithdrawalBarrier'];
+  expect(factory, 'Real durable PAPER withdrawal factory is required').toBeTypeOf('function');
+  const port = await (factory as (options: unknown) => Promise<Withdrawal>)({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function withdrawalRequest(f: Ready, reservationId: string) {
+  return { ...(await unknownRequest(f, reservationId)), kind: 'PAPER_WITHDRAW_BEFORE_DISPATCH' };
+}
+async function withdrawalInventory(f: Ready) {
+  return {
+    inventory: await inventory(f),
+    effects: await effects(f.c.owner.tenantId),
+    rows: (
+      await admin.query(
+        `SELECT
+        (SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM public."order" o WHERE "tenantId"=$1) orders,
+        (SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM ctp_portfolio.book b WHERE "tenantId"=$1) books,
+        (SELECT jsonb_agg(to_jsonb(w) ORDER BY "holdId") FROM ctp_portfolio.hold_watermark w WHERE "tenantId"=$1) watermarks,
+        (SELECT count(*)::int FROM public.submission_attempt WHERE "tenantId"=$1) attempts,
+        (SELECT count(*)::int FROM public.order_event WHERE "tenantId"=$1) events`,
+        [f.c.owner.tenantId],
+      )
+    ).rows,
+  };
+}
+
+it('paper-withdrawal: irreversible NOT_SENT retains the full original hold and exact replay survives restart, pause and rule refresh', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f);
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  const receipt = await port.withdraw(request, io());
+  expect(receipt).toMatchObject({
+    outcome: 'NOT_SENT',
+    collateral: 'RETAINED',
+    eventId: request.eventId,
+    reservationId: original.reservationId,
+    orderId: f.order.id,
+    intentId: f.order.intentId,
+    stateRevision: '1',
+    commandHash: request.admission.commandHash,
+  });
+  expect(await withdrawalInventory(f)).toEqual(before);
+  await port.close();
+  const restarted = await openWithdrawal();
+  expect(await restarted.withdraw(request, io())).toEqual(receipt);
+  expect(await restarted.reconcile(request, io())).toEqual({ kind: 'COMMITTED', request, receipt });
+  await expect(admission.approve(await input(f), io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect((await admission.reconcileApproval(await input(f), io())).kind).toBe('COMMITTED');
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+
+it('paper-withdrawal: permanent event and target conflicts cannot change collateral or make a second barrier', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId);
+  await port.withdraw(request, io());
+  const before = await withdrawalInventory(f);
+  for (const changed of [
+    { ...request, eventId: randomUUID() },
+    { ...request, reservationId: randomUUID() },
+    { ...request, admission: { ...request.admission, commandHash: 'f'.repeat(64) } },
+  ])
+    await expect(port.withdraw(changed, io())).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+  await expect(port.withdraw({ ...request, expectedRevision: '2' }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_INPUT',
+  );
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+
+it('paper-withdrawal: concurrent distinct keys commit exactly one barrier and identical replay is idempotent', async () => {
+  const a = await openWithdrawal(),
+    b = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f);
+  const results = await Promise.allSettled([
+    a.withdraw(request, io()),
+    b.withdraw({ ...request, eventId: randomUUID() }, io()),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await withdrawalInventory(f)).toEqual(before);
+  expect(
+    (
+      await admin.query(
+        'SELECT count(*)::int n FROM ctp_paper.withdrawal_barrier WHERE tenant_id=$1',
+        [f.c.owner.tenantId],
+      )
+    ).rows,
+  ).toEqual([{ n: 1 }]);
+});
+
+it('paper-withdrawal: UNKNOWN and withdrawal serialize to one winner without weakening or releasing its hold', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission(),
+    lifecycle = await openLifecycle();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    unknown = await unknownRequest(f, original.reservationId),
+    before = await inventory(f);
+  const result = await Promise.allSettled([
+    port.withdraw(request, io()),
+    lifecycle.markUnknown(unknown, io()),
+  ]);
+  expect(result.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(result.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await inventory(f)).toEqual(before);
+  if (result[0].status === 'fulfilled')
+    await expect(lifecycle.markUnknown(unknown, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  else await expect(port.withdraw(request, io())).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+});
+
+it('paper-withdrawal: lost COMMIT returns no authority; read-only reconciliation finds one durable barrier', async () => {
+  await openWithdrawal();
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f),
+    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'), 'PAPER_ADMISSION');
+  const port = await openWithdrawal(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(port.withdraw(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    expect(await (await openWithdrawal()).reconcile(request, io())).toMatchObject({
+      kind: 'COMMITTED',
+    });
+    expect(await withdrawalInventory(f)).toEqual(before);
+  } finally {
+    await port.close();
+    await proxy.close();
+  }
+});
+
+it('paper-withdrawal: MISSING and pre-abort have no effect; fixed private helpers and witness are inaccessible', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId),
+    before = await withdrawalInventory(f);
+  expect(await port.reconcile(request, io())).toEqual({ kind: 'MISSING', request });
+  const abort = new AbortController();
+  abort.abort();
+  await expect(port.withdraw(request, io(abort.signal))).rejects.toThrow('PAPER_ADMISSION_ABORTED');
+  expect(await port.reconcile(request, io())).toEqual({ kind: 'MISSING', request });
+  expect(await withdrawalInventory(f)).toEqual(before);
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
+  try {
+    for (const signature of [
+      'ctp_paper.evaluate_and_reserve_v54(jsonb)',
+      'ctp_paper.reconcile_admission_v54(jsonb)',
+      'ctp_paper.withdraw_before_dispatch(jsonb,boolean)',
+    ])
+      expect(
+        (
+          await runtime.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed", [
+            signature,
+          ])
+        ).rows,
+      ).toEqual([{ allowed: false }]);
+    await expect(runtime.query('SELECT * FROM ctp_paper.withdrawal_barrier')).rejects.toThrow(
+      /permission denied/u,
+    );
+  } finally {
+    await runtime.end();
+  }
+});
+
+it('paper-withdrawal: durable barrier rejects later dispatch, progress, order changes and synthetic terminal events', async () => {
+  const port = await openWithdrawal(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    request = await withdrawalRequest(f, original.reservationId);
+  await port.withdraw(request, io());
+  const before = await withdrawalInventory(f);
+  for (const sql of [
+    `UPDATE public."order" SET status='SUBMITTING',version=1 WHERE "tenantId"=$1 AND id=$2`,
+    `UPDATE ctp_execution.progress SET "nativeAt"=1,"nativeHash"=decode(repeat('a',64),'hex'),"nativeStatus"='OPEN' WHERE "tenantId"=$1 AND "orderId"=$2`,
+    `INSERT INTO public.order_event("tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,1,'CREATED','CANCELLED','TEST','withdrawal-forgery',decode(repeat('a',64),'hex'),now())`,
+    `INSERT INTO public.submission_attempt("tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","workerId","commandHash","deadlineAt") SELECT "tenantId",id,"intentId","accountId",mode,"instrumentId",1,'PLACE',0,'test',decode(repeat('a',64),'hex'),now()+interval '1 second' FROM public."order" WHERE "tenantId"=$1 AND id=$2`,
+  ])
+    await expect(admin.query(sql, [f.c.owner.tenantId, f.order.id])).rejects.toThrow(
+      'PAPER_WITHDRAWN_NOT_SENT',
+    );
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
