@@ -1451,3 +1451,279 @@ it('paper-withdrawal: durable barrier rejects later dispatch, progress, order ch
   }
   expect(await withdrawalInventory(f)).toEqual(before);
 });
+
+// Additive terminal overlay only for a genuine irreversible NOT_SENT barrier.
+// No role DDL, shared-role mutation, expiry inference or caller fill authority.
+type WithdrawalRelease = {
+  release(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
+  close(): Promise<void>;
+};
+async function openWithdrawalRelease(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+  const factory = exports['createPostgresPaperWithdrawalRelease'];
+  expect(factory, 'Trusted durable NOT_SENT release factory is required').toBeTypeOf('function');
+  const port = await (factory as (options: unknown) => Promise<WithdrawalRelease>)({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function releaseFixture() {
+  const f = await nativeReady(),
+    admission = await openAdmission(),
+    withdrawal = await openWithdrawal();
+  const original = await admission.approve(await input(f), io()),
+    barrier = await withdrawalRequest(f, original.reservationId);
+  await withdrawal.withdraw(barrier, io());
+  const request = {
+    kind: 'PAPER_RELEASE_WITHDRAWN',
+    admission: barrier.admission,
+    reservationId: original.reservationId,
+    withdrawalEventId: barrier.eventId,
+    eventId: randomUUID(),
+    expectedRevision: '1',
+  };
+  return { f, admission, withdrawal, original, barrier, request };
+}
+async function releaseRows(f: Ready) {
+  return (
+    await admin.query<{
+      records: number;
+      released: number;
+      live: number;
+      events: number;
+      revision: string;
+    }>(
+      `SELECT
+    (SELECT count(*)::int FROM ctp_paper.withdrawal_release WHERE tenant_id=$1) records,
+    (SELECT count(*)::int FROM ctp_portfolio.hold_watermark WHERE "tenantId"=$1 AND released) released,
+    (SELECT jsonb_array_length(state::jsonb->'holds') FROM ctp_portfolio.book WHERE "tenantId"=$1) live,
+    (SELECT count(*)::int FROM ctp_portfolio.evidence WHERE "tenantId"=$1 AND payload::jsonb->>'type'='RELEASE') events,
+    (SELECT revision::text FROM ctp_portfolio.book WHERE "tenantId"=$1) revision`,
+      [f.c.owner.tenantId],
+    )
+  ).rows[0]!;
+}
+
+it('paper-release: authentic NOT_SENT releases one full hold atomically without cash posting; permanent replay survives restart, pause and rule refresh', async () => {
+  const port = await openWithdrawalRelease(),
+    { f, admission, request } = await releaseFixture(),
+    before = await inventory(f);
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  const receipt = await port.release(request, io());
+  expect(receipt).toMatchObject({
+    outcome: 'NOT_SENT',
+    collateral: 'RELEASED',
+    eventId: request.eventId,
+    withdrawalEventId: request.withdrawalEventId,
+    reservationId: request.reservationId,
+    orderId: f.order.id,
+    intentId: f.order.intentId,
+    commandHash: request.admission.commandHash,
+    releaseVersion: '1',
+    bookRevision: '3',
+  });
+  expect(await inventory(f)).toEqual({ ...before, holds: 0 });
+  expect(await releaseRows(f)).toEqual({
+    records: 1,
+    released: 1,
+    live: 0,
+    events: 1,
+    revision: '3',
+  });
+  await port.close();
+  const restarted = await openWithdrawalRelease(),
+    stable = await withdrawalInventory(f);
+  expect(await restarted.release(request, io())).toEqual(receipt);
+  expect(await restarted.reconcile(request, io())).toEqual({ kind: 'COMMITTED', request, receipt });
+  await expect(admission.approve(await input(f), io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect((await admission.reconcileApproval(await input(f), io())).kind).toBe('COMMITTED');
+  expect(await withdrawalInventory(f)).toEqual(stable);
+});
+
+it('paper-release: new risk uses current terminal overlay exactly once while original allocation and cash remain immutable', async () => {
+  const port = await openWithdrawalRelease(),
+    { f, admission, request } = await releaseFixture();
+  await port.release(request, io());
+  const second = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
+  await admission.approve(await input(f, second), io());
+  expect(await inventory(f)).toMatchObject({
+    reservations: 2,
+    decisions: 2,
+    issuance: 2,
+    holds: 1,
+    debits: ['5.25525', '5.25525'],
+    ledger: 1,
+    entries: 2,
+  });
+  expect(await releaseRows(f)).toEqual({
+    records: 1,
+    released: 1,
+    live: 1,
+    events: 1,
+    revision: '4',
+  });
+  const payload = (
+    await admin.query<{
+      source: {
+        inventory: { evidence: { holds: unknown[]; reservations: unknown[]; orders: unknown[] } };
+      };
+    }>('SELECT source FROM ctp_paper.admission_issuance WHERE tenant_id=$1 AND order_id=$2', [
+      f.c.owner.tenantId,
+      second.id,
+    ])
+  ).rows[0]!;
+  expect(payload.source.inventory.evidence.holds).toEqual([]);
+  expect(payload.source.inventory.evidence.reservations).toEqual([]);
+  expect(payload.source.inventory.evidence.orders).toEqual([]);
+});
+
+it('paper-release: concurrent distinct keys have one winner; replay/conflicts cannot release twice or resurrect the hold', async () => {
+  const a = await openWithdrawalRelease(),
+    b = await openWithdrawalRelease(),
+    { f, request } = await releaseFixture();
+  const result = await Promise.allSettled([
+    a.release(request, io()),
+    b.release({ ...request, eventId: randomUUID() }, io()),
+  ]);
+  expect(result.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(result.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await releaseRows(f)).toEqual({
+    records: 1,
+    released: 1,
+    live: 0,
+    events: 1,
+    revision: '3',
+  });
+  const stable = await withdrawalInventory(f);
+  for (const changed of [
+    { ...request, reservationId: randomUUID() },
+    { ...request, withdrawalEventId: randomUUID() },
+    { ...request, admission: { ...request.admission, commandHash: 'f'.repeat(64) } },
+  ])
+    await expect(a.release(changed, io())).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+  await expect(
+    (await openLifecycle()).markUnknown(await unknownRequest(f, request.reservationId), io()),
+  ).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect(await withdrawalInventory(f)).toEqual(stable);
+});
+
+it('paper-release: lost COMMIT grants no result; readonly reconciliation finds one durable release without a retry', async () => {
+  await openWithdrawalRelease();
+  const { f, request } = await releaseFixture(),
+    before = await inventory(f),
+    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'), 'PAPER_ADMISSION');
+  const port = await openWithdrawalRelease(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(port.release(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    expect(await (await openWithdrawalRelease()).reconcile(request, io())).toMatchObject({
+      kind: 'COMMITTED',
+      request,
+      receipt: { collateral: 'RELEASED' },
+    });
+    expect(await inventory(f)).toEqual({ ...before, holds: 0 });
+    expect(await releaseRows(f)).toEqual({
+      records: 1,
+      released: 1,
+      live: 0,
+      events: 1,
+      revision: '3',
+    });
+  } finally {
+    await port.close();
+    await proxy.close();
+  }
+});
+
+it('paper-release: no barrier, UNKNOWN, pre-abort and MISSING cannot authorize any release', async () => {
+  const port = await openWithdrawalRelease(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  const original = await admission.approve(await input(f), io()),
+    barrier = await withdrawalRequest(f, original.reservationId),
+    request = {
+      kind: 'PAPER_RELEASE_WITHDRAWN',
+      admission: barrier.admission,
+      reservationId: original.reservationId,
+      withdrawalEventId: barrier.eventId,
+      eventId: randomUUID(),
+      expectedRevision: '1',
+    },
+    before = await withdrawalInventory(f);
+  expect(await port.reconcile(request, io())).toEqual({ kind: 'MISSING', request });
+  await expect(port.release(request, io())).rejects.toThrow('PAPER_ADMISSION_MISSING');
+  const abort = new AbortController();
+  abort.abort();
+  await expect(port.release(request, io(abort.signal))).rejects.toThrow('PAPER_ADMISSION_ABORTED');
+  expect(await withdrawalInventory(f)).toEqual(before);
+  await (await openLifecycle()).markUnknown(await unknownRequest(f, original.reservationId), io());
+  const unknown = await withdrawalInventory(f);
+  await expect(port.release(request, io())).rejects.toThrow(/^PAPER_ADMISSION_/u);
+  expect(await withdrawalInventory(f)).toEqual(unknown);
+  expect(await releaseRows(f)).toMatchObject({ records: 0, released: 0, live: 1, events: 0 });
+});
+
+it('paper-release: private tombstone is inaccessible and stale common writers cannot erase or resurrect released history', async () => {
+  const port = await openWithdrawalRelease(),
+    { f, request } = await releaseFixture();
+  await port.release(request, io());
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
+  try {
+    await expect(runtime.query('SELECT * FROM ctp_paper.withdrawal_release')).rejects.toThrow(
+      /permission denied/u,
+    );
+    for (const signature of [
+      'ctp_paper.release_withdrawn(jsonb,boolean)',
+      'ctp_paper.evaluate_and_reserve_v55(jsonb)',
+      'ctp_paper.reconcile_admission_v55(jsonb)',
+    ])
+      expect(
+        (
+          await runtime.query("SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed", [
+            signature,
+          ])
+        ).rows,
+      ).toEqual([{ allowed: false }]);
+  } finally {
+    await runtime.end();
+  }
+  const stable = await withdrawalInventory(f);
+  const writer = await admin.connect();
+  try {
+    await writer.query('BEGIN');
+    await writer.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    await writer.query('SET LOCAL ROLE ctp_portfolio');
+    await expect(
+      writer.query(
+        `UPDATE ctp_portfolio.hold_watermark SET timestamp=timestamp+1,released=false WHERE "tenantId"=$1`,
+        [f.c.owner.tenantId],
+      ),
+    ).rejects.toThrow(/Hold watermark cannot regress/u);
+  } finally {
+    await writer.query('ROLLBACK');
+    writer.release();
+  }
+  expect(await withdrawalInventory(f)).toEqual(stable);
+});

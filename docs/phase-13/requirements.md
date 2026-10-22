@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## NOT_SENT collateral release contract — 22 October 2026
+
+Starting accepted protected main is **00f96275771e75d0f30162dcf1adabae52bcf7af** ([PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39)); all55published migrations remain immutable. The next [withdrawal-release contract](withdrawal-release.md) requires a genuine irreversible barrier, atomic common Portfolio release with no cash posting, permanent terminal provenance/tombstone and current Risk inventory that excludes the released target exactly once. UNKNOWN, caller status/fills, expiry and an old approval cannot authorize release. Tests precede implementation; no release API or additive56 is accepted at this checkpoint. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER financial dispatch and positive native credit disabled. Historical checkpoints below retain their original scope and outcomes.
+
 ## Verified withdrawal source and PR checkpoint — 21 October 2026
 
 The [withdrawal requirements](withdrawal-barrier.md) passed complete source/PR acceptance on **3233e166f7342d37ae470c3759f5e8c88090cc93**:4749unit/1506Paper/41HTTP per OS;1364PostgreSQL in42files;33admission/lifecycle cases and all19owner reports. Genuine pristine issuance, irreversible NOT_SENT, full unchanged collateral, permanent replay, restart, UNKNOWN/dispatch races and readonly uncertain-COMMIT recovery are verified. This does not complete public CANCEL, trusted release/tombstones, final dispatch or virtual execution. Final documentation-head/protected-main publication evidence is tracked in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); historical checkpoints below retain their original scope. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER dispatch and positive native credit disabled.

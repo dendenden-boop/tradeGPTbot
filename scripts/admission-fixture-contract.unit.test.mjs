@@ -49,7 +49,7 @@ function root(node) {
     node = node.expression;
   return ts.isIdentifier(node) ? node.text : null;
 }
-it('retains all72 original non-fixture statements, all33 test bodies, readers, restart helpers and cleanup', () => {
+it('retains all72 original non-fixture statements and33 test bodies before the separately appended release contracts', () => {
   const file = source();
   const kept = file.statements
     .filter(
@@ -63,8 +63,11 @@ it('retains all72 original non-fixture statements, all33 test bodies, readers, r
         ),
     )
     .map((s) => s.getText(file));
-  expect(kept).toHaveLength(72);
-  expect(hash(kept)).toBe('b40e952b8a9dcdf422ecaa6a7d221de59e396962a151b8af4638c4b6487bc8c9');
+  expect(kept).toHaveLength(82);
+  expect(hash(kept.slice(0, 72))).toBe(
+    'b40e952b8a9dcdf422ecaa6a7d221de59e396962a151b8af4638c4b6487bc8c9',
+  );
+  expect(kept.slice(72).filter((s) => s.startsWith("it('paper-release:"))).toHaveLength(6);
 });
 it.each([
   ['updatePolicy', 2, '3deb5ffdd5c335fdfdb3e8d50c3c1be9640f4701e93eda5c98df039770580dbb'],

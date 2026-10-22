@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## NOT_SENT terminal collateral overlay candidate — 22 October 2026
+
+The [withdrawal-release contract](withdrawal-release.md) extends accepted main **00f9627** only after tests-first proof. The original immutable allocation/ACTIVE journal remains historical; a private immutable terminal overlay must establish current RELEASED, authenticate the exact NOT_SENT barrier and protect the permanent common Portfolio watermark. Removing a hold alone is insufficient: current Risk inventory and causal/deferred consistency must authenticate the release together. Replay/conflicts/concurrency and uncertain-COMMIT reconciliation cannot create a second Portfolio or cash effect. This is neither a public CANCEL acknowledgement nor dispatch permission. No candidate release implementation is accepted yet. Published1–55 and native financial semantics remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER financial dispatch disabled.
+
 ## Verified negative-capability source and PR — 21 October 2026
 
 Source **3233e166f7342d37ae470c3759f5e8c88090cc93** passed full source/PR CI for the [withdrawal contract](withdrawal-barrier.md): one immutable private barrier, original Order CREATED/command unchanged, entire ACTIVE vector and RESERVED hold retained, no grant/posting/release. Native role/ownership/UNKNOWN/lost-COMMIT/dispatch guards and populated54→55 deploy/redeploy/reset are verified. All4720previous unit/1357native identities and54published migrations remain intact. This is a source/PR checkpoint; exact final-documentation/protected-main publication evidence is maintained in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39). **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; terminal/release/public CANCEL/final dispatch/execution remain outstanding, LIVE/PAPER dispatch disabled.
