@@ -191,7 +191,7 @@ it.each([
   else if (field === 'native binding') p.before.binding.connectionId = other;
   else if (field === 'wallet') p.before.binding.walletId = 'other';
   else if (field === 'profile')
-      p.before.binding.scope = { ...p.before.binding.scope, environment: 'LIVE' };
+    p.before.binding.scope = { ...p.before.binding.scope, environment: 'LIVE' };
   else if (field === 'missing hold') p.before.holds = [];
   else if (field === 'UNKNOWN hold') p.before.holds[0]!.status = 'UNKNOWN';
   else if (field === 'reflected hold') p.before.holds[0]!.reflected = true;

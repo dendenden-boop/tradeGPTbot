@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## First implementation CI formatting correction — 22 October 2026
+
+Implementation **973481a577b7215705df325703a6bb9d37f759d6** failed source [Platform39734706455](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39734706455) and PR [Platform39734712922](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39734712922) on formatting one new unit-fixture line. Native/Auth/Docker were skipped and the required aggregate failed; these runs are not acceptance. The complete frozen local run retained all809input hashes and passed12of13commands, including4799unit/41HTTP/build/runtime/twelve clean deployments/audits0, with the same format failure preserved. Prettier corrects only that fixture's indentation/line layout, without changing any assertion or runtime/SQL. A fresh full regression and new exact-head CI are required; neither an unchanged-source rerun nor skipped native jobs can establish GREEN. All prior diagnostic evidence and limitations below remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER dispatch disabled.
+
 ## Withdrawal-release implementation candidate — 22 October 2026
 
 Tests-first commit **7405718115065cd55f206008bbc82b6a8a324fa3** precedes runtime/additive56 implementation. The server-only factory now passes all49wire contracts, including exact scope/identities, full original debit, strict shape, current watermark, lossless revisions, actual Portfolio reducer with zero postings, immutable result after COMMIT and fixed readonly reconciliation. The first implementation invocation failed before running tests because the Windows sandbox could not rename Vite's temporary cache; that report is retained separately. The same targeted suite under normal approved process permissions passed49/49. Corrected candidate source typecheck and targeted lint pass.
