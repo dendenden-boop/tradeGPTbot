@@ -49,7 +49,7 @@ function root(node) {
     node = node.expression;
   return ts.isIdentifier(node) ? node.text : null;
 }
-it('retains all72 original non-fixture statements and33 test bodies before the separately appended release contracts', () => {
+it('retains all72 original non-fixture statements, all33 test bodies, readers, restart helpers and cleanup', () => {
   const file = source();
   const kept = file.statements
     .filter(
@@ -137,10 +137,37 @@ it('bounds fixture caches to eight server-owned handles and drains each through 
   expect(constructors).toHaveLength(7); // Four singleton writers + two maps with2authorities; foreign book URL stays fresh.
 });
 it('retains the whole native runner, all owner/cohort assertions and1020s/480s/90s budgets', () => {
-  expect(createHash('sha256').update(text('scripts/test-database.mjs')).digest('hex')).toBe(
-    '613552de72cbe9aa7e7476a52fa52b152cf21d5bbfa829342c014cb8eb7165ad',
-  );
+  expect(
+    createHash('sha256')
+      .update(beforeReleaseRunner(text('scripts/test-database.mjs')))
+      .digest('hex'),
+  ).toBe('613552de72cbe9aa7e7476a52fa52b152cf21d5bbfa829342c014cb8eb7165ad');
   expect(createHash('sha256').update(text('scripts/integration-proof.mjs')).digest('hex')).toBe(
     '0b5859334fc36a31c68211e1bee7e26fbd487644d5621c16a0f6a5b5846f596e',
   );
+});
+
+function releaseBlocks(source) {
+  return [
+    ...source.matchAll(
+      /^[ \t]*\/\/ BEGIN PAPER RELEASE ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PAPER RELEASE \1\n/gm,
+    ),
+  ];
+}
+function beforeReleaseRunner(source) {
+  for (const block of releaseBlocks(source)) source = source.replace(block[0], '');
+  return source
+    .replace('paperAdmissionOwner.numPassedTests, 39', 'paperAdmissionOwner.numPassedTests, 33')
+    .replace('beforeUnknownTests.numPendingTests, 22', 'beforeUnknownTests.numPendingTests, 16')
+    .replace(
+      'beforeWithdrawalTests.numPendingTests, 37',
+      'beforeWithdrawalTests.numPendingTests, 31',
+    );
+}
+it('requires exactly the reviewed additive56 owner, upgrade and reset extensions without altering the complete prior runner', () => {
+  expect(
+    releaseBlocks(text('scripts/test-database.mjs'))
+      .map((b) => b[1])
+      .sort(),
+  ).toEqual(['FLAGS', 'IMPORT', 'MIGRATION', 'OWNER', 'RESET_AFTER', 'RESET_BEFORE', 'UPGRADE']);
 });

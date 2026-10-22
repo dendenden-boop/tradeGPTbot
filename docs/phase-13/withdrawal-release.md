@@ -1,5 +1,9 @@
 # PAPER release after an irreversible withdrawal
 
+## Implementation checkpoint
+
+The server-only factory and additive56 are implemented as a candidate. Local49wire/10runner/65native contracts and actual clean server restart pass; [verification](verification.md) preserves tests-first RED, the two candidate defects and explicit diagnostic limits. Full new-head regression, populated deploy/redeploy/reset and source/PR/protected-main CI remain pending. This is not accepted production release authority yet. Published1–55 remain immutable.
+
 ## Candidate scope
 
 Starting accepted protected main is `00f96275771e75d0f30162dcf1adabae52bcf7af` ([PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39)). Published migrations1–55 are immutable. This increment must complete the collateral lifecycle of the existing [pre-dispatch withdrawal barrier](withdrawal-barrier.md), without enabling financial dispatch or claiming a public CANCEL acknowledgement.

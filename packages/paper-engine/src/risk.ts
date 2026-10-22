@@ -14,6 +14,11 @@ export { createPostgresPaperTenantRiskContextSource } from './postgres-tenant-ri
 export { createPostgresPaperOrderRiskPort } from './postgres-admission.js';
 export { createPostgresPaperReservationLifecycle } from './postgres-reservation-lifecycle.js';
 export { createPostgresPaperWithdrawalBarrier } from './postgres-withdrawal-barrier.js';
+export { createPostgresPaperWithdrawalRelease } from './postgres-withdrawal-release.js';
+export type {
+  PaperWithdrawalReleaseRequest,
+  PaperWithdrawalReleaseReceipt,
+} from './postgres-withdrawal-release.js';
 export type {
   PaperWithdrawalRequest,
   PaperWithdrawalReceipt,

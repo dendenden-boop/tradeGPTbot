@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## PHASE13 NOT_SENT release candidate — 22 October 2026
+
+Starting protected main **00f9627** accepted the irreversible withdrawal barrier through [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39). The [release candidate](docs/phase-13/withdrawal-release.md) adds an authenticated terminal overlay and permanent Portfolio tombstone for that exact NOT_SENT case. Original allocation/command and cash remain unchanged; current Risk inventory excludes the released liability exactly once. Tests-first RED and local49wire/10runner/65PostgreSQL GREEN plus an actual clean server restart are recorded in [verification](docs/phase-13/verification.md). Candidate additive56 follows immutable1–55. Full new-head regression, populated deploy/redeploy/reset and exact source/PR/protected-main CI remain acceptance requirements; this candidate is not accepted yet.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Public CANCEL, executed/partial release and UNKNOWN resolution, final dispatch and durable shared execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Earlier sections preserve their source-specific history.
+
 ## PHASE13 withdrawal source and PR checkpoint — 21 October 2026
 
 Source **3233e166f7342d37ae470c3759f5e8c88090cc93** passed complete Ubuntu/Windows/native PostgreSQL/services/Docker/CodeQL source and PR checks, independently verified in [verification](docs/phase-13/verification.md). The [withdrawal barrier](docs/phase-13/withdrawal-barrier.md) irreversibly blocks a pristine issued PLACE while preserving its entire original collateral; public Order stays CREATED. It does not acknowledge CANCEL, release money or enable dispatch. Additive55 follows immutable1–54. Final documentation-head/protected-main publication evidence is maintained in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); earlier sections preserve historical checkpoints.

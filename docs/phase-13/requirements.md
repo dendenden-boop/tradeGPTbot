@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Implemented NOT_SENT release candidate — 22 October 2026
+
+The [withdrawal-release candidate](withdrawal-release.md) now implements the strict server-only boundary and additive56 private terminal cause, current inventory, Portfolio release/tombstone and causal consistency. Actual local native65/65 includes all59previous admission/lifecycle/cash-loss contracts; clean PostgreSQL stop/start retained11barriers and5releases with readonly reconciliation and no financial changes. Wire49/49 and runner10/10 pass. Two additional candidate regressions—published55 TRUNCATE error semantics and acknowledged outbox delivery—were reproduced before correction and remain in verification history. This does not establish full source/PR/main acceptance: complete regression, populated deploy/redeploy/reset and CI remain mandatory. Published1–55 are immutable. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; public CANCEL, partial/executed lifecycle, final dispatch and durable virtual execution remain outstanding, LIVE/PAPER dispatch disabled.
+
 ## NOT_SENT collateral release contract — 22 October 2026
 
 Starting accepted protected main is **00f96275771e75d0f30162dcf1adabae52bcf7af** ([PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39)); all55published migrations remain immutable. The next [withdrawal-release contract](withdrawal-release.md) requires a genuine irreversible barrier, atomic common Portfolio release with no cash posting, permanent terminal provenance/tombstone and current Risk inventory that excludes the released target exactly once. UNKNOWN, caller status/fills, expiry and an old approval cannot authorize release. Tests precede implementation; no release API or additive56 is accepted at this checkpoint. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER financial dispatch and positive native credit disabled. Historical checkpoints below retain their original scope and outcomes.

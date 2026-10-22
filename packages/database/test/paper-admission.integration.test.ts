@@ -1549,7 +1549,28 @@ it('paper-release: authentic NOT_SENT releases one full hold atomically without 
 it('paper-release: new risk uses current terminal overlay exactly once while original allocation and cash remain immutable', async () => {
   const port = await openWithdrawalRelease(),
     { f, admission, request } = await releaseFixture();
-  await port.release(request, io());
+  const released = await port.release(request, io());
+  // Match the existing Portfolio acknowledge operation: delivery is not
+  // durable financial authority and must not destroy terminal provenance.
+  const delivery = await admin.connect();
+  try {
+    await delivery.query('BEGIN');
+    await delivery.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    await delivery.query('SET LOCAL ROLE ctp_portfolio');
+    expect(
+      (
+        await delivery.query(
+          'DELETE FROM ctp_portfolio.outbox WHERE "tenantId"=$1 AND type=\'RELEASE\' RETURNING id',
+          [f.c.owner.tenantId],
+        )
+      ).rows,
+    ).toHaveLength(1);
+    await delivery.query('COMMIT');
+  } finally {
+    await delivery.query('ROLLBACK');
+    delivery.release();
+  }
+  expect(await port.release(request, io())).toEqual(released);
   const second = await f.orders.create(
     f.binding,
     {
@@ -1709,6 +1730,9 @@ it('paper-release: private tombstone is inaccessible and stale common writers ca
   } finally {
     await runtime.end();
   }
+  await expect(admin.query('TRUNCATE ctp_paper.withdrawal_barrier')).rejects.toMatchObject({
+    code: '23514',
+  }); // Preserve published55 BEFORE TRUNCATE semantics, including after a release.
   const stable = await withdrawalInventory(f);
   const writer = await admin.connect();
   try {
