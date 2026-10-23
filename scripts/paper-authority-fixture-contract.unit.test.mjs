@@ -84,7 +84,7 @@ it('bounds new authority producer handles to four and retains fresh foreign-book
     file.statements
       .find((s) => ts.isFunctionDeclaration(s) && s.name?.text === name)
       ?.getText(file);
-  expect(fn('openBook')).toContain("connectionString === required('DATABASE_PAPER_BOOK_URL')");
+  expect(fn('openBook')).toContain('arguments.length === 0');
   expect(fn('openBook')).toContain('bookWriter ??=');
   expect(fn('openBook')).toContain('handles.push(h)');
   expect(fn('runtimePort')).toContain('runtimeWriter ??= ownWriter(');
