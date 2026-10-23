@@ -15,12 +15,22 @@ const fixtureOnly = new Set([
   'ownWriter',
   'configurationPort',
   'fundingPort',
+  // Producer calls/payloads in these three helpers remain pinned by the
+  // complementary paper-authority fixture contract; no reader is excluded.
+  'openBook',
+  'ready',
+  'runtimeEvidence',
+  'runtimePort',
+  'marketPorts',
 ]);
 const writerCaches = new Set([
   'configurationWriter',
   'fundingWriter',
   'policyWriters',
   'controlWriters',
+  'bookWriter',
+  'runtimeWriter',
+  'marketWriters',
 ]);
 const source = (file, kind = ts.ScriptKind.TS) =>
   ts.createSourceFile(
@@ -68,8 +78,8 @@ it('retains every original authority assertion, reader/restart helper, cleanup a
       );
     })
     .map((statement) => statement.getText(file));
-  expect(kept).toHaveLength(86);
-  expect(hash(kept)).toBe('f7d7e7995895575921a14da81b46b4a0b7b983c5f22c6b064651fe076be4e3de');
+  expect(kept).toHaveLength(83);
+  expect(hash(kept)).toBe('0f575539440a19e4dec24ef8203f3b5dcbec21a0b5c337094196ea326e7e14f8');
   const script = source('scripts/test-database.mjs', ts.ScriptKind.JS),
     owner = [];
   const scan = (node) => {

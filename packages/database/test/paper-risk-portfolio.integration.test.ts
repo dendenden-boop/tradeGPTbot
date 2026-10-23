@@ -34,6 +34,33 @@ const io = (signal = new AbortController().signal, ms = 2500) => ({
   deadline: Date.now() + ms,
 });
 const handles: { close(): Promise<void> }[] = [];
+// Default fixture producers only. Every payload, read and financial operation
+// remains fresh; inventory/valuation/Order readers and explicit URL probes do not share handles.
+let configurationWriter: ReturnType<typeof createPostgresPaperConfiguration> | undefined;
+let fundingWriter: ReturnType<typeof createPostgresPaperFunding> | undefined;
+let bookWriter: ReturnType<typeof createPostgresPaperPortfolioBootstrap> | undefined;
+function ownWriter<T extends { close(): Promise<void> }>(opening: Promise<T>): Promise<T> {
+  return opening.then((handle) => {
+    handles.push(handle);
+    return handle;
+  });
+}
+function configurationPort() {
+  return (configurationWriter ??= ownWriter(
+    createPostgresPaperConfiguration({
+      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function fundingPort() {
+  return (fundingWriter ??= ownWriter(
+    createPostgresPaperFunding({
+      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
+      environment: 'test',
+    }),
+  ));
+}
 afterAll(async () => {
   await Promise.all(handles.map((h) => h.close()));
   await admin.end();
@@ -75,15 +102,8 @@ async function fixture({
     'INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'SIMULATED\',\'ACTIVE\',\'paper-draft-epoch\',now())',
     [c.owner.accountId, c.owner.tenantId, c.source.exchange, externalAccountId, c.source.region],
   );
-  const config = await createPostgresPaperConfiguration({
-    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-    environment: 'test',
-  });
-  try {
-    if (configure) await config.register(c, io());
-  } finally {
-    await config.close();
-  }
+  const config = await configurationPort();
+  if (configure) await config.register(c, io());
   const i = f.p.record.instrument,
     r = f.p.record.rules;
   await admin.query(
@@ -146,32 +166,29 @@ async function prepared({
   const f = await fixture(region ? { region } : {});
   const fundingId = randomUUID();
   if (fund) {
-    const funding = await createPostgresPaperFunding({
-      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-      environment: 'test',
-    });
-    try {
-      await funding.initialize(
-        paperFundingSchema.parse({
-          id: fundingId,
-          owner: f.c.owner,
-          configurationId: f.c.id,
-          balances: [
-            { asset: 'BTC', amount: '0.000000000000000001' },
-            { asset: 'USDT', amount: '9007199254740993' },
-          ],
-        }),
-        io(),
-      );
-    } finally {
-      await funding.close();
-    }
+    const funding = await fundingPort();
+    await funding.initialize(
+      paperFundingSchema.parse({
+        id: fundingId,
+        owner: f.c.owner,
+        configurationId: f.c.id,
+        balances: [
+          { asset: 'BTC', amount: '0.000000000000000001' },
+          { asset: 'USDT', amount: '9007199254740993' },
+        ],
+      }),
+      io(),
+    );
   }
   const orders = await openOrders();
   const order = draft ? await orders.create(f.binding, f.draft, io()) : null;
   return { ...f, fundingId, orders, order };
 }
 async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) {
+  if (arguments.length === 0)
+    return (bookWriter ??= ownWriter(
+      createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+    ));
   const h = await createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' });
   handles.push(h);
   return h;
@@ -286,32 +303,18 @@ async function inventoryFixture(region?: string) {
       sibling.source.region,
     ],
   );
-  const configuration = await createPostgresPaperConfiguration({
-    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-    environment: 'test',
-  });
-  try {
-    await configuration.register(sibling, io());
-  } finally {
-    await configuration.close();
-  }
-  const funding = await createPostgresPaperFunding({
-    connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-    environment: 'test',
-  });
-  try {
-    await funding.initialize(
-      paperFundingSchema.parse({
-        id: randomUUID(),
-        owner: sibling.owner,
-        configurationId: sibling.id,
-        balances: [{ asset: 'USDT', amount: '3' }],
-      }),
-      io(),
-    );
-  } finally {
-    await funding.close();
-  }
+  const configuration = await configurationPort();
+  await configuration.register(sibling, io());
+  const funding = await fundingPort();
+  await funding.initialize(
+    paperFundingSchema.parse({
+      id: randomUUID(),
+      owner: sibling.owner,
+      configurationId: sibling.id,
+      balances: [{ asset: 'USDT', amount: '3' }],
+    }),
+    io(),
+  );
   const second = await bootstrap.initialize(sibling.owner, io());
   return { ...f, first, second, sibling };
 }

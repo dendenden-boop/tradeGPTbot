@@ -63,8 +63,11 @@ it('retains all72 original non-fixture statements, all33 test bodies, readers, r
         ),
     )
     .map((s) => s.getText(file));
-  expect(kept).toHaveLength(72);
-  expect(hash(kept)).toBe('b40e952b8a9dcdf422ecaa6a7d221de59e396962a151b8af4638c4b6487bc8c9');
+  expect(kept).toHaveLength(82);
+  expect(hash(kept.slice(0, 72))).toBe(
+    'b40e952b8a9dcdf422ecaa6a7d221de59e396962a151b8af4638c4b6487bc8c9',
+  );
+  expect(kept.slice(72).filter((s) => s.startsWith("it('paper-release:"))).toHaveLength(6);
 });
 it.each([
   ['updatePolicy', 2, '3deb5ffdd5c335fdfdb3e8d50c3c1be9640f4701e93eda5c98df039770580dbb'],
@@ -134,10 +137,37 @@ it('bounds fixture caches to eight server-owned handles and drains each through 
   expect(constructors).toHaveLength(7); // Four singleton writers + two maps with2authorities; foreign book URL stays fresh.
 });
 it('retains the whole native runner, all owner/cohort assertions and1020s/480s/90s budgets', () => {
-  expect(createHash('sha256').update(text('scripts/test-database.mjs')).digest('hex')).toBe(
-    '613552de72cbe9aa7e7476a52fa52b152cf21d5bbfa829342c014cb8eb7165ad',
-  );
+  expect(
+    createHash('sha256')
+      .update(beforeReleaseRunner(text('scripts/test-database.mjs')))
+      .digest('hex'),
+  ).toBe('613552de72cbe9aa7e7476a52fa52b152cf21d5bbfa829342c014cb8eb7165ad');
   expect(createHash('sha256').update(text('scripts/integration-proof.mjs')).digest('hex')).toBe(
     '0b5859334fc36a31c68211e1bee7e26fbd487644d5621c16a0f6a5b5846f596e',
   );
+});
+
+function releaseBlocks(source) {
+  return [
+    ...source.matchAll(
+      /^[ \t]*\/\/ BEGIN PAPER RELEASE ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PAPER RELEASE \1\n/gm,
+    ),
+  ];
+}
+function beforeReleaseRunner(source) {
+  for (const block of releaseBlocks(source)) source = source.replace(block[0], '');
+  return source
+    .replace('paperAdmissionOwner.numPassedTests, 39', 'paperAdmissionOwner.numPassedTests, 33')
+    .replace('beforeUnknownTests.numPendingTests, 22', 'beforeUnknownTests.numPendingTests, 16')
+    .replace(
+      'beforeWithdrawalTests.numPendingTests, 37',
+      'beforeWithdrawalTests.numPendingTests, 31',
+    );
+}
+it('requires exactly the reviewed additive56 owner, upgrade and reset extensions without altering the complete prior runner', () => {
+  expect(
+    releaseBlocks(text('scripts/test-database.mjs'))
+      .map((b) => b[1])
+      .sort(),
+  ).toEqual(['FLAGS', 'IMPORT', 'MIGRATION', 'OWNER', 'RESET_AFTER', 'RESET_BEFORE', 'UPGRADE']);
 });

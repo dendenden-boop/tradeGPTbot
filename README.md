@@ -1,5 +1,17 @@
 # Crypto Trading Platform
 
+## Verified NOT_SENT release source and PR — 23 October 2026
+
+The [server-only release](docs/phase-13/withdrawal-release.md) passed complete source/PR CI on **fa923f711575aa4666a86a114503683431797524**:4822unit/1555Paper/41HTTP per OS,1370PostgreSQL,39admission-owner cases, all19owner reports, populated upgrade/redeploy/reset, Auth/Docker, twelve clean deployments and audit0. Exact-source artifact digests, earlier identities and strict main protection were verified; [verification](docs/phase-13/verification.md) retains all failed/RED checkpoints and diagnostic limits. The release removes only proven NOT_SENT collateral, preserves permanent tombstones and changes no cash, original command or public Order. Published1–55 are immutable; additive56 and final documentation/protected-main publication remain tracked in [PR40](https://github.com/dendenden-boop/tradeGPTbot/pull/40), starting from main00f9627. Earlier sections retain their historical source-specific statuses.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND remains Binance Spot TESTNET only. Public CANCEL completion, executed/partial release and UNKNOWN resolution, final dispatch/attempt/permit ordering, durable shared virtual execution and operational composition remain outstanding. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
+## PHASE13 NOT_SENT release candidate — 22 October 2026
+
+Starting protected main **00f9627** accepted the irreversible withdrawal barrier through [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39). The [release candidate](docs/phase-13/withdrawal-release.md) adds an authenticated terminal overlay and permanent Portfolio tombstone for that exact NOT_SENT case. Original allocation/command and cash remain unchanged; current Risk inventory excludes the released liability exactly once. Tests-first RED and local49wire/10runner/65PostgreSQL GREEN plus an actual clean server restart are recorded in [verification](docs/phase-13/verification.md). Candidate additive56 follows immutable1–55. Full new-head regression, populated deploy/redeploy/reset and exact source/PR/protected-main CI remain acceptance requirements; this candidate is not accepted yet.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Public CANCEL, executed/partial release and UNKNOWN resolution, final dispatch and durable shared execution remain outstanding. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Earlier sections preserve their source-specific history.
+
 ## PHASE13 withdrawal source and PR checkpoint — 21 October 2026
 
 Source **3233e166f7342d37ae470c3759f5e8c88090cc93** passed complete Ubuntu/Windows/native PostgreSQL/services/Docker/CodeQL source and PR checks, independently verified in [verification](docs/phase-13/verification.md). The [withdrawal barrier](docs/phase-13/withdrawal-barrier.md) irreversibly blocks a pristine issued PLACE while preserving its entire original collateral; public Order stays CREATED. It does not acknowledge CANCEL, release money or enable dispatch. Additive55 follows immutable1–54. Final documentation-head/protected-main publication evidence is maintained in [PR39](https://github.com/dendenden-boop/tradeGPTbot/pull/39); earlier sections preserve historical checkpoints.

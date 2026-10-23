@@ -52,6 +52,18 @@ const handles: { close(): Promise<void> }[] = [];
 // Readers and their close/restart/physical-slot tests remain fresh and unchanged.
 let configurationWriter: ReturnType<typeof createPostgresPaperConfiguration> | undefined;
 let fundingWriter: ReturnType<typeof createPostgresPaperFunding> | undefined;
+// Four additional default producer handles, not financial readers or evidence.
+// Every initialize/context/head/publication remains a fresh PostgreSQL operation.
+let bookWriter: ReturnType<typeof createPostgresPaperPortfolioBootstrap> | undefined;
+let runtimeWriter: ReturnType<typeof createPostgresPaperRuntimeObservations> | undefined;
+let marketWriters:
+  | Promise<
+      [
+        Awaited<ReturnType<typeof createPostgresMarketSnapshots>>,
+        Awaited<ReturnType<typeof createPostgresMarketTrades>>,
+      ]
+    >
+  | undefined;
 const policyWriters = new Map<'PLATFORM' | 'USER', ReturnType<typeof createPostgresPolicies>>();
 const controlWriters = new Map<'GLOBAL' | 'TENANT', ReturnType<typeof createPostgresControls>>();
 function ownWriter<T extends { close(): Promise<void> }>(opening: Promise<T>): Promise<T> {
@@ -75,6 +87,30 @@ function fundingPort() {
       environment: 'test',
     }),
   ));
+}
+function runtimePort() {
+  return (runtimeWriter ??= ownWriter(
+    createPostgresPaperRuntimeObservations({
+      connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function marketPorts() {
+  return (marketWriters ??= Promise.all([
+    ownWriter(
+      createPostgresMarketSnapshots({
+        connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
+        environment: 'test',
+      }),
+    ),
+    ownWriter(
+      createPostgresMarketTrades({
+        connectionString: required('DATABASE_MARKET_TRADE_URL'),
+        environment: 'test',
+      }),
+    ),
+  ]));
 }
 
 async function updatePolicy(
@@ -292,6 +328,11 @@ async function prepared({
   return { ...f, fundingId, orders, order };
 }
 async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) {
+  // Explicit URLs (including foreign-authority probes) always open a fresh port.
+  if (arguments.length === 0)
+    return (bookWriter ??= ownWriter(
+      createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+    ));
   const h = await createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' });
   handles.push(h);
   return h;
@@ -300,15 +341,7 @@ async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) 
 async function ready(withPolicies = true) {
   const f = await prepared();
   await (await openBook()).initialize(f.c.owner, io());
-  const snapshots = await createPostgresMarketSnapshots({
-      connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
-      environment: 'test',
-    }),
-    trades = await createPostgresMarketTrades({
-      connectionString: required('DATABASE_MARKET_TRADE_URL'),
-      environment: 'test',
-    });
-  handles.push(snapshots, trades);
+  const [snapshots, trades] = await marketPorts();
   if (withPolicies) await ensurePolicies(f.c.owner.tenantId);
   const now = Date.now();
   f.f.s.timestamp = f.f.p.timestamp = now;
@@ -338,11 +371,7 @@ async function runtimeEvidence(
   f: Awaited<ReturnType<typeof ready>>,
   status: 'HEALTHY' | 'FAILED' | 'UNKNOWN' = 'HEALTHY',
 ) {
-  const h = await createPostgresPaperRuntimeObservations({
-    connectionString: required('DATABASE_PAPER_RUNTIME_OBSERVER_URL'),
-    environment: 'test',
-  });
-  handles.push(h);
+  const h = await runtimePort();
   const ctx = await h.context(f.c.owner, io());
   const publication: PaperRuntimePublication = {
     id: randomUUID(),
