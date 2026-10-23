@@ -1,5 +1,19 @@
 # PHASE 13 requirements
 
+## Verified content-preparation requirements — 23 October 2026
+
+Source **98e177d4269e59b603e0befa8f827ba289badf1e** passed complete source/PR acceptance for the [pure unsent cancellation contract](unsent-cancellation.md), with4,893unit/41HTTP,1,370native, all previous owner/upgrade/Auth/Docker reports, isolated production probes and audit0. All earlier identities,56published migrations, native runtime and CI policies are unchanged. [Verification](verification.md) records source-specific proof and [PR41](https://github.com/dendenden-boop/tradeGPTbot/pull/41) tracks final documentation/protected-main publication separately. The return value is content, not a durable CANCEL, Order transition, private proof, writer, grant or permit. No public cancellation completion is inferred from this increment.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** This accepts content preparation only. Public durable CANCEL/its private SQL bridge, executed/partial lifecycle and trusted UNKNOWN resolution, final dispatch/attempt/permit, durable shared virtual execution and operational composition remain outstanding. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
+## Unsent cancellation preparation scope — 23 October 2026
+
+Accepted protected main is **e22b269229e5dc1697b2348dbaab2765bed8375a** ([PR40](https://github.com/dendenden-boop/tradeGPTbot/pull/40)); migrations1–56 are published and immutable. This increment implements only the [pure unsent cancellation content contract](unsent-cancellation.md), needed before a trusted durable public CANCEL bridge. It requires pristine PAPER Spot BUY identity, consistent original NOT_SENT/RELEASED content, common permanent-key semantics and a client locator without fake exchange evidence. Receipt-shaped JSON and the returned plan are not authority. Existing native cancellation/AMEND, barrier guards and financial runtime remain unchanged.
+
+Tests-first70RED/1PASS became246targeted PASS including71new cases. Full exact-head regression/CI remains acceptance work, recorded in [verification](verification.md). No writer, durable intent/terminal transition, migration, endpoint or permission is part of this increment.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Public durable CANCEL, executed/partial lifecycle and trusted UNKNOWN resolution, final dispatch/attempt/permit, durable shared execution and operational composition remain outstanding. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Verified release requirements checkpoint — 23 October 2026
 
 The [NOT_SENT release contract](withdrawal-release.md) passed complete source/PR verification on **fa923f711575aa4666a86a114503683431797524**, including authentic barrier/issuance, one durable release and permanent tombstone, current inventory removal exactly once, unchanged cash/original allocation, UNKNOWN rejection, concurrency/restart and uncertain-COMMIT readonly reconciliation. Evidence and exact CI links are in [verification](verification.md):4822unit/41HTTP per OS,1370native,39admission-owner cases and all19owner reports, populated upgrade/reset, Auth/Docker, clean deployments and audit0. This is an increment checkpoint, not complete PHASE13 acceptance. Final documentation-head/protected-main publication is tracked in PR40; additive56 remains unpublished until merge and earlier candidate paragraphs retain their historical scope.

@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./paper": {
+      "types": "./dist/paper.d.ts",
+      "default": "./dist/paper.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
