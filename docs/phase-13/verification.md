@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Risk Portfolio fixture producer correction — 23 October 2026
+
+Tests-first **f99a1f52a1aaec3a41441692cfebeed74ad26ac4** precedes the second lifetime correction. Three module-owned default configuration/funding/book producer handles now replace repeated constructor-only probes in four fixture helpers. Explicit-URL probes and every inventory/valuation/Order reader stay fresh; all command payloads, database reads, original test bodies and cleanup remain pinned. The first patch accidentally matched a producer block inside an original test body; the new guard correctly failed (28PASS/1FAIL). That source/report was retained, the original test body restored exactly, and the change confined to the named helpers. All29targeted preservation/dependency cases now pass; the six new contracts preserve59original statements and every fresh helper call/parameter.
+
+All44original Risk Portfolio PostgreSQL cases then passed with zero exclusions in a new owned database, including restart, mixed/foreign/UNKNOWN evidence, catalog locks, role drift, abort/deadline and physical-slot recovery. All44identities remain available for comparison with the earlier real CI reports. The local server stopped cleanly. This uses the already disclosed Windows startup normalization/5ms delivery and does not certify production speedup, restricted ownership of every old function, Prisma deploy/reset or full CI. Financial runtime, published migrations, owner/cohort assertions and1020s/480s/90s limits remain unchanged. New frozen regression and exact-head CI are still required before publication.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** PR40 remains draft; no LIVE/PAPER financial dispatch or positive native credit.
+
 ## Completed dependency regression; remaining native parent RED — 23 October 2026
 
 Security source **8fb4010e1d483969c0e212a8474a506a24f3fead** passed all13local commands with812tracked inputs unchanged, **4816unit /1555Paper /41HTTP**, twelve clean deployments and actual same-invocation audit0. The ignored local collector initially copied `dependency-audit.json` after the print-only audit command, before `audit:supply-chain` regenerated that file. Its stale copy is retained separately; corrected proof binds the final JSON to the generating command's time window, output/lock digest and fresh file mtime. No audit assertion or CI policy is relaxed. Earlier14fb audit0shorthand was an evidence-attribution error: its actual high-threshold and report-generator logs contain1low/1moderate, as do a1's logs. Those original logs remain retained and supersede that shorthand.
