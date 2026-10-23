@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
-import { authorizationSchema, computeCommandHash, operations } from '@ctp/exchange-core';
+import {
+  authorizationSchema,
+  computeCommandHash,
+  operations,
+  parseDecimal,
+} from '@ctp/exchange-core';
 import { canonical, grantSchema, hash, stateSchema, type OrderState } from '../src/domain.js';
 import * as paper from '../src/paper.js';
 import * as root from '../src/index.js';
@@ -170,7 +175,12 @@ it('binds the semantic target independently from the caller key without generati
 });
 it('accepts an original supported LIMIT with its immutable old rule, without pricing or admitting another order', () => {
   const f = fixture();
-  f.state.command = { ...f.state.command, type: 'LIMIT', limitPrice: '10', timeInForce: 'GTC' };
+  f.state.command = {
+    ...f.state.command,
+    type: 'LIMIT',
+    limitPrice: parseDecimal('10'),
+    timeInForce: 'GTC',
+  };
   rebind(f);
   const p = prepare(f);
   expect(p.command).not.toHaveProperty('quantity');
@@ -294,19 +304,19 @@ const invalidStates: [string, (f: Fixture) => void][] = [
   [
     'nonzero filled quantity',
     (f) => {
-      f.state.filledQuantity = '1';
+      f.state.filledQuantity = parseDecimal('1');
     },
   ],
   [
     'unadopted execution',
     (f) => {
-      f.state.executedQuantity = '1';
+      f.state.executedQuantity = parseDecimal('1');
     },
   ],
   [
     'execution notional',
     (f) => {
-      f.state.executionNotional = '1';
+      f.state.executionNotional = parseDecimal('1');
     },
   ],
   [
