@@ -1,5 +1,15 @@
 # PHASE 13 verification
 
+## Withdrawal-release PR parent-deadline RED — 23 October 2026
+
+Exact source **03191081843547c0612312fbdbc0cc5280e6e9f7** passed [Platform39738617744](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39738617744) and [CodeQL39738617523](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39738617523). Its [PR40 Platform39738624394](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39738624394) failed the unchanged1020s database parent deadline; [PR CodeQL39738624480](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39738624480), Ubuntu, Windows, Auth and Docker passed. The required aggregate correctly failed. All five failed-run artifact ZIP digests and producer windows were verified and retained; this is not full acceptance and no unchanged-source retry was used. The successful source's financial/native reports cannot replace the failed PR run.
+
+The failed PR retained all19successful owner reports, including39admission cases, the actual populated55 upgrade producers,986main/23registry/39admission cohort cases. Native-admission/role completion and final database/reset reports are absent, so no1370-test PR acceptance is claimed. Its first owner suite began at07:20:18Z; main cohorts began at07:29:38Z, and the main cohort took363778ms. The largest main suite was the78-case Paper authority file at84047ms, also exercised independently under the restricted DDL owner. This identifies fixture orchestration overhead as a candidate for measurement, without claiming the hosted-runner slowdown's cause is proven.
+
+New fixture contracts first passed four preservation checks and failed the bounded-writer requirement (4PASS/1RED). They pin every original authority test body, reader/restart/role probe, fixture payload and cleanup, and every fresh operation/parameter in the three candidate producer helpers. An earlier diagnostic used a nonexistent unit config and failed before tests; it is retained separately and is not RED evidence. Only fixture writer lifetimes may change; accepted runtime, published1–55, assertions, role isolation, native480s/parent1020s/owner90s budgets and required CI remain mandatory. A local before/after PostgreSQL diagnostic and new exact-head full regression/CI remain pending.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** PR40 remains blocked; LIVE/PAPER financial dispatch and positive native credit remain disabled.
+
 ## Dev-tool security reproduction — 22 October 2026
 
 Independent zero-vulnerability verification rejected the audit report from **52d0f5911144660457487a67da7576df6b7fead5**: all13local commands exited successfully, but the unchanged configured high threshold permits two moderate findings in installed `@vitest/mocker@4.1.11`. The raw pre-patch JSON is retained separately; this is not audit0 or release acceptance. The earlier973 local-run shorthand below is corrected to describe command success at that threshold. Previously verified historical main reports retain their original observations.
