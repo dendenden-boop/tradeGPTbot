@@ -1,5 +1,11 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Verified PHASE13 NOT_SENT release increment — 23 October 2026
+
+The [release source](../phase-13/withdrawal-release.md), **fa923f711575aa4666a86a114503683431797524**, passed complete source/PR Ubuntu/Windows/PostgreSQL/Auth/Docker/CodeQL with4822unit/41HTTP per OS,1370native cases, all19owner reports plus39admission-owner cases, populated55→56 upgrade/reset, twelve clean deployments and audit0. Exact artifacts, earlier test identities, immutable1–55 and strict protection were verified in [verification](../phase-13/verification.md). Only proven pristine NOT_SENT collateral releases; terminal history/tombstones are permanent, UNKNOWN remains held, cash/original command/public Order remain unchanged. Final documentation-head and protected-main publication remain separate in PR40; candidate56 is not yet published. Historical checkpoints below retain their original results.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND remains Binance Spot TESTNET only. Public CANCEL completion, executed/partial release and UNKNOWN resolution, final dispatch/attempt/permit ordering, durable shared virtual execution and operational composition remain outstanding. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Published admission and security maintenance — 21 October 2026
 
 [PR35](https://github.com/dendenden-boop/tradeGPTbot/pull/35) merged as main **6a4085b00d4e394b96376ee0868d9cd1b2697916** after exact82ea59f source/PR Platform and CodeQL passed with1348native tests. Migration53 is now published and immutable. Its exact-main [Platform39550794190](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39550794190) failed dependency audit on both operating systems: Vite7.3.6 now has one HIGH and two MODERATE advisories. Native/Auth/Docker were skipped and the aggregate failed; this is not accepted main CI. CodeQL39550794196 passed. Earlier source-specific GREEN reports remain historical evidence and do not override this failure.

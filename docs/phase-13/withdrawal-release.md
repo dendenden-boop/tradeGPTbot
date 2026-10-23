@@ -2,7 +2,7 @@
 
 ## Implementation checkpoint
 
-The server-only factory and additive56 are implemented as a candidate. Local49wire/10runner/65native contracts and actual clean server restart pass; [verification](verification.md) preserves tests-first RED, the two candidate defects and explicit diagnostic limits. Full new-head regression, populated deploy/redeploy/reset and source/PR/protected-main CI remain pending. This is not accepted production release authority yet. Published1–55 remain immutable.
+The server-only factory and additive56 passed full source/PR verification on **fa923f711575aa4666a86a114503683431797524**:4822unit/1555Paper/41HTTP per OS,1370native PostgreSQL,39admission-owner cases/all19owner reports, populated55→56 upgrade/redeploy/reset, Auth/Docker, twelve clean deployments and audit0. Exact artifact digests/windows, earlier identities, all55published migrations and strict protection were verified. [Verification](verification.md) preserves tests-first RED, candidate defects, failed runs and diagnostic limits. This is source/PR acceptance only; final documentation-head and protected-main publication remain separate in [PR40](https://github.com/dendenden-boop/tradeGPTbot/pull/40). Additive56 remains unpublished until protected merge.
 
 ## Candidate scope
 

@@ -1,5 +1,13 @@
 # PHASE 13 contracts
 
+## Verified terminal-overlay source contract — 23 October 2026
+
+Source **fa923f711575aa4666a86a114503683431797524** verifies the [release contract](withdrawal-release.md) through complete source/PR CI. The fixed server-only two-RPC boundary authenticates pristine issuance plus irreversible NOT_SENT, commits one immutable terminal cause/common RELEASE/permanent tombstone/causal book, and authenticates exclusion once from current Risk inventory. Original allocation/command, public Order and cash remain unchanged. UNKNOWN never releases; uncertain COMMIT returns no result, with exact readonly reconciliation after restart. Normal outbox acknowledgement cannot erase private release provenance. The original dispatch barrier remains irrevocable.
+
+[Verification](verification.md) records exact identities, artifact digests, restricted owner/upgrade/reset and fresh audit0 evidence; earlier candidate checkpoints remain historical. This source does not establish final documentation-head/protected-main publication, which is tracked in PR40. Published1–55 stay immutable; additive56 is a candidate until merge.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND remains Binance Spot TESTNET only. Public CANCEL completion, executed/partial release and UNKNOWN resolution, final dispatch/attempt/permit ordering, durable shared virtual execution and operational composition remain outstanding. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Implemented terminal overlay candidate — 22 October 2026
 
 `createPostgresPaperWithdrawalRelease` is confined to the server risk subpath and existing bounded two-RPC admission transport. Candidate56 authenticates genuine issuance and irreversible NOT_SENT, commits one private terminal cause, actual common RELEASE, retained watermark and causal book, and reuses the existing Portfolio reducer before COMMIT. Original parent/debits/ACTIVE journal are historical allocation; current inventory authenticates the terminal overlay and excludes its logical order/reservation/hold. A received historical approval or withdrawal receipt never overrides the barrier/tombstone. UNKNOWN cannot enter this path. Immutable evidence/private causal history persists after normal outbox acknowledgement; new inbound FKs must not mask published55 BEFORE TRUNCATE semantics. No monetary posting, public CANCEL acknowledgement or dispatch is introduced. Local evidence is in [verification](verification.md); full CI acceptance remains pending. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**.
