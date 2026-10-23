@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Production-dependency patch candidate — 23 October 2026
+
+Tests-first **5359f9f6c84d2e14d9fca37ade04bb4443b2c1f2** precedes the install. Exact pins now select **Fastify5.12.6 / Nodemailer10.0.10 / SMTP-server3.19.13**. The lockfile changes only those three package records/importers and the SMTP→Nodemailer edge; no override, release-age/build/peer policy, audit threshold, workflow or financial runtime/SQL is changed. Both installed Auth/SMTP parser paths and all three Fastify header constraints now pass, **7/7**, while retaining binary header/body semantics. Fresh raw `pnpm audit --json` has zero findings at every severity. The install and RED/GREEN/audit reports are retained independently.
+
+This targeted result is not full acceptance. A new frozen full regression, PostgreSQL/Auth/Docker/backward compatibility, Ubuntu/Windows/CodeQL and exact source/PR/protected-main verification remain mandatory. The still-running a1CI uses its original dependencies and cannot certify this patch; it will be retained without cancellation or an unchanged-source rerun. Its historical thirteen successful commands do not establish zero-audit acceptance.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** PR40 stays draft; LIVE/PAPER financial dispatch and positive native credit stay disabled.
+
 ## Newly observed production-dependency RED — 23 October 2026
 
 The full **a1fcd13a73c1bf7b78860793ec9af6cf451dca47** local run passed all13commands,4809unit/41HTTP and twelve clean deployments with811tracked input hashes unchanged. Independent verification nevertheless rejected audit0: the retained fresh audit JSON contains **1moderate Nodemailer10.0.9 and1low Fastify5.12.5** finding. The configured high-threshold command exits0, which is not zero-audit acceptance. The earlier14fb audit0snapshot remains historical; the discrepancy does not prove when the advisories were published or why the registry responses differed. The a1source/PR CI remains in progress and cannot certify a later dependency correction.
