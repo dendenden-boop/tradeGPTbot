@@ -1,5 +1,13 @@
 # PHASE 13 contracts
 
+## Verified content semantics without durable authority — 23 October 2026
+
+The [content protocol](unsent-cancellation.md) passed full source/PR verification on **98e177d4269e59b603e0befa8f827ba289badf1e**. The dedicated @ctp/order-engine/paper entrypoint prepares a frozen plan only for pristine supported PAPER content with matching original PLACE/NOT_SENT/RELEASED identities. Common key semantics and a lossless CLIENT_ID locator are retained; the PAPER binding hash domain avoids inventing a native connection/target. Unknown, non-pristine or conflicting input fails the content contract; original state and native contracts remain unchanged.
+
+Even internally consistent JSON and hashes are not issuance, ownership, a commit or permission. A future durable bridge must authenticate private causes/current authorization under lock, look up exact permanent replay first and atomically retain genuine common CANCEL/terminal evidence without a broad guard bypass or second monetary effect. This increment provides none of that writer authority. [Verification](verification.md) retains complete tests/artifact/protection evidence; [PR41](https://github.com/dendenden-boop/tradeGPTbot/pull/41) records final documentation/protected-main publication separately.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** This accepts content preparation only. Public durable CANCEL/its private SQL bridge, executed/partial lifecycle and trusted UNKNOWN resolution, final dispatch/attempt/permit, durable shared virtual execution and operational composition remain outstanding. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## PAPER cancellation content before durable authority — 23 October 2026
 
 The [unsent cancellation protocol](unsent-cancellation.md) defines preparePaperUnsentCancellation on @ctp/order-engine/paper; the existing root and native contracts are unchanged. A pristine original PAPER Spot BUY plus strict consistent withdrawal/release content yields only an immutable PAPER_UNSENT_CANCEL_PLAN. Common semantic request hashing excludes the permanent namespace key; PAPER command hashing uses {operation:cancelOrder,command,binding}, consistent with existing PAPER PLACE and null connection. Client IDs and causal revisions remain lossless; no native target, credentials, current metadata admission, randomness or ambient clock is invented.

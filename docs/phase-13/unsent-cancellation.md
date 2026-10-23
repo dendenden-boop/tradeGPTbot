@@ -1,5 +1,11 @@
 # PAPER unsent cancellation content contract
 
+## Source and PR verification checkpoint — 23 October 2026
+
+The content-only implementation on **98e177d4269e59b603e0befa8f827ba289badf1e** passed complete source/PR CI and independent [verification](verification.md):71new content contracts, all4,822old unit/1,370native identities retained, compiled isolated subpath/root/source-path probes, existing owner/upgrade/reset/Auth/Docker suites, twelve clean deployments and audit0. All56published migrations and existing native/financial runtime remain unchanged. Final documentation-head/protected-main evidence is maintained separately in [PR41](https://github.com/dendenden-boop/tradeGPTbot/pull/41). This accepts only preparation; the durable bridge described below remains unimplemented.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** This accepts content preparation only. Public durable CANCEL/its private SQL bridge, executed/partial lifecycle and trusted UNKNOWN resolution, final dispatch/attempt/permit, durable shared virtual execution and operational composition remain outstanding. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Scope and starting point
 
 Start from accepted protected main `e22b269229e5dc1697b2348dbaab2765bed8375a`, [PR40](https://github.com/dendenden-boop/tradeGPTbot/pull/40), [main Platform39938066122](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39938066122) and [CodeQL39938066283](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/39938066283). All56published migrations are immutable. The [withdrawal barrier](withdrawal-barrier.md) and [collateral release](withdrawal-release.md) intentionally leave the common public Order CREATED. Their receipts do not acknowledge CANCEL or authorize later Order/control writes.
