@@ -359,6 +359,13 @@ try {
     assert.throws(()=>engine.createOrderEngine({}));
     assert.throws(()=>import.meta.resolve('@ctp/order-engine/testing'));
     assert.equal('memoryStore' in engine,false);
+    // BEGIN PAPER UNSENT CANCEL CONTENT
+    const paper = await import('@ctp/order-engine/paper');
+    assert.deepEqual(Object.keys(paper),['preparePaperUnsentCancellation']);
+    assert.equal('preparePaperUnsentCancellation' in engine,false);
+    assert.throws(()=>paper.preparePaperUnsentCancellation({},0),/ORDER_PAPER_CANCEL_INPUT/);
+    assert.throws(()=>import.meta.resolve('@ctp/order-engine/src/paper.js'));
+    // END PAPER UNSENT CANCEL CONTENT
   `,
     options,
   );
