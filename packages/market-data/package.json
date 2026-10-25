@@ -19,7 +19,7 @@
     "@ctp/exchange-core": "workspace:*",
     "pg": "8.23.0",
     "ws": "8.22.0",
-    "zod": "4.5.4",
+    "zod": "4.6.6",
     "@ctp/exchange-binance": "workspace:*",
     "@ctp/exchange-bybit": "workspace:*",
     "@ctp/exchange-okx": "workspace:*",
