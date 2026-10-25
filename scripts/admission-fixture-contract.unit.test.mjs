@@ -26,6 +26,12 @@ const caches = new Set([
   'policyWriters',
   'controlWriters',
 ]);
+const cancellationHelpers = new Set([
+  'openUnsentCancellation',
+  'cancellationRequest',
+  'cancellationFixture',
+  'cancellationRows',
+]);
 const factories = new Set([
   'createPostgresPaperConfiguration',
   'createPostgresPaperFunding',
@@ -54,6 +60,9 @@ it('retains all72 original non-fixture statements, all33 test bodies, readers, r
   const kept = file.statements
     .filter(
       (s) =>
+        !(ts.isFunctionDeclaration(s) && cancellationHelpers.has(s.name?.text)) &&
+        !(ts.isTypeAliasDeclaration(s) && s.name.text === 'UnsentCancellation') &&
+        !(ts.isExpressionStatement(s) && s.getText(file).startsWith("it('paper-cancel:")) &&
         !(ts.isFunctionDeclaration(s) && fixtureOnly.has(s.name?.text)) &&
         !(
           ts.isVariableStatement(s) &&
@@ -155,6 +164,15 @@ function releaseBlocks(source) {
   ];
 }
 function beforeReleaseRunner(source) {
+  for (const block of cancellationBlocks(source)) source = source.replace(block[0], '');
+  source = source
+    .replace('paperAdmissionOwner.numPassedTests, 46', 'paperAdmissionOwner.numPassedTests, 39')
+    .replace('beforeUnknownTests.numPendingTests, 29', 'beforeUnknownTests.numPendingTests, 22')
+    .replace(
+      'beforeWithdrawalTests.numPendingTests, 44',
+      'beforeWithdrawalTests.numPendingTests, 37',
+    )
+    .replace('beforeReleaseTests.numPendingTests, 45', 'beforeReleaseTests.numPendingTests, 38');
   for (const block of releaseBlocks(source)) source = source.replace(block[0], '');
   return source
     .replace('paperAdmissionOwner.numPassedTests, 39', 'paperAdmissionOwner.numPassedTests, 33')
@@ -170,4 +188,35 @@ it('requires exactly the reviewed additive56 owner, upgrade and reset extensions
       .map((b) => b[1])
       .sort(),
   ).toEqual(['FLAGS', 'IMPORT', 'MIGRATION', 'OWNER', 'RESET_AFTER', 'RESET_BEFORE', 'UPGRADE']);
+});
+
+function cancellationBlocks(source) {
+  return [
+    ...source.matchAll(
+      /^[ \t]*\/\/ BEGIN PAPER CANCEL ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PAPER CANCEL \1\n/gm,
+    ),
+  ];
+}
+it('requires the exact additive57 extensions, seven new cancellation contracts and no shared financial fixture cache', () => {
+  expect(
+    cancellationBlocks(text('scripts/test-database.mjs'))
+      .map((b) => b[1])
+      .sort(),
+  ).toEqual(['FLAGS', 'IMPORT', 'MIGRATION', 'OWNER', 'RESET_AFTER', 'RESET_BEFORE', 'UPGRADE']);
+  const file = source();
+  expect(
+    file.statements.filter(
+      (s) => ts.isExpressionStatement(s) && s.getText(file).startsWith("it('paper-cancel:"),
+    ),
+  ).toHaveLength(7);
+  expect(
+    file.statements.filter(
+      (s) => ts.isFunctionDeclaration(s) && cancellationHelpers.has(s.name?.text),
+    ),
+  ).toHaveLength(4);
+  expect(
+    file.statements.filter(
+      (s) => ts.isTypeAliasDeclaration(s) && s.name.text === 'UnsentCancellation',
+    ),
+  ).toHaveLength(1);
 });

@@ -1608,6 +1608,51 @@ it('paper-cancel: authentic local terminal Order has one immutable CANCEL cause 
   expect(after.rows[0]!.watermarks).toEqual(before.rows[0]!.watermarks);
   expect(after.rows[0]!.attempts).toEqual(before.rows[0]!.attempts);
   expect(after.rows[0]!.events).toBe(Number(before.rows[0]!.events) + 1);
+  const restricted = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
+  try {
+    await expect(restricted.query('SELECT * FROM ctp_paper.unsent_cancellation')).rejects.toThrow(
+      /permission denied/u,
+    );
+    for (const signature of [
+      'ctp_paper.cancel_unsent(jsonb,boolean)',
+      'ctp_paper.validate_unsent_cancellation(uuid,uuid)',
+      'ctp_paper.validate_unsent_cancel_origin(uuid,uuid)',
+      'ctp_paper.evaluate_and_reserve_v56(jsonb)',
+    ])
+      expect(
+        (
+          await restricted.query(
+            "SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed",
+            [signature],
+          )
+        ).rows,
+      ).toEqual([{ allowed: false }]);
+  } finally {
+    await restricted.end();
+  }
+  for (const sql of [
+    `UPDATE public."order" SET status='SUBMITTING',version=2 WHERE "tenantId"=$1 AND id=$2`,
+    `UPDATE ctp_execution.progress SET "nativeAt"=1,"nativeHash"=decode(repeat('a',64),'hex'),"nativeStatus"='SUBMITTED' WHERE "tenantId"=$1 AND "orderId"=$2`,
+    `INSERT INTO public.order_event("tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,2,'CANCELED','SUBMITTED','PAPER_NOT_SENT_CANCEL','forged',decode(repeat('a',64),'hex'),now())`,
+    `INSERT INTO public.submission_attempt("tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","workerId","commandHash","deadlineAt") SELECT "tenantId",id,"intentId","accountId",mode,"instrumentId",2,'PLACE',0,'test',decode(repeat('a',64),'hex'),now()+interval '1 second' FROM public."order" WHERE "tenantId"=$1 AND id=$2`,
+  ]) {
+    const writer = await admin.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query(
+        "SELECT set_config('app.tenant_id',$1,true),set_config('app.paper_cancel','true',true)",
+        [f.c.owner.tenantId],
+      );
+      await writer.query('SET LOCAL ROLE ctp_execution');
+      await expect(writer.query(sql, [f.c.owner.tenantId, f.order.id])).rejects.toThrow(
+        'PAPER_WITHDRAWN_NOT_SENT',
+      );
+    } finally {
+      await writer.query('ROLLBACK');
+      writer.release();
+    }
+  }
+  expect(await withdrawalInventory(f)).toEqual(after);
 });
 
 it('paper-cancel: permanent exact replay survives restart, terminal state, pause and rule replacement; current epochs remain mandatory', async () => {
@@ -1685,7 +1730,20 @@ it('paper-cancel: authentic terminal cause keeps current inventory healthy for s
   const port = await openUnsentCancellation(),
     { f, admission, cancel } = await cancellationFixture();
   await port.cancel(cancel, io());
-  const second = await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, io());
+  const second = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
   await nextFixtureMarketObservation(f);
   await runtimeEvidence(f);
   await admission.approve(await input(f, second), io());
@@ -1706,6 +1764,40 @@ it('paper-cancel: absent release, UNKNOWN and revoked ownership cannot authorize
     cancel = await cancellationRequest(f);
   await expect(port.cancel(cancel, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
   await (await openWithdrawalRelease()).release(request, io());
+  // A matching self-hash and table-writer authority do not authenticate a
+  // fabricated private terminal cause or open the common withdrawal guard.
+  const forger = await admin.connect(),
+    forgedIntent = randomUUID();
+  try {
+    await forger.query('BEGIN');
+    await forger.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    await forger.query(
+      `INSERT INTO ctp_paper.unsent_cancellation
+      (tenant_id,order_id,place_intent_id,intent_id,event_id,reservation_id,key,request,before_order,intent_row,command_row,event_row,response,response_hash,observed_ms,permission_epoch,session_epoch)
+      SELECT o."tenantId",o.id,o."intentId",$3,gen_random_uuid(),$4,'forged-cancel',
+       jsonb_build_object('binding',$5::jsonb,'orderId',o.id::text,'operation','CANCEL','key','forged-cancel'),to_jsonb(o),
+       '{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,sha256(convert_to('{}','UTF8')),floor(extract(epoch FROM clock_timestamp())*1000)::bigint,0,0
+      FROM public."order" o WHERE o."tenantId"=$1 AND o.id=$2`,
+      [
+        f.c.owner.tenantId,
+        f.order.id,
+        forgedIntent,
+        request.reservationId,
+        JSON.stringify(f.binding),
+      ],
+    );
+    await expect(
+      forger.query(
+        `INSERT INTO public.order_intent
+      SELECT (jsonb_populate_record(NULL::public.order_intent,to_jsonb(i)||jsonb_build_object('id',$3::text,'targetOrderId',$2::text,'operation','CANCEL','idempotencyKey','forged-cancel'))).*
+      FROM public.order_intent i WHERE i."tenantId"=$1 AND i.id=$4`,
+        [f.c.owner.tenantId, f.order.id, forgedIntent, f.order.intentId],
+      ),
+    ).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  } finally {
+    await forger.query('ROLLBACK');
+    forger.release();
+  }
   await admin.query('UPDATE public."user" SET "sessionEpoch"="sessionEpoch"+1 WHERE id=$1', [
     f.c.owner.tenantId,
   ]);
@@ -1722,11 +1814,12 @@ it('paper-cancel: absent release, UNKNOWN and revoked ownership cannot authorize
 
 it('paper-cancel: lost COMMIT returns no receipt, readonly reconciliation recovers the only result after restart without mutation retry', async () => {
   const { f, cancel } = await cancellationFixture(),
-    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'));
+    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'), 'PAPER_ADMISSION');
   try {
     const port = await openUnsentCancellation(proxy.connectionString);
     proxy.arm();
     await expect(port.cancel(cancel, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
     await port.close();
     const restarted = await openUnsentCancellation(),
       found = await restarted.reconcile(cancel, io());

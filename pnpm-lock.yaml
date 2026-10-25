@@ -265,6 +265,9 @@ importers:
       '@ctp/market-data':
         specifier: workspace:*
         version: link:../market-data
+      '@ctp/order-engine':
+        specifier: workspace:*
+        version: link:../order-engine
       '@ctp/portfolio':
         specifier: workspace:*
         version: link:../portfolio

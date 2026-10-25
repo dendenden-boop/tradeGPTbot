@@ -119,7 +119,7 @@ function fixture() {
       withdrawalEventId: withdrawal.eventId,
       releaseEventId: release.eventId,
     },
-    packet = { kind: 'CANCELED', request: plan.request, source, receipt };
+    packet = { kind: 'CANCELED', request: structuredClone(plan.request), source, receipt };
   return { request, packet, receipt };
 }
 const io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2000 });

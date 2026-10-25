@@ -15,6 +15,12 @@ export { createPostgresPaperOrderRiskPort } from './postgres-admission.js';
 export { createPostgresPaperReservationLifecycle } from './postgres-reservation-lifecycle.js';
 export { createPostgresPaperWithdrawalBarrier } from './postgres-withdrawal-barrier.js';
 export { createPostgresPaperWithdrawalRelease } from './postgres-withdrawal-release.js';
+export { createPostgresPaperUnsentCancellation } from './postgres-unsent-cancellation.js';
+export type {
+  PaperUnsentCancellationRequest,
+  PaperUnsentCancellationReceipt,
+  PaperUnsentCancellationReconciliation,
+} from './postgres-unsent-cancellation.js';
 export type {
   PaperWithdrawalReleaseRequest,
   PaperWithdrawalReleaseReceipt,

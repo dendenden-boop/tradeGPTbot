@@ -25,6 +25,9 @@ export const aliases = {
   '@ctp/risk-engine': fileURLToPath(
     new URL('./packages/risk-engine/src/index.ts', import.meta.url),
   ),
+  '@ctp/order-engine/paper': fileURLToPath(
+    new URL('./packages/order-engine/src/paper.ts', import.meta.url),
+  ),
   '@ctp/order-engine': fileURLToPath(
     new URL('./packages/order-engine/src/index.ts', import.meta.url),
   ),
