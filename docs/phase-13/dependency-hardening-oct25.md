@@ -70,7 +70,7 @@ the retained actual 3.1.8 / 4.1.5 packages and safe serialization on 3.1.9 / 4.2
 with file hashes and outputs retained. This correction is not a claimed additional
 upstream defect, suppression or weakening of valid URI behavior.
 
-## Gate
+## Historical candidate gate
 
 Full regression and complete new-head/source/PR/protected-main CI remain required
 at this candidate checkpoint. Previous failures are not
@@ -82,3 +82,11 @@ and positive native collateral credit remain disabled. Native AMEND remains
 Binance Spot TESTNET only. Pure unsent cancellation preparation is not durable
 public CANCEL. Real private exchange acceptance, crash/backup restore and
 production soak are not claimed.
+
+## Verified source and PR checkpoint
+
+Corrected source `51dae36ba2493efa93109790ea4043e136dd67bb` passed full source [Platform 40195502641](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40195502641) / [CodeQL 40195502642](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40195502642) and PR [Platform 40195514859](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40195514859) / [CodeQL 40195514846](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40195514846). Each OS passed 4,955 unit tests in 249 files, including all 4,893 previous identities and exactly 62 new dependency cases, 1,555 Paper / 41 HTTP and twelve clean deployments. All 1,370 native PostgreSQL identities in 42 files, 19 owner reports / 39 admission-owner cases and prior upgrade/reset/Auth/Docker checks remain. Artifact ZIP SHA-256 digests and producer windows, exact pins/lock graph, audit 0 at all severities, current CodeQL and strict main protection were verified.
+
+All thirteen local commands passed with 818 tracked input hashes unchanged; raw zero-audit proof is bound to its actual producer window, lock digest and generated file. Native cohorts completed in 376697 / 378398 ms within the unchanged 480000 ms limit; database parents 825933 / 844716 ms within 1020000 ms. Existing owner deadlines are unchanged. These are run-specific results, not production throughput or soak evidence.
+
+The prior failed main run remains failed. This source checkpoint does not claim exact-main acceptance. Final documentation-head and normal protected publication are recorded separately in [PR42](https://github.com/dendenden-boop/tradeGPTbot/pull/42). **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; LIVE/PAPER dispatch and positive credit remain disabled.
