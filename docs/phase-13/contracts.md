@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Dependency audit recovery — 25 October 2026
+
+PR [41](https://github.com/dendenden-boop/tradeGPTbot/pull/41) merged normally as main `c15b14b8c0bd343d6fd35d1b9361c2e2761355a5`. Its exact-main [Platform 40193915441](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40193915441) failed fresh dependency audit on both OSes; PostgreSQL/Auth/Docker were skipped, so this main run is not acceptance. CodeQL passed. Earlier source/PR results retain their historical scope. The [isolated dependency recovery](dependency-hardening-oct25.md) records tests-first 47 RED / 15 PASS, corrected suffix diagnostics, minimal Zod/Nodemailer/fast-uri pins, 78 targeted PASS and a fresh audit of zero. Full corrected-head regression and source/PR/protected-main CI remain pending; no blind retry, suppression or CI waiver was used.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Durable public CANCEL and the remaining PHASE 13 lifecycle/dispatch/execution work are unimplemented. All 56 published migrations, financial source and CI policies remain unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Verified content semantics without durable authority — 23 October 2026
 
 The [content protocol](unsent-cancellation.md) passed full source/PR verification on **98e177d4269e59b603e0befa8f827ba289badf1e**. The dedicated @ctp/order-engine/paper entrypoint prepares a frozen plan only for pristine supported PAPER content with matching original PLACE/NOT_SENT/RELEASED identities. Common key semantics and a lossless CLIENT_ID locator are retained; the PAPER binding hash domain avoids inventing a native connection/target. Unknown, non-pristine or conflicting input fails the content contract; original state and native contracts remain unchanged.

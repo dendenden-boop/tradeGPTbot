@@ -151,7 +151,12 @@ for (const [edge, uri] of uriEdges) {
     }
   });
   it('installed ' + edge + ' URI suffix output cannot acquire a scheme', () => {
-    const output = uri.normalize('custom:fixture', { reference: 'suffix' });
+    // A suffix omits the component scheme. Its path must remain a relative
+    // reference even when the original component object included a scheme.
+    const output = uri.serialize(
+      { scheme: 'discarded', path: 'custom:fixture' },
+      { reference: 'suffix' },
+    );
     expect(uri.parse(output).scheme).toBeUndefined();
     expect(output).toContain('%3A');
   });

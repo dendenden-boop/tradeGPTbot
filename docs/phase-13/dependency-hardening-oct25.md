@@ -49,10 +49,31 @@ the workspace.
   Tests exercise each distinction and retain ordinary URI behavior for both
   installed majors.
 
+## Implemented candidate and targeted evidence
+
+Tests-first commit `08562c0b489be6600589a3c1f95c07762d802faa` precedes pin
+changes. The candidate updates the eleven exact Zod pins to 4.6.6, Auth Nodemailer
+to 10.1.4, its SMTP-fixture edge through one scoped override, and the existing
+fast-uri overrides to 3.1.9 / 4.2.3. Only those four package/version records change
+in the lockfile; no unrelated dependency or build policy is upgraded.
+
+Frozen installation passed. A fresh raw audit of the candidate lockfile reports
+**0 info / low / moderate / high / critical**. Targeted verification passes
+**78/78**, comprising all 62 new cases and 16 existing dependency/policy cases.
+
+The first candidate targeted run passed 76/78. Two suffix assertions incorrectly
+expected malformed string normalization to discard a scheme; the implementation
+preserves that raw invalid input. Upstream's fixed contract concerns serialization
+of a suffix component whose original scheme is omitted. The assertions now test
+that operation. Separate bounded diagnostics reproduce unsafe serialization on
+the retained actual 3.1.8 / 4.1.5 packages and safe serialization on 3.1.9 / 4.2.3,
+with file hashes and outputs retained. This correction is not a claimed additional
+upstream defect, suppression or weakening of valid URI behavior.
+
 ## Gate
 
-Dependency changes, GREEN regression and complete new-head/source/PR/protected-main
-CI remain required at this tests-first checkpoint. Previous failures are not
+Full regression and complete new-head/source/PR/protected-main CI remain required
+at this candidate checkpoint. Previous failures are not
 overwritten. Published migrations 1–56, financial source, adapter logic, audit
 threshold, workflows, release-age policy and deadlines must remain unchanged.
 
