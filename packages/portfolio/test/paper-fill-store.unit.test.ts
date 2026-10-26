@@ -1,9 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import type * as CoreModule from '@ctp/exchange-core';
+import type * as PgModule from 'pg';
 import * as portfolio from '../src/index.js';
 import { binding } from './fixtures.js';
 const fake = vi.hoisted(() => ({ connections: 0, queries: [] as string[] }));
 vi.mock('@ctp/exchange-core', async (original) => {
-  const actual = await original<typeof import('@ctp/exchange-core')>();
+  const actual = await original<typeof CoreModule>();
   return {
     ...actual,
     createPostgresConnections: () => ({
@@ -27,7 +29,7 @@ vi.mock('@ctp/exchange-core', async (original) => {
   };
 });
 vi.mock('pg', async (original) => {
-  const actual = await original<typeof import('pg')>();
+  const actual = await original<typeof PgModule>();
   return {
     ...actual,
     Pool: class {

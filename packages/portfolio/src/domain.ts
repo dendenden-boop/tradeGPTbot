@@ -99,6 +99,30 @@ export const fillEventSchema = z.strictObject({
     )
     .max(20),
 });
+/** Simulated content only. A matching JSON object/hash is not private execution
+ * provenance, a committed fill, or permission for the public Portfolio writer. */
+export const paperFillEventSchema = fillEventSchema
+  .omit({ type: true, native: true, fees: true })
+  .extend({
+    type: z.literal('PAPER_FILL'),
+    positionSide: z.literal('NET'),
+    bucket: z.literal('SPOT'),
+    paper: z.strictObject({
+      fillId: z.string().regex(/^paper-[a-f0-9]{64}$/u),
+      modelVersion: z.literal('spot-l2-taker-v1'),
+      scope: marketScopeSchema,
+    }),
+    fees: z.array(z.strictObject({ asset, amount: positive, quoteEquivalent: positive })).max(1),
+  })
+  .superRefine((e, context) => {
+    if (
+      e.id !== `paper-fill:${e.paper.fillId}` ||
+      e.base === e.quote ||
+      e.paper.scope.market !== 'SPOT' ||
+      e.fees.some((f) => f.asset !== e.quote || f.quoteEquivalent !== f.amount)
+    )
+      context.addIssue({ code: 'custom', message: 'INVALID_PAPER_FILL' });
+  });
 export const snapshotEventSchema = z.strictObject({
   ...baseEvent,
   type: z.literal('SNAPSHOT'),
@@ -110,6 +134,7 @@ export const snapshotEventSchema = z.strictObject({
 });
 export const eventSchema = z.discriminatedUnion('type', [
   fillEventSchema,
+  paperFillEventSchema,
   snapshotEventSchema,
   z.strictObject({
     ...baseEvent,
@@ -137,6 +162,7 @@ export const eventSchema = z.discriminatedUnion('type', [
 ]);
 export type PortfolioEvent = z.infer<typeof eventSchema>;
 export type FillEvent = z.infer<typeof fillEventSchema>;
+export type PaperFillEvent = z.infer<typeof paperFillEventSchema>;
 export type SnapshotEvent = z.infer<typeof snapshotEventSchema>;
 export const stateSchema = z.strictObject({
   binding: bindingSchema,

@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## PAPER fill accounting content — 26 October 2026
+
+The [PAPER_FILL variant](paper-fill-provenance.md) contains an original simulated fill ID/model/public scope instead of native IDs. The pure reducer checks exact PAPER binding/scope and context event/binding correlation, then reuses existing Spot basis/PnL/fee arithmetic without a second monetary effect or UNKNOWN hold release. Plain matching hashes are not trusted SQL provenance or dispatch permission. The public Portfolio store cannot persist this event on either PAPER or native bindings. A future fixed private writer must independently authenticate the cause and commit shared liquidity, permanent fill replay, ledger/Portfolio/holds atomically.
+
+Forty-five new contracts and the full 1,744-case Portfolio/Paper selection pass; complete new-head acceptance remains required. All 57 published migrations and native behavior remain unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. No private exchange acceptance, crash/backup restore or production soak claimed.
+
 ## Pure execution posting boundary — 26 October 2026
 
 [calculatePaperExecutionLedger](execution-ledger.md) recomputes existing complete competition and returns only a deeply immutable PAPER_EXECUTION_LEDGER_CALCULATION. Per fill, base and quote principal balance AVAILABLE/EXTERNAL, while its already rounded quote fee balances AVAILABLE/FEE exactly once. Nonzero per-order AVAILABLE sums are a projection, never a second posting. The proposed paper-fill identity is independent of accounting implementation version; future durable replay must authenticate the original fill and compare complete semantics. No caller fill/receipt, native ACK/event, ledger UUID, current reservation, source authority or dispatch permit is supplied by this calculation.

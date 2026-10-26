@@ -344,6 +344,8 @@ try {
     assert.equal(typeof portfolio.createPortfolioAccount,'function');
     assert.equal(typeof portfolio.createPostgresPortfolioStore,'function');
     assert.equal(typeof portfolio.valuePortfolio,'function');
+    assert.equal(typeof portfolio.paperFillEventSchema.safeParse,'function');
+    assert.equal(portfolio.paperFillEventSchema.safeParse({}).success,false);
     assert.throws(()=>portfolio.createPortfolioAccount({}));
     assert.throws(()=>import.meta.resolve('@ctp/portfolio/testing'));
     assert.equal('createMemoryPortfolioStore' in portfolio,false);

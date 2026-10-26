@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Native-free PAPER fill checkpoint — 26 October 2026
+
+Starting accepted main **bcec05e44227863b1459c799928152e3e53541b6** passed complete [Platform40336902670](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902670) and [CodeQL40336902808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902808); [PR44](https://github.com/dendenden-boop/tradeGPTbot/pull/44) retains actual API/protection and artifact readback. All thirteen local baseline commands passed before edits, with 826 unchanged tracked inputs, 5,031 unit / 41 HTTP, twelve deployments and audit zero.
+
+[PAPER fill content](paper-fill-provenance.md) tests-first **24cd6e0fda126a53d4bc9752633bd14ca7c3a126** produced 45 failed / zero passed / zero pending, all missing-schema errors. The first implementation passed all 45. Typecheck exposed four optional-native-FX accesses after adding the new no-FX variant; safe property narrowing repaired typing with unchanged native semantics. The complete Portfolio/Paper selection passed 1,744 cases. Store fixtures prove rejection before additional SQL/connection acquisition only; their mocked startup flag is not actual role/provenance acceptance. No production native ACK/ID or trusted cause is fabricated.
+
+Full new-head local regression, original native/owner/upgrade/Auth/Docker cases, exact source/PR/protected-main CI and artifact/protection readback remain required. All 57 published SQL migrations, dependencies, workflows and budgets remain unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** This is a pure content/accounting boundary, not a financial writer or grant. LIVE/PAPER financial dispatch and positive credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Earlier checkpoints below retain their historical scope.
+
 ## Execution ledger calculation checkpoint — 26 October 2026
 
 Baseline is accepted protected main **02ed2d2afc6e5e4fa90bc9e314181540c2dfaffe** ([PR43](https://github.com/dendenden-boop/tradeGPTbot/pull/43), [Platform40309262990](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40309262990), [CodeQL40309263055](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40309263055)). All thirteen local baseline commands passed before edits with 823 tracked input hashes unchanged, 4,991 unit / 41 HTTP tests, twelve clean deployments and audit zero.
