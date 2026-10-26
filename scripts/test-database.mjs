@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 import { databaseProof } from './integration-proof.mjs';
+// BEGIN NATIVE PARTITION IMPORT
+import {
+  nativeWindowIdentity,
+  readNativeWindow,
+  remainingNativeBudget,
+} from './native-proof-window.mjs';
+// END NATIVE PARTITION IMPORT
 import { randomBytes, randomUUID } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, writeFile, unlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -33,6 +40,11 @@ import {
 // END PAPER CANCEL IMPORT
 
 const proof = databaseProof(process.argv.slice(2));
+// BEGIN NATIVE PARTITION WINDOW
+const nativeWindow = ['owners', 'cohorts'].includes(proof.mode)
+  ? readNativeWindow(process.env.CTP_NATIVE_WINDOW, nativeWindowIdentity())
+  : undefined;
+// END NATIVE PARTITION WINDOW
 
 const expectedMigrations = [
   '202609070001_initial',
@@ -1536,780 +1548,787 @@ async function runDatabaseProof() {
     7,
   );
 
-  // Run the complete physical certification contract against SECURITY DEFINER
-  // functions owned by the non-BYPASSRLS migration owner as well as the fresh DB.
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/risk-certification.integration.test.ts',
-      '--outputFile.json=test-results/risk-certification-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
-        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
-        DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
-        DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[2]),
-        DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
-        DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
+  // BEGIN NATIVE PARTITION OWNER_WRAPPER
+  if (proof.mode !== 'cohorts') {
+    // Run the complete physical certification contract against SECURITY DEFINER
+    // functions owned by the non-BYPASSRLS migration owner as well as the fresh DB.
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/risk-certification.integration.test.ts',
+        '--outputFile.json=test-results/risk-certification-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
+          DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
+          DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+          DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[2]),
+          DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
+          DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 120000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 120000,
-    },
-  );
-  const certificationOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/risk-certification-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(certificationOwner.success, true);
-  assert.equal(certificationOwner.numPendingTests, 0);
-  assert.ok(certificationOwner.numPassedTests >= 14);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/risk-admission.integration.test.ts',
-      '--outputFile.json=test-results/risk-admission-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
-        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
-        DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
-        DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[2]),
-        DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
-        DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
-        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
-        DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
-        DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[2]),
+    );
+    const certificationOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/risk-certification-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(certificationOwner.success, true);
+    assert.equal(certificationOwner.numPendingTests, 0);
+    assert.ok(certificationOwner.numPassedTests >= 14);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/risk-admission.integration.test.ts',
+        '--outputFile.json=test-results/risk-admission-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
+          DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
+          DATABASE_RISK_EVIDENCE_URL: evidenceUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+          DATABASE_INSTRUMENT_REGISTRY_URL: registryUrl(databases[2]),
+          DATABASE_RISK_CERTIFICATION_URL: certificationUrl(databases[2]),
+          DATABASE_RISK_OBSERVATION_URL: certificationUrl(databases[2], true),
+          DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+          DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
+          DATABASE_RISK_ADMISSION_URL: admissionUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 120000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 120000,
-    },
-  );
-  const admissionOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/risk-admission-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(admissionOwner.success, true);
-  assert.equal(admissionOwner.numPendingTests, 0);
-  assert.ok(admissionOwner.numPassedTests >= 28);
+    );
+    const admissionOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/risk-admission-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(admissionOwner.success, true);
+    assert.equal(admissionOwner.numPendingTests, 0);
+    assert.ok(admissionOwner.numPassedTests >= 28);
 
-  // The additive PAPER receipt must also work with a non-BYPASSRLS DDL owner.
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-configuration.integration.test.ts',
-      '--outputFile.json=test-results/paper-configuration-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+    // The additive PAPER receipt must also work with a non-BYPASSRLS DDL owner.
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-configuration.integration.test.ts',
+        '--outputFile.json=test-results/paper-configuration-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperConfigurationOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-configuration-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperConfigurationOwner.success, true);
-  assert.equal(paperConfigurationOwner.numPendingTests, 0);
-  assert.ok(paperConfigurationOwner.numPassedTests >= 30);
+    );
+    const paperConfigurationOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-configuration-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperConfigurationOwner.success, true);
+    assert.equal(paperConfigurationOwner.numPendingTests, 0);
+    assert.ok(paperConfigurationOwner.numPassedTests >= 30);
 
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-funding.integration.test.ts',
-      '--outputFile.json=test-results/paper-funding-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-funding.integration.test.ts',
+        '--outputFile.json=test-results/paper-funding-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperFundingOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-funding-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperFundingOwner.success, true);
-  assert.equal(paperFundingOwner.numPendingTests, 0);
-  assert.ok(paperFundingOwner.numPassedTests >= 40);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-initial-portfolio.integration.test.ts',
-      '--outputFile.json=test-results/paper-portfolio-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
-        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+    );
+    const paperFundingOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-funding-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperFundingOwner.success, true);
+    assert.equal(paperFundingOwner.numPendingTests, 0);
+    assert.ok(paperFundingOwner.numPassedTests >= 40);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-initial-portfolio.integration.test.ts',
+        '--outputFile.json=test-results/paper-portfolio-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
+          DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperPortfolioOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-portfolio-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperPortfolioOwner.success, true);
-  assert.equal(paperPortfolioOwner.numPendingTests, 0);
-  assert.ok(paperPortfolioOwner.numPassedTests >= 35);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/market-trades.integration.test.ts',
-      '--outputFile.json=test-results/market-trades-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+    );
+    const paperPortfolioOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-portfolio-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperPortfolioOwner.success, true);
+    assert.equal(paperPortfolioOwner.numPendingTests, 0);
+    assert.ok(paperPortfolioOwner.numPassedTests >= 35);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/market-trades.integration.test.ts',
+        '--outputFile.json=test-results/market-trades-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 120000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 120000,
-    },
-  );
-  const marketTradesOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/market-trades-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(marketTradesOwner.success, true);
-  assert.equal(marketTradesOwner.numFailedTests, 0);
-  assert.equal(marketTradesOwner.numPendingTests, 0);
-  assert.equal(marketTradesOwner.numPassedTests, 40);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-market-frames.integration.test.ts',
-      '--outputFile.json=test-results/paper-market-frames-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
-        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+    );
+    const marketTradesOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/market-trades-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(marketTradesOwner.success, true);
+    assert.equal(marketTradesOwner.numFailedTests, 0);
+    assert.equal(marketTradesOwner.numPendingTests, 0);
+    assert.equal(marketTradesOwner.numPassedTests, 40);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-market-frames.integration.test.ts',
+        '--outputFile.json=test-results/paper-market-frames-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+          DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperFramesOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-market-frames-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperFramesOwner.success, true);
-  assert.equal(paperFramesOwner.numFailedTests, 0);
-  assert.equal(paperFramesOwner.numPendingTests, 0);
-  assert.equal(paperFramesOwner.numPassedTests, 14);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-order-drafts.integration.test.ts',
-      '--outputFile.json=test-results/paper-order-drafts-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+    );
+    const paperFramesOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-market-frames-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperFramesOwner.success, true);
+    assert.equal(paperFramesOwner.numFailedTests, 0);
+    assert.equal(paperFramesOwner.numPendingTests, 0);
+    assert.equal(paperFramesOwner.numPassedTests, 14);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-order-drafts.integration.test.ts',
+        '--outputFile.json=test-results/paper-order-drafts-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperDraftsOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-order-drafts-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperDraftsOwner.success, true);
-  assert.equal(paperDraftsOwner.numFailedTests, 0);
-  assert.equal(paperDraftsOwner.numPendingTests, 0);
-  assert.equal(paperDraftsOwner.numPassedTests, 29);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-portfolio-bootstrap.integration.test.ts',
-      '--outputFile.json=test-results/paper-book-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+    );
+    const paperDraftsOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-order-drafts-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperDraftsOwner.success, true);
+    assert.equal(paperDraftsOwner.numFailedTests, 0);
+    assert.equal(paperDraftsOwner.numPendingTests, 0);
+    assert.equal(paperDraftsOwner.numPassedTests, 29);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-portfolio-bootstrap.integration.test.ts',
+        '--outputFile.json=test-results/paper-book-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperBookOwner = JSON.parse(
-    await readFile(new URL('../test-results/paper-book-owner-tests.json', import.meta.url), 'utf8'),
-  );
-  assert.equal(paperBookOwner.success, true);
-  assert.equal(paperBookOwner.numFailedTests, 0);
-  assert.equal(paperBookOwner.numPendingTests, 0);
-  assert.equal(paperBookOwner.numPassedTests, 32);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-book-source.integration.test.ts',
-      '--outputFile.json=test-results/paper-book-source-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
-        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
+    );
+    const paperBookOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-book-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperBookOwner.success, true);
+    assert.equal(paperBookOwner.numFailedTests, 0);
+    assert.equal(paperBookOwner.numPendingTests, 0);
+    assert.equal(paperBookOwner.numPassedTests, 32);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-book-source.integration.test.ts',
+        '--outputFile.json=test-results/paper-book-source-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PORTFOLIO_URL: dbUrl(databases[2], false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_PORTFOLIO_URL: paperPortfolioUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+          DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperBookSourceOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-book-source-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperBookSourceOwner.success, true);
-  assert.equal(paperBookSourceOwner.numFailedTests, 0);
-  assert.equal(paperBookSourceOwner.numPendingTests, 0);
-  assert.equal(paperBookSourceOwner.numPassedTests, 37);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-risk-portfolio.integration.test.ts',
-      '--outputFile.json=test-results/paper-risk-portfolio-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
-        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
-        DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[2]),
-        DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+    );
+    const paperBookSourceOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-book-source-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperBookSourceOwner.success, true);
+    assert.equal(paperBookSourceOwner.numFailedTests, 0);
+    assert.equal(paperBookSourceOwner.numPendingTests, 0);
+    assert.equal(paperBookSourceOwner.numPassedTests, 37);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-risk-portfolio.integration.test.ts',
+        '--outputFile.json=test-results/paper-risk-portfolio-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+          DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
+          DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[2]),
+          DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperRiskPortfolioOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-risk-portfolio-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperRiskPortfolioOwner.success, true);
-  assert.equal(paperRiskPortfolioOwner.numPassedTests, 44);
-  assert.equal(paperRiskPortfolioOwner.numFailedTests, 0);
-  assert.equal(paperRiskPortfolioOwner.numPendingTests, 0);
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-risk-loss.integration.test.ts',
-      '--outputFile.json=test-results/paper-risk-loss-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
-        DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
-        DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[2]),
-        DATABASE_PAPER_RISK_LOSS_URL: paperRiskLossUrl(databases[2]),
-        DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+    );
+    const paperRiskPortfolioOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-risk-portfolio-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperRiskPortfolioOwner.success, true);
+    assert.equal(paperRiskPortfolioOwner.numPassedTests, 44);
+    assert.equal(paperRiskPortfolioOwner.numFailedTests, 0);
+    assert.equal(paperRiskPortfolioOwner.numPendingTests, 0);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-risk-loss.integration.test.ts',
+        '--outputFile.json=test-results/paper-risk-loss-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+          DATABASE_PAPER_BOOK_SOURCE_URL: paperBookSourceUrl(databases[2]),
+          DATABASE_PAPER_RISK_PORTFOLIO_URL: paperRiskPortfolioUrl(databases[2]),
+          DATABASE_PAPER_RISK_LOSS_URL: paperRiskLossUrl(databases[2]),
+          DATABASE_PAPER_RISK_VALUATION_URL: paperRiskValuationUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperRiskLossOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-risk-loss-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperRiskLossOwner.success, true);
-  assert.equal(paperRiskLossOwner.numPassedTests, 26);
-  assert.equal(paperRiskLossOwner.numFailedTests, 0);
-  assert.equal(paperRiskLossOwner.numPendingTests, 0);
+    );
+    const paperRiskLossOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-risk-loss-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperRiskLossOwner.success, true);
+    assert.equal(paperRiskLossOwner.numPassedTests, 26);
+    assert.equal(paperRiskLossOwner.numFailedTests, 0);
+    assert.equal(paperRiskLossOwner.numPendingTests, 0);
 
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-order-risk.integration.test.ts',
-      '--outputFile.json=test-results/paper-order-risk-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
-        DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
-        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-order-risk.integration.test.ts',
+        '--outputFile.json=test-results/paper-order-risk-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+          DATABASE_PAPER_ORDER_RISK_URL: paperOrderRiskUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+          DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperOrderRiskOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-order-risk-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperOrderRiskOwner.success, true);
-  assert.equal(paperOrderRiskOwner.numPassedTests, 19);
-  assert.equal(paperOrderRiskOwner.numFailedTests, 0);
-  assert.equal(paperOrderRiskOwner.numPendingTests, 0);
+    );
+    const paperOrderRiskOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-order-risk-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperOrderRiskOwner.success, true);
+    assert.equal(paperOrderRiskOwner.numPassedTests, 19);
+    assert.equal(paperOrderRiskOwner.numFailedTests, 0);
+    assert.equal(paperOrderRiskOwner.numPendingTests, 0);
 
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-risk-authority.integration.test.ts',
-      '--outputFile.json=test-results/paper-risk-authority-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
-        DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[2]),
-        DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[2]),
-        DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[2]),
-        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
-        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
-        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
-        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
-        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
-        DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-risk-authority.integration.test.ts',
+        '--outputFile.json=test-results/paper-risk-authority-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+          DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[2]),
+          DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[2]),
+          DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[2]),
+          DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+          DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+          DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
+          DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
+          DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+          DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperRiskAuthorityOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-risk-authority-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperRiskAuthorityOwner.success, true);
-  assert.equal(paperRiskAuthorityOwner.numPassedTests, 78);
-  assert.equal(paperRiskAuthorityOwner.numFailedTests, 0);
-  assert.equal(paperRiskAuthorityOwner.numPendingTests, 0);
+    );
+    const paperRiskAuthorityOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-risk-authority-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperRiskAuthorityOwner.success, true);
+    assert.equal(paperRiskAuthorityOwner.numPassedTests, 78);
+    assert.equal(paperRiskAuthorityOwner.numFailedTests, 0);
+    assert.equal(paperRiskAuthorityOwner.numPendingTests, 0);
 
-  // Separate bounded PAPER calculation owner proof; preserve the original 78-case invocation.
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-risk-evaluation.integration.test.ts',
-      '--outputFile.json=test-results/paper-risk-evaluation-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
-        DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
-        DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[2]),
-        DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[2]),
-        DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[2]),
-        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
-        DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
-        DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
-        DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
-        DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
-        DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
-        DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
+    // Separate bounded PAPER calculation owner proof; preserve the original 78-case invocation.
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-risk-evaluation.integration.test.ts',
+        '--outputFile.json=test-results/paper-risk-evaluation-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_EXECUTION_URL: dbUrl(databases[2], false, false, false, false, false, true),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_FUNDING_URL: paperFundingUrl(databases[2]),
+          DATABASE_PAPER_BOOK_URL: paperBookUrl(databases[2]),
+          DATABASE_PAPER_RISK_AUTHORITY_URL: paperRiskAuthorityUrl(databases[2]),
+          DATABASE_PAPER_RISK_CONTEXT_URL: paperRiskContextUrl(databases[2]),
+          DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[2]),
+          DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
+          DATABASE_MARKET_SNAPSHOT_URL: snapshotUrl(databases[2]),
+          DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[2]),
+          DATABASE_RISK_POLICY_OPERATOR_URL: policyUrl(databases[2], true),
+          DATABASE_RISK_POLICY_CONTROLLER_URL: policyUrl(databases[2]),
+          DATABASE_RISK_OPERATOR_URL: controlUrl(databases[2], true),
+          DATABASE_RISK_CONTROL_URL: controlUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 30000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 30000,
-    },
-  );
-  const paperRiskEvaluationOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-risk-evaluation-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperRiskEvaluationOwner.success, true);
-  assert.equal(paperRiskEvaluationOwner.numPassedTests, 3);
-  assert.equal(paperRiskEvaluationOwner.numFailedTests, 0);
-  assert.equal(paperRiskEvaluationOwner.numPendingTests, 0);
+    );
+    const paperRiskEvaluationOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-risk-evaluation-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperRiskEvaluationOwner.success, true);
+    assert.equal(paperRiskEvaluationOwner.numPassedTests, 3);
+    assert.equal(paperRiskEvaluationOwner.numFailedTests, 0);
+    assert.equal(paperRiskEvaluationOwner.numPendingTests, 0);
 
-  // End separate PAPER calculation owner proof.
+    // End separate PAPER calculation owner proof.
 
-  // Initial PAPER vector storage against the actual non-BYPASSRLS DDL owner.
-  // This remains independent of all 17 earlier owner reports and assertions.
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-reservation-storage.integration.test.ts',
-      '--outputFile.json=test-results/paper-reservation-storage-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2], false, true),
+    // Initial PAPER vector storage against the actual non-BYPASSRLS DDL owner.
+    // This remains independent of all 17 earlier owner reports and assertions.
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-reservation-storage.integration.test.ts',
+        '--outputFile.json=test-results/paper-reservation-storage-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2], false, true),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 30000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 30000,
-    },
-  );
-  const paperReservationOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-reservation-storage-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperReservationOwner.success, true);
-  assert.equal(paperReservationOwner.numPassedTests, 30);
-  assert.equal(paperReservationOwner.numFailedTests, 0);
-  assert.equal(paperReservationOwner.numPendingTests, 0);
+    );
+    const paperReservationOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-reservation-storage-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperReservationOwner.success, true);
+    assert.equal(paperReservationOwner.numPassedTests, 30);
+    assert.equal(paperReservationOwner.numFailedTests, 0);
+    assert.equal(paperReservationOwner.numPendingTests, 0);
 
-  // Separate conservative reservation-state proof; all 18 prior owner reports stay mandatory.
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-reservation-state.integration.test.ts',
-      '--outputFile.json=test-results/paper-reservation-state-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2], false, true),
+    // Separate conservative reservation-state proof; all 18 prior owner reports stay mandatory.
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-reservation-state.integration.test.ts',
+        '--outputFile.json=test-results/paper-reservation-state-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2], false, true),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 30000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 30000,
-    },
-  );
-  const paperReservationStateOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-reservation-state-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperReservationStateOwner.success, true);
-  assert.equal(paperReservationStateOwner.numPassedTests, 34);
-  assert.equal(paperReservationStateOwner.numFailedTests, 0);
-  assert.equal(paperReservationStateOwner.numPendingTests, 0);
+    );
+    const paperReservationStateOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-reservation-state-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperReservationStateOwner.success, true);
+    assert.equal(paperReservationStateOwner.numPassedTests, 34);
+    assert.equal(paperReservationStateOwner.numFailedTests, 0);
+    assert.equal(paperReservationStateOwner.numPendingTests, 0);
 
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-runtime.integration.test.ts',
-      '--outputFile.json=test-results/paper-runtime-owner-tests.json',
-    ],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        DATABASE_MIGRATION_URL: dbUrl(databases[2]),
-        DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
-        DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
-        DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[2]),
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-runtime.integration.test.ts',
+        '--outputFile.json=test-results/paper-runtime-owner-tests.json',
+      ],
+      {
+        env: {
+          ...process.env,
+          NODE_ENV: 'test',
+          DATABASE_MIGRATION_URL: dbUrl(databases[2]),
+          DATABASE_PAPER_CONFIGURATION_URL: paperConfigurationUrl(databases[2]),
+          DATABASE_PAPER_RUNTIME_OBSERVER_URL: paperRuntimeObserverUrl(databases[2]),
+          DATABASE_PAPER_RUNTIME_READER_URL: paperRuntimeReaderUrl(databases[2]),
+        },
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
       },
-      secrets,
-      echo: true,
-      timeoutMs: 90000,
-    },
-  );
-  const paperRuntimeOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-runtime-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperRuntimeOwner.success, true);
-  assert.equal(paperRuntimeOwner.numPassedTests, 49);
-  assert.equal(paperRuntimeOwner.numFailedTests, 0);
-  assert.equal(paperRuntimeOwner.numPendingTests, 0);
+    );
+    const paperRuntimeOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-runtime-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperRuntimeOwner.success, true);
+    assert.equal(paperRuntimeOwner.numPassedTests, 49);
+    assert.equal(paperRuntimeOwner.numFailedTests, 0);
+    assert.equal(paperRuntimeOwner.numPendingTests, 0);
 
-  // Real atomic admission under functions created by the original restricted
-  // DDL owner. Every previous owner report/assertion remains mandatory above.
-  const withdrawalOwner = connect(dbUrl(databases[2]));
-  assert.deepEqual(
-    (
-      await withdrawalOwner.query(
-        `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+    // Real atomic admission under functions created by the original restricted
+    // DDL owner. Every previous owner report/assertion remains mandatory above.
+    const withdrawalOwner = connect(dbUrl(databases[2]));
+    assert.deepEqual(
+      (
+        await withdrawalOwner.query(
+          `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
          FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
          WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
-        [
           [
-            'evaluate_and_reserve',
-            'reconcile_admission',
-            'withdraw_before_dispatch',
-            'guard_withdrawal',
-            'check_withdrawal_cause',
+            [
+              'evaluate_and_reserve',
+              'reconcile_admission',
+              'withdraw_before_dispatch',
+              'guard_withdrawal',
+              'check_withdrawal_cause',
+            ],
           ],
-        ],
-      )
-    ).rows,
-    [{ count: 5, safe: true }],
-  );
-  await withdrawalOwner.end();
-  pools.delete(withdrawalOwner);
-  // BEGIN PAPER RELEASE OWNER
-  const releaseOwner = connect(dbUrl(databases[2]));
-  assert.deepEqual(
-    (
-      await releaseOwner.query(
-        `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+        )
+      ).rows,
+      [{ count: 5, safe: true }],
+    );
+    await withdrawalOwner.end();
+    pools.delete(withdrawalOwner);
+    // BEGIN PAPER RELEASE OWNER
+    const releaseOwner = connect(dbUrl(databases[2]));
+    assert.deepEqual(
+      (
+        await releaseOwner.query(
+          `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
      WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
-        [
           [
-            'evaluate_and_reserve',
-            'reconcile_admission',
-            'admission_book',
-            'admission_inventory',
-            'check_admission_book',
-            'validate_withdrawal_release',
-            'release_withdrawn',
+            [
+              'evaluate_and_reserve',
+              'reconcile_admission',
+              'admission_book',
+              'admission_inventory',
+              'check_admission_book',
+              'validate_withdrawal_release',
+              'release_withdrawn',
+            ],
           ],
-        ],
-      )
-    ).rows,
-    [{ count: 7, safe: true }],
-  );
-  await releaseOwner.end();
-  pools.delete(releaseOwner);
-  // END PAPER RELEASE OWNER
-  // BEGIN PAPER CANCEL OWNER
-  const cancellationOwner = connect(dbUrl(databases[2]));
-  assert.deepEqual(
-    (
-      await cancellationOwner.query(
-        `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+        )
+      ).rows,
+      [{ count: 7, safe: true }],
+    );
+    await releaseOwner.end();
+    pools.delete(releaseOwner);
+    // END PAPER RELEASE OWNER
+    // BEGIN PAPER CANCEL OWNER
+    const cancellationOwner = connect(dbUrl(databases[2]));
+    assert.deepEqual(
+      (
+        await cancellationOwner.query(
+          `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
     FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
     WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
-        [
           [
-            'evaluate_and_reserve',
-            'reconcile_admission',
-            'admission_inventory',
-            'guard_withdrawal',
-            'unsent_cancel_state',
-            'unsent_cancel_after',
-            'validate_unsent_cancel_origin',
-            'validate_unsent_cancellation',
-            'check_unsent_cancellation',
-            'cancel_unsent',
+            [
+              'evaluate_and_reserve',
+              'reconcile_admission',
+              'admission_inventory',
+              'guard_withdrawal',
+              'unsent_cancel_state',
+              'unsent_cancel_after',
+              'validate_unsent_cancel_origin',
+              'validate_unsent_cancellation',
+              'check_unsent_cancellation',
+              'cancel_unsent',
+            ],
           ],
-        ],
-      )
-    ).rows,
-    [{ count: 10, safe: true }],
-  );
-  await cancellationOwner.end();
-  pools.delete(cancellationOwner);
-  // END PAPER CANCEL OWNER
-  await run(
-    process.execPath,
-    [
-      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
-      'run',
-      '--config',
-      'vitest.database.config.ts',
-      'packages/database/test/paper-admission.integration.test.ts',
-      '--outputFile.json=test-results/paper-admission-owner-tests.json',
-    ],
-    { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
-  );
-  const paperAdmissionOwner = JSON.parse(
-    await readFile(
-      new URL('../test-results/paper-admission-owner-tests.json', import.meta.url),
-      'utf8',
-    ),
-  );
-  assert.equal(paperAdmissionOwner.success, true);
-  assert.equal(paperAdmissionOwner.numPassedTests, 47);
-  assert.equal(paperAdmissionOwner.numFailedTests, 0);
-  assert.equal(paperAdmissionOwner.numPendingTests, 0);
+        )
+      ).rows,
+      [{ count: 10, safe: true }],
+    );
+    await cancellationOwner.end();
+    pools.delete(cancellationOwner);
+    // END PAPER CANCEL OWNER
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-admission.integration.test.ts',
+        '--outputFile.json=test-results/paper-admission-owner-tests.json',
+      ],
+      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+    );
+    const paperAdmissionOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-admission-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(paperAdmissionOwner.success, true);
+    assert.equal(paperAdmissionOwner.numPassedTests, 47);
+    assert.equal(paperAdmissionOwner.numFailedTests, 0);
+    assert.equal(paperAdmissionOwner.numPendingTests, 0);
+  }
+  // END NATIVE PARTITION OWNER_WRAPPER
 
   // Preserve a genuine published-35 receipt while a non-BYPASSRLS owner
   // backfills its immutable seal. FORCE RLS must not silently hide legacy rows.
@@ -4195,6 +4214,27 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(lifecycleUpgrade.numPassedTests, 1);
   assert.equal(lifecycleUpgrade.numPendingTests, 0);
 
+  // BEGIN NATIVE PARTITION OWNER_REPORT
+  if (proof.mode === 'owners') {
+    remainingNativeBudget(nativeWindow);
+    // All 19 original owner suites and their assertions above have settled.
+    // This is explicitly incomplete: cohorts and both reset tails are required
+    // from another physical cluster before the combined gate can accept it.
+    outcome = {
+      ...outcome,
+      status: 'PARTIAL',
+      ownerSuites: 'COMPLETE',
+      nativeCohorts: 'DELEGATED',
+      isolatedReset: 'DELEGATED',
+      requiredNativeJob: 'Native PostgreSQL and real services',
+      authenticatedRuntime: 'DELEGATED',
+      authenticationHardening: 'DELEGATED',
+      requiredAuthJob: 'Auth runtime and faults',
+    };
+    return;
+  }
+  // END NATIVE PARTITION OWNER_REPORT
+
   // Dedicated DB + login: registry activity/privilege probes cannot observe the
   // legacy cohort. Cluster-wide role mutation tests run only after both settle.
   await migrate(databases[5]);
@@ -4494,6 +4534,21 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     maintenanceStatementTimeoutMs: 30_000,
     tests: tests.numPassedTests,
   };
+  // BEGIN NATIVE PARTITION COHORT_REPORT
+  if (proof.mode === 'cohorts') {
+    remainingNativeBudget(nativeWindow);
+    outcome.status = 'PARTIAL';
+    outcome.ownerSuites = 'DELEGATED';
+    outcome.nativeCohorts = 'COMPLETE';
+    outcome.requiredOwnerJob = 'Native migration owners';
+    outcome.authenticatedRuntime = 'DELEGATED';
+    outcome.authenticationHardening = 'DELEGATED';
+    outcome.requiredAuthJob = 'Auth runtime and faults';
+    for (const key of Object.keys(outcome))
+      if (key.endsWith('NonBypassOwner') || key === 'nonBypassMigrationOwner')
+        outcome[key] = 'DELEGATED';
+  }
+  // END NATIVE PARTITION COHORT_REPORT
 }
 
 async function resetDatabaseProof(fresh) {
@@ -4661,8 +4716,19 @@ try {
 } finally {
   for (const pool of pools) await pool.end().catch(() => {});
   // The parent runner removes the entire owned Compose project, even after partial setup.
-  await report(proof.mode === 'auth' ? 'database-auth' : 'database', {
+  // BEGIN NATIVE PARTITION REPORT_NAME
+  const reportName =
+    proof.mode === 'auth'
+      ? 'database-auth'
+      : proof.mode === 'owners'
+        ? 'database-owners'
+        : 'database';
+  // END NATIVE PARTITION REPORT_NAME
+  await report(reportName, {
     ...outcome,
+    // BEGIN NATIVE PARTITION REPORT_WINDOW
+    nativeWindow,
+    // END NATIVE PARTITION REPORT_WINDOW
     completedAt: new Date().toISOString(),
   });
 }

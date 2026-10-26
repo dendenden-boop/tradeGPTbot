@@ -3,6 +3,11 @@ import { createServer } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { integrationProof, requireDatabaseProofReport } from './integration-proof.mjs';
 import {
+  nativeWindowIdentity,
+  readNativeWindow,
+  remainingNativeBudget,
+} from './native-proof-window.mjs';
+import {
   composeArgs,
   localPort,
   report,
@@ -13,12 +18,21 @@ import {
 } from './docker-test-utils.mjs';
 
 const proof = integrationProof(process.argv.slice(2));
+const nativeWindow = ['owners', 'cohorts'].includes(proof.mode)
+  ? readNativeWindow(process.env.CTP_NATIVE_WINDOW, nativeWindowIdentity())
+  : undefined;
 const test = testEnvironment('integration');
 const file = 'infra/compose.test.yml';
 const options = { env: test.env, secrets: test.secrets };
 const startedAt = new Date().toISOString();
 let resourcesMayExist = false;
-let outcome = { status: 'FAIL', startedAt, project: test.project, proofScope: proof.mode };
+let outcome = {
+  status: 'FAIL',
+  startedAt,
+  project: test.project,
+  proofScope: proof.mode,
+  nativeWindow,
+};
 
 async function selectPorts() {
   const reservations = [];
@@ -90,7 +104,7 @@ try {
     // Default/legacy full runs retain the 1020s serial parent. CI delegates
     // Auth explicitly into a separate owned cluster with its own 360s parent;
     // the native 480s and Auth 120/180s child deadlines remain unchanged.
-    timeoutMs: proof.timeoutMs,
+    timeoutMs: nativeWindow ? remainingNativeBudget(nativeWindow) : proof.timeoutMs,
     env: {
       ...test.env,
       NODE_ENV: 'test',
@@ -99,19 +113,19 @@ try {
       REDIS_URL: `redis://:${test.env.REDIS_PASSWORD}@127.0.0.1:${redisPort}/0`,
     },
   });
-  requireDatabaseProofReport(
-    JSON.parse(
-      await readFile(
-        new URL(
-          `../test-results/${proof.mode === 'auth' ? 'database-auth' : 'database'}.json`,
-          import.meta.url,
-        ),
-        'utf8',
+  const databaseReport = JSON.parse(
+    await readFile(
+      new URL(
+        `../test-results/${proof.mode === 'auth' ? 'database-auth' : proof.mode === 'owners' ? 'database-owners' : 'database'}.json`,
+        import.meta.url,
       ),
+      'utf8',
     ),
-    proof.mode,
   );
-  outcome.status = 'PASS';
+  requireDatabaseProofReport(databaseReport, proof.mode);
+  for (const field of ['ownerSuites', 'nativeCohorts', 'isolatedReset'])
+    outcome[field] = databaseReport[field];
+  outcome.status = nativeWindow ? 'PARTIAL' : 'PASS';
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Integration runner failed';
   console.error(message);
@@ -150,6 +164,14 @@ try {
         `Cleanup failed for owned test project ${test.project}; inspect it before another run.`,
       );
       outcome = { ...outcome, status: 'FAIL', cleanup: 'FAIL' };
+      process.exitCode = 1;
+    }
+  }
+  if (nativeWindow) {
+    try {
+      remainingNativeBudget(nativeWindow);
+    } catch {
+      outcome = { ...outcome, status: 'FAIL', reason: 'NATIVE_WINDOW_EXPIRED' };
       process.exitCode = 1;
     }
   }

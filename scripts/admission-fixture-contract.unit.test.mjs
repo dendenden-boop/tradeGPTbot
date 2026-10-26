@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
+import { format, resolveConfig } from 'prettier';
 import { expect, it } from 'vitest';
 const path = 'packages/database/test/paper-admission.integration.test.ts';
 const fixtureOnly = new Set([
@@ -145,16 +146,86 @@ it('bounds fixture caches to eight server-owned handles and drains each through 
   for (const call of constructors) expect(factories.has(root(call.arguments[0]))).toBe(true);
   expect(constructors).toHaveLength(7); // Four singleton writers + two maps with2authorities; foreign book URL stays fresh.
 });
-it('retains the whole native runner, all owner/cohort assertions and1020s/480s/90s budgets', () => {
+it('retains the whole native runner, all owner/cohort assertions and1020s/480s/90s budgets', async () => {
   expect(
     createHash('sha256')
-      .update(beforeReleaseRunner(text('scripts/test-database.mjs')))
+      .update(
+        beforeReleaseRunner(
+          await format(legacyNativeRunner(text('scripts/test-database.mjs')), {
+            ...(await resolveConfig('scripts/test-database.mjs')),
+            filepath: 'scripts/test-database.mjs',
+          }),
+        ),
+      )
       .digest('hex'),
   ).toBe('613552de72cbe9aa7e7476a52fa52b152cf21d5bbfa829342c014cb8eb7165ad');
-  expect(createHash('sha256').update(text('scripts/integration-proof.mjs')).digest('hex')).toBe(
-    '0b5859334fc36a31c68211e1bee7e26fbd487644d5621c16a0f6a5b5846f596e',
-  );
+  expect(
+    createHash('sha256')
+      .update(
+        await format(legacyIntegrationProof(text('scripts/integration-proof.mjs')), {
+          ...(await resolveConfig('scripts/integration-proof.mjs')),
+          filepath: 'scripts/integration-proof.mjs',
+        }),
+      )
+      .digest('hex'),
+  ).toBe('0b5859334fc36a31c68211e1bee7e26fbd487644d5621c16a0f6a5b5846f596e');
 });
+
+// Remove only the explicit CI partition controls, then prove the complete old
+// runner byte-for-byte after canonical formatting. No original assertion or SQL
+// statement is normalized away; both physical groups execute the same prelude.
+function legacyNativeRunner(source) {
+  const markers = [...source.matchAll(/\/\/ BEGIN NATIVE PARTITION ([A-Z_]+)/gu)]
+    .map((m) => m[1])
+    .sort();
+  expect(markers).toEqual([
+    'COHORT_REPORT',
+    'IMPORT',
+    'OWNER_REPORT',
+    'OWNER_WRAPPER',
+    'REPORT_NAME',
+    'REPORT_WINDOW',
+    'WINDOW',
+  ]);
+  source = source.replace(
+    / {2}\/\/ BEGIN NATIVE PARTITION OWNER_WRAPPER\n {2}if \(proof.mode !== 'cohorts'\) \{\n([\s\S]*?) {2}\}\n {2}\/\/ END NATIVE PARTITION OWNER_WRAPPER\n/u,
+    // Prettier restores JS indentation; never dedent raw SQL template contents.
+    (_, body) => body,
+  );
+  source = source.replace(
+    /^[ \t]*\/\/ BEGIN NATIVE PARTITION ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END NATIVE PARTITION \1\n/gmu,
+    '',
+  );
+  return source.replace(
+    'await report(reportName, {',
+    "await report(proof.mode === 'auth' ? 'database-auth' : 'database', {",
+  );
+}
+
+function legacyIntegrationProof(source) {
+  // The new scope-specific report branches are additive. Reconstruct the old
+  // admission predicates exactly; the hash below still pins every legacy path.
+  const start = source.indexOf("    (mode === 'auth' && report.tests !== undefined)");
+  const end = source.indexOf('\n  )\n    throw', start);
+  if (start < 0 || end < start) throw new Error('LEGACY_PROOF_RECONSTRUCTION');
+  source =
+    source.slice(0, start) +
+    "    (mode === 'auth' && report.tests !== undefined)" +
+    source.slice(end);
+  source = source
+    .replace(
+      /const parentDeadlines = Object.freeze\(\{\n {2}full: 1020000,\n {2}database: 1020000,\n {2}auth: 360000,\n {2}owners: 1020000,\n {2}cohorts: 1020000,\n\}\);/u,
+      'const parentDeadlines = Object.freeze({ full: 1020000, database: 1020000, auth: 360000 });',
+    )
+    .replace(/\|owners\|cohorts/gu, '')
+    .replace(
+      "const delegated = ['database', 'owners', 'cohorts'].includes(mode);",
+      "const delegated = mode === 'database';",
+    )
+    .replace("  const partial = ['owners', 'cohorts'].includes(mode);\n", '')
+    .replace("report.status !== (partial ? 'PARTIAL' : 'PASS')", "report.status !== 'PASS'");
+  return source;
+}
 
 function releaseBlocks(source) {
   return [

@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Complete native CI evidence
+
+[Native proof isolation](native-proof-isolation.md) defines explicit `PARTIAL` owner/cohort reports, distinct physical clusters, one run/attempt/commit-bound 1020s window and a fail-closed combined required gate. Original owner commands, native cases, populated upgrades, resets, 480s aggregate cohorts and 90s owner limits remain mandatory. This is test orchestration only and issues no runtime authority.
+
 ## PAPER fill accounting content — 26 October 2026
 
 The [PAPER_FILL variant](paper-fill-provenance.md) contains an original simulated fill ID/model/public scope instead of native IDs. The pure reducer checks exact PAPER binding/scope and context event/binding correlation, then reuses existing Spot basis/PnL/fee arithmetic without a second monetary effect or UNKNOWN hold release. Plain matching hashes are not trusted SQL provenance or dispatch permission. The public Portfolio store cannot persist this event on either PAPER or native bindings. A future fixed private writer must independently authenticate the cause and commit shared liquidity, permanent fill replay, ledger/Portfolio/holds atomically.

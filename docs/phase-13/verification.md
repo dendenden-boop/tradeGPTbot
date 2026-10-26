@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Actual-main deadline failure and CI-only repair — 26 October 2026
+
+Explicitly approved protected PR45 merge produced **44d8ce5a068afc24250bf14aa544f559b9fe601a**. Source Platform40347339442 and PR Platform40347352019 passed all original suites, audits and artifact/protection checks, but [actual-main40351817958](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40351817958) failed at the unchanged 1020000ms parent deadline. All 1,378 native cases/42 files and 19 owner reports completed; cohorts took 447466.126709ms. Final reset/deploy remained incomplete, with no database summary. Ubuntu/Windows/Auth/Docker and [CodeQL40351817886](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40351817886) passed. No main acceptance is claimed, and the failed run is retained.
+
+[Native proof isolation](native-proof-isolation.md) records the reproduction and bounded partition contract. Tests-first **077374f** produced 13 RED / 2 PASS. The initial 100 targeted contracts then passed, including original-runner reconstruction, strict partial evidence, actual gate process and hung child deadline. Full repaired local/source/PR/main CI remains pending. This changes CI orchestration only; published migrations and financial runtime are unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; all dispatch/credit limitations remain.
+
 ## Native-free PAPER fill checkpoint — 26 October 2026
 
 Starting accepted main **bcec05e44227863b1459c799928152e3e53541b6** passed complete [Platform40336902670](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902670) and [CodeQL40336902808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902808); [PR44](https://github.com/dendenden-boop/tradeGPTbot/pull/44) retains actual API/protection and artifact readback. All thirteen local baseline commands passed before edits, with 826 unchanged tracked inputs, 5,031 unit / 41 HTTP, twelve deployments and audit zero.

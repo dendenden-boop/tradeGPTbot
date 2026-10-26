@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Current main CI repair — 26 October 2026
+
+[PR45](https://github.com/dendenden-boop/tradeGPTbot/pull/45) merged normally with explicit approval into **44d8ce5a068afc24250bf14aa544f559b9fe601a**. Source/PR CI passed, but [exact-main Platform40351817958](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40351817958) reached the native parent deadline before the reset tail completed. Main acceptance is therefore incomplete. The [CI-only repair contract](docs/phase-13/native-proof-isolation.md) isolates owner and cohort workloads with one shared unchanged 1020s window; full repaired CI remains required. All 57 published migrations and financial runtime remain unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed. Earlier checkpoints below are historical.
+
 ## Native-free PAPER fill candidate — 26 October 2026
 
 Protected main **bcec05e44227863b1459c799928152e3e53541b6** accepted the execution-ledger calculation through [PR44](https://github.com/dendenden-boop/tradeGPTbot/pull/44) and complete [Platform40336902670](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902670) / [CodeQL40336902808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902808). The next [PAPER fill content contract](docs/phase-13/paper-fill-provenance.md) adds explicit simulated provenance to the pure Portfolio reducer without fabricating native IDs. The public PostgreSQL store still rejects PAPER writes and rejects PAPER_FILL on native bindings before operation SQL. Matching event/binding hashes are correlation only, not permission. Tests-first 45 RED became GREEN; 1,744 Portfolio/Paper tests pass. Full new-head regression/CI remains required; all 57 published migrations and native contracts remain unchanged.
