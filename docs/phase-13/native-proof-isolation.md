@@ -47,7 +47,7 @@ report is also `PARTIAL`; owner-suite acceptance is explicitly `DELEGATED`.
 SQL owner assertions outside the delegated block remain. No SQL roles or DDL
 are shared between these physically separate clusters.
 
-The original **480000ms aggregate cohort** and **90000ms owner process** deadlines,
+The original **480000ms aggregate cohort** and per-suite **30000/90000/120000ms owner process** deadlines,
 test/SQL/abort deadlines, cohort overlap barriers and worker caps remain. All
 57 published migrations and runtime files remain unchanged. A reconstruction
 test removes only explicit partition controls and reproduces the complete old
@@ -64,6 +64,26 @@ The gate itself may read completed evidence after the window closes; all proof
 and cleanup timestamps must be inside the original window.
 
 ## Verification boundary
+
+The first source [40383822623](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40383822623)
+and PR [40383933580](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40383933580)
+runs at **7bd61f4** failed in the combined gate. All seven child jobs passed,
+including cohorts and both reset tails, and both CodeQL runs passed. Verified
+native completion including setup/cleanup was 537666ms source / 451010ms PR,
+inside the one 1020000ms allowance. The failed conclusions remain failures.
+
+The artifact validator incorrectly required integer file `endTime` values;
+actual Vitest JSON has fractional milliseconds in all 61 native/owner file
+results. It also incorrectly applied one 90000ms artifact limit to suites whose
+unchanged process limits are 30000, 90000 or 120000ms. Tests-first **8065819**
+recorded four RED / thirteen PASS. The correction accepts finite fractional
+timestamps without rounding, retains stale/window/deadline rejection and matches
+each of the 19 original process limits. A cross-file AST contract checks all
+limits and limit-plus-one rejection against the actual runner invocations.
+All 115 targeted contracts pass. Offline replay of the twelve verified ZIPs
+reproduces RED with the original validator and GREEN with the correction; it
+does not convert either failed GitHub run into acceptance. Fresh full regression
+and new-head source/PR/main CI remain required.
 
 Targeted evidence includes a real gate child process accepting complete isolated
 artifacts and rejecting an incomplete reset; a hung child is killed using only

@@ -2,7 +2,7 @@
 
 ## Complete native CI evidence
 
-[Native proof isolation](native-proof-isolation.md) defines explicit `PARTIAL` owner/cohort reports, distinct physical clusters, one run/attempt/commit-bound 1020s window and a fail-closed combined required gate. Original owner commands, native cases, populated upgrades, resets, 480s aggregate cohorts and 90s owner limits remain mandatory. This is test orchestration only and issues no runtime authority.
+[Native proof isolation](native-proof-isolation.md) defines explicit `PARTIAL` owner/cohort reports, distinct physical clusters, one run/attempt/commit-bound 1020s window and a fail-closed combined required gate. Original owner commands, native cases, populated upgrades, resets, 480s aggregate cohorts and original per-suite 30/90/120s owner limits remain mandatory. This is test orchestration only and issues no runtime authority.
 
 ## PAPER fill accounting content — 26 October 2026
 

@@ -21,6 +21,30 @@ export const ownerReports = Object.freeze({
   'paper-admission': 47,
 });
 
+// Exact existing process limits in test-database.mjs, not a new allowance.
+// A cross-file contract checks every entry against its real run() invocation.
+const ownerDeadlines = Object.freeze({
+  'risk-certification': 120000,
+  'risk-admission': 120000,
+  'paper-configuration': 90000,
+  'paper-funding': 90000,
+  'paper-portfolio': 90000,
+  'market-trades': 120000,
+  'paper-market-frames': 90000,
+  'paper-order-drafts': 90000,
+  'paper-book': 90000,
+  'paper-book-source': 90000,
+  'paper-risk-portfolio': 90000,
+  'paper-risk-loss': 90000,
+  'paper-order-risk': 90000,
+  'paper-risk-authority': 90000,
+  'paper-risk-evaluation': 30000,
+  'paper-reservation-storage': 30000,
+  'paper-reservation-state': 30000,
+  'paper-runtime': 90000,
+  'paper-admission': 90000,
+});
+
 export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   const fail = () => {
     throw new Error('NATIVE_TEST_EVIDENCE_INCOMPLETE');
@@ -50,8 +74,8 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
       if (
         file.status !== 'passed' ||
         !Array.isArray(file.assertionResults) ||
-        !Number.isSafeInteger(file.startTime) ||
-        !Number.isSafeInteger(file.endTime) ||
+        !Number.isFinite(file.startTime) ||
+        !Number.isFinite(file.endTime) ||
         file.startTime < report.startTime ||
         file.endTime < file.startTime ||
         file.endTime > window.deadlineMs ||
@@ -63,7 +87,8 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
     }
     if (total !== report.numPassedTests || end - report.startTime > timeout) fail();
   }
-  for (const [name, minimum] of Object.entries(ownerReports)) passed(owners[name], minimum, 90000);
+  for (const [name, minimum] of Object.entries(ownerReports))
+    passed(owners[name], minimum, ownerDeadlines[name]);
   passed(native, 1378, 480000);
   if (
     !cohorts ||
