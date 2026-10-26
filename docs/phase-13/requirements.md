@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Bounded complete native acceptance
+
+The [native proof isolation contract](native-proof-isolation.md) requires both restricted-owner and full cohort/reset evidence inside one unchanged 1020s window. Partial groups cannot claim full acceptance. The failed actual-main PR45 run remains a failure until repaired CI completes. This infrastructure repair adds no financial scope; all earlier requirements and limitations remain.
+
 ## Explicit simulated fill content — 26 October 2026
 
 From accepted main **bcec05e44227863b1459c799928152e3e53541b6** ([PR44](https://github.com/dendenden-boop/tradeGPTbot/pull/44)), the [PAPER fill contract](paper-fill-provenance.md) requires native-free identities, exact PAPER/null-connection/public-source scope, original model/fill cause, quote-only fees, unchanged Spot accounting and UNKNOWN holds, and unconditional denial by the public writer. Event/binding hashes alone grant no authority. Forty-five missing-schema RED contracts became GREEN; 1,744 Portfolio/Paper cases pass. Full regression and exact-head CI remain required. All 57 published migrations and native contracts stay unchanged.

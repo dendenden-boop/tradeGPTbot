@@ -58,11 +58,31 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  native:
-    name: Native PostgreSQL and real services
+  native-window:
+    name: Shared native proof deadline
     needs: checks
     runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    outputs:
+      window: ${{ steps.window.outputs.window }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - id: window
+        run: node scripts/native-proof-window.mjs --create
+
+  native:
+    name: Native PostgreSQL and real services
+    needs: native-window
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      CTP_NATIVE_WINDOW: ${{ needs.native-window.outputs.window }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,12 +104,50 @@ jobs:
       - run: pnpm db:validate
       - run: pnpm build
       - name: Verify database owners, migrations and real-service recovery
-        run: pnpm test:integration --proof=database
+        run: pnpm test:integration --proof=cohorts
       - name: Upload sanitized integration reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bootstrap-docker
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 7
+
+  native-owners:
+    name: Native migration owners
+    needs: native-window
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CTP_NATIVE_WINDOW: ${{ needs.native-window.outputs.window }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          package-manager-cache: false
+      - name: Install pinned pnpm
+        run: npm install --global pnpm@11.25.0 --ignore-scripts
+      - name: Record runtime identifiers
+        run: |
+          mkdir -p test-results
+          node --version > test-results/node-version.txt
+          pnpm --version > test-results/pnpm-version.txt
+          docker version --format '{{json .}}' > test-results/docker-version.json
+          docker compose version > test-results/compose-version.txt
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:validate
+      - run: pnpm build
+      - name: Verify all original restricted-owner suites and populated upgrades
+        run: pnpm test:integration --proof=owners
+      - name: Upload sanitized owner reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bootstrap-native-owners
           path: test-results/
           if-no-files-found: error
           retention-days: 7
@@ -166,7 +224,7 @@ jobs:
 
   docker:
     name: Real services and Docker smoke
-    needs: [native, auth, smoke]
+    needs: [native, native-owners, auth, smoke, native-window]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 1
@@ -178,9 +236,19 @@ jobs:
         with:
           node-version: 24.20.0
           package-manager-cache: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: bootstrap-native-owners
+          path: test-results/native-gate/owners
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: bootstrap-docker
+          path: test-results/native-gate/cohorts
       - name: Require definitive success of all isolated suites
         env:
           CTP_NATIVE_RESULT: ${{ needs.native.result }}
+          CTP_OWNER_RESULT: ${{ needs.native-owners.result }}
+          CTP_NATIVE_WINDOW: ${{ needs.native-window.outputs.window }}
           CTP_AUTH_RESULT: ${{ needs.auth.result }}
           CTP_SMOKE_RESULT: ${{ needs.smoke.result }}
         run: node scripts/real-services-gate.mjs

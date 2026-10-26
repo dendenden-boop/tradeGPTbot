@@ -18,7 +18,7 @@ it('requires a separate Auth result before accepting the isolated CI proof', () 
 it('gives Auth its own environment and budget under the existing required gate', async () => {
   const workflow = await readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   expect(workflow).toContain('name: Auth runtime and faults');
-  expect(workflow).toContain('needs: [native, auth, smoke]');
+  expect(workflow).toContain('needs: [native, native-owners, auth, smoke, native-window]');
   expect(workflow).toContain('run: pnpm test:integration --proof=auth');
   expect(workflow).toContain('CTP_AUTH_RESULT: ${{ needs.auth.result }}');
 });

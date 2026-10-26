@@ -90,8 +90,21 @@ it('retains every original authority assertion, reader/restart helper, cleanup a
       node.arguments[1]
         ?.getText(script)
         .includes("'packages/database/test/paper-risk-authority.integration.test.ts'")
-    )
-      owner.push(node.getText(script));
+    ) {
+      let parent = node.parent;
+      while (
+        parent &&
+        !(
+          ts.isIfStatement(parent) &&
+          parent.expression.getText(script) === "proof.mode !== 'cohorts'"
+        )
+      )
+        parent = parent.parent;
+      expect(parent, 'Owner invocation must remain inside the explicit CI partition').toBeDefined();
+      // Canonicalize only the extra wrapper indentation; every original
+      // argument, environment field and 90s deadline keeps its original hash.
+      owner.push(node.getText(script).replace(/\n {2}/gu, '\n'));
+    }
     ts.forEachChild(node, scan);
   };
   scan(script);
