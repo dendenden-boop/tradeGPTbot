@@ -1507,6 +1507,440 @@ async function releaseRows(f: Ready) {
   ).rows[0]!;
 }
 
+// PAPER unsent cancellation: tenant-local rows only, no cluster/shared-role DDL.
+type UnsentCancellation = {
+  cancel(raw: unknown, options: ReturnType<typeof io>): Promise<Record<string, unknown>>;
+  reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<Record<string, unknown>>;
+  close(): Promise<void>;
+};
+async function openUnsentCancellation(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+  const factory = exports['createPostgresPaperUnsentCancellation'];
+  expect(factory, 'The genuine durable PAPER cancellation bridge is required').toBeTypeOf(
+    'function',
+  );
+  const port = await (factory as (options: unknown) => Promise<UnsentCancellation>)({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function cancellationRequest(f: Ready, key = randomUUID()) {
+  const { rows } = await admin.query<{ permissionEpoch: string; userSessionEpoch: string }>(
+    `SELECT a."permissionEpoch"::text AS "permissionEpoch",u."sessionEpoch"::text AS "userSessionEpoch"
+     FROM public.exchange_account a JOIN public."user" u ON u.id=a."tenantId" WHERE a."tenantId"=$1 AND a.id=$2`,
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  return {
+    kind: 'PAPER_CANCEL_UNSENT',
+    binding: f.binding,
+    orderId: f.order.id,
+    key,
+    authorization: rows[0]!,
+  };
+}
+async function cancellationFixture() {
+  const x = await releaseFixture();
+  await (await openWithdrawalRelease()).release(x.request, io());
+  return { ...x, cancel: await cancellationRequest(x.f) };
+}
+async function cancellationRows(f: Ready) {
+  return (
+    await admin.query<{
+      causes: number;
+      intents: number;
+      commands: number;
+      events: number;
+      attempts: number;
+      outbox: number;
+    }>(
+      `SELECT
+    (SELECT count(*)::int FROM ctp_paper.unsent_cancellation WHERE tenant_id=$1) causes,
+    (SELECT count(*)::int FROM public.order_intent WHERE "tenantId"=$1 AND operation='CANCEL') intents,
+    (SELECT count(*)::int FROM ctp_execution.command WHERE "tenantId"=$1 AND operation='CANCEL') commands,
+    (SELECT count(*)::int FROM public.order_event WHERE "tenantId"=$1 AND source='PAPER_NOT_SENT_CANCEL') events,
+    (SELECT count(*)::int FROM public.submission_attempt WHERE "tenantId"=$1) attempts,
+    (SELECT count(*)::int FROM public.outbox_event WHERE "tenantId"=$1 AND "eventType"='PaperOrderCanceled') outbox`,
+      [f.c.owner.tenantId],
+    )
+  ).rows[0]!;
+}
+
+it('paper-cancel: authentic local terminal Order has one immutable CANCEL cause and no second monetary effect or client ID', async () => {
+  const port = await openUnsentCancellation(),
+    { f, cancel } = await cancellationFixture(),
+    before = await withdrawalInventory(f),
+    money = await releaseRows(f),
+    cash = await effects(f.c.owner.tenantId);
+  const result = await port.cancel(cancel, io());
+  expect(result).toMatchObject({
+    outcome: 'NOT_SENT',
+    collateral: 'RELEASED',
+    orderId: f.order.id,
+    placeIntentId: f.order.intentId,
+    clientOrderId: f.order.command.clientOrderId,
+    status: 'CANCELED',
+    version: '1',
+  });
+  expect(result.intentId).not.toBe(f.order.intentId);
+  expect(await f.orders.read(f.binding, f.order.id, io())).toEqual({
+    ...f.order,
+    status: 'CANCELED',
+    reconciliation: 'CONSISTENT',
+    version: 1,
+  });
+  expect(await cancellationRows(f)).toEqual({
+    causes: 1,
+    intents: 1,
+    commands: 1,
+    events: 1,
+    attempts: 0,
+    outbox: 1,
+  });
+  expect(await releaseRows(f)).toEqual(money);
+  expect(await effects(f.c.owner.tenantId)).toEqual(
+    cash.map((r) => ({ ...r, intents: r.intents + 1 })),
+  );
+  const after = await withdrawalInventory(f);
+  expect(after.inventory).toEqual(before.inventory);
+  const detail = (raw: unknown) => {
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      !('books' in raw) ||
+      !('watermarks' in raw) ||
+      !('attempts' in raw) ||
+      typeof raw.attempts !== 'number' ||
+      !('events' in raw) ||
+      typeof raw.events !== 'number'
+    )
+      throw Error('CANCELLATION_FIXTURE_ROW');
+    return {
+      books: raw.books,
+      watermarks: raw.watermarks,
+      attempts: raw.attempts,
+      events: raw.events,
+    };
+  };
+  const previousDetail = detail(before.rows[0]),
+    currentDetail = detail(after.rows[0]);
+  expect(currentDetail).toEqual({ ...previousDetail, events: previousDetail.events + 1 });
+  const restricted = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
+  try {
+    await expect(restricted.query('SELECT * FROM ctp_paper.unsent_cancellation')).rejects.toThrow(
+      /permission denied/u,
+    );
+    for (const signature of [
+      'ctp_paper.cancel_unsent(jsonb,boolean)',
+      'ctp_paper.validate_unsent_cancellation(uuid,uuid)',
+      'ctp_paper.validate_unsent_cancel_origin(uuid,uuid)',
+      'ctp_paper.evaluate_and_reserve_v56(jsonb)',
+    ])
+      expect(
+        (
+          await restricted.query(
+            "SELECT has_function_privilege(current_user,$1,'EXECUTE') allowed",
+            [signature],
+          )
+        ).rows,
+      ).toEqual([{ allowed: false }]);
+  } finally {
+    await restricted.end();
+  }
+  for (const sql of [
+    `UPDATE public."order" SET status='SUBMITTING',version=2 WHERE "tenantId"=$1 AND id=$2`,
+    `UPDATE ctp_execution.progress SET "nativeAt"=1,"nativeHash"=decode(repeat('a',64),'hex'),"nativeStatus"='SUBMITTED' WHERE "tenantId"=$1 AND "orderId"=$2`,
+    `INSERT INTO public.order_event("tenantId","orderId",version,"previousStatus",status,source,"sourceIdentity","evidenceHash","occurredAt") VALUES($1,$2,2,'CANCELED','SUBMITTED','PAPER_NOT_SENT_CANCEL','forged',decode(repeat('a',64),'hex'),now())`,
+    `INSERT INTO public.submission_attempt("tenantId","orderId","intentId","accountId",mode,"instrumentId","operationVersion",operation,"permissionEpoch","workerId","commandHash","deadlineAt") SELECT "tenantId",id,"intentId","accountId",mode,"instrumentId",2,'PLACE',0,'test',decode(repeat('a',64),'hex'),now()+interval '1 second' FROM public."order" WHERE "tenantId"=$1 AND id=$2`,
+  ]) {
+    const writer = await admin.connect();
+    try {
+      await writer.query('BEGIN');
+      await writer.query(
+        "SELECT set_config('app.tenant_id',$1,true),set_config('app.paper_cancel','true',true)",
+        [f.c.owner.tenantId],
+      );
+      await writer.query('SET LOCAL ROLE ctp_execution');
+      await expect(writer.query(sql, [f.c.owner.tenantId, f.order.id])).rejects.toThrow(
+        'PAPER_WITHDRAWN_NOT_SENT',
+      );
+    } finally {
+      await writer.query('ROLLBACK');
+      writer.release();
+    }
+  }
+  expect(await withdrawalInventory(f)).toEqual(after);
+});
+
+it('paper-cancel: permanent exact replay survives restart, terminal state, pause and rule replacement; current epochs remain mandatory', async () => {
+  const port = await openUnsentCancellation(),
+    { f, cancel } = await cancellationFixture();
+  const receipt = await port.cancel(cancel, io());
+  await port.close();
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  const restarted = await openUnsentCancellation(),
+    before = await cancellationRows(f);
+  expect(await restarted.cancel(cancel, io())).toEqual(receipt);
+  expect(await restarted.reconcile(cancel, io())).toEqual({
+    kind: 'COMMITTED',
+    request: { binding: f.binding, orderId: f.order.id, operation: 'CANCEL', key: cancel.key },
+    receipt,
+  });
+  await admin.query(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  await expect(restarted.cancel(cancel, io())).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  expect(await restarted.cancel(await cancellationRequest(f, cancel.key), io())).toEqual(receipt);
+  expect(await cancellationRows(f)).toEqual(before);
+});
+
+it('paper-cancel: permanent key conflicts and second keys cannot manufacture another cancellation; readonly missing stays missing', async () => {
+  const port = await openUnsentCancellation(),
+    { f, cancel } = await cancellationFixture();
+  const semantic = {
+    binding: f.binding,
+    orderId: f.order.id,
+    operation: 'CANCEL',
+    key: cancel.key,
+  };
+  expect(await port.reconcile(cancel, io())).toEqual({ kind: 'MISSING', request: semantic });
+  expect(await cancellationRows(f)).toEqual({
+    causes: 0,
+    intents: 0,
+    commands: 0,
+    events: 0,
+    attempts: 0,
+    outbox: 0,
+  });
+  await port.cancel(cancel, io());
+  await expect(port.cancel({ ...cancel, orderId: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+  await expect(port.cancel({ ...cancel, key: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+  expect(await cancellationRows(f)).toMatchObject({ causes: 1, intents: 1, events: 1 });
+});
+
+it('paper-cancel: concurrent exact replay has one result; concurrent distinct keys have one winner', async () => {
+  const a = await openUnsentCancellation(),
+    b = await openUnsentCancellation(),
+    x = await cancellationFixture();
+  const exact = await Promise.all([a.cancel(x.cancel, io()), b.cancel(x.cancel, io())]);
+  expect(exact[0]).toEqual(exact[1]);
+  expect(await cancellationRows(x.f)).toMatchObject({ causes: 1, intents: 1, events: 1 });
+  const y = await cancellationFixture(),
+    competing = await Promise.allSettled([
+      a.cancel(y.cancel, io()),
+      b.cancel({ ...y.cancel, key: randomUUID() }, io()),
+    ]);
+  expect(competing.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  expect(competing.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  expect(await cancellationRows(y.f)).toMatchObject({ causes: 1, intents: 1, events: 1 });
+});
+
+it('paper-cancel: authentic terminal cause keeps current inventory healthy for subsequent admission without resurrecting released collateral', async () => {
+  const port = await openUnsentCancellation(),
+    { f, admission, cancel } = await cancellationFixture();
+  await port.cancel(cancel, io());
+  const second = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
+  await admission.approve(await input(f, second), io());
+  expect(await inventory(f)).toMatchObject({
+    reservations: 2,
+    decisions: 2,
+    issuance: 2,
+    holds: 1,
+    ledger: 1,
+    entries: 2,
+  });
+  expect(await releaseRows(f)).toMatchObject({ records: 1, released: 1, live: 1, events: 1 });
+});
+
+it('paper-cancel: absent release, UNKNOWN and revoked ownership cannot authorize a local terminal outcome', async () => {
+  const port = await openUnsentCancellation(),
+    { f, request } = await releaseFixture(),
+    cancel = await cancellationRequest(f);
+  await expect(port.cancel(cancel, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  await (await openWithdrawalRelease()).release(request, io());
+  // A matching self-hash and table-writer authority do not authenticate a
+  // fabricated private terminal cause or open the common withdrawal guard.
+  const forger = await admin.connect(),
+    forgedIntent = randomUUID();
+  try {
+    await forger.query('BEGIN');
+    await forger.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    await forger.query(
+      `INSERT INTO ctp_paper.unsent_cancellation
+      (tenant_id,order_id,place_intent_id,intent_id,event_id,reservation_id,key,request,before_order,intent_row,command_row,event_row,response,response_hash,observed_ms,permission_epoch,session_epoch)
+      SELECT o."tenantId",o.id,o."intentId",$3,gen_random_uuid(),$4,'forged-cancel',
+       jsonb_build_object('binding',$5::jsonb,'orderId',o.id::text,'operation','CANCEL','key','forged-cancel'),to_jsonb(o),
+       '{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,sha256(convert_to('{}','UTF8')),floor(extract(epoch FROM clock_timestamp())*1000)::bigint,0,0
+      FROM public."order" o WHERE o."tenantId"=$1 AND o.id=$2`,
+      [
+        f.c.owner.tenantId,
+        f.order.id,
+        forgedIntent,
+        request.reservationId,
+        JSON.stringify(f.binding),
+      ],
+    );
+    await expect(
+      forger.query(
+        `INSERT INTO public.order_intent
+      SELECT (jsonb_populate_record(NULL::public.order_intent,to_jsonb(i)||jsonb_build_object('id',$3::text,'targetOrderId',$2::text,'operation','CANCEL','idempotencyKey','forged-cancel'))).*
+      FROM public.order_intent i WHERE i."tenantId"=$1 AND i.id=$4`,
+        [f.c.owner.tenantId, f.order.id, forgedIntent, f.order.intentId],
+      ),
+    ).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  } finally {
+    await forger.query('ROLLBACK');
+    forger.release();
+  }
+  await admin.query('UPDATE public."user" SET "sessionEpoch"="sessionEpoch"+1 WHERE id=$1', [
+    f.c.owner.tenantId,
+  ]);
+  await expect(port.cancel(cancel, io())).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  const other = await nativeReady(),
+    grant = await (await openAdmission()).approve(await input(other), io());
+  await (await openLifecycle()).markUnknown(await unknownRequest(other, grant.reservationId), io());
+  await expect(port.cancel(await cancellationRequest(other), io())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  expect(await cancellationRows(f)).toMatchObject({ causes: 0, intents: 0, events: 0 });
+  expect(await cancellationRows(other)).toMatchObject({ causes: 0, intents: 0, events: 0 });
+});
+
+it('paper-cancel: lost COMMIT returns no receipt, readonly reconciliation recovers the only result after restart without mutation retry', async () => {
+  const { f, cancel } = await cancellationFixture(),
+    proxy = await registryCommitProxy(required('DATABASE_PAPER_ADMISSION_URL'), 'PAPER_ADMISSION');
+  try {
+    const port = await openUnsentCancellation(proxy.connectionString);
+    proxy.arm();
+    await expect(port.cancel(cancel, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await port.close();
+    const restarted = await openUnsentCancellation(),
+      found = await restarted.reconcile(cancel, io());
+    expect(found.kind).toBe('COMMITTED');
+    expect(found.receipt).toMatchObject({ status: 'CANCELED', orderId: f.order.id });
+    expect(await cancellationRows(f)).toEqual({
+      causes: 1,
+      intents: 1,
+      commands: 1,
+      events: 1,
+      attempts: 0,
+      outbox: 1,
+    });
+  } finally {
+    await proxy.close();
+  }
+});
+
+it('paper-cancel: durable replay and private cause validation survive session timezone replacement without changing semantics or caller settings', async () => {
+  const { f, cancel } = await cancellationFixture(),
+    money = await releaseRows(f);
+  const runtime = new Pool({
+    connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+    max: 1,
+    query_timeout: 5000,
+    connectionTimeoutMillis: 1000,
+  });
+  let receipt: unknown;
+  try {
+    const creation = await runtime.connect();
+    try {
+      await creation.query('BEGIN');
+      await creation.query(
+        "SELECT set_config('app.tenant_id',$1,true),set_config('TimeZone','Pacific/Honolulu',true)",
+        [f.c.owner.tenantId],
+      );
+      const created = (
+        await creation.query<{ result: { kind: string; receipt: unknown } }>(
+          'SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result',
+          [JSON.stringify(cancel)],
+        )
+      ).rows[0]!.result;
+      await creation.query('COMMIT');
+      expect(created.kind).toBe('CANCELED');
+      expect(created.receipt).toMatchObject({
+        outcome: 'NOT_SENT',
+        status: 'CANCELED',
+        orderId: f.order.id,
+      });
+      receipt = created.receipt;
+    } finally {
+      await creation.query('ROLLBACK');
+      creation.release();
+    }
+    for (const zone of ['Pacific/Honolulu', 'Asia/Tokyo', 'UTC']) {
+      const client = await runtime.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          "SELECT set_config('app.tenant_id',$1,true),set_config('TimeZone',$2,true)",
+          [f.c.owner.tenantId, zone],
+        );
+        const found = (
+          await client.query<{ result: { kind: string; receipt: unknown } }>(
+            'SELECT ctp_paper.reconcile_admission($1::jsonb) result',
+            [JSON.stringify(cancel)],
+          )
+        ).rows[0]!.result;
+        expect(found.kind).toBe('COMMITTED');
+        expect(found.receipt).toEqual(receipt);
+        const replay = (
+          await client.query<{ result: { kind: string; receipt: unknown } }>(
+            'SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result',
+            [JSON.stringify(cancel)],
+          )
+        ).rows[0]!.result;
+        expect(replay.kind).toBe('CANCELED');
+        expect(replay.receipt).toEqual(receipt);
+        expect(
+          (await client.query<{ zone: string }>("SELECT current_setting('TimeZone') zone")).rows,
+        ).toEqual([{ zone }]);
+        await client.query('COMMIT');
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    }
+  } finally {
+    await runtime.end();
+  }
+  const restarted = await openUnsentCancellation();
+  expect(await restarted.reconcile(cancel, io())).toMatchObject({ kind: 'COMMITTED', receipt });
+  expect(await cancellationRows(f)).toMatchObject({
+    causes: 1,
+    intents: 1,
+    commands: 1,
+    events: 1,
+    attempts: 0,
+    outbox: 1,
+  });
+  expect(await releaseRows(f)).toEqual(money);
+});
+
 it('paper-release: authentic NOT_SENT releases one full hold atomically without cash posting; permanent replay survives restart, pause and rule refresh', async () => {
   const port = await openWithdrawalRelease(),
     { f, admission, request } = await releaseFixture(),

@@ -25,6 +25,12 @@ import { verifyPaperWithdrawalUpgrade } from './paper-withdrawal-upgrade.mjs';
 // BEGIN PAPER RELEASE IMPORT
 import { verifyPaperWithdrawalReleaseUpgrade } from './paper-withdrawal-release-upgrade.mjs';
 // END PAPER RELEASE IMPORT
+// BEGIN PAPER CANCEL IMPORT
+import {
+  preparePaperUnsentCancellationUpgrade,
+  verifyPaperUnsentCancellationUpgrade,
+} from './paper-unsent-cancellation-upgrade.mjs';
+// END PAPER CANCEL IMPORT
 
 const proof = databaseProof(process.argv.slice(2));
 
@@ -87,6 +93,9 @@ const expectedMigrations = [
   // BEGIN PAPER RELEASE MIGRATION
   '202610220001_paper_withdrawal_release',
   // END PAPER RELEASE MIGRATION
+  // BEGIN PAPER CANCEL MIGRATION
+  '202610250001_paper_unsent_cancellation',
+  // END PAPER CANCEL MIGRATION
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2250,6 +2259,35 @@ async function runDatabaseProof() {
   await releaseOwner.end();
   pools.delete(releaseOwner);
   // END PAPER RELEASE OWNER
+  // BEGIN PAPER CANCEL OWNER
+  const cancellationOwner = connect(dbUrl(databases[2]));
+  assert.deepEqual(
+    (
+      await cancellationOwner.query(
+        `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+    WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
+        [
+          [
+            'evaluate_and_reserve',
+            'reconcile_admission',
+            'admission_inventory',
+            'guard_withdrawal',
+            'unsent_cancel_state',
+            'unsent_cancel_after',
+            'validate_unsent_cancel_origin',
+            'validate_unsent_cancellation',
+            'check_unsent_cancellation',
+            'cancel_unsent',
+          ],
+        ],
+      )
+    ).rows,
+    [{ count: 10, safe: true }],
+  );
+  await cancellationOwner.end();
+  pools.delete(cancellationOwner);
+  // END PAPER CANCEL OWNER
   await run(
     process.execPath,
     [
@@ -2269,7 +2307,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperAdmissionOwner.success, true);
-  assert.equal(paperAdmissionOwner.numPassedTests, 39);
+  assert.equal(paperAdmissionOwner.numPassedTests, 47);
   assert.equal(paperAdmissionOwner.numFailedTests, 0);
   assert.equal(paperAdmissionOwner.numPendingTests, 0);
 
@@ -3950,7 +3988,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 22); // Explicitly excluded 9 post54 + 7 post55 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 30); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
@@ -3992,7 +4030,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeWithdrawalTests.success, true);
   assert.equal(beforeWithdrawalTests.numPassedTests, 2);
   assert.equal(beforeWithdrawalTests.numFailedTests, 0);
-  assert.equal(beforeWithdrawalTests.numPendingTests, 37);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 45);
   const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
@@ -4037,7 +4075,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeReleaseTests.success, true);
   assert.equal(beforeReleaseTests.numPassedTests, 1);
   assert.equal(beforeReleaseTests.numFailedTests, 0);
-  assert.equal(beforeReleaseTests.numPendingTests, 38);
+  assert.equal(beforeReleaseTests.numPendingTests, 46);
   const beforePaperRelease = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperRelease.rows.find((x) => x.name === '"ctp_paper"."withdrawal_barrier"').rows.length >
@@ -4056,6 +4094,31 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperWithdrawalReleaseUpgrade(paperUpgrade, beforePaperRelease);
   // END PAPER RELEASE UPGRADE
+  // BEGIN PAPER CANCEL UPGRADE
+  // The eight post57 contracts are excluded only by the existing earlier-schema
+  // producers. Complete47-case owner/cohort suites have no exclusions.
+  const cancellationUpgradeRuntime = connect(paperAdmissionUrl(databases[4]));
+  await preparePaperUnsentCancellationUpgrade(paperUpgrade, cancellationUpgradeRuntime);
+  const beforePaperCancellation = await capturePaperAdmissionUpgrade(paperUpgrade);
+  assert.ok(
+    beforePaperCancellation.rows.find((x) => x.name === '"ctp_paper"."withdrawal_release"').rows
+      .length > 0,
+  );
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[56]),
+    path.join(paperMigrations, expectedMigrations[56]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperUnsentCancellationUpgrade(
+    paperUpgrade,
+    beforePaperCancellation,
+    cancellationUpgradeRuntime,
+  );
+  await cancellationUpgradeRuntime.end();
+  pools.delete(cancellationUpgradeRuntime);
+  // END PAPER CANCEL UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4280,6 +4343,18 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await releaseBeforeReset.end();
   pools.delete(releaseBeforeReset);
   // END PAPER RELEASE RESET_BEFORE
+  // BEGIN PAPER CANCEL RESET_BEFORE
+  const cancellationBeforeReset = connect(dbUrl(databases[6]));
+  assert.ok(
+    (
+      await cancellationBeforeReset.query(
+        'SELECT count(*)::int n FROM ctp_paper.unsent_cancellation',
+      )
+    ).rows[0].n > 0,
+  );
+  await cancellationBeforeReset.end();
+  pools.delete(cancellationBeforeReset);
+  // END PAPER CANCEL RESET_BEFORE
   pools.delete(admissionBeforeReset);
   await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
   await admin.query(`CREATE DATABASE ${identifier(databases[6])}`);
@@ -4296,6 +4371,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     // BEGIN PAPER RELEASE RESET_AFTER
     'withdrawal_release',
     // END PAPER RELEASE RESET_AFTER
+    // BEGIN PAPER CANCEL RESET_AFTER
+    'unsent_cancellation',
+    // END PAPER CANCEL RESET_AFTER
   ])
     assert.equal(
       (await admissionReset.query(`SELECT count(*)::int n FROM ctp_paper.${table}`)).rows[0].n,
@@ -4396,6 +4474,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperWithdrawalReleaseNoInferredHistory: 'PASS',
     paperWithdrawalReleaseFreshAndPopulatedIsolatedReset: 'PASS',
     // END PAPER RELEASE FLAGS
+    // BEGIN PAPER CANCEL FLAGS
+    paperUnsentCancellationNonBypassOwner: 'PASS',
+    paperUnsentCancellationPopulatedUpgradeFromPublished56: 'PASS',
+    paperUnsentCancellationNoInferredHistory: 'PASS',
+    paperUnsentCancellationFreshAndPopulatedIsolatedReset: 'PASS',
+    // END PAPER CANCEL FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
