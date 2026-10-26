@@ -149,7 +149,7 @@ it('actual gate accepts only complete artifacts from both isolated projects', as
 });
 it('kills a hung child with only the remaining shared window, not a fresh parent budget', async () => {
   const started = Date.now();
-  const almostExpired = createNativeWindow(identity, started - 1019950);
+  const almostExpired = createNativeWindow(identity, started - 1019500);
   await expect(
     run(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       timeoutMs: remainingNativeBudget(almostExpired),

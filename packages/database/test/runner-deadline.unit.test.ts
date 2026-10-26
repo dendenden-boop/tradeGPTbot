@@ -24,7 +24,9 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond aggregat
   // passed native assertions but exhausted the 900s parent during Auth.
   // This aggregate is separate from each test/transaction/abort deadline.
   expect([native, auth, hardening]).toEqual([480000, 120000, 180000]);
-  expect(integration).toContain('timeoutMs: proof.timeoutMs');
+  expect(integration).toContain(
+    'timeoutMs: nativeWindow ? remainingNativeBudget(nativeWindow) : proof.timeoutMs',
+  );
   expect(integration).toContain("['scripts/test-database.mjs', ...proof.databaseArgs]");
   expect(fullParent).toBe(parent);
   expect(authParent).toBeGreaterThanOrEqual(auth + hardening + 60000);
@@ -46,7 +48,11 @@ it('database acceptance parent leaves bounded owner/upgrade room beyond aggregat
   const nativeJob = workflow.slice(workflow.indexOf('  native:'), workflow.indexOf('  auth:'));
   const authJob = workflow.slice(workflow.indexOf('  auth:'), workflow.indexOf('  smoke:'));
   expect(nativeJob).toContain('timeout-minutes: 20');
-  expect(nativeJob).toContain('run: pnpm test:integration --proof=database');
+  expect(nativeJob).toContain('run: pnpm test:integration --proof=cohorts');
+  expect(nativeJob).toContain('run: pnpm test:integration --proof=owners');
+  expect(
+    nativeJob.match(/CTP_NATIVE_WINDOW: \$\{\{ needs.native-window.outputs.window \}\}/gu),
+  ).toHaveLength(2);
   expect(authJob).toContain('run: pnpm test:integration --proof=auth');
   expect(authJob).toContain('timeout-minutes: 10');
   expect(authParent + 180000).toBeLessThanOrEqual(10 * 60000);
