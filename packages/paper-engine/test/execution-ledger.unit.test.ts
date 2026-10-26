@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
 import { expect, it } from 'vitest';
-import { parseDecimal } from '@ctp/exchange-core';
+import { newOrderSchema, parseDecimal } from '@ctp/exchange-core';
 import { createState, reducePortfolio, type Posting } from '@ctp/portfolio';
 import * as paper from '../src/index.js';
 import { fixture, marketFixture, NOW } from './fixtures.js';
@@ -143,7 +143,7 @@ it('every fill independently conserves each asset and matches its calculated wal
       expect(sum(transaction.postings, 'USDT')).toBe('0');
       expect(sum(transaction.postings, 'BTC', 'AVAILABLE')).toBe(f.baseDelta);
       expect(sum(transaction.postings, 'USDT', 'AVAILABLE')).toBe(f.quoteDelta);
-      expect(transaction.causeIdentity).toBe('spot-l2-taker-ledger-v1:' + f.id);
+      expect(transaction.causeIdentity).toBe('paper-fill:' + f.id);
     }
 });
 it('preserves per-slice upward fee rounding rather than rounding an aggregate fee', () => {
@@ -152,10 +152,10 @@ it('preserves per-slice upward fee rounding rather than rounding an aggregate fe
   frame.model.participationRate = '1';
   frame.model.takerFeeRate = '0.000000000000000001';
   frame.book.asks = Array.from({ length: 10 }, (_, i) => ({
-    price: new D('10.05').add(new D('0.05').mul(i)).toFixed(),
-    quantity: '0.05',
+    price: parseDecimal(new D('10.05').add(new D('0.05').mul(i)).toFixed()),
+    quantity: parseDecimal('0.05'),
   }));
-  frame.asksUsed = frame.book.asks.map(() => '0');
+  frame.asksUsed = frame.book.asks.map(() => parseDecimal('0'));
   const r = calculate({ ...x, frame }),
     postings = r.orders[0]!.transactions.flatMap((t) => t.postings);
   expect(r.orders[0]!.transactions).toHaveLength(10);
@@ -165,17 +165,17 @@ it('preserves per-slice upward fee rounding rather than rounding an aggregate fe
 it('retains quantities beyond Number precision without iterating over lots', () => {
   const x = input(),
     frame = structuredClone(x.frame),
-    quantity = '9007199254740993.05';
+    quantity = parseDecimal('9007199254740993.05');
   frame.model.participationRate = '1';
   frame.model.takerFeeRate = '0';
   frame.record.rules.maxQuantity = parseDecimal('99999999999999999999');
   frame.record.rules.maxNotional = null;
-  frame.book.asks = [{ price: '10.05', quantity }];
-  frame.asksUsed = ['0'];
+  frame.book.asks = [{ price: parseDecimal('10.05'), quantity }];
+  frame.asksUsed = [parseDecimal('0')];
   frame.trade.quantity = quantity;
   const order = {
     ...item(),
-    order: { ...item().order, size: { kind: 'BASE_QUANTITY', value: quantity } },
+    order: { ...item().order, size: { ...item().order.size, value: quantity } },
   };
   const r = calculate({ ...x, frame, orders: [order] });
   expect(r.orders[0]!.availableDeltas[0]).toEqual({ asset: 'BTC', amount: quantity });
@@ -269,7 +269,7 @@ it('FOK failure discards provisional economics and liquidity consumption', () =>
           order: {
             ...item().order,
             timeInForce: 'FOK',
-            size: { kind: 'BASE_QUANTITY', value: '1' },
+            size: { ...item().order.size, value: '1' },
           },
         },
       ],
@@ -287,7 +287,7 @@ it.each(['IOC', 'GTC'] as const)(
         orders: [
           {
             ...item(),
-            order: { ...item().order, timeInForce, size: { kind: 'BASE_QUANTITY', value: '1' } },
+            order: { ...item().order, timeInForce, size: { ...item().order.size, value: '1' } },
           },
         ],
       });
@@ -348,7 +348,19 @@ it('uses instrument assets without hard-coded currency names or conversion', () 
     frame = structuredClone(x.frame);
   frame.record.instrument.baseAsset = 'ETH';
   frame.record.instrument.quoteAsset = 'USDC';
-  const r = calculate({ ...x, frame });
+  const r = calculate({
+    ...x,
+    frame,
+    orders: [
+      {
+        ...item(),
+        order: newOrderSchema.parse({
+          ...item().order,
+          size: { kind: 'BASE_QUANTITY', value: '0.5', asset: 'ETH' },
+        }),
+      },
+    ],
+  });
   expect(r.orders[0]!.availableDeltas).toEqual([
     { asset: 'ETH', amount: '0.5' },
     { asset: 'USDC', amount: '-5.030025' },
@@ -375,10 +387,70 @@ it('rejects numeric money instead of coercing rounded quantities', () => {
           ...item(),
           order: {
             ...item().order,
-            size: { kind: 'BASE_QUANTITY', value: Number('9007199254740993') },
+            size: { ...item().order.size, value: Number('9007199254740993') },
           },
         },
       ],
     }),
   ).toThrow('PAPER_COMPETITION_INPUT');
+});
+it('a minimum-scale sale fee can consume proceeds without negative zero or duplicated principal', () => {
+  const x = input('SELL'),
+    frame = structuredClone(x.frame),
+    unit = parseDecimal('0.000000001');
+  frame.model.participationRate = '1';
+  frame.model.takerFeeRate = '0.1';
+  frame.record.rules = {
+    ...frame.record.rules,
+    tickSize: parseDecimal(unit),
+    stepSize: parseDecimal(unit),
+    minQuantity: parseDecimal(unit),
+    minPrice: parseDecimal(unit),
+    minNotional: parseDecimal('0'),
+    quantityPrecision: 9,
+    pricePrecision: 9,
+  };
+  frame.book.bids = [{ price: unit, quantity: unit }];
+  frame.bidsUsed = [parseDecimal('0')];
+  frame.book.asks = [{ price: parseDecimal('0.000000002'), quantity: unit }];
+  frame.asksUsed = [parseDecimal('0')];
+  frame.trade.price = unit;
+  frame.trade.quantity = unit;
+  const order = newOrderSchema.parse({
+    ...x.orders[0]!.order,
+    limitPrice: unit,
+    size: { kind: 'BASE_QUANTITY', asset: 'BTC', value: unit },
+  });
+  const r = calculate({ ...x, frame, orders: [{ ...x.orders[0]!, order }] });
+  expect(r.execution.executions[0]!.fills[0]!.quoteFee).toBe('0.000000000000000001');
+  expect(r.orders[0]!.availableDeltas).toEqual([{ asset: 'BTC', amount: '-0.000000001' }]);
+  const p = r.orders[0]!.transactions[0]!.postings;
+  expect(sum(p, 'USDT', 'AVAILABLE')).toBe('0');
+  expect(sum(p, 'USDT')).toBe('0');
+  expect(p.every((v) => v.amount !== '0' && v.amount !== '-0')).toBe(true);
+});
+it('supports the existing 1000-level boundary without discarding any fill or fee', () => {
+  const x = input(),
+    frame = structuredClone(x.frame);
+  frame.model.participationRate = '1';
+  frame.record.rules.maxQuantity = parseDecimal('100');
+  frame.record.rules.maxNotional = null;
+  frame.book.asks = Array.from({ length: 1000 }, (_, i) => ({
+    price: parseDecimal(new D('10.05').add(new D('0.05').mul(i)).toFixed()),
+    quantity: parseDecimal('0.05'),
+  }));
+  frame.asksUsed = frame.book.asks.map(() => parseDecimal('0'));
+  frame.trade.quantity = parseDecimal('50');
+  const order = newOrderSchema.parse({
+    ...x.orders[0]!.order,
+    limitPrice: '100',
+    size: { kind: 'BASE_QUANTITY', asset: 'BTC', value: '50' },
+  });
+  const r = calculate({ ...x, frame, orders: [{ ...x.orders[0]!, order }] });
+  expect(r.orders[0]!.transactions).toHaveLength(1000);
+  const postings = r.orders[0]!.transactions.flatMap((t) => t.postings);
+  expect(sum(postings, 'BTC', 'AVAILABLE')).toBe('50');
+  expect(sum(postings, 'BTC')).toBe('0');
+  expect(sum(postings, 'USDT')).toBe('0');
+  expect(new Set(r.orders[0]!.transactions.map((t) => t.causeIdentity)).size).toBe(1000);
 });
