@@ -36,7 +36,7 @@ export async function preparePaperUnsentCancellationUpgrade(db, runtime) {
 export function beforeCancellationGuard(definition) {
   const blocks = [
     ...definition.matchAll(
-      /  -- BEGIN EXACT CANCEL CAUSE\n[\s\S]*?  -- END EXACT CANCEL CAUSE\n/gu,
+      /[ ]{2}-- BEGIN EXACT CANCEL CAUSE\n[\s\S]*?[ ]{2}-- END EXACT CANCEL CAUSE\n/gu,
     ),
   ];
   assert.equal(blocks.length, 1);

@@ -1,5 +1,21 @@
 # PHASE 13 verification
 
+## Corrected source preparation and complete local native evidence — 26 October 2026
+
+Candidate `29e0c9b` failed [source Platform40203967165](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40203967165) and [PR Platform40204005808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40204005808) on12lint errors; native/Auth/Docker were skipped. Both CodeQL runs passed. Those runs remain unaccepted and were not retried. The corrections are test row typing, honest Promise-based mocks and an equivalent upgrade-check regex; financial runtime and candidate57 SQL are unchanged.
+
+The12lint findings were corrected without suppressions or runtime changes: new native assertions narrow unknown query rows before member access, unit mocks return real Promises without unnecessary async/type assertions, and the upgrade-proof regex uses an equivalent explicit space quantifier. Targeted ESLint passed;46selected unit/fixture contract cases passed. The renewed overlap hash follows review of tenant-local test changes only; no shared-role/schema DDL or financial-reader cache was added. All original non-fixture/test/runner preservation guards remain enabled.
+
+The interrupted25October native run's apparent UNKNOWN regression was diagnosed from the retained failing database, not guessed: at `2026-10-25T14:49:42.730Z`, the unissued fixture's snapshot/book/trade were5070ms old, against an unchanged5000ms admission limit; snapshot/trade records matched and metadata was still current. The error was in admission_market freshness before initial issuance. The unchanged runtime passed the isolated original test (1selected/71unselected) and the complete subsequent72-case native run. No old assertion, source guard, freshness window or published migration changed.
+
+Complete local PostgreSQL57 diagnostic passed **72/72 in2files**, all65previous identities plus7cancellation cases, including the additional fake-private-cause assertion. Selected14functions use non-BYPASSRLS owners. Actual clean pg_ctl stop/start retained and readonly-reconciled **7cancellations/19barriers/13releases**, with the same financial/common row digests and no mutation retry. The native test invocation took309.65s; this Windows diagnostic includes the already disclosed startup-GUC normalization/5ms response proxy and is not full Linux/original-owner/Prisma/Docker acceptance. Prior populated SQL56→57 evidence remains separate.
+
+Resume infrastructure is recorded separately: the old interrupted local cluster required automatic recovery beyond pg_ctl's startup wait, so no tests ran in that attempt; recovery/shutdown completed before the successful diagnosis. A fresh-cluster diagnostic's unsupported initdb pwfile-stdin option also failed before tests and is not RED or acceptance. No SQL or CI deadline was changed to hide these failures.
+
+All13frozen local checks, corrected exact-head source/PR CI, full native original-DDL-owner/Prisma upgrade/redeploy/reset, earlier identities, Ubuntu/Windows/Auth/services/Docker and CodeQL are still required. Failed29eartifacts are retained with all4OSZIP digests/producer windows verified; its skipped services are never credited. [Draft PR43](https://github.com/dendenden-boop/tradeGPTbot/pull/43) tracks subsequent corrected-head/publication evidence. Historical checkpoints below retain their original results.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The candidate is not accepted until complete new-head regression/CI. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56, earlier native invariants and CI deadlines remain unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Durable unsent cancellation RED and targeted GREEN — 25 October 2026
 
 Starting protected main is **ff3703a3ab41476877ccc45763031dd741c39088**: exact-main [Platform40199293069](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293069) and [CodeQL40199293058](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293058) passed. Those runs accept the preceding main, not this new cancellation implementation.

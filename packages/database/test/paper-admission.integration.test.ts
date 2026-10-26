@@ -1604,10 +1604,28 @@ it('paper-cancel: authentic local terminal Order has one immutable CANCEL cause 
   );
   const after = await withdrawalInventory(f);
   expect(after.inventory).toEqual(before.inventory);
-  expect(after.rows[0]!.books).toEqual(before.rows[0]!.books);
-  expect(after.rows[0]!.watermarks).toEqual(before.rows[0]!.watermarks);
-  expect(after.rows[0]!.attempts).toEqual(before.rows[0]!.attempts);
-  expect(after.rows[0]!.events).toBe(Number(before.rows[0]!.events) + 1);
+  const detail = (raw: unknown) => {
+    if (
+      !raw ||
+      typeof raw !== 'object' ||
+      !('books' in raw) ||
+      !('watermarks' in raw) ||
+      !('attempts' in raw) ||
+      typeof raw.attempts !== 'number' ||
+      !('events' in raw) ||
+      typeof raw.events !== 'number'
+    )
+      throw Error('CANCELLATION_FIXTURE_ROW');
+    return {
+      books: raw.books,
+      watermarks: raw.watermarks,
+      attempts: raw.attempts,
+      events: raw.events,
+    };
+  };
+  const previousDetail = detail(before.rows[0]),
+    currentDetail = detail(after.rows[0]);
+  expect(currentDetail).toEqual({ ...previousDetail, events: previousDetail.events + 1 });
   const restricted = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL') });
   try {
     await expect(restricted.query('SELECT * FROM ctp_paper.unsent_cancellation')).rejects.toThrow(

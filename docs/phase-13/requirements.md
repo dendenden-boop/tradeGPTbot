@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Corrected cancellation candidate — 26 October 2026
+
+The [bridge contract](unsent-cancellation-bridge.md) retains every earlier requirement. All72local native admission/cancellation/cash-loss cases passed, including all65previous identities and private-cause forgery, current authorization epochs, exact permanent replay, one terminal transition, unchanged cash/holds/counter, UNKNOWN prohibition and real lost-COMMIT recovery. Actual clean stop/start reconciled7cancellations; populated SQL56→57 retention passed separately. No original freshness rule was changed. Corrected lint and46targeted unit/fixture contracts pass; complete regression and original-DDL-owner/Prisma/Ubuntu/Windows/services/Docker/CodeQL CI remain pending.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The candidate is not accepted until complete new-head regression/CI. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56, earlier native invariants and CI deadlines remain unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Durable unsent cancellation candidate — 25 October 2026
 
 Starting protected main is **ff3703a3ab41476877ccc45763031dd741c39088**: exact-main [Platform40199293069](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293069) and [CodeQL40199293058](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293058) passed. Those runs accept the preceding main, not this new cancellation implementation.

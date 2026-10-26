@@ -6,29 +6,36 @@ import { state } from '../../order-engine/test/fixtures.js';
 import * as server from '../src/risk.js';
 import * as root from '../src/index.js';
 
-const fake = vi.hoisted(() => ({
-  payload: null as unknown,
-  queries: [] as string[],
-  values: [] as unknown[],
+const fake = vi.hoisted<{
+  payload: unknown;
+  queries: string[];
+  values: unknown[];
+  committed: boolean;
+  uncertain: boolean;
+}>(() => ({
+  payload: null,
+  queries: [],
+  values: [],
   committed: false,
   uncertain: false,
 }));
 vi.mock('../src/admission-database.js', () => ({
-  openPaperAdmissionDatabase: async () => ({
-    async transaction(_tenant: string, _io: unknown, work: (sql: unknown) => Promise<unknown>) {
-      const result = await work({
-        async query(text: string, values: unknown[]) {
-          fake.queries.push(text);
-          fake.values.push(values);
-          return { rows: [{ result: fake.payload }] };
-        },
-      });
-      if (fake.uncertain) throw Error('PAPER_ADMISSION_UNCERTAIN');
-      fake.committed = true;
-      return result;
-    },
-    async close() {},
-  }),
+  openPaperAdmissionDatabase: () =>
+    Promise.resolve({
+      async transaction(_tenant: string, _io: unknown, work: (sql: unknown) => Promise<unknown>) {
+        const result = await work({
+          query(text: string, values: unknown[]) {
+            fake.queries.push(text);
+            fake.values.push(values);
+            return Promise.resolve({ rows: [{ result: fake.payload }] });
+          },
+        });
+        if (fake.uncertain) throw Error('PAPER_ADMISSION_UNCERTAIN');
+        fake.committed = true;
+        return result;
+      },
+      async close() {},
+    }),
 }));
 type Port = {
   cancel(raw: unknown, io: unknown): Promise<unknown>;

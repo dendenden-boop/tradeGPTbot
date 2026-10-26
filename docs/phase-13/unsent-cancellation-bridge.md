@@ -3,8 +3,8 @@
 ## Candidate scope and starting point
 
 Starting protected main is `ff3703a3ab41476877ccc45763031dd741c39088`.
-Published migrations 1–56 remain immutable. This contract describes the next
-PHASE 13 increment; it does not claim implementation or acceptance. PHASE 13
+Published migrations 1–56 remain immutable. This contract describes the implemented candidate
+PHASE 13 increment; complete acceptance remains pending. PHASE 13
 remains IN_PROGRESS / NOT READY FOR PHASE 14.
 
 Only a genuinely issued, pristine PAPER Spot BUY with an irreversible private

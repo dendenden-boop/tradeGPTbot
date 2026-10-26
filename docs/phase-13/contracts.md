@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Cancellation invariant preservation checkpoint — 26 October 2026
+
+The [candidate bridge](unsent-cancellation-bridge.md) SQL and financial runtime are unchanged from29e0c9b. Corrections affect only test typing/mocks and the equivalent upgrade-proof regex. All72local native cases passed, including every earlier admission/UNKNOWN/cash-loss contract and the added private-cause forgery. A retained admission with5070ms-old market evidence against5000ms was correctly rejected during the earlier parallel-heavy diagnostic; isolated and complete native checks passed without relaxing freshness, holds or source authorization. Current-head complete CI remains mandatory.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The candidate is not accepted until complete new-head regression/CI. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56, earlier native invariants and CI deadlines remain unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Candidate durable local cancellation boundary — 25 October 2026
 
 Starting protected main is **ff3703a3ab41476877ccc45763031dd741c39088**: exact-main [Platform40199293069](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293069) and [CodeQL40199293058](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293058) passed. Those runs accept the preceding main, not this new cancellation implementation.

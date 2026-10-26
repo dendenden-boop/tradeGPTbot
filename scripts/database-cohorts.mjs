@@ -23,7 +23,7 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
       'packages/database/test/fixtures/risk-certification.ts',
       '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c',
     ],
-    [admission, 'db47c4524a9752741ea59e4f2d26b73b902070eab2fa2dde23b7664bc20518b3'],
+    [admission, 'bcfbfb05f0d44e6722ca1390c91d2420a3b8fbfb8166dc602edbe08a8591324b'],
   ]) {
     const text = (await readFile(path.join(root, file), 'utf8')).replaceAll('\r\n', '\n');
     assert.equal(

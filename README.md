@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Unsent cancellation regression checkpoint — 26 October 2026
+
+The [durable CANCEL candidate](docs/phase-13/unsent-cancellation-bridge.md) now passes all72local native PostgreSQL cases, including65previous cases, private-cause forgery, replay/epochs/concurrency, UNKNOWN, lost COMMIT and actual clean stop/start with7cancellations. Local targeted46unit/fixture contracts and corrected lint pass. The earlier apparent UNKNOWN regression was a correct freshness rejection: retained evidence was5070ms old against5000ms; unchanged runtime passed isolated and complete native checks. Full13checks and corrected-source/PR CI are pending.
+
+Candidate `29e0c9b` failed [source Platform40203967165](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40203967165) and [PR Platform40204005808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40204005808) on12lint errors; native/Auth/Docker were skipped. Both CodeQL runs passed. Those runs remain unaccepted and were not retried. The corrections are test row typing, honest Promise-based mocks and an equivalent upgrade-check regex; financial runtime and candidate57 SQL are unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The candidate is not accepted until complete new-head regression/CI. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56, earlier native invariants and CI deadlines remain unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Durable unsent PAPER cancellation candidate — 25 October 2026
 
 Starting protected main is **ff3703a3ab41476877ccc45763031dd741c39088**: exact-main [Platform40199293069](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293069) and [CodeQL40199293058](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40199293058) passed. Those runs accept the preceding main, not this new cancellation implementation.
