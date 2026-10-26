@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Cancellation timezone hardening candidate — 26 October 2026
+
+A new native RED regression found that session TimeZone replacement could reject permanent CANCEL replay because composite row timestamps rendered differently. The [bridge](docs/phase-13/unsent-cancellation-bridge.md) now canonicalizes snapshots and private validation in function-local UTC in three new migration57 functions; caller settings are restored. All73local native cases and populated56→57 SQL retention/restart passed, including creation in Honolulu, replay in Tokyo/UTC and no extra effect. Corrected-source full13checks and CI are required again.
+
+The earlier b31b6f7 checkpoint passed all13frozen local commands (823inputs/4991unit/41HTTP/audit0) and full [source Platform40292013091](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40292013091) / [CodeQL40292013098](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40292013098), [PR Platform40292017543](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40292017543) / [CodeQL40292017540](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40292017540), with1377native cases,19owner reports, upgrade/reset/Auth/Docker, twelve clean deployments, audit0 and verified artifact digests/windows/protection. It did not cover the subsequently found timezone defect and is not acceptance of the corrected candidate.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Corrected exact-head full regression/CI and protected publication remain pending. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56 and CI deadlines stay unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Unsent cancellation regression checkpoint — 26 October 2026
 
 The [durable CANCEL candidate](docs/phase-13/unsent-cancellation-bridge.md) now passes all72local native PostgreSQL cases, including65previous cases, private-cause forgery, replay/epochs/concurrency, UNKNOWN, lost COMMIT and actual clean stop/start with7cancellations. Local targeted46unit/fixture contracts and corrected lint pass. The earlier apparent UNKNOWN regression was a correct freshness rejection: retained evidence was5070ms old against5000ms; unchanged runtime passed isolated and complete native checks. Full13checks and corrected-source/PR CI are pending.

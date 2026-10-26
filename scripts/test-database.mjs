@@ -2307,7 +2307,7 @@ async function runDatabaseProof() {
     ),
   );
   assert.equal(paperAdmissionOwner.success, true);
-  assert.equal(paperAdmissionOwner.numPassedTests, 46);
+  assert.equal(paperAdmissionOwner.numPassedTests, 47);
   assert.equal(paperAdmissionOwner.numFailedTests, 0);
   assert.equal(paperAdmissionOwner.numPendingTests, 0);
 
@@ -3988,7 +3988,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 29); // Explicitly excluded 9 post54 + 7 post55 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 30); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
@@ -4030,7 +4030,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeWithdrawalTests.success, true);
   assert.equal(beforeWithdrawalTests.numPassedTests, 2);
   assert.equal(beforeWithdrawalTests.numFailedTests, 0);
-  assert.equal(beforeWithdrawalTests.numPendingTests, 44);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 45);
   const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
@@ -4075,7 +4075,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeReleaseTests.success, true);
   assert.equal(beforeReleaseTests.numPassedTests, 1);
   assert.equal(beforeReleaseTests.numFailedTests, 0);
-  assert.equal(beforeReleaseTests.numPendingTests, 45);
+  assert.equal(beforeReleaseTests.numPendingTests, 46);
   const beforePaperRelease = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperRelease.rows.find((x) => x.name === '"ctp_paper"."withdrawal_barrier"').rows.length >
@@ -4095,8 +4095,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await verifyPaperWithdrawalReleaseUpgrade(paperUpgrade, beforePaperRelease);
   // END PAPER RELEASE UPGRADE
   // BEGIN PAPER CANCEL UPGRADE
-  // The seven post57 contracts are excluded only by the existing earlier-schema
-  // producers. Complete46-case owner/cohort suites have no exclusions.
+  // The eight post57 contracts are excluded only by the existing earlier-schema
+  // producers. Complete47-case owner/cohort suites have no exclusions.
   const cancellationUpgradeRuntime = connect(paperAdmissionUrl(databases[4]));
   await preparePaperUnsentCancellationUpgrade(paperUpgrade, cancellationUpgradeRuntime);
   const beforePaperCancellation = await capturePaperAdmissionUpgrade(paperUpgrade);

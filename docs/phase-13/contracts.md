@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Canonical private timestamp context — 26 October 2026
+
+The [bridge](unsent-cancellation-bridge.md) uses function-local UTC only in cancel_unsent, validate_unsent_cancel_origin and validate_unsent_cancellation. Original source instants and common command semantics do not change. Consistency remains authenticated against genuine private provenance; UTC is encoding context, not a caller-controlled permission flag. Scoped settings restore on return, including readonly/exact replay. The preserved public withdrawal guard and all published1–56functions remain unchanged. All73local native cases passed; complete new-head CI is pending.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Corrected exact-head full regression/CI and protected publication remain pending. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56 and CI deadlines stay unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Cancellation invariant preservation checkpoint — 26 October 2026
 
 The [candidate bridge](unsent-cancellation-bridge.md) SQL and financial runtime are unchanged from29e0c9b. Corrections affect only test typing/mocks and the equivalent upgrade-proof regex. All72local native cases passed, including every earlier admission/UNKNOWN/cash-loss contract and the added private-cause forgery. A retained admission with5070ms-old market evidence against5000ms was correctly rejected during the earlier parallel-heavy diagnostic; isolated and complete native checks passed without relaxing freshness, holds or source authorization. Current-head complete CI remains mandatory.

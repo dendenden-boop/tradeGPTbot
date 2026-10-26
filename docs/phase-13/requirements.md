@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Timezone-independent durable replay — 26 October 2026
+
+[Durable cancellation](unsent-cancellation-bridge.md) additionally requires canonical UTC row snapshots/private comparisons independent of caller/server session timezone, with session settings restored after RPC. Tests-first b818f7e follows actual native RED on the prior implementation. The candidate confines UTC to three new private functions; no old guard, financial value, timestamp instant, permanent identity or authorization source is relaxed. All73local native cases and populated SQL56→57 retention passed. Full new-head regression and CI remain mandatory.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Corrected exact-head full regression/CI and protected publication remain pending. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Published migrations1–56 and CI deadlines stay unchanged. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Corrected cancellation candidate — 26 October 2026
 
 The [bridge contract](unsent-cancellation-bridge.md) retains every earlier requirement. All72local native admission/cancellation/cash-loss cases passed, including all65previous identities and private-cause forgery, current authorization epochs, exact permanent replay, one terminal transition, unchanged cash/holds/counter, UNKNOWN prohibition and real lost-COMMIT recovery. Actual clean stop/start reconciled7cancellations; populated SQL56→57 retention passed separately. No original freshness rule was changed. Corrected lint and46targeted unit/fixture contracts pass; complete regression and original-DDL-owner/Prisma/Ubuntu/Windows/services/Docker/CodeQL CI remain pending.

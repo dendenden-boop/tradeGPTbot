@@ -166,13 +166,13 @@ function releaseBlocks(source) {
 function beforeReleaseRunner(source) {
   for (const block of cancellationBlocks(source)) source = source.replace(block[0], '');
   source = source
-    .replace('paperAdmissionOwner.numPassedTests, 46', 'paperAdmissionOwner.numPassedTests, 39')
-    .replace('beforeUnknownTests.numPendingTests, 29', 'beforeUnknownTests.numPendingTests, 22')
+    .replace('paperAdmissionOwner.numPassedTests, 47', 'paperAdmissionOwner.numPassedTests, 39')
+    .replace('beforeUnknownTests.numPendingTests, 30', 'beforeUnknownTests.numPendingTests, 22')
     .replace(
-      'beforeWithdrawalTests.numPendingTests, 44',
+      'beforeWithdrawalTests.numPendingTests, 45',
       'beforeWithdrawalTests.numPendingTests, 37',
     )
-    .replace('beforeReleaseTests.numPendingTests, 45', 'beforeReleaseTests.numPendingTests, 38');
+    .replace('beforeReleaseTests.numPendingTests, 46', 'beforeReleaseTests.numPendingTests, 38');
   for (const block of releaseBlocks(source)) source = source.replace(block[0], '');
   return source
     .replace('paperAdmissionOwner.numPassedTests, 39', 'paperAdmissionOwner.numPassedTests, 33')

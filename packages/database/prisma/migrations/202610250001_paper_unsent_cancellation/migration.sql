@@ -50,8 +50,11 @@ $$;
 
 -- Authentic private historical authority, independent of the caller's hashes.
 -- This helper permits no writes and can run before the exact common rows exist.
+-- Composite row snapshots contain timestamptz JSON. Creation, historical proof
+-- and full validation use function-local UTC, restored on return. Session zone
+-- replacement must not change permanent identity or be an authorization flag.
 CREATE FUNCTION ctp_paper.validate_unsent_cancel_origin(t uuid,oid uuid) RETURNS void
- LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+ LANGUAGE plpgsql SET search_path=pg_catalog SET timezone='UTC' AS $$
 DECLARE x ctp_paper.unsent_cancellation%ROWTYPE; i ctp_paper.admission_issuance%ROWTYPE;
  w ctp_paper.withdrawal_barrier%ROWTYPE; r ctp_paper.withdrawal_release%ROWTYPE;
  original public.order_intent%ROWTYPE; c ctp_execution.command%ROWTYPE;
@@ -131,7 +134,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION ctp_paper.validate_unsent_cancellation(t uuid,oid uuid) RETURNS void
- LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+ LANGUAGE plpgsql SET search_path=pg_catalog SET timezone='UTC' AS $$
 DECLARE x ctp_paper.unsent_cancellation%ROWTYPE;
 BEGIN
  PERFORM ctp_paper.validate_unsent_cancel_origin(t,oid);
@@ -202,7 +205,7 @@ BEGIN
 END $$;
 
 CREATE FUNCTION ctp_paper.cancel_unsent(p jsonb,read_only boolean) RETURNS jsonb
- LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+ LANGUAGE plpgsql SET search_path=pg_catalog SET timezone='UTC' AS $$
 DECLARE t uuid; b jsonb:=p->'binding'; auth jsonb:=p->'authorization'; k text; owner jsonb; sem jsonb;
  a public.exchange_account%ROWTYPE; config ctp_paper.configuration%ROWTYPE; ident jsonb;
  i ctp_paper.admission_issuance%ROWTYPE; w ctp_paper.withdrawal_barrier%ROWTYPE; r ctp_paper.withdrawal_release%ROWTYPE;
