@@ -208,7 +208,7 @@ it('requires the exact additive57 extensions, seven new cancellation contracts a
     file.statements.filter(
       (s) => ts.isExpressionStatement(s) && s.getText(file).startsWith("it('paper-cancel:"),
     ),
-  ).toHaveLength(7);
+  ).toHaveLength(8);
   expect(
     file.statements.filter(
       (s) => ts.isFunctionDeclaration(s) && cancellationHelpers.has(s.name?.text),

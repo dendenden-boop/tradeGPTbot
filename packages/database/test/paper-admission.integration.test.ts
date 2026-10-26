@@ -1856,6 +1856,91 @@ it('paper-cancel: lost COMMIT returns no receipt, readonly reconciliation recove
   }
 });
 
+it('paper-cancel: durable replay and private cause validation survive session timezone replacement without changing semantics or caller settings', async () => {
+  const { f, cancel } = await cancellationFixture(),
+    money = await releaseRows(f);
+  const runtime = new Pool({
+    connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+    max: 1,
+    query_timeout: 5000,
+    connectionTimeoutMillis: 1000,
+  });
+  let receipt: unknown;
+  try {
+    const creation = await runtime.connect();
+    try {
+      await creation.query('BEGIN');
+      await creation.query(
+        "SELECT set_config('app.tenant_id',$1,true),set_config('TimeZone','Pacific/Honolulu',true)",
+        [f.c.owner.tenantId],
+      );
+      const created = (
+        await creation.query<{ result: { kind: string; receipt: unknown } }>(
+          'SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result',
+          [JSON.stringify(cancel)],
+        )
+      ).rows[0]!.result;
+      await creation.query('COMMIT');
+      expect(created.kind).toBe('CANCELED');
+      expect(created.receipt).toMatchObject({
+        outcome: 'NOT_SENT',
+        status: 'CANCELED',
+        orderId: f.order.id,
+      });
+      receipt = created.receipt;
+    } finally {
+      await creation.query('ROLLBACK');
+      creation.release();
+    }
+    for (const zone of ['Pacific/Honolulu', 'Asia/Tokyo', 'UTC']) {
+      const client = await runtime.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          "SELECT set_config('app.tenant_id',$1,true),set_config('TimeZone',$2,true)",
+          [f.c.owner.tenantId, zone],
+        );
+        const found = (
+          await client.query<{ result: { kind: string; receipt: unknown } }>(
+            'SELECT ctp_paper.reconcile_admission($1::jsonb) result',
+            [JSON.stringify(cancel)],
+          )
+        ).rows[0]!.result;
+        expect(found.kind).toBe('COMMITTED');
+        expect(found.receipt).toEqual(receipt);
+        const replay = (
+          await client.query<{ result: { kind: string; receipt: unknown } }>(
+            'SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result',
+            [JSON.stringify(cancel)],
+          )
+        ).rows[0]!.result;
+        expect(replay.kind).toBe('CANCELED');
+        expect(replay.receipt).toEqual(receipt);
+        expect(
+          (await client.query<{ zone: string }>("SELECT current_setting('TimeZone') zone")).rows,
+        ).toEqual([{ zone }]);
+        await client.query('COMMIT');
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    }
+  } finally {
+    await runtime.end();
+  }
+  const restarted = await openUnsentCancellation();
+  expect(await restarted.reconcile(cancel, io())).toMatchObject({ kind: 'COMMITTED', receipt });
+  expect(await cancellationRows(f)).toMatchObject({
+    causes: 1,
+    intents: 1,
+    commands: 1,
+    events: 1,
+    attempts: 0,
+    outbox: 1,
+  });
+  expect(await releaseRows(f)).toEqual(money);
+});
+
 it('paper-release: authentic NOT_SENT releases one full hold atomically without cash posting; permanent replay survives restart, pause and rule refresh', async () => {
   const port = await openWithdrawalRelease(),
     { f, admission, request } = await releaseFixture(),

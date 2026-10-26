@@ -67,6 +67,12 @@ COMMIT yields no receipt and requires readonly reconciliation. Concurrent exact
 replays have one permanent result; conflicting keys/targets cannot create a
 second cancellation. The provenance, tombstone and permanent key survive restart.
 
+Session TimeZone must not change durable replay or provenance equality. New
+cancellation snapshots and their causal validation use canonical UTC timestamps
+within the private boundary; caller session settings must be restored after each
+RPC. A different server/session zone cannot turn an exact replay into missing or
+conflicting evidence, and does not authorize additional mutation.
+
 ## Required evidence
 
 Tests precede implementation: strict wire rejection; genuine common state and
