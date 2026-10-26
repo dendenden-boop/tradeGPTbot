@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Explicit simulated fill content — 26 October 2026
+
+From accepted main **bcec05e44227863b1459c799928152e3e53541b6** ([PR44](https://github.com/dendenden-boop/tradeGPTbot/pull/44)), the [PAPER fill contract](paper-fill-provenance.md) requires native-free identities, exact PAPER/null-connection/public-source scope, original model/fill cause, quote-only fees, unchanged Spot accounting and UNKNOWN holds, and unconditional denial by the public writer. Event/binding hashes alone grant no authority. Forty-five missing-schema RED contracts became GREEN; 1,744 Portfolio/Paper cases pass. Full regression and exact-head CI remain required. All 57 published migrations and native contracts stay unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Private execution provenance, atomic shared allocation/ledger/hold progress, final dispatch/attempt/permit and remaining lifecycle/composition remain unfinished. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance, crash/backup restore or production soak claimed.
+
 ## PAPER execution accounting calculation — 26 October 2026
 
 Starting accepted main **02ed2d2afc6e5e4fa90bc9e314181540c2dfaffe** is recorded in [PR43](https://github.com/dendenden-boop/tradeGPTbot/pull/43). The [execution ledger contract](execution-ledger.md) requires balanced principal and per-fill rounded quote fees from recomputed complete competition, unchanged shared consumption/priority, exact asset deltas, immutable deterministic identities and no second financial effect. Caller-provided fills, postings or permission flags are rejected. Forty targeted contracts pass after tests-first missing-export RED; full new-head regression/CI remains required. This is calculation only, with published migrations1–57 and accepted runtime unchanged.

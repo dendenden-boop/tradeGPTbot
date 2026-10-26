@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Native-free PAPER fill candidate — 26 October 2026
+
+Protected main **bcec05e44227863b1459c799928152e3e53541b6** accepted the execution-ledger calculation through [PR44](https://github.com/dendenden-boop/tradeGPTbot/pull/44) and complete [Platform40336902670](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902670) / [CodeQL40336902808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40336902808). The next [PAPER fill content contract](docs/phase-13/paper-fill-provenance.md) adds explicit simulated provenance to the pure Portfolio reducer without fabricating native IDs. The public PostgreSQL store still rejects PAPER writes and rejects PAPER_FILL on native bindings before operation SQL. Matching event/binding hashes are correlation only, not permission. Tests-first 45 RED became GREEN; 1,744 Portfolio/Paper tests pass. Full new-head regression/CI remains required; all 57 published migrations and native contracts remain unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** This adds no durable execution authority. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Older checkpoints retain their historical source-specific results.
+
 ## PAPER execution accounting calculation — 26 October 2026
 
 Protected main **02ed2d2afc6e5e4fa90bc9e314181540c2dfaffe** accepted the durable unsent CANCEL increment through [PR43](https://github.com/dendenden-boop/tradeGPTbot/pull/43), complete [Platform40309262990](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40309262990) and [CodeQL40309263055](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40309263055). The next PHASE 13 scope is the pure [execution ledger calculation](docs/phase-13/execution-ledger.md): recompute complete competition, preserve actual calculated fills and produce per-asset balanced principal/fee postings consistent with Portfolio. Tests-first 38 missing-export RED became GREEN; 40 targeted contracts now pass. Complete new-head regression/CI and protected publication remain required. This calculation grants no financial authority or durable replay; migrations 1–57, native financial runtime, dependencies and workflows remain unchanged.

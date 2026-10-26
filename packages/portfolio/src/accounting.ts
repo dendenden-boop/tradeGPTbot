@@ -6,6 +6,7 @@ import {
   decimalMultiply,
   decimalCompare,
   parseDecimal,
+  sameMarketScope,
 } from '@ctp/exchange-core';
 import {
   bindingSchema,
@@ -131,6 +132,9 @@ export function reducePortfolio(
     holdWatermark?: HoldWatermark | null;
     /** Server-supplied evidence from the durable reservation lifecycle, never event fields. */
     resolutionEvidence?: { eventId: string; fingerprint: string };
+    /** Correlation with a future fixed writer's authenticated capture, never raw
+     * event fields. This pure guard does not itself prove SQL provenance. */
+    paperExecutionEvidence?: { eventId: string; fingerprint: string; bindingHash: string };
   },
 ): Reduction {
   const s = restorePortfolio(input),
@@ -138,6 +142,23 @@ export function reducePortfolio(
     postings: Posting[] = [];
   const now = context.now();
   if (!Number.isSafeInteger(now) || e.timestamp > now) throw new Error('FUTURE_EVENT');
+  if (e.type === 'PAPER_FILL') {
+    if (
+      s.binding.mode !== 'PAPER' ||
+      s.binding.connectionId !== null ||
+      s.binding.scope.market !== 'SPOT' ||
+      !sameMarketScope(s.binding.scope, e.paper.scope)
+    )
+      throw new Error('PAPER_EXECUTION_SCOPE');
+    const evidence = context.paperExecutionEvidence;
+    if (
+      !evidence ||
+      evidence.eventId !== e.id ||
+      evidence.fingerprint !== createHash('sha256').update(canonical(e)).digest('hex') ||
+      evidence.bindingHash !== createHash('sha256').update(canonical(s.binding)).digest('hex')
+    )
+      throw new Error('PAPER_EXECUTION_PROOF_REQUIRED');
+  }
   let holdWatermark: HoldWatermark | undefined;
   if (e.type === 'COMMITMENT' || e.type === 'RELEASE' || e.type === 'RESOLVE_COMMITMENT') {
     const resolving = e.type === 'RESOLVE_COMMITMENT';
@@ -333,7 +354,7 @@ export function reducePortfolio(
     )
       throw new Error('OUT_OF_ORDER_ECONOMIC');
     if (s.pending.includes(e.id)) throw new Error('EVIDENCE_ALREADY_PENDING');
-    if (e.type === 'FILL') {
+    if (e.type === 'FILL' || e.type === 'PAPER_FILL') {
       const key = positionKey(e);
       let p = s.positions.find((x) => positionKey(x) === key);
       if (!p) {
@@ -363,13 +384,14 @@ export function reducePortfolio(
       } else if (gross !== null) cash(e.quote, gross);
       else s.status = 'UNRECONCILED';
       for (const fee of e.fees) {
+        const fx = 'fx' in fee ? fee.fx : undefined;
         const expected =
           fee.asset === e.quote
             ? fee.amount
             : fee.asset === e.base
               ? mul(fee.amount, e.price)
-              : fee.fx && fee.fx.asOf <= now && Math.abs(fee.fx.asOf - e.timestamp) <= 5000
-                ? mul(fee.amount, fee.fx.rate)
+              : fx && fx.asOf <= now && Math.abs(fx.asOf - e.timestamp) <= 5000
+                ? mul(fee.amount, fx.rate)
                 : null;
         if (fee.quoteEquivalent !== expected) throw new Error('UNPROVEN_FEE_CONVERSION');
         p.fees[fee.asset] = add(p.fees[fee.asset] ?? '0', fee.amount);

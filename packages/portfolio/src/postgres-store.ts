@@ -256,6 +256,9 @@ export async function createPostgresPortfolioStore(options: {
         fingerprint = digest(payload);
       // Only the SQL reservation bridge can write this evidence and matching Risk state.
       if (event.type === 'RESOLVE_COMMITMENT') throw new Error('RESOLUTION_PROOF_REQUIRED');
+      // Simulated money requires the future fixed private execution bridge;
+      // this native reconciliation writer cannot accept caller-shaped evidence.
+      if (event.type === 'PAPER_FILL') throw new Error('PAPER_EXECUTION_PROOF_REQUIRED');
       if (
         !Number.isSafeInteger(expectedRevision) ||
         expectedRevision < 0 ||
