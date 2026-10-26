@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
+import ts from 'typescript';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +49,54 @@ function evidence() {
     },
   };
 }
+it('retains the original 120s admission owner allowance instead of imposing 90s', () => {
+  const e = evidence(), owner = e.owners['risk-admission'];
+  owner.testResults[0].endTime = owner.startTime + 110000;
+  expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).not.toThrow();
+});
+it('accepts real Vitest fractional millisecond endTime without rounding it away', () => {
+  const e = evidence();
+  for (const r of [...Object.values(e.owners), e.native])
+    for (const file of r.testResults) file.endTime += 0.25;
+  expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).not.toThrow();
+});
+it('rejects a reservation owner report beyond its original 30s process deadline', () => {
+  const e = evidence(), owner = e.owners['paper-reservation-state'];
+  owner.testResults[0].endTime = owner.startTime + 31000;
+  expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window))
+    .toThrow('NATIVE_TEST_EVIDENCE_INCOMPLETE');
+});
+it('matches every artifact owner deadline to its actual unchanged runner invocation', async () => {
+  const source = await readFile(new URL('./test-database.mjs', import.meta.url), 'utf8');
+  const file = ts.createSourceFile('runner.mjs', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  const deadlines = new Map();
+  function scan(node) {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'run' &&
+      node.arguments[1] && ts.isArrayLiteralExpression(node.arguments[1]) &&
+      node.arguments[2] && ts.isObjectLiteralExpression(node.arguments[2])) {
+      const output = node.arguments[1].elements.find(arg => ts.isStringLiteral(arg) &&
+        /^--outputFile.json=test-results\/.+-owner-tests.json$/u.test(arg.text));
+      if (output) {
+        const name = output.text.slice('--outputFile.json=test-results/'.length, -'-owner-tests.json'.length);
+        const timeout = node.arguments[2].properties.find(p => ts.isPropertyAssignment(p) && p.name.getText(file) === 'timeoutMs');
+        if (!timeout || !ts.isPropertyAssignment(timeout)) throw new Error('OWNER_DEADLINE_MISSING');
+        deadlines.set(name, Number(timeout.initializer.getText(file)));
+      }
+    }
+    ts.forEachChild(node, scan);
+  }
+  scan(file);
+  expect([...deadlines.keys()].sort()).toEqual(Object.keys(ownerReports).sort());
+  for (const [name, limit] of deadlines) {
+    expect([30000, 90000, 120000]).toContain(limit);
+    const e = evidence(), owner = e.owners[name];
+    owner.testResults[0].endTime = owner.startTime + limit;
+    expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window), name).not.toThrow();
+    owner.testResults[0].endTime++;
+    expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window), name)
+      .toThrow('NATIVE_TEST_EVIDENCE_INCOMPLETE');
+  }
+});
 it('requires all19 real owner reports, all42 native files and a bounded complete cohort report', () => {
   const { owners, native, cohorts } = evidence();
   expect(() => requireNativeTestArtifacts(owners, native, cohorts, window)).not.toThrow();
