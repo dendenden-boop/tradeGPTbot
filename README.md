@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Native progress fixture correction — 27 October 2026
+
+PR50 was authorized and merged to **05359995ab2a4f07005f201618748082de05de93** with all854 Git blobs identical to its fully verified source/PR. Exact-main [Platform40560806546](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40560806546) then failed one Ubuntu progress-fixture unit test (5,361 PASS / 1 FAIL); Windows and [CodeQL40560806630](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40560806630) passed, native/Auth/Docker dependencies skipped. This main run is **not acceptance**. All59 migrations are now published and remain immutable.
+
+The [test-only phase-budget correction](docs/phase-13/native-progress-fixture.md) separates actual child startup from delayed reporter delivery under the unchanged6s/8s/15s bounds. Tests-first deterministic RED and physical timestamps are retained; no unchanged CI rerun, production runner/runtime change or deadline waiver is made. Complete corrected-head regression/CI and protected publication remain required. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Older checkpoint results retain their historical scope.
+
 ## PAPER preparation journal candidate — 27 October 2026
 
 Accepted protected main **bb33ac41c7ca557113d4cfaff2ffa6bdc07f5438** through [PR49](https://github.com/dendenden-boop/tradeGPTbot/pull/49) passed complete [Platform40538727311](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40538727311) / [CodeQL40538727378](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40538727378): 5,308 unit / 1,384 PostgreSQL, nineteen owners, audit0; artifacts and strict protection verified. This closes the earlier pending attempt-protocol publication. All58 published migrations are immutable.

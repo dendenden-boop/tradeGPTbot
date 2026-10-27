@@ -74,16 +74,21 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
   );
   try {
     const end = Date.now() + 6000;
-    while (
-      !(await exists(path.join(dir, 'blocked.ready'))) ||
-      !(await exists(path.join(dir, 'progress.ready')))
-    ) {
+    while (!(await exists(path.join(dir, 'blocked.ready')))) {
       const early = await Promise.race([observed, wait(10).then(() => null)]);
       if (early?.error) throw early.error;
       if (Date.now() >= end) throw Error('Native progress fixture startup deadline');
     }
+    // Startup has its original six-second bound. Delayed reporter delivery
+    // shares the existing eight-second cohort deadline; it cannot consume the
+    // startup allowance after the fixture is already running and blocked.
+    while (!(await exists(path.join(dir, 'progress.ready')))) {
+      const early = await Promise.race([observed, wait(10).then(() => null)]);
+      if (early?.error) throw early.error;
+      if (early) throw Error('Native progress cohort completed before its witness');
+    }
     // The real VerboseReporter acknowledged its completed-case stdout flush.
-    // The later case is still blocked; the original startup deadline bounds both.
+    // The later case is still blocked; the original total deadline bounds both.
     controller.abort();
     expect((await observed).error).toMatchObject({
       message: expect.stringMatching(/abort|deadline/u),
@@ -114,6 +119,7 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
     await writeFile(path.join(dir, 'timing.json'), JSON.stringify(markers));
     logger.mockRestore();
   }
+  return dir;
 }
 it(
   'retains completed native case progress when a later case is physically interrupted',
@@ -125,8 +131,14 @@ it(
   () => exerciseProgress(1000),
   15000,
 );
-it(
-  'keeps six-second startup independent of delayed delivery within the original eight-second cohort',
-  () => exerciseProgress(1000, 5200),
-  15000,
-);
+it('keeps six-second startup independent of delayed delivery within the original eight-second cohort', async () => {
+  const dir = await exerciseProgress(1000, 5200);
+  const timing = JSON.parse(await readFile(path.join(dir, 'timing.json'), 'utf8'));
+  const start = timing['start.at'],
+    blocked = timing['blocked.ready'],
+    delivered = timing['progress.ready'];
+  expect(blocked - start).toBeGreaterThan(5000);
+  expect(blocked - start).toBeLessThan(6000);
+  expect(delivered - start).toBeGreaterThan(6000);
+  expect(delivered - start).toBeLessThan(8000);
+}, 15000);
