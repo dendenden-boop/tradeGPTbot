@@ -66,10 +66,11 @@ function input() {
   return { competition, portfolio };
 }
 const balance = (s: PortfolioState, asset: string) => s.balances.find((b) => b.asset === asset)!;
+const Exact = Decimal.clone({ precision: 120 });
 const sum = (rows: readonly Posting[], asset: string, bucket: string) =>
   rows
     .filter((p) => p.asset === asset && p.bucket === bucket)
-    .reduce((n, p) => n.add(p.amount), new Decimal(0))
+    .reduce((n, p) => n.add(p.amount), new Exact(0))
     .toFixed();
 
 it('derives native-free PAPER events from the original fills and exact frame versions', () => {
@@ -340,9 +341,12 @@ it.each(['exchange', 'region', 'environment'] as const)(
   'rejects another public source %s',
   (field) => {
     const x = input();
-    if (field === 'exchange') x.portfolio.binding.scope.exchange = 'BYBIT';
-    if (field === 'region') x.portfolio.binding.scope.region = 'other-region';
-    if (field === 'environment') x.portfolio.binding.scope.environment = 'LIVE';
+    if (field === 'exchange')
+      x.portfolio.binding.scope = { ...x.portfolio.binding.scope, exchange: 'BYBIT' };
+    if (field === 'region')
+      x.portfolio.binding.scope = { ...x.portfolio.binding.scope, region: 'other-region' };
+    if (field === 'environment')
+      x.portfolio.binding.scope = { ...x.portfolio.binding.scope, environment: 'LIVE' };
     expect(() => calculate(x)).toThrow('PAPER_EXECUTION_PORTFOLIO_SCOPE');
   },
 );
@@ -469,4 +473,79 @@ it('never presents a calculation as committed execution, source authority or a g
     expect(key in r).toBe(false);
   expect(r.state.binding.mode).toBe('PAPER');
   expect(r.state.binding.connectionId).toBeNull();
+});
+
+it('rejects a projection that loses another Spot position cost basis instead of returning unknown PnL', () => {
+  const x = input();
+  x.portfolio.positions.push({
+    instrumentId: 'usdt-usdc',
+    positionSide: 'NET',
+    bucket: 'SPOT',
+    base: 'USDT',
+    quote: 'USDC',
+    quantity: '1000',
+    basis: '1000',
+    realizedGross: '0',
+    feesQuote: '0',
+    fundingQuote: '0',
+    fees: {},
+    funding: {},
+  });
+  const original = JSON.stringify(x);
+  expect(() => calculate(x)).toThrow('PAPER_EXECUTION_PORTFOLIO_STATE');
+  expect(JSON.stringify(x)).toBe(original);
+});
+it('rejects cross-instrument inventory divergence even with a zero fee', () => {
+  const x = input();
+  x.competition.frame.model.takerFeeRate = '0';
+  x.portfolio.positions.push({
+    instrumentId: 'usdt-usdc',
+    positionSide: 'NET',
+    bucket: 'SPOT',
+    base: 'USDT',
+    quote: 'USDC',
+    quantity: '1000',
+    basis: '1000',
+    realizedGross: '0',
+    feesQuote: '0',
+    fundingQuote: '0',
+    fees: {},
+    funding: {},
+  });
+  expect(() => calculate(x)).toThrow('PAPER_EXECUTION_PORTFOLIO_STATE');
+});
+it('projects actual fills for all 300 contenders without a second cash effect', () => {
+  const x = input();
+  x.competition.orders = Array.from({ length: 300 }, (_, i) => item(i + 1));
+  x.competition.frame.model.participationRate = '1';
+  x.competition.frame.trade.quantity = parseDecimal('150');
+  x.competition.frame.book.asks = [{ price: parseDecimal('10.05'), quantity: parseDecimal('150') }];
+  x.competition.frame.asksUsed = [parseDecimal('0')];
+  const quote = balance(x.portfolio, 'USDT');
+  quote.total = quote.free = quote.available = '3000';
+  const r = calculate(x);
+  expect(r.fills).toHaveLength(300);
+  expect(r.state.pending).toHaveLength(300);
+  expect(new Set(r.fills.map((f) => f.fillId)).size).toBe(300);
+  expect(balance(r.state, 'BTC').total).toBe('150');
+  expect(balance(r.state, 'USDT').total).toBe('1490.9925');
+  expect(r.state.positions[0]!.basis).toBe('1507.5');
+  expect(r.state.positions[0]!.feesQuote).toBe('1.5075');
+});
+it('fails atomically at the existing pending evidence bound', () => {
+  const x = input();
+  x.portfolio.pending = Array.from({ length: 2000 }, (_, i) => `earlier-fill-${i}`);
+  const before = JSON.stringify(x);
+  expect(() => calculate(x)).toThrow();
+  expect(JSON.stringify(x)).toBe(before);
+});
+it('bounds Portfolio collections before parsing poisoned members', () => {
+  const x = input();
+  x.portfolio.positions = new Array(1001) as PortfolioState['positions'];
+  Object.defineProperty(x.portfolio.positions, '0', {
+    get() {
+      throw new Error('POISONED_POSITION');
+    },
+  });
+  expect(() => calculate(x)).toThrow('PAPER_EXECUTION_PORTFOLIO_INPUT');
 });

@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Execution to Portfolio calculation — 27 October 2026
+
+The pure [execution Portfolio bridge](execution-portfolio.md) takes complete competition inputs plus a prior PAPER/null-connection/Spot book. It recomputes existing ledger fills, derives native-free PAPER_FILL events and requires exact reducer/posting equivalence. BUY/SELL principal, basis/PnL and per-fill quote fees have one monetary effect. Every fill preserves holds and must leave known cost basis and consistent Spot inventory. Bounds, ordering, nullable availability, deterministic identities and deep immutability remain explicit. Caller-supplied results or authority fields reject.
+
+The result is calculation content, not authenticated provenance, permanent replay or a committed financial result. Matching hashes cannot authorize SQL. The public Portfolio writer still rejects PAPER; final dispatch/attempt/permit and atomic private execution/allocation/Portfolio/holds remain required. All 57 migrations and native financial runtime remain unchanged. Accepted main **d623cb6d…** completed the earlier CI repair; new-head acceptance is separate. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER financial dispatch/positive native credit disabled, native AMEND Binance Spot TESTNET only. No real private exchange acceptance, crash/backup restore or production soak claimed.
+
 ## Complete native CI evidence
 
 [Native proof isolation](native-proof-isolation.md) defines explicit `PARTIAL` owner/cohort reports, distinct physical clusters, one run/attempt/commit-bound 1020s window and a fail-closed combined required gate. Original owner commands, native cases, populated upgrades, resets, 480s aggregate cohorts and original per-suite 30/90/120s owner limits remain mandatory. This is test orchestration only and issues no runtime authority.

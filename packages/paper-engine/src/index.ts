@@ -5,6 +5,11 @@ export * from './reservation-progress.js';
 export { calculatePaperRiskBudget } from './risk-budget.js';
 export * from './competition.js';
 export * from './execution-ledger.js';
+export {
+  calculatePaperExecutionPortfolio,
+  type PaperExecutionPortfolioCalculation,
+  type PaperExecutionPortfolioFill,
+} from './execution-portfolio.js';
 export { calculatePaperInventoryValuation } from './inventory-valuation.js';
 export {
   calculatePaperRiskEvaluation,
