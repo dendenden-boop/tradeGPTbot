@@ -85,5 +85,9 @@ export function executionSourceWire(count = 1) {
     },
     candidates,
   };
-  return { request, packet, portfolio };
+  return {
+    request: structuredClone(request),
+    packet: structuredClone(packet),
+    portfolio: structuredClone(portfolio),
+  };
 }

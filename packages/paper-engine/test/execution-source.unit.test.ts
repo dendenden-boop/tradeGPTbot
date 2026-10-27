@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import { executionSourceWire } from './execution-source-fixtures.js';
-import { wireNow } from './admission-wire-fixtures.js';
+import { wireHash, wireNow } from './admission-wire-fixtures.js';
 const fake = vi.hoisted<{
   payload: unknown;
   queries: string[];
@@ -33,7 +33,7 @@ const options = {
 };
 const io = () => ({ signal: new AbortController().signal, deadline: wireNow + 2000 });
 interface Port {
-  read(raw: unknown, io: ReturnType<typeof io>): Promise<Record<string, unknown>>;
+  read(raw: unknown, context: ReturnType<typeof io>): Promise<Record<string, unknown>>;
   close(): Promise<void>;
 }
 function factory() {
@@ -101,6 +101,40 @@ it('keeps all 300 supplied candidate priorities lossless above Number precision'
     await port.close();
   }
 });
+it('accepts the admitted Spot MARKET shape without a fabricated limit or native identity', async () => {
+  const f = executionSourceWire(),
+    port = await open(),
+    c = f.packet.candidates[0]!;
+  c.command = { ...c.command, type: 'MARKET', limitPrice: null, timeInForce: null };
+  c.commandHash = wireHash({
+    operation: 'createOrder',
+    command: c.command,
+    binding: f.request.admission.binding,
+  });
+  f.request.admission.commandHash = f.packet.request.admission.commandHash = c.commandHash;
+  fake.payload = f.packet;
+  try {
+    expect((await port.read(f.request, io())).candidates).toEqual(f.packet.candidates);
+  } finally {
+    await port.close();
+  }
+});
+it('rejects 301 contenders before parsing poisoned members instead of silently truncating', async () => {
+  const f = executionSourceWire(),
+    port = await open();
+  const poisoned = new Array(301);
+  Object.defineProperty(poisoned, '0', {
+    get() {
+      throw Error('POISONED_CANDIDATE');
+    },
+  });
+  fake.payload = { ...f.packet, candidates: poisoned };
+  try {
+    await expect(port.read(f.request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  } finally {
+    await port.close();
+  }
+});
 it.each([
   ['asOf', wireNow + 1],
   ['validUntil', wireNow],
@@ -109,6 +143,8 @@ it.each([
   ['portfolio.hash', 'f'.repeat(64)],
   ['portfolio.revision', '9007199254740992'],
   ['market.record.rules.version', 'replacement'],
+  ['market.record.rules.unsupportedFilters', ['FUTURE_LIMIT']],
+  ['market.record.rules.minQuantity', '1'],
   ['market.record.instrument.scope.exchange', 'HTX'],
   ['market.book.stale', true],
   ['market.trade.receivedAt', wireNow + 1],
@@ -133,7 +169,7 @@ it.each([
 ])('rejects corrupted %s content before COMMIT', async (path, replacement) => {
   const f = executionSourceWire(),
     port = await open();
-  set(f.packet, path as string, replacement);
+  set(f.packet, path, replacement);
   fake.payload = f.packet;
   fake.queries = [];
   try {
@@ -206,6 +242,8 @@ it('rejects duplicate RPC rows', async () => {
 it('returns no expired evidence if cleanup crosses freshness after COMMIT', async () => {
   const f = executionSourceWire(),
     port = await open();
+  f.packet.maxEvidenceAgeMs = 1000;
+  f.packet.validUntil = f.packet.market.snapshotAt + 1001;
   fake.payload = f.packet;
   fake.afterCommit = () => vi.mocked(Date.now).mockReturnValue(f.packet.validUntil);
   try {
