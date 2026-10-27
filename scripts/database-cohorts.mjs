@@ -23,7 +23,11 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
       'packages/database/test/fixtures/risk-certification.ts',
       '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c',
     ],
-    [admission, '2829e03fbfb716b938fe9a4e1aa0ed01fbb6771fac68e77941d1c4ad0a681929'],
+    [admission, '4089a9db8cd00c54487c528dbfdfe28a502db7e1973e064960a1e6d7e134125c'],
+    [
+      'packages/database/test/fixtures/registry-commit-proxy.ts',
+      'a64aefc8526cea37cc6f218c407ee730d82e58f504d8a111888d03ca0a915af4',
+    ],
   ]) {
     const text = (await readFile(path.join(root, file), 'utf8')).replaceAll('\r\n', '\n');
     assert.equal(
