@@ -26,6 +26,9 @@ import {
 import { fixture as riskFixture } from '../../risk-engine/test/fixtures.js';
 import { frameFixture } from '../../paper-engine/test/frame-fixture.js';
 import { state } from '../../order-engine/test/fixtures.js';
+// BEGIN PAPER EXECUTION SOURCE IMPORT
+import * as paperSourceServer from '@ctp/paper-engine/risk';
+// END PAPER EXECUTION SOURCE IMPORT
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('ISOLATED_PAPER_ADMISSION_RUNNER_REQUIRED');
 
@@ -2185,3 +2188,216 @@ it('paper-release: private tombstone is inaccessible and stale common writers ca
   }
   expect(await withdrawalInventory(f)).toEqual(stable);
 });
+
+// BEGIN PAPER EXECUTION SOURCE TESTS
+// Initial server-owned execution inventory. These are genuine accepted Order /
+// admission ports, not owner-inserted JSON certificates or a financial writer.
+interface ExecutionCandidateRead {
+  read(
+    request: unknown,
+    options: ReturnType<typeof io>,
+  ): Promise<{
+    kind: string;
+    asOf: number;
+    candidates: {
+      orderId: string;
+      intentId: string;
+      admissionSequence: string;
+      admittedAt: number;
+    }[];
+    portfolio: { holds: unknown[] };
+  }>;
+  close(): Promise<void>;
+}
+async function openExecutionSource(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+    'createPostgresPaperExecutionSource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_SOURCE_MISSING');
+  const port = await (factory as (o: unknown) => Promise<ExecutionCandidateRead>)({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function executionRequest(f: Ready, order = f.order) {
+  const { state, ...admission } = await input(f, order);
+  const auth = (
+    await admin.query<{ permissionEpoch: string; userSessionEpoch: string }>(
+      'SELECT a."permissionEpoch"::text "permissionEpoch",u."sessionEpoch"::text "userSessionEpoch" FROM public.exchange_account a JOIN public."user" u ON u.id=a."tenantId" WHERE a."tenantId"=$1 AND a.id=$2',
+      [f.c.owner.tenantId, f.c.owner.accountId],
+    )
+  ).rows[0]!;
+  return {
+    kind: 'PAPER_EXECUTION_CAPTURE',
+    admission: { ...admission, orderId: state.id },
+    authorization: auth,
+  };
+}
+async function executionPair() {
+  const f = await nativeReady(),
+    admission = await openAdmission();
+  const other = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  const second = await admission.approve(await input(f, other), io());
+  const first = await admission.approve(await input(f), io());
+  return { f, admission, other, first, second, request: await executionRequest(f) };
+}
+it('paper-execution: fixed SQL route captures a genuinely issued source without a financial effect', async () => {
+  const ready = await nativeReady(),
+    marketOrder = await ready.orders.create(
+      ready.binding,
+      {
+        ...ready.draft,
+        key: randomUUID(),
+        order: { ...ready.draft.order, type: 'MARKET', limitPrice: null, timeInForce: null },
+      },
+      io(),
+    ),
+    f = ready,
+    admission = await openAdmission();
+  // The fixture's wide lifetime price bounds cannot prove MARKET min/max
+  // notional. Preserve that Risk rejection; it is not a capture permission.
+  const rejectedBefore = await withdrawalInventory(f);
+  await expect(admission.approve(await input(f, marketOrder), io())).rejects.toThrow(
+    'PAPER_ADMISSION_LIMIT',
+  );
+  expect(await withdrawalInventory(f)).toEqual(rejectedBefore);
+  await admission.approve(await input(f), io());
+  const request = await executionRequest(f),
+    before = await withdrawalInventory(f),
+    runtime = new Pool({
+      connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+      max: 1,
+      query_timeout: 3000,
+    });
+  const c = await runtime.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    const result = (
+      await c.query<{ result: { kind: string; candidates: { orderId: string }[] } }>(
+        'SELECT ctp_paper.reconcile_admission($1::jsonb) result',
+        [JSON.stringify(request)],
+      )
+    ).rows[0]!.result;
+    expect(result.kind).toBe('PAPER_EXECUTION_CAPTURE');
+    expect(result.candidates.map((x: { orderId: string }) => x.orderId)).toEqual([f.order.id]);
+    await c.query('COMMIT');
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+    await runtime.end();
+  }
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution: complete immutable FIFO follows admission rather than draft creation and survives new connections', async () => {
+  const port = await openExecutionSource(),
+    { f, other, request } = await executionPair(),
+    before = await withdrawalInventory(f);
+  const result = await port.read(request, io());
+  expect(result.kind).toBe('PAPER_EXECUTION_SOURCE');
+  expect(result.candidates.map((c) => c.orderId)).toEqual([other.id, f.order.id]);
+  expect(
+    BigInt(result.candidates[0]!.admissionSequence) <
+      BigInt(result.candidates[1]!.admissionSequence),
+  ).toBe(true);
+  expect(result.portfolio.holds).toHaveLength(2);
+  await port.close();
+  const restarted = await openExecutionSource();
+  expect((await restarted.read(request, io())).candidates).toEqual(result.candidates);
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution: reading cannot adopt a previously unadopted account or omit it from tenant inventory', async () => {
+  const port = await openExecutionSource(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  await admission.approve(await input(f), io());
+  await anotherAccount(f, true);
+  const before = await withdrawalInventory(f);
+  const heads = () =>
+    admin.query(
+      'SELECT tenant_id::text,book_id::text,revision::text FROM ctp_paper.admission_book_head WHERE tenant_id=$1 ORDER BY book_id',
+      [f.c.owner.tenantId],
+    );
+  const stable = (await heads()).rows;
+  await expect(port.read(await executionRequest(f), io())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  expect((await heads()).rows).toEqual(stable);
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution: UNKNOWN is never silently dropped from a complete contender source', async () => {
+  const port = await openExecutionSource(),
+    { f, other, second, request } = await executionPair();
+  await (
+    await openLifecycle()
+  ).markUnknown(await unknownRequest({ ...f, order: other }, second.reservationId), io());
+  const before = await withdrawalInventory(f);
+  await expect(port.read(request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution: private NOT_SENT exclusion retains all collateral and a withdrawn target cannot become executable', async () => {
+  const port = await openExecutionSource(),
+    { f, other, second, request } = await executionPair();
+  await (
+    await openWithdrawal()
+  ).withdraw(await withdrawalRequest({ ...f, order: other }, second.reservationId), io());
+  const before = await withdrawalInventory(f),
+    result = await port.read(request, io());
+  expect(result.candidates.map((c) => c.orderId)).toEqual([f.order.id]);
+  expect(result.portfolio.holds).toHaveLength(2);
+  await expect(port.read(await executionRequest(f, other), io())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution: stale authorization and lost COMMIT produce no evidence or monetary mutation; retry is readonly', async () => {
+  const normal = await openExecutionSource(),
+    f = await nativeReady(),
+    admission = await openAdmission();
+  await admission.approve(await input(f), io());
+  const request = await executionRequest(f),
+    before = await withdrawalInventory(f);
+  await expect(
+    normal.read(
+      {
+        ...request,
+        authorization: {
+          ...request.authorization,
+          permissionEpoch: (BigInt(request.authorization.permissionEpoch) + 1n).toString(),
+        },
+      },
+      io(),
+    ),
+  ).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_ADMISSION_URL'),
+    'PAPER_EXECUTION_SOURCE',
+  );
+  const uncertain = await openExecutionSource(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(uncertain.read(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+  } finally {
+    await uncertain.close();
+    await proxy.close();
+  }
+  expect((await normal.read(request, io())).candidates.map((c) => c.orderId)).toEqual([f.order.id]);
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+// END PAPER EXECUTION SOURCE TESTS

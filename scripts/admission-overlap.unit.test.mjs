@@ -179,6 +179,9 @@ it('fails closed when reviewed overlap inputs or their SQL fixture helper change
   await expect(cohorts.verifyAdmissionParallelFiles(await temp())).rejects.toThrow();
   const copy = await temp();
   const paths = [native, paper, 'packages/database/test/fixtures/risk-certification.ts'];
+  // BEGIN PAPER EXECUTION SOURCE PROXY_WATCH
+  paths.push('packages/database/test/fixtures/registry-commit-proxy.ts');
+  // END PAPER EXECUTION SOURCE PROXY_WATCH
   for (const file of paths) {
     await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
     await writeFile(
@@ -198,3 +201,26 @@ it('fails closed when reviewed overlap inputs or their SQL fixture helper change
     await writeFile(path.join(copy, file), before);
   }
 });
+// BEGIN PAPER EXECUTION SOURCE PROXY_REVIEW
+it('binds the shared readonly COMMIT proxy to renewed overlap review', async () => {
+  const copy = await temp();
+  for (const file of [
+    native,
+    paper,
+    'packages/database/test/fixtures/risk-certification.ts',
+    'packages/database/test/fixtures/registry-commit-proxy.ts',
+  ]) {
+    await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
+    await writeFile(path.join(copy, file), await readFile(path.join(root, file), 'utf8'));
+  }
+  await cohorts.verifyAdmissionParallelFiles(copy);
+  await writeFile(
+    path.join(copy, 'packages/database/test/fixtures/registry-commit-proxy.ts'),
+    '// unreviewed proxy role mutation\n',
+    { flag: 'a' },
+  );
+  await expect(cohorts.verifyAdmissionParallelFiles(copy)).rejects.toThrow(
+    /renewed cluster-role review/u,
+  );
+});
+// END PAPER EXECUTION SOURCE PROXY_REVIEW

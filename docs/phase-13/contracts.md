@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Pristine execution candidate capture — 27 October 2026
+
+The server-only [execution source](execution-source.md) uses the fixed reconciliation RPC and existing physically settling admission transport. Under GLOBAL → tenant → verified user → sorted accounts/Orders → causal book/reservation serialization, it authenticates the complete tenant inventory and captures all eligible issued contenders for the exact account/instrument, ordered by original lossless admission sequence. Actual private NOT_SENT exclusions retain collateral; UNKNOWN or missing causal heads reject rather than disappear. A read cannot adopt any account, create a priority or renew approval. Original admission times/expiry/bounds and current market freshness have distinct meanings.
+
+The immutable result is data, not Risk certification, a committed fill, allocation or dispatch permission. A future fixed private writer must reread all current authority/state at its atomic final boundary. Candidate additive58 preserves all57 published SQL migrations and old mutation paths. Full regression and exact-head CI remain mandatory. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, LIVE/PAPER financial dispatch/positive credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak not claimed.
+
 ## Execution to Portfolio calculation — 27 October 2026
 
 The pure [execution Portfolio bridge](execution-portfolio.md) takes complete competition inputs plus a prior PAPER/null-connection/Spot book. It recomputes existing ledger fills, derives native-free PAPER_FILL events and requires exact reducer/posting equivalence. BUY/SELL principal, basis/PnL and per-fill quote fees have one monetary effect. Every fill preserves holds and must leave known cost basis and consistent Spot inventory. Bounds, ordering, nullable availability, deterministic identities and deep immutability remain explicit. Caller-supplied results or authority fields reject.

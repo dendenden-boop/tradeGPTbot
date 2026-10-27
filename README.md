@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Pristine PAPER execution source candidate — 27 October 2026
+
+Accepted protected main is **d4f4736f4f0811af1200d5fd49b62034aa2bf6a3** through [PR47](https://github.com/dendenden-boop/tradeGPTbot/pull/47), complete [Platform40464200775](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40464200775) and [CodeQL40464200727](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40464200727). Its exact-main results supersede the earlier pending calculation-publication checkpoint. A fresh full13 baseline passed before edits with 837 tracked inputs unchanged.
+
+The [server-owned execution candidate source](docs/phase-13/execution-source.md) captures complete eligible pristine issued FIFO, causal Portfolio and current public market heads. It assigns no liquidity or transport permission and performs no financial write or implicit book adoption. Tests-first unit/native RED and subsequent targeted GREEN evidence are retained. Candidate additive58 preserves all57 published migrations and accepted financial contracts; complete new-head regression/CI and protected publication remain required.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Durable execution/final dispatch and remaining lifecycle/composition are unfinished. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Older checkpoints retain their historical scope/results.
+
 ## PAPER execution Portfolio calculation — 27 October 2026
 
 Current accepted protected main is **d623cb6db9b1d66b8941b9bbf610d787af1ed35b**, through [PR46](https://github.com/dendenden-boop/tradeGPTbot/pull/46), complete [Platform40393202279](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202279) and [CodeQL40393202135](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202135). These runs complete the preceding CI-only repair; earlier timeout/validator failures remain historical. A fresh thirteen-command local baseline passed before this increment.

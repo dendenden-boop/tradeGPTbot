@@ -16,6 +16,12 @@ export { createPostgresPaperReservationLifecycle } from './postgres-reservation-
 export { createPostgresPaperWithdrawalBarrier } from './postgres-withdrawal-barrier.js';
 export { createPostgresPaperWithdrawalRelease } from './postgres-withdrawal-release.js';
 export { createPostgresPaperUnsentCancellation } from './postgres-unsent-cancellation.js';
+export { createPostgresPaperExecutionSource } from './postgres-execution-source.js';
+export type {
+  PaperExecutionSource,
+  PaperExecutionSourceRequest,
+  PaperExecutionSourceReader,
+} from './postgres-execution-source.js';
 export type {
   PaperUnsentCancellationRequest,
   PaperUnsentCancellationReceipt,
