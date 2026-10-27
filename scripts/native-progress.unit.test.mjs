@@ -12,11 +12,12 @@ const exists = (file) =>
     () => false,
   );
 
-it('retains completed native case progress when a later case is physically interrupted', async () => {
+async function exerciseProgress(deliveryDelayMs = 0) {
   await mkdir(path.join(root, 'test-results/cohort-unit'), { recursive: true });
   const dir = await mkdtemp(path.join(root, 'test-results/cohort-unit/native-progress-'));
   const fixture = path.join(dir, 'progress.test.mjs'),
-    config = path.join(dir, 'vitest.config.ts');
+    config = path.join(dir, 'vitest.config.ts'),
+    reporter = path.join(dir, 'progress-reporter.mjs');
   await writeFile(
     fixture,
     `import {it,expect} from 'vitest';import {writeFile} from 'node:fs/promises';
@@ -26,9 +27,27 @@ it('blocked native owner progress witness',async()=>{await writeFile(new URL('./
   );
   const portable = (s) => s.replaceAll('\\', '/');
   await writeFile(
+    reporter,
+    `import {VerboseReporter} from 'vitest/reporters';
+import {writeFile} from 'node:fs/promises';
+import {setTimeout as wait} from 'node:timers/promises';
+export default class ProgressReporter extends VerboseReporter {
+  async onTestCaseResult(test) {
+    const witness=test.task.name==='completed native owner progress witness';
+    if(witness) await wait(${deliveryDelayMs});
+    super.onTestCaseResult(test);
+    if(witness && test.result().state==='passed') {
+      await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
+      await writeFile(new URL('./progress.ready',import.meta.url),'flushed');
+    }
+  }
+}
+`,
+  );
+  await writeFile(
     config,
     `import native from ${JSON.stringify(portable(path.join(root, 'vitest.database.config.ts')))};
-export default {...native,test:{...native.test,include:[${JSON.stringify(portable(fixture))}],outputFile:{json:${JSON.stringify(portable(path.join(dir, 'complete.json')))}}}};
+export default {...native,test:{...native.test,include:[${JSON.stringify(portable(fixture))}],reporters:[${JSON.stringify(portable(reporter))},'json'],outputFile:{json:${JSON.stringify(portable(path.join(dir, 'complete.json')))}}}};
 `,
   );
   const controller = new AbortController(),
@@ -54,14 +73,16 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
   );
   try {
     const end = Date.now() + 6000;
-    while (!(await exists(path.join(dir, 'blocked.ready')))) {
+    while (
+      !(await exists(path.join(dir, 'blocked.ready'))) ||
+      !(await exists(path.join(dir, 'progress.ready')))
+    ) {
       const early = await Promise.race([observed, wait(10).then(() => null)]);
       if (early?.error) throw early.error;
       if (Date.now() >= end) throw Error('Native progress fixture startup deadline');
     }
-    // Let the real parent reporter drain the already completed first case's
-    // IPC event; the second case remains blocked, so no complete module exists.
-    await wait(250);
+    // The real VerboseReporter acknowledged its completed-case stdout flush.
+    // The later case is still blocked; the original startup deadline bounds both.
     controller.abort();
     expect((await observed).error).toMatchObject({
       message: expect.stringMatching(/abort|deadline/u),
@@ -80,4 +101,14 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
     await observed;
     logger.mockRestore();
   }
-}, 15000);
+}
+it(
+  'retains completed native case progress when a later case is physically interrupted',
+  () => exerciseProgress(),
+  15000,
+);
+it(
+  'retains completed native progress when parent output delivery exceeds the old fixed drain',
+  () => exerciseProgress(1000),
+  15000,
+);
