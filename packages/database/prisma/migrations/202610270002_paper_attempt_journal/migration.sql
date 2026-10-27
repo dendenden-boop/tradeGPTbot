@@ -8,8 +8,7 @@ CREATE TABLE ctp_paper.attempt_preparation (
  request jsonb NOT NULL CHECK(octet_length(request::text)<=16384),
  state jsonb NOT NULL CHECK(octet_length(state::text)<=32768),
  state_hash bytea NOT NULL CHECK(state_hash=sha256(convert_to(state::text,'UTF8'))),
- PRIMARY KEY(tenant_id,preparation_key), UNIQUE(tenant_id,attempt_id), UNIQUE(tenant_id,intent_id),
- FOREIGN KEY(tenant_id,reservation_id) REFERENCES ctp_paper.admission_issuance(tenant_id,reservation_id)
+ PRIMARY KEY(tenant_id,preparation_key), UNIQUE(tenant_id,attempt_id), UNIQUE(tenant_id,intent_id)
 );
 CREATE TABLE ctp_paper.attempt_not_sent (
  tenant_id uuid NOT NULL, stop_key text NOT NULL CHECK(stop_key ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
@@ -18,9 +17,11 @@ CREATE TABLE ctp_paper.attempt_not_sent (
  state jsonb NOT NULL CHECK(octet_length(state::text)<=32768),
  state_hash bytea NOT NULL CHECK(state_hash=sha256(convert_to(state::text,'UTF8'))),
  PRIMARY KEY(tenant_id,stop_key), UNIQUE(tenant_id,attempt_id),
- FOREIGN KEY(tenant_id,attempt_id) REFERENCES ctp_paper.attempt_preparation(tenant_id,attempt_id),
- FOREIGN KEY(tenant_id,withdrawal_event_id) REFERENCES ctp_paper.withdrawal_barrier(tenant_id,event_id)
+ FOREIGN KEY(tenant_id,attempt_id) REFERENCES ctp_paper.attempt_preparation(tenant_id,attempt_id)
 );
+-- Published issuance/withdrawal rows are already permanently immutable. Validate
+-- those relationships in the cause trigger below: a new referencing FK would
+-- intercept TRUNCATE before the published23514 immutable trigger can run.
 ALTER TABLE ctp_paper.attempt_preparation ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ctp_paper.attempt_preparation FORCE ROW LEVEL SECURITY;
 ALTER TABLE ctp_paper.attempt_not_sent ENABLE ROW LEVEL SECURITY;

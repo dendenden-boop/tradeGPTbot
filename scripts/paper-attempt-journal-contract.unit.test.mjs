@@ -6,6 +6,13 @@ const read = (p) =>
   fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const sql = () =>
   read('packages/database/prisma/migrations/202610270002_paper_attempt_journal/migration.sql');
+it('preserves published BEFORE TRUNCATE errors through cause checks without adding foreign-key dependencies on old tables', () => {
+  const s = sql();
+  expect(s).not.toMatch(/REFERENCES ctp_paper\.(?:withdrawal_barrier|admission_issuance)\(/u);
+  expect(s).toContain('CREATE TRIGGER attempt_preparation_cause BEFORE INSERT');
+  expect(s).toContain('CREATE TRIGGER attempt_not_sent_cause BEFORE INSERT');
+  expect(s).toContain('w.reservation_id<>j.reservation_id');
+});
 it('adds two private immutable forced-RLS journals and grants only the original two RPCs', () => {
   const s = sql();
   expect(s.match(/CREATE TABLE /gu)).toHaveLength(2);
