@@ -406,6 +406,10 @@ try {
     assert.equal('createPostgresPaperExecutionSource' in paper,false);
     await assert.rejects(paperRisk.createPostgresPaperExecutionSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-execution-source.js'));
+    assert.equal(typeof paperRisk.createPostgresPaperAttemptJournal,'function');
+    assert.equal('createPostgresPaperAttemptJournal' in paper,false);
+    await assert.rejects(paperRisk.createPostgresPaperAttemptJournal({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-attempt-journal.js'));
     const paperRuntime=await import('@ctp/paper-engine/runtime');
     for(const name of ['createPostgresPaperRuntimeObservations','createPostgresPaperRuntimeSource']) {
       assert.equal(typeof paperRuntime[name],'function');

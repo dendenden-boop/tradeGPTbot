@@ -2452,9 +2452,10 @@ it('paper-attempt-journal: fixed runtime SQL route persists a real preparation w
     await c.query('BEGIN');
     await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
     const r = (
-      await c.query('SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result', [
-        JSON.stringify(request),
-      ])
+      await c.query<{ result: { kind: string; preparation: PaperExecutionAttempt } }>(
+        'SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result',
+        [JSON.stringify(request)],
+      )
     ).rows[0]!.result;
     expect(r.kind).toBe('PREPARED');
     expect(r.preparation.phase).toBe('PREPARED');
@@ -2548,7 +2549,7 @@ it('paper-attempt-journal: UNKNOWN and STOP race with one durable cause and no w
     lifecycle.markUnknown(unknown, io()),
   ]);
   expect(outcomes.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
-  if (outcomes[0]!.status === 'fulfilled') {
+  if (outcomes[0].status === 'fulfilled') {
     await expect(lifecycle.markUnknown(unknown, io())).rejects.toThrow(/PAPER_ADMISSION/);
     expect(await withdrawalInventory(f)).toEqual(before);
   } else {
@@ -2568,9 +2569,28 @@ it('paper-attempt-journal: a legacy withdrawal supplies the same immutable negat
   const before = await withdrawalInventory(f),
     stop = stopRequest(request);
   const state = await (await openAttemptJournal()).stopBeforeStart(stop, io());
-  expect(state.lastEvent.id).toBe(barrier.eventId);
+  expect(barrier).toMatchObject({ eventId: state.lastEvent.id });
   expect(await port.prepare(request, io())).toEqual(preparation);
   expect(await withdrawalInventory(f)).toEqual(before);
+  await (
+    await openWithdrawalRelease()
+  ).release(
+    {
+      kind: 'PAPER_RELEASE_WITHDRAWN',
+      admission: request.admission,
+      reservationId: grant.reservationId,
+      withdrawalEventId: state.lastEvent.id,
+      eventId: randomUUID(),
+      expectedRevision: '1',
+    },
+    io(),
+  );
+  await (await openUnsentCancellation()).cancel(await cancellationRequest(f), io());
+  const terminal = await withdrawalInventory(f);
+  expect(await port.prepare(request, io())).toEqual(preparation);
+  expect(await port.stopBeforeStart(stop, io())).toEqual(state);
+  expect(await port.read(request, io())).toMatchObject({ kind: 'COMMITTED', state });
+  expect(await withdrawalInventory(f)).toEqual(terminal);
 });
 it('paper-attempt-journal: lost COMMIT yields no grant and readonly recovery finds the single real preparation and stop', async () => {
   await openAttemptJournal();
@@ -2590,14 +2610,29 @@ it('paper-attempt-journal: lost COMMIT yields no grant and readonly recovery fin
       recovered = await normal.read(request, io());
     expect(recovered.kind).toBe('COMMITTED');
     const stop = stopRequest(request);
-    proxy.arm();
-    await expect(port.stopBeforeStart(stop, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    // The shared proxy drops one COMMIT in its lifetime. STOP needs its own
+    // physical fault boundary; rearming cannot reproduce a second response loss.
+    const stopProxy = await registryCommitProxy(
+      required('DATABASE_PAPER_ADMISSION_URL'),
+      'PAPER_ADMISSION',
+    );
+    const stopping = await openAttemptJournal(stopProxy.connectionString);
+    try {
+      stopProxy.arm();
+      await expect(stopping.stopBeforeStart(stop, io())).rejects.toThrow(
+        'PAPER_ADMISSION_UNCERTAIN',
+      );
+      expect(stopProxy.dropped()).toBe(1);
+    } finally {
+      await stopping.close();
+      await stopProxy.close();
+    }
     expect(await normal.reconcileStop(stop, io())).toMatchObject({
       kind: 'COMMITTED',
       preparation: recovered.preparation,
       state: { phase: 'NOT_SENT' },
     });
-    expect(proxy.dropped()).toBe(2);
+    expect(proxy.dropped()).toBe(1);
     expect(await withdrawalInventory(f)).toEqual(before);
   } finally {
     await port.close();
@@ -2617,10 +2652,10 @@ it('paper-attempt-journal: readonly MISSING cannot adopt an attempt and runtime 
       for (const action of ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'])
         expect(
           (
-            await runtime.query('SELECT has_table_privilege(current_user,$1,$2) allowed', [
-              'ctp_paper.' + table,
-              action,
-            ])
+            await runtime.query<{ allowed: boolean }>(
+              'SELECT has_table_privilege(current_user,$1,$2) allowed',
+              ['ctp_paper.' + table, action],
+            )
           ).rows[0]!.allowed,
         ).toBe(false);
     }

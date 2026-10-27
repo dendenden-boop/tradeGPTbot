@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { format, resolveConfig } from 'prettier';
 import { expect, it } from 'vitest';
+import { beforePaperAttemptJournal } from './paper-attempt-journal-legacy.mjs';
 const path = 'packages/database/test/paper-admission.integration.test.ts';
 const fixtureOnly = new Set([
   'updatePolicy',
@@ -45,6 +46,7 @@ const factories = new Set([
 // reviewed additive58 blocks and six new cases; their raw required coverage,
 // owner counts, migration and unchanged deadlines have a separate contract.
 function beforeExecutionSource(file, source) {
+  source = beforePaperAttemptJournal(file, source);
   if (![path, 'scripts/test-database.mjs'].includes(file)) return source;
   source = source.replace(
     /^[ \t]*\/\/ BEGIN PAPER EXECUTION SOURCE ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PAPER EXECUTION SOURCE \1\n/gm,

@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## PAPER preparation journal candidate — 27 October 2026
+
+Accepted protected main **bb33ac41c7ca557113d4cfaff2ffa6bdc07f5438** through [PR49](https://github.com/dendenden-boop/tradeGPTbot/pull/49) passed complete [Platform40538727311](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40538727311) / [CodeQL40538727378](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40538727378): 5,308 unit / 1,384 PostgreSQL, nineteen owners, audit0; artifacts and strict protection verified. This closes the earlier pending attempt-protocol publication. All58 published migrations are immutable.
+
+The next [server-only preparation/stop journal](docs/phase-13/attempt-journal.md) persists original PREPARED and irreversible NOT_SENT using the existing fixed RPCs and actual withdrawal cause. It retains collateral, permanent replay and read-only uncertain-COMMIT recovery. Candidate additive59 grants no START, permit or monetary effect. Full new-head regression/CI and protected publication remain required.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Final execution gate/writer and remaining lifecycle/composition are unfinished. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Earlier checkpoints keep their historical scope/results.
+
 ## Pristine PAPER attempt protocol — 27 October 2026
 
 Accepted protected main **d86424f35472cf4432262f2ffe10deed1d701dd3** through [PR48](https://github.com/dendenden-boop/tradeGPTbot/pull/48) passed complete [Platform40502819971](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819971) / [CodeQL40502819965](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819965): 5,221 unit / 1,384 PostgreSQL, nineteen owners, audit0; artifacts and protection verified. This completes the earlier source-publication checkpoint. All58 migrations are published and immutable.
