@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Pristine attempt timing and uncertainty — 27 October 2026
+
+Accepted main **d86424f…** ([PR48](https://github.com/dendenden-boop/tradeGPTbot/pull/48), complete [Platform40502819971](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819971) / [CodeQL40502819965](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819965)) publishes the execution source and additive58. The [attempt protocol](execution-attempt.md) requires original immutable identities/priority, distinct preparation/start/admission times, exact replay/conflict handling, pre-start NOT_SENT and sticky UNKNOWN, and projection only from known START. Pure JSON must not become a durable attempt, Risk grant or permit. All58 published migrations/native financial paths stay unchanged; complete new-head regression/CI remains required.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Durable journal/final gate/one-use permit and atomic execution/allocation/Portfolio/holds remain unfinished. LIVE/PAPER financial dispatch and positive credit disabled; native AMEND Binance Spot TESTNET only. No private exchange acceptance, crash/backup restore or production soak claimed.
+
 ## Server-owned pristine execution inputs — 27 October 2026
 
 From accepted main **d4f4736f…** ([PR47](https://github.com/dendenden-boop/tradeGPTbot/pull/47), complete [Platform40464200775](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40464200775) / [CodeQL40464200727](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40464200727)), the [execution source](execution-source.md) requires complete eligible original-admission FIFO, exact authenticated server scope/epochs, current metadata/market freshness and causal Portfolio/holds, no implicit adoption or priority allocation, and fail-closed unknown/conflicting state. Plain hashes/source freshness grant no authority. Additive58 must preserve published1–57 and every existing financial/mutation path; full source/PR/main acceptance remains required.

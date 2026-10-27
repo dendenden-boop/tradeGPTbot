@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Pristine PAPER attempt protocol — 27 October 2026
+
+Accepted protected main **d86424f35472cf4432262f2ffe10deed1d701dd3** through [PR48](https://github.com/dendenden-boop/tradeGPTbot/pull/48) passed complete [Platform40502819971](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819971) / [CodeQL40502819965](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819965): 5,221 unit / 1,384 PostgreSQL, nineteen owners, audit0; artifacts and protection verified. This completes the earlier source-publication checkpoint. All58 migrations are published and immutable.
+
+The next [attempt content protocol](docs/phase-13/execution-attempt.md) preserves original identities, deterministic replay and PREPARED/STARTED/NOT_SENT/UNKNOWN ordering. Simulation submission time comes only from a known START, never Risk admission/preparation. JSON and hashes grant no authority; no persisted attempt, current-policy gate, permit or dispatch is implemented here. Tests-first RED→GREEN is retained; complete new-head regression/CI remains required.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Durable execution/final gate and remaining lifecycle/composition are unfinished. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance, crash/backup restore or production soak claimed. Older checkpoints retain their historical scope/results.
+
 ## Pristine PAPER execution source candidate — 27 October 2026
 
 Accepted protected main is **d4f4736f4f0811af1200d5fd49b62034aa2bf6a3** through [PR47](https://github.com/dendenden-boop/tradeGPTbot/pull/47), complete [Platform40464200775](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40464200775) and [CodeQL40464200727](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40464200727). Its exact-main results supersede the earlier pending calculation-publication checkpoint. A fresh full13 baseline passed before edits with 837 tracked inputs unchanged.
