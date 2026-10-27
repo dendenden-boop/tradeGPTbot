@@ -398,6 +398,10 @@ try {
     const portfolio=await import('@ctp/paper-engine/portfolio');
     const evidence=await import('@ctp/paper-engine/evidence');
     const paperRisk=await import('@ctp/paper-engine/risk');
+    for(const name of ['preparePaperExecutionAttempt','reducePaperExecutionAttempt','projectPristinePaperExecutionAttempt']) assert.equal(typeof paper[name],'function');
+    assert.throws(()=>paper.preparePaperExecutionAttempt({}),/PAPER_ATTEMPT/);
+    assert.throws(()=>paper.projectPristinePaperExecutionAttempt({}),/PAPER_ATTEMPT/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/execution-attempt.js'));
     assert.equal(typeof paperRisk.createPostgresPaperExecutionSource,'function');
     assert.equal('createPostgresPaperExecutionSource' in paper,false);
     await assert.rejects(paperRisk.createPostgresPaperExecutionSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);

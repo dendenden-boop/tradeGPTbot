@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Pristine attempt content and actual START time — 27 October 2026
+
+The [pure attempt protocol](execution-attempt.md) retains original PAPER/null-connection/Spot BUY scope, command and admission/decision/reservation/metadata identities. PREPARED has no submission time. START inside the original admission window supplies `startedAt`; only that known time projects into simulation. Pre-start blockage is NOT_SENT without collateral release; ambiguous START commit or post-start outcome is UNKNOWN without a positive resolution. Exact last-event replay is idempotent; conflicting/stale revisions or identities and backward time reject. JSON restore is content evidence, not a durable journal or restart-safe permission.
+
+The helpers perform no I/O and authenticate no source/current authority. The future fixed writer must atomically retain/reconstruct original history and enforce current Risk/auth/controls/rules/health/deadline and one-use handoff; ordinary hashes cannot authorize it. Full new-head acceptance remains required. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, all58 migrations and native financial paths unchanged, LIVE/PAPER financial dispatch/positive credit disabled, native AMEND Binance Spot TESTNET only. No private exchange acceptance, crash/backup restore or production soak claimed.
+
 ## Pristine execution candidate capture — 27 October 2026
 
 The server-only [execution source](execution-source.md) uses the fixed reconciliation RPC and existing physically settling admission transport. Under GLOBAL → tenant → verified user → sorted accounts/Orders → causal book/reservation serialization, it authenticates the complete tenant inventory and captures all eligible issued contenders for the exact account/instrument, ordered by original lossless admission sequence. Actual private NOT_SENT exclusions retain collateral; UNKNOWN or missing causal heads reject rather than disappear. A read cannot adopt any account, create a priority or renew approval. Original admission times/expiry/bounds and current market freshness have distinct meanings.

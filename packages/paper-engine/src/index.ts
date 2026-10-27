@@ -4,6 +4,14 @@ export * from './reservation-coverage.js';
 export * from './reservation-progress.js';
 export { calculatePaperRiskBudget } from './risk-budget.js';
 export * from './competition.js';
+export {
+  preparePaperExecutionAttempt,
+  reducePaperExecutionAttempt,
+  projectPristinePaperExecutionAttempt,
+  type PaperExecutionAttempt,
+  type PaperExecutionAttemptRequest,
+  type PaperExecutionAttemptEvent,
+} from './execution-attempt.js';
 export * from './execution-ledger.js';
 export {
   calculatePaperExecutionPortfolio,

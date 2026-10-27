@@ -289,7 +289,7 @@ it.each([
 ] as const)(
   'rejects torn or caller-extended previous state field %s after restore',
   (path, value) => {
-    const s = corrupt(prepare(), path, value) as State;
+    const s = corrupt(prepare(), path, value) as unknown as State;
     expect(() => reduce(s, start())).toThrow(/PAPER_ATTEMPT/u);
     expect(() => project(s)).toThrow(/PAPER_ATTEMPT/u);
   },
@@ -358,4 +358,59 @@ it('replays 300 independent lossless priorities deterministically without alloca
     return project(s).admissionSequence;
   });
   expect(new Set(all).size).toBe(300);
+});
+it('rejects unexpected collections before walking their poisoned members', () => {
+  let visits = 0;
+  const collection = new Array<unknown>(1000000);
+  Object.defineProperty(collection, '0', {
+    get() {
+      visits++;
+      return 'poison';
+    },
+  });
+  expect(() => prepare({ ...input(), collection })).toThrow(/PAPER_ATTEMPT/u);
+  expect(visits).toBe(0);
+});
+it('rejects accessor-bearing content without invoking caller code', () => {
+  let visits = 0;
+  const extra = Object.defineProperty({}, 'field', {
+    enumerable: true,
+    get() {
+      visits++;
+      return 'secret';
+    },
+  });
+  expect(() => prepare({ ...input(), extra })).toThrow(/PAPER_ATTEMPT/u);
+  expect(visits).toBe(0);
+});
+it('bounds depth, cycles and large strings without changing any previous state', () => {
+  const s = prepare(),
+    before = canonical(s),
+    cyclic: Record<string, unknown> = {};
+  cyclic['self'] = cyclic;
+  expect(() => prepare(cyclic)).toThrow(/PAPER_ATTEMPT/u);
+  expect(() => reduce(s, { ...start(), extra: 'x'.repeat(20000) })).toThrow(/PAPER_ATTEMPT/u);
+  expect(canonical(s)).toBe(before);
+});
+it('rejects excessive depth before visiting a far accessor', () => {
+  let visits = 0;
+  let deep: unknown = Object.defineProperty({}, 'value', {
+    enumerable: true,
+    get() {
+      visits++;
+      return 1;
+    },
+  });
+  for (let i = 0; i < 40; i++) deep = { next: deep };
+  expect(() => prepare({ ...input(), deep })).toThrow(/PAPER_ATTEMPT/u);
+  expect(visits).toBe(0);
+});
+it('preserves exact post-start UNKNOWN replay after JSON restore beyond historical expiry', () => {
+  const s = reduce(prepare(), start()).state,
+    e = unknown(true, s.request.admission.expiresAt + 100);
+  const next = reduce(s, e).state;
+  expect(reduce(JSON.parse(JSON.stringify(next)) as State, e)).toEqual({
+    state: next,
+    ignored: true,
+  });
 });
