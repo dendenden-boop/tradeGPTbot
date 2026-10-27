@@ -12,7 +12,7 @@ const exists = (file) =>
     () => false,
   );
 
-async function exerciseProgress(deliveryDelayMs = 0) {
+async function exerciseProgress(deliveryDelayMs = 0, witnessReadyAfterMs = 0) {
   await mkdir(path.join(root, 'test-results/cohort-unit'), { recursive: true });
   const dir = await mkdtemp(path.join(root, 'test-results/cohort-unit/native-progress-'));
   const fixture = path.join(dir, 'progress.test.mjs'),
@@ -20,9 +20,9 @@ async function exerciseProgress(deliveryDelayMs = 0) {
     reporter = path.join(dir, 'progress-reporter.mjs');
   await writeFile(
     fixture,
-    `import {it,expect} from 'vitest';import {writeFile} from 'node:fs/promises';
-it('completed native owner progress witness',()=>{expect(2+2).toBe(4)});
-it('blocked native owner progress witness',async()=>{await writeFile(new URL('./blocked.ready',import.meta.url),'ready');await new Promise(()=>{})});
+    `import {it,expect} from 'vitest';import {writeFile,readFile} from 'node:fs/promises';import {setTimeout as wait} from 'node:timers/promises';
+it('completed native owner progress witness',async()=>{if(${witnessReadyAfterMs}>0){const start=Number(await readFile(new URL('./start.at',import.meta.url),'utf8'));await wait(Math.max(0,start+${witnessReadyAfterMs}-Date.now()));}expect(2+2).toBe(4)});
+it('blocked native owner progress witness',async()=>{await writeFile(new URL('./blocked.ready',import.meta.url),String(Date.now()));await new Promise(()=>{})});
 `,
   );
   const portable = (s) => s.replaceAll('\\', '/');
@@ -38,7 +38,7 @@ export default class ProgressReporter extends VerboseReporter {
     super.onTestCaseResult(test);
     if(witness && test.result().state==='passed') {
       await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
-      await writeFile(new URL('./progress.ready',import.meta.url),'flushed');
+      await writeFile(new URL('./progress.ready',import.meta.url),String(Date.now()));
     }
   }
 }
@@ -63,6 +63,7 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
         : [worker, dir, id, id === 'registry' ? 'hang' : 'serial'],
     env: { ...process.env, CI: 'true', NO_COLOR: '1', FORCE_COLOR: '0' },
   }));
+  await writeFile(path.join(dir, 'start.at'), String(Date.now()));
   const observed = runDatabaseCohorts(jobs, {
     timeoutMs: 8000,
     signal: controller.signal,
@@ -99,6 +100,18 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
   } finally {
     controller.abort();
     await observed;
+    const markers = Object.fromEntries(
+      await Promise.all(
+        ['start.at', 'blocked.ready', 'progress.ready'].map(async (name) => [
+          name,
+          await readFile(path.join(dir, name), 'utf8').then(
+            (v) => Number(v) || null,
+            () => null,
+          ),
+        ]),
+      ),
+    );
+    await writeFile(path.join(dir, 'timing.json'), JSON.stringify(markers));
     logger.mockRestore();
   }
 }
@@ -110,5 +123,10 @@ it(
 it(
   'retains completed native progress when parent output delivery exceeds the old fixed drain',
   () => exerciseProgress(1000),
+  15000,
+);
+it(
+  'keeps six-second startup independent of delayed delivery within the original eight-second cohort',
+  () => exerciseProgress(1000, 5200),
   15000,
 );
