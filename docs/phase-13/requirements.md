@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Execution Portfolio calculation — 27 October 2026
+
+Accepted protected main **d623cb6db9b1d66b8941b9bbf610d787af1ed35b** passed complete [Platform40393202279](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202279) / [CodeQL40393202135](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202135) through [PR46](https://github.com/dendenden-boop/tradeGPTbot/pull/46), completing the earlier CI-only repair. The [new calculation contract](execution-portfolio.md) requires original native-free fill identities, exact per-fill ledger/reducer equivalence, known reconciled before/after inventory and cost basis, deterministic immutable output, unchanged holds and fail-closed capacity/cash/scope checks. Plain hashes are correlation only. No durable writer, financial dispatch or source authority is introduced; all 57 published migrations and accepted native contracts remain unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Full new-head regression/CI and protected publication remain required. Atomic durable fill/allocation/Portfolio/holds, final attempt/permit and executed/partial/UNKNOWN lifecycle plus remaining composition/exits/reset remain unfinished. LIVE/PAPER financial dispatch and positive native credit disabled; native AMEND Binance Spot TESTNET only. No real private exchange acceptance, crash/backup restore or production soak claimed. Earlier checkpoints remain historical.
+
 ## Bounded complete native acceptance
 
 The [native proof isolation contract](native-proof-isolation.md) requires both restricted-owner and full cohort/reset evidence inside one unchanged 1020s window. Partial groups cannot claim full acceptance. The failed actual-main PR45 run remains a failure until repaired CI completes. This infrastructure repair adds no financial scope; all earlier requirements and limitations remain.

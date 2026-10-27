@@ -491,6 +491,9 @@ try {
     assert.equal(typeof paper.calculatePaperExecutionLedger,'function');
     assert.throws(()=>paper.calculatePaperExecutionLedger({}),/PAPER_COMPETITION_INPUT/);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/execution-ledger.js'));
+    assert.equal(typeof paper.calculatePaperExecutionPortfolio,'function');
+    assert.throws(()=>paper.calculatePaperExecutionPortfolio({}),/PAPER_EXECUTION_PORTFOLIO_INPUT/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/execution-portfolio.js'));
     assert.throws(()=>paper.calculatePaperInventoryValuation({}),/PAPER_VALUATION_INPUT/);
     for(const name of ['approve','createRiskGrant','createOrder','createPaperAccount','createMemoryStore']) assert.equal(name in paper,false);
     assert.equal(existsSync('./test'),false);

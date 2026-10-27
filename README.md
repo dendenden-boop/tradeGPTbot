@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## PAPER execution Portfolio calculation — 27 October 2026
+
+Current accepted protected main is **d623cb6db9b1d66b8941b9bbf610d787af1ed35b**, through [PR46](https://github.com/dendenden-boop/tradeGPTbot/pull/46), complete [Platform40393202279](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202279) and [CodeQL40393202135](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202135). These runs complete the preceding CI-only repair; earlier timeout/validator failures remain historical. A fresh thirteen-command local baseline passed before this increment.
+
+The next [execution Portfolio calculation](docs/phase-13/execution-portfolio.md) derives native-free PAPER events from recomputed competition/ledger, verifies exact postings and projects balances, Spot cost basis/PnL and pending evidence once, preserving holds. It authenticates no source and grants no durable write or dispatch. Tests-first missing-export and post-state RED evidence is retained; full new-head regression/CI and protected publication remain required. All 57 migrations and native financial contracts stay unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Durable execution/Portfolio/hold integration and final dispatch remain unfinished. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND is Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed. Older checkpoints below retain their historical scope/results.
+
 ## Current main CI repair — 26 October 2026
 
 [PR45](https://github.com/dendenden-boop/tradeGPTbot/pull/45) merged normally with explicit approval into **44d8ce5a068afc24250bf14aa544f559b9fe601a**. Source/PR CI passed, but [exact-main Platform40351817958](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40351817958) reached the native parent deadline before the reset tail completed. Main acceptance is therefore incomplete. The [CI-only repair contract](docs/phase-13/native-proof-isolation.md) isolates owner and cohort workloads with one shared unchanged 1020s window; full repaired CI remains required. All 57 published migrations and financial runtime remain unchanged.

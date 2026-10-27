@@ -1,0 +1,31 @@
+# PAPER execution Portfolio calculation
+
+## Scope and starting evidence
+
+This increment starts from protected main **d623cb6db9b1d66b8941b9bbf610d787af1ed35b**, accepted through [PR46](https://github.com/dendenden-boop/tradeGPTbot/pull/46), complete [Platform40393202279](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202279) and [CodeQL40393202135](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40393202135). The earlier PR45 actual-main timeout and artifact-validator failures remain historical failures; PR46's new exact-main acceptance supersedes the pending repair status. All thirteen local baseline commands passed again before these edits, with 834 tracked inputs unchanged.
+
+`calculatePaperExecutionPortfolio` on the pure `@ctp/paper-engine` root joins the existing [execution ledger calculation](execution-ledger.md) to the native-free [PAPER_FILL reducer](paper-fill-provenance.md). It accepts exactly `{ competition: { now, frame, orders }, portfolio }`. It recomputes competition and ledger, derives events from original fills and commands, and requires each reducer posting set to match the ledger transaction exactly. There is no second application of asset deltas or realized PnL to cash.
+
+## Calculation contract
+
+The prior book must have an exact PAPER/null-connection/Spot public-source scope, an original reconciled snapshot, no future economic state or unresolved differences, and known Spot position cost basis and PnL components. Existing snapshot and economic ordering rules remain. Snapshot age alone does not authenticate complete intervening history. Known negative cash/free/available balances fail closed; nullable availability remains nullable. Spot quantities summed by base asset must agree with the corresponding cash inventory before and after every fill. A projection that loses cost basis or makes another instrument's inventory inconsistent is rejected; the calculator does not invent conversion accounting.
+
+Each event retains the original order ID, fill ID, metadata/rules versions, model and public source scope. Fees are quote-only, per-fill rounded by the unchanged model; zero fees create no synthetic fee posting. Spot BUY/SELL quantity, principal basis, realized gross PnL and fees use the existing Portfolio reducer. Realized PnL is a projection, not an additional monetary ledger effect. Matching event/binding hashes correlate this pure calculation only; they authenticate no issuance, caller, ownership or dispatch authority.
+
+All supplied contenders share the unchanged lossless FIFO/volume calculation. Bounds remain 300 contenders, 1,000 depth levels, and existing Portfolio collection/pending limits. Input is unchanged and output deeply immutable. Any later rejection returns no partial result. Waiting, completed and failed FOK candidates produce no new postings. Existing UNKNOWN and ordinary holds are preserved without resize, release or resolution.
+
+The output kind is `PAPER_EXECUTION_PORTFOLIO_CALCULATION`, version `spot-l2-taker-portfolio-v1`, containing the original ledger calculation, before/after state and per-fill events/postings. It is neither a commit receipt nor a grant. Repeating identical inputs produces identical content; this does not prove permanent replay across restart. Duplicate already-pending fills reject. The public PostgreSQL Portfolio writer still rejects PAPER, and this entrypoint adds no SQL, HTTP, credentials, callback, permit, durable attempt or source authority.
+
+## Durable boundary still required
+
+A future fixed private writer must reconstruct complete server-owned contenders, current book/reset/model and market consumption from authoritative storage; revalidate ownership, policies, rules/capabilities, health/controls/deadline and ACTIVE reservation; retain the durable attempt and consume one-use permission at the final boundary. Permanent original-fill replay, shared allocation, balanced postings, Portfolio/order progress and authenticated hold lifecycle must commit together. No standalone liquidity grant, caller-shaped execution evidence or second monetary effect is acceptable. UNKNOWN retains holds; uncertain COMMIT produces no success and requires read-only reconciliation without blind mutation retry.
+
+Pure SELL/STOP/FOK arithmetic does not enable those durable dispatch paths. Accepted pristine Spot BUY admission/cancellation and native behavior remain unchanged. All 57 published migrations, native financial runtime/adapters, dependency pins, lockfile and CI workflows/budgets remain unchanged.
+
+## Verification and gate
+
+Tests-first **501e582152569e966dceee0dcbe711c0dbb92258** recorded 42 failed / zero passed, all missing-entrypoint errors. Initial implementation passed 38; four fixture errors were frozen-object mutation and process-global Decimal precision in a test sum. Correcting fixtures left runtime validation unchanged. Two additional post-state RED regressions reproduced unknown cost basis and cross-instrument inventory divergence; the bridge now checks known state and inventory after each fill without changing the accepted Portfolio reducer. Further contracts cover 300 actual fills, pending capacity and pre-parse collection bounds. The first 300-fill fixture omitted its matching consumption vector and correctly failed `PAPER_FRAME`; the fixture correction preserves that guard.
+
+Compiled production deployment checks the root export and rejects the private source subpath. Complete new-head local regression, Ubuntu/Windows/native PostgreSQL/owner/upgrade/Auth/Docker/CodeQL CI and protected publication remain required. Exact results are recorded only after execution in the phase verification document and implementation PR. These pure tests do not establish durable execution or restart authority.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Final dispatch/attempt/permit, atomic durable execution/allocation/Portfolio/holds, executed/partial lifecycle and trusted UNKNOWN resolution, remaining operational composition/conditional exits/reset are unfinished. LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak are not claimed.
