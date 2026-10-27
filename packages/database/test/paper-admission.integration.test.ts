@@ -29,6 +29,9 @@ import { state } from '../../order-engine/test/fixtures.js';
 // BEGIN PAPER EXECUTION SOURCE IMPORT
 import * as paperSourceServer from '@ctp/paper-engine/risk';
 // END PAPER EXECUTION SOURCE IMPORT
+// BEGIN PAPER ATTEMPT JOURNAL IMPORT
+import type { PaperExecutionAttempt } from '@ctp/paper-engine';
+// END PAPER ATTEMPT JOURNAL IMPORT
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('ISOLATED_PAPER_ADMISSION_RUNNER_REQUIRED');
 
@@ -2401,3 +2404,240 @@ it('paper-execution: stale authorization and lost COMMIT produce no evidence or 
   expect(await withdrawalInventory(f)).toEqual(before);
 });
 // END PAPER EXECUTION SOURCE TESTS
+// BEGIN PAPER ATTEMPT JOURNAL TESTS
+interface AttemptJournal {
+  prepare(raw: unknown, context: ReturnType<typeof io>): Promise<PaperExecutionAttempt>;
+  read(
+    raw: unknown,
+    context: ReturnType<typeof io>,
+  ): Promise<{
+    kind: 'MISSING' | 'COMMITTED';
+    preparation?: PaperExecutionAttempt;
+    state?: PaperExecutionAttempt;
+    withdrawal?: { eventId: string };
+  }>;
+  stopBeforeStart(raw: unknown, context: ReturnType<typeof io>): Promise<PaperExecutionAttempt>;
+  reconcileStop(raw: unknown, context: ReturnType<typeof io>): ReturnType<AttemptJournal['read']>;
+  close(): Promise<void>;
+}
+async function openAttemptJournal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+    'createPostgresPaperAttemptJournal'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_ATTEMPT_JOURNAL_MISSING');
+  const port = await (factory as (options: unknown) => Promise<AttemptJournal>)({
+    connectionString,
+    environment: 'test',
+  });
+  handles.push(port);
+  return port;
+}
+async function attemptRequest(f: Ready, key = randomUUID()) {
+  return { ...(await executionRequest(f)), kind: 'PAPER_ATTEMPT_PREPARE', key };
+}
+const stopRequest = (r: Awaited<ReturnType<typeof attemptRequest>>, reason = 'CANCELLED') => ({
+  ...r,
+  kind: 'PAPER_ATTEMPT_STOP',
+  stopKey: randomUUID(),
+  reason,
+});
+it('paper-attempt-journal: fixed runtime SQL route persists a real preparation without a financial effect or dispatch permit', async () => {
+  const f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const request = await attemptRequest(f),
+    before = await withdrawalInventory(f);
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL'), max: 1 });
+  const c = await runtime.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    const r = (
+      await c.query('SELECT ctp_paper.evaluate_and_reserve($1::jsonb) result', [
+        JSON.stringify(request),
+      ])
+    ).rows[0]!.result;
+    expect(r.kind).toBe('PREPARED');
+    expect(r.preparation.phase).toBe('PREPARED');
+    expect(r.preparation.request.admission.orderId).toBe(f.order.id);
+    expect(r.preparation.startedAt).toBeNull();
+    expect(r.preparation).not.toHaveProperty('permit');
+    await c.query('COMMIT');
+    expect(await withdrawalInventory(f)).toEqual(before);
+    expect(await (await openAttemptJournal()).prepare(request, io())).toEqual(r.preparation);
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+    await runtime.end();
+  }
+});
+it('paper-attempt-journal: concurrent exact replay preserves one immutable attempt and rejects another key for the intent', async () => {
+  const port = await openAttemptJournal(),
+    f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const request = await attemptRequest(f),
+    before = await withdrawalInventory(f);
+  const [a, b] = await Promise.all([port.prepare(request, io()), port.prepare(request, io())]);
+  expect(a).toEqual(b);
+  expect(await (await openAttemptJournal()).read(request, io())).toMatchObject({
+    kind: 'COMMITTED',
+    preparation: a,
+    state: a,
+  });
+  await expect(port.prepare({ ...request, key: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-attempt-journal: current ownership epochs precede historical replay but refreshed rules cannot rewrite the original preparation', async () => {
+  const port = await openAttemptJournal(),
+    f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const request = await attemptRequest(f),
+    a = await port.prepare(request, io());
+  await admin.query(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  await expect(port.read(request, io())).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  await admin.query('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    a.request.admission.dbRuleId,
+  ]);
+  const current = await attemptRequest(f, request.key);
+  expect(await port.prepare(current, io())).toEqual(a);
+  await expect(port.prepare({ ...current, key: randomUUID() }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+});
+it('paper-attempt-journal: STOP atomically shares the real withdrawal barrier, retains collateral and preserves original preparation replay', async () => {
+  const port = await openAttemptJournal(),
+    f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const request = await attemptRequest(f),
+    preparation = await port.prepare(request, io()),
+    before = await withdrawalInventory(f),
+    stop = stopRequest(request);
+  const state = await port.stopBeforeStart(stop, io());
+  expect(state).toMatchObject({ phase: 'NOT_SENT', revision: '2', startedAt: null });
+  expect(await withdrawalInventory(f)).toEqual(before);
+  expect(await port.prepare(request, io())).toEqual(preparation);
+  expect(await port.read(request, io())).toMatchObject({
+    kind: 'COMMITTED',
+    state,
+    withdrawal: { eventId: state.lastEvent.id },
+  });
+  expect(await port.reconcileStop(stop, io())).toMatchObject({ kind: 'COMMITTED', state });
+  await expect(port.stopBeforeStart({ ...stop, reason: 'CONTROL' }, io())).rejects.toThrow(
+    'PAPER_ADMISSION_CONFLICT',
+  );
+  await expect((await openExecutionSource()).read(await executionRequest(f), io())).rejects.toThrow(
+    /PAPER_ADMISSION/,
+  );
+});
+it('paper-attempt-journal: UNKNOWN and STOP race with one durable cause and no weakening or second ledger effect', async () => {
+  const port = await openAttemptJournal(),
+    lifecycle = await openLifecycle(),
+    f = await nativeReady();
+  const grant = await (await openAdmission()).approve(await input(f), io()),
+    request = await attemptRequest(f);
+  await port.prepare(request, io());
+  const before = await withdrawalInventory(f),
+    stop = stopRequest(request),
+    unknown = await unknownRequest(f, grant.reservationId);
+  const outcomes = await Promise.allSettled([
+    port.stopBeforeStart(stop, io()),
+    lifecycle.markUnknown(unknown, io()),
+  ]);
+  expect(outcomes.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+  if (outcomes[0]!.status === 'fulfilled') {
+    await expect(lifecycle.markUnknown(unknown, io())).rejects.toThrow(/PAPER_ADMISSION/);
+    expect(await withdrawalInventory(f)).toEqual(before);
+  } else {
+    await expect(port.stopBeforeStart(stop, io())).rejects.toThrow(/PAPER_ADMISSION/);
+    expect((await port.read(request, io())).state?.phase).toBe('PREPARED');
+  }
+});
+it('paper-attempt-journal: a legacy withdrawal supplies the same immutable negative cause after restart', async () => {
+  const port = await openAttemptJournal(),
+    f = await nativeReady();
+  const grant = await (await openAdmission()).approve(await input(f), io()),
+    request = await attemptRequest(f);
+  const preparation = await port.prepare(request, io());
+  const barrier = await (
+    await openWithdrawal()
+  ).withdraw(await withdrawalRequest(f, grant.reservationId), io());
+  const before = await withdrawalInventory(f),
+    stop = stopRequest(request);
+  const state = await (await openAttemptJournal()).stopBeforeStart(stop, io());
+  expect(state.lastEvent.id).toBe(barrier.eventId);
+  expect(await port.prepare(request, io())).toEqual(preparation);
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-attempt-journal: lost COMMIT yields no grant and readonly recovery finds the single real preparation and stop', async () => {
+  await openAttemptJournal();
+  const f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const request = await attemptRequest(f),
+    before = await withdrawalInventory(f);
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_ADMISSION_URL'),
+    'PAPER_ADMISSION',
+  );
+  const port = await openAttemptJournal(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(port.prepare(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    const normal = await openAttemptJournal(),
+      recovered = await normal.read(request, io());
+    expect(recovered.kind).toBe('COMMITTED');
+    const stop = stopRequest(request);
+    proxy.arm();
+    await expect(port.stopBeforeStart(stop, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(await normal.reconcileStop(stop, io())).toMatchObject({
+      kind: 'COMMITTED',
+      preparation: recovered.preparation,
+      state: { phase: 'NOT_SENT' },
+    });
+    expect(proxy.dropped()).toBe(2);
+    expect(await withdrawalInventory(f)).toEqual(before);
+  } finally {
+    await port.close();
+    await proxy.close();
+  }
+});
+it('paper-attempt-journal: readonly MISSING cannot adopt an attempt and runtime cannot mutate private journal rows or invent START', async () => {
+  const port = await openAttemptJournal(),
+    f = await nativeReady(),
+    request = await attemptRequest(f);
+  expect(await port.read(request, io())).toMatchObject({ kind: 'MISSING' });
+  await (await openAdmission()).approve(await input(f), io());
+  const a = await port.prepare(request, io());
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL'), max: 1 });
+  try {
+    for (const table of ['attempt_preparation', 'attempt_not_sent']) {
+      for (const action of ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'])
+        expect(
+          (
+            await runtime.query('SELECT has_table_privilege(current_user,$1,$2) allowed', [
+              'ctp_paper.' + table,
+              action,
+            ])
+          ).rows[0]!.allowed,
+        ).toBe(false);
+    }
+    await expect(
+      port.prepare(
+        { ...request, kind: 'PAPER_ATTEMPT_START', attemptId: a.request.attemptId },
+        io(),
+      ),
+    ).rejects.toThrow('PAPER_ADMISSION_INPUT');
+    await expect(
+      admin.query('DELETE FROM ctp_paper.attempt_preparation WHERE tenant_id=$1', [
+        f.c.owner.tenantId,
+      ]),
+    ).rejects.toThrow();
+    expect((await port.read(request, io())).state).toEqual(a);
+  } finally {
+    await runtime.end();
+  }
+});
+// END PAPER ATTEMPT JOURNAL TESTS
