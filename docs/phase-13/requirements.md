@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Durable preparation and negative stop — 27 October 2026
+
+From accepted protected main **bb33ac4…** (PR49, full Platform40538727311 / CodeQL40538727378), the [preparation/stop journal](attempt-journal.md) requires permanent exact replay, current authenticated ownership before lookup, server-issued IDs/time and genuine immutable admission, and atomic NOT_SENT backed by the accepted withdrawal barrier. Collateral remains retained; UNKNOWN cannot weaken. Read-only reconciliation must recover uncertain COMMIT without retry. Additive59 must retain all58 published migrations/old native contracts and infer no historical attempts. Full new-head CI and protected publication remain required. No START/permit or financial dispatch is in this increment; PHASE 13 remains IN_PROGRESS / NOT READY FOR PHASE 14.
+
 ## Pristine attempt timing and uncertainty — 27 October 2026
 
 Accepted main **d86424f…** ([PR48](https://github.com/dendenden-boop/tradeGPTbot/pull/48), complete [Platform40502819971](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819971) / [CodeQL40502819965](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40502819965)) publishes the execution source and additive58. The [attempt protocol](execution-attempt.md) requires original immutable identities/priority, distinct preparation/start/admission times, exact replay/conflict handling, pre-start NOT_SENT and sticky UNKNOWN, and projection only from known START. Pure JSON must not become a durable attempt, Risk grant or permit. All58 published migrations/native financial paths stay unchanged; complete new-head regression/CI remains required.

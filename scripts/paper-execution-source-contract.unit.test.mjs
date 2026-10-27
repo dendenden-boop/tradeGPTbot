@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import { expect, it } from 'vitest';
+import { beforePaperAttemptJournal } from './paper-attempt-journal-legacy.mjs';
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforePaperAttemptJournal(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const current = () =>
   read('packages/database/prisma/migrations/202610270001_paper_execution_source/migration.sql');
 const original = () =>

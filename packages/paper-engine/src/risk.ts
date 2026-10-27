@@ -17,6 +17,13 @@ export { createPostgresPaperWithdrawalBarrier } from './postgres-withdrawal-barr
 export { createPostgresPaperWithdrawalRelease } from './postgres-withdrawal-release.js';
 export { createPostgresPaperUnsentCancellation } from './postgres-unsent-cancellation.js';
 export { createPostgresPaperExecutionSource } from './postgres-execution-source.js';
+export { createPostgresPaperAttemptJournal } from './postgres-attempt-journal.js';
+export type {
+  PaperAttemptJournal,
+  PaperAttemptJournalView,
+  PaperAttemptPreparationRequest,
+  PaperAttemptStopRequest,
+} from './postgres-attempt-journal.js';
 export type {
   PaperExecutionSource,
   PaperExecutionSourceRequest,

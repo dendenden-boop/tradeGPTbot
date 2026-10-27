@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Durable preparation and pre-start stop — 27 October 2026
+
+The server-only [journal](attempt-journal.md) uses the same two fixed SQL RPCs. New preparation authenticates current pristine execution evidence; exact permanent replay returns original PREPARED history independently of current rules/expiry after current ownership/epoch verification. Read exposes the later NOT_SENT head separately. A stop is atomic with its real negative withdrawal cause and retains the original hold; UNKNOWN cannot become NOT_SENT. Independent stop keys conflict permanently. Missing reads never adopt state, uncertain COMMIT grants nothing, and reconciliation performs no mutation. Forced-RLS immutable candidate59 tables grant no runtime direct access or START capability. The future final Risk gate and financial writer remain unimplemented; LIVE/PAPER dispatch is disabled.
+
 ## Pristine attempt content and actual START time — 27 October 2026
 
 The [pure attempt protocol](execution-attempt.md) retains original PAPER/null-connection/Spot BUY scope, command and admission/decision/reservation/metadata identities. PREPARED has no submission time. START inside the original admission window supplies `startedAt`; only that known time projects into simulation. Pre-start blockage is NOT_SENT without collateral release; ambiguous START commit or post-start outcome is UNKNOWN without a positive resolution. Exact last-event replay is idempotent; conflicting/stale revisions or identities and backward time reject. JSON restore is content evidence, not a durable journal or restart-safe permission.
