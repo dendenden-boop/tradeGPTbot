@@ -16,6 +16,7 @@ async function exerciseProgress(
   deliveryDelayMs = 0,
   witnessReadyAfterMs = 0,
   replaceLiveResult = false,
+  firstResultPending = false,
 ) {
   await mkdir(path.join(root, 'test-results/cohort-unit'), { recursive: true });
   const dir = await mkdtemp(path.join(root, 'test-results/cohort-unit/native-progress-'));
@@ -33,9 +34,21 @@ it('blocked native owner progress witness',async()=>{await writeFile(new URL('./
   await writeFile(
     reporter,
     `import {VerboseReporter} from 'vitest/reporters';
+import {createNativeProgressDelivery} from ${JSON.stringify(portable(path.join(root, 'scripts/fixtures/native-progress-event.mjs')))};
 import {writeFile} from 'node:fs/promises';
 import {setTimeout as wait} from 'node:timers/promises';
 export default class ProgressReporter extends VerboseReporter {
+  getDelivery() {
+    return this.delivery ??= createNativeProgressDelivery({
+      emit: event=>super.onTestCaseResult(event),
+      delay: ()=>wait(${deliveryDelayMs}),
+      acknowledge: async()=>{
+        await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
+        await writeFile(new URL('./progress.ready',import.meta.url),String(Date.now()));
+      },
+    });
+  }
+  onTaskUpdate() { return this.delivery?.update(); }
   async onTestCaseResult(test) {
     const witness=test.task.name==='completed native owner progress witness';
     if(witness && ${replaceLiveResult}) {
@@ -47,20 +60,16 @@ export default class ProgressReporter extends VerboseReporter {
         return typeof value==='function'?value.bind(target):value;
       }});
     }
-    // Retain this event's native result before yielding. Vitest's live case
-    // view can change while delivery is deliberately delayed.
-    const result=test.result();
-    const event=new Proxy(test,{get(target,key){
-      if(key==='result') return ()=>result;
-      const value=Reflect.get(target,key,target);
-      return typeof value==='function'?value.bind(target):value;
-    }});
-    if(witness) await wait(${deliveryDelayMs});
-    super.onTestCaseResult(event);
-    if(witness && result.state==='passed') {
-      await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
-      await writeFile(new URL('./progress.ready',import.meta.url),String(Date.now()));
+    if(witness && ${firstResultPending}) {
+      const native=test;
+      let reads=0;
+      test=new Proxy(native,{get(target,key){
+        if(key==='result') return ()=>++reads===1?{state:'pending',errors:undefined}:native.result();
+        const value=Reflect.get(target,key,target);
+        return typeof value==='function'?value.bind(target):value;
+      }});
     }
+    return this.getDelivery().result(test);
   }
 }
 `,
@@ -68,7 +77,7 @@ export default class ProgressReporter extends VerboseReporter {
   await writeFile(
     config,
     `import native from ${JSON.stringify(portable(path.join(root, 'vitest.database.config.ts')))};
-export default {...native,test:{...native.test,include:[${JSON.stringify(portable(fixture))}],reporters:[${JSON.stringify(portable(reporter))},'json'],outputFile:{json:${JSON.stringify(portable(path.join(dir, 'complete.json')))}}}};
+export default {...native,test:{...native.test,runner:${JSON.stringify(portable(path.join(root, 'scripts/fixtures/native-progress-runner.mjs')))},include:[${JSON.stringify(portable(fixture))}],reporters:[${JSON.stringify(portable(reporter))},'json'],outputFile:{json:${JSON.stringify(portable(path.join(dir, 'complete.json')))}}}};
 `,
   );
   const controller = new AbortController(),
@@ -124,6 +133,7 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
     await wait(80);
     expect(await readFile(heartbeat, 'utf8')).toBe(before);
     expect(captured).toMatch(/✓.*completed native owner progress witness/u);
+    expect(captured).not.toContain('NATIVE_PROGRESS_SENDER_FAILED');
   } finally {
     controller.abort();
     await observed;
@@ -139,6 +149,8 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
       ),
     );
     await writeFile(path.join(dir, 'timing.json'), JSON.stringify(markers));
+    // Keep physical stdout even when no terminal marker arrived before abort.
+    await writeFile(path.join(dir, 'partial.log'), output.join('\n'));
     logger.mockRestore();
   }
   return dir;
@@ -167,5 +179,10 @@ it('keeps six-second startup independent of delayed delivery within the original
 it(
   'retains the completed event result when the live case view changes during reporter delivery',
   () => exerciseProgress(1000, 0, true),
+  15000,
+);
+it(
+  'waits for a genuine terminal update when the first completion callback still sees pending',
+  () => exerciseProgress(1000, 0, false, true),
   15000,
 );

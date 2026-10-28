@@ -2692,3 +2692,96 @@ it('paper-attempt-journal: readonly MISSING cannot adopt an attempt and runtime 
   }
 });
 // END PAPER ATTEMPT JOURNAL TESTS
+// BEGIN PAPER PREPARED SOURCE TESTS
+it('paper-prepared-source: one readonly transaction anchors full current FIFO to original preparation without authority or writes', async () => {
+  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+    'createPostgresPaperPreparedExecutionSource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_PREPARED_EXECUTION_SOURCE_MISSING');
+  interface PreparedView {
+    kind: string;
+    preparation: PaperExecutionAttempt;
+    source: { candidates: { orderId: string; intentId: string; admissionSequence: string }[] };
+  }
+  interface PreparedReader {
+    read(raw: unknown, context: ReturnType<typeof io>): Promise<PreparedView>;
+    close(): Promise<void>;
+  }
+  const open = () =>
+    (factory as (options: unknown) => Promise<PreparedReader>)({
+      connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+      environment: 'test',
+    });
+  const f = await nativeReady();
+  const admission = await openAdmission();
+  await admission.approve(await input(f), io());
+  const request = await attemptRequest(f);
+  const capture = {
+    kind: 'PAPER_PREPARED_EXECUTION_CAPTURE',
+    preparationKey: request.key,
+    admission: request.admission,
+    authorization: request.authorization,
+  };
+  let reader = await open();
+  handles.push(reader);
+  const beforeMissing = await withdrawalInventory(f);
+  await expect(reader.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect(await withdrawalInventory(f)).toEqual(beforeMissing);
+  const journal = await openAttemptJournal();
+  const preparation = await journal.prepare(request, io());
+  const second = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
+  await admission.approve(await input(f, second), io());
+  const before = await withdrawalInventory(f);
+  const view = await reader.read(capture, io());
+  expect(view.kind).toBe('PAPER_PREPARED_EXECUTION_SOURCE');
+  expect(view.preparation).toEqual(preparation);
+  expect(view.preparation).toMatchObject({ phase: 'PREPARED', startedAt: null });
+  expect(view.source.candidates.map((c) => c.intentId)).toEqual([
+    f.order.intentId,
+    second.intentId,
+  ]);
+  expect(BigInt(view.source.candidates[0]!.admissionSequence)).toBeLessThan(
+    BigInt(view.source.candidates[1]!.admissionSequence),
+  );
+  for (const key of ['permit', 'grant', 'startedAt', 'submittedAt', 'fills', 'allocation'])
+    expect(view).not.toHaveProperty(key);
+  await reader.close();
+  reader = await open();
+  handles.push(reader);
+  expect((await reader.read(capture, io())).preparation).toEqual(preparation);
+  await expect(
+    reader.read(
+      {
+        ...capture,
+        preparationKey: randomUUID(),
+        authorization: {
+          ...capture.authorization,
+          permissionEpoch: (BigInt(capture.authorization.permissionEpoch) + 1n).toString(),
+        },
+      },
+      io(),
+    ),
+  ).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  expect(await withdrawalInventory(f)).toEqual(before);
+  await journal.stopBeforeStart(stopRequest(request), io());
+  const stopped = await withdrawalInventory(f);
+  await expect(reader.read(capture, io())).rejects.toThrow(/PAPER_ADMISSION_/u);
+  expect((await journal.read(request, io())).preparation).toEqual(preparation);
+  expect(await withdrawalInventory(f)).toEqual(stopped);
+});
+// END PAPER PREPARED SOURCE TESTS

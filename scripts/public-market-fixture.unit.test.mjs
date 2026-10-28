@@ -4,9 +4,13 @@ import ts from 'typescript';
 import { format } from 'prettier';
 import { expect, it } from 'vitest';
 import { beforePublicMarketWriters } from './public-market-fixture-legacy.mjs';
+import { beforePreparedExecutionSource } from './prepared-execution-source-legacy.mjs';
 const file = 'packages/database/test/paper-admission.integration.test.ts';
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforePreparedExecutionSource(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 
 it('retains the entire original61-case native fixture and cleanup after only writer-lifetime reconstruction', () => {

@@ -8,6 +8,7 @@ import { format, resolveConfig } from 'prettier';
 import { expect, it } from 'vitest';
 import { beforePaperAttemptJournal } from './paper-attempt-journal-legacy.mjs';
 import { beforePublicMarketWriters } from './public-market-fixture-legacy.mjs';
+import { beforePreparedExecutionSource } from './prepared-execution-source-legacy.mjs';
 const path = 'packages/database/test/paper-admission.integration.test.ts';
 const fixtureOnly = new Set([
   'updatePolicy',
@@ -69,7 +70,10 @@ const text = (file) =>
     file,
     beforePublicMarketWriters(
       file,
-      fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+      beforePreparedExecutionSource(
+        file,
+        fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+      ),
     ),
   );
 const source = () =>

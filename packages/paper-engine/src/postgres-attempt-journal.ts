@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { immutable, timestampSchema } from '@ctp/exchange-core';
 import { canonical } from '@ctp/portfolio';
@@ -7,6 +8,11 @@ import { preparePaperExecutionAttempt, reducePaperExecutionAttempt } from './exe
 import type { PaperExecutionAttempt } from './execution-attempt.js';
 import type { PaperFundingIo } from './funding-domain.js';
 import type { PaperWithdrawalReceipt } from './postgres-withdrawal-barrier.js';
+import {
+  decodePaperExecutionSource,
+  type PaperExecutionSource,
+  type PaperExecutionSourceRequest,
+} from './postgres-execution-source.js';
 
 const uuid = z.uuid().transform((v) => v.toLowerCase());
 const digest = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -30,6 +36,12 @@ const fields = {
   }),
 };
 const preparationRequest = z.strictObject({ kind: z.literal('PAPER_ATTEMPT_PREPARE'), ...fields });
+const preparedExecutionRequest = z.strictObject({
+  kind: z.literal('PAPER_PREPARED_EXECUTION_CAPTURE'),
+  preparationKey: key,
+  admission: fields.admission,
+  authorization: fields.authorization,
+});
 const stopRequest = z.strictObject({
   kind: z.literal('PAPER_ATTEMPT_STOP'),
   ...fields,
@@ -91,6 +103,24 @@ export interface PaperAttemptJournal {
     request: PaperAttemptStopRequest,
     io: PaperFundingIo,
   ): Promise<PaperAttemptJournalView>;
+  close(): Promise<void>;
+}
+
+export type PaperPreparedExecutionSourceRequest = z.infer<typeof preparedExecutionRequest>;
+export interface PaperPreparedExecutionSource {
+  readonly kind: 'PAPER_PREPARED_EXECUTION_SOURCE';
+  readonly request: PaperPreparedExecutionSourceRequest;
+  readonly asOf: number;
+  readonly validUntil: number;
+  readonly hash: string;
+  readonly source: PaperExecutionSource;
+  readonly preparation: PaperExecutionAttempt;
+}
+export interface PaperPreparedExecutionSourceReader {
+  read(
+    request: PaperPreparedExecutionSourceRequest,
+    io: PaperFundingIo,
+  ): Promise<PaperPreparedExecutionSource>;
   close(): Promise<void>;
 }
 function fail(code = 'PAPER_ADMISSION_EVIDENCE'): never {
@@ -213,6 +243,107 @@ export async function createPostgresPaperAttemptJournal(
     },
     reconcileStop(raw: unknown, io: PaperFundingIo) {
       return call(raw, io, true, true);
+    },
+    close: database.close,
+  });
+}
+
+/** Current input and original preparation content only. This is not a final
+ * Risk check, a START boundary, an idempotent grant or dispatch permission. */
+export async function createPostgresPaperPreparedExecutionSource(
+  options: unknown,
+): Promise<PaperPreparedExecutionSourceReader> {
+  const database = await openPaperAdmissionDatabase(options);
+  return Object.freeze({
+    async read(raw: PaperPreparedExecutionSourceRequest, io: PaperFundingIo) {
+      let parsed;
+      try {
+        parsed = preparedExecutionRequest.safeParse(raw);
+      } catch {
+        fail('PAPER_ADMISSION_INPUT');
+      }
+      if (!parsed.success) fail('PAPER_ADMISSION_INPUT');
+      const r = parsed.data;
+      const journalRequest = lookup(
+        {
+          kind: 'PAPER_ATTEMPT_PREPARE',
+          key: r.preparationKey,
+          admission: r.admission,
+          authorization: r.authorization,
+        },
+        false,
+      ) as PaperAttemptPreparationRequest;
+      const request: PaperPreparedExecutionSourceRequest = {
+        kind: 'PAPER_PREPARED_EXECUTION_CAPTURE',
+        preparationKey: journalRequest.key,
+        admission: journalRequest.admission,
+        authorization: journalRequest.authorization,
+      };
+      const capture: PaperExecutionSourceRequest = {
+        kind: 'PAPER_EXECUTION_CAPTURE',
+        admission: journalRequest.admission,
+        authorization: journalRequest.authorization,
+      };
+      const result = await database.transaction(
+        request.admission.binding.tenantId,
+        io,
+        async (sql) => {
+          const rows = await sql.query<{ result: unknown }>(
+            'SELECT ctp_paper.reconcile_admission($1::jsonb) AS result',
+            [canonical(capture)],
+          );
+          if (rows.rows.length !== 1) fail();
+          const source = decodePaperExecutionSource(rows.rows[0]!.result, capture, Date.now());
+          const journalRows = await sql.query<{ result: unknown }>(
+            'SELECT ctp_paper.reconcile_admission($1::jsonb) AS result',
+            [canonical(journalRequest)],
+          );
+          if (journalRows.rows.length !== 1) fail();
+          const view = decode(journalRows.rows[0]!.result, journalRequest, 'COMMITTED');
+          if (
+            view.kind !== 'COMMITTED' ||
+            view.withdrawal !== null ||
+            view.state.phase !== 'PREPARED'
+          )
+            fail();
+          const preparation = view.preparation;
+          const target = source.candidates.find(
+            (c) =>
+              c.orderId === request.admission.orderId && c.intentId === request.admission.intentId,
+          );
+          if (!target || preparation.request.preparedAt > source.asOf) fail();
+          const original = {
+            binding: request.admission.binding,
+            orderId: target.orderId,
+            intentId: target.intentId,
+            reservationId: target.reservationId,
+            decisionId: target.decisionId,
+            dbInstrumentId: target.dbInstrumentId,
+            dbRuleId: target.dbRuleId,
+            command: target.command,
+            commandHash: target.commandHash,
+            admissionSequence: target.admissionSequence,
+            admittedAt: target.admittedAt,
+            expiresAt: target.original.expiresAt,
+          };
+          if (canonical(preparation.request.admission) !== canonical(original)) fail();
+          if (Date.now() >= source.validUntil) fail('PAPER_ADMISSION_EXPIRED');
+          return immutable({
+            kind: 'PAPER_PREPARED_EXECUTION_SOURCE' as const,
+            request,
+            asOf: source.asOf,
+            validUntil: source.validUntil,
+            hash: createHash('sha256')
+              .update(canonical({ request, sourceHash: source.hash, preparation }))
+              .digest('hex'),
+            source,
+            preparation,
+          });
+        },
+      );
+      if (io.signal.aborted || Date.now() >= io.deadline) fail('PAPER_ADMISSION_ABORTED');
+      if (Date.now() >= result.validUntil) fail('PAPER_ADMISSION_EXPIRED');
+      return result;
     },
     close: database.close,
   });

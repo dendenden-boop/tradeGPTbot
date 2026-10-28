@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Current source plus immutable PREPARED history — 28 October 2026
+
+The server-only [prepared source](prepared-execution-source.md) runs the existing execution-capture and journal-read RPC branches on one transaction/connection under the existing retained GLOBAL/tenant locks. It validates the current source before reading the requested journal key, requires PREPARED/no withdrawal and exact original target admission semantics, and rechecks freshness after COMMIT delivery. Only the target preparation is joined; other FIFO descriptors gain no inferred preparation/start timestamp. Hashes/freshness do not renew old admission or authorize dispatch. Uncertain COMMIT returns no result. Published1–59, role grants and financial writer paths are unchanged. The final current-Risk/one-use/atomic-allocation writer remains pending; PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14, LIVE/PAPER financial dispatch and positive credit disabled.
+
 ## Durable preparation and pre-start stop — 27 October 2026
 
 The server-only [journal](attempt-journal.md) uses the same two fixed SQL RPCs. New preparation authenticates current pristine execution evidence; exact permanent replay returns original PREPARED history independently of current rules/expiry after current ownership/epoch verification. Read exposes the later NOT_SENT head separately. A stop is atomic with its real negative withdrawal cause and retains the original hold; UNKNOWN cannot become NOT_SENT. Independent stop keys conflict permanently. Missing reads never adopt state, uncertain COMMIT grants nothing, and reconciliation performs no mutation. Forced-RLS immutable candidate59 tables grant no runtime direct access or START capability. The future final Risk gate and financial writer remain unimplemented; LIVE/PAPER dispatch is disabled.

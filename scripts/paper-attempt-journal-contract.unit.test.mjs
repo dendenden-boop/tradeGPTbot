@@ -3,10 +3,14 @@ import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { verifyAdmissionParallelFiles } from './database-cohorts.mjs';
 import { beforePublicMarketWriters } from './public-market-fixture-legacy.mjs';
+import { beforePreparedExecutionSource } from './prepared-execution-source-legacy.mjs';
 const read = (p) =>
   beforePublicMarketWriters(
     p,
-    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    beforePreparedExecutionSource(
+      p,
+      fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    ),
   );
 const sql = () =>
   read('packages/database/prisma/migrations/202610270002_paper_attempt_journal/migration.sql');

@@ -409,6 +409,11 @@ try {
     assert.equal(typeof paperRisk.createPostgresPaperAttemptJournal,'function');
     assert.equal('createPostgresPaperAttemptJournal' in paper,false);
     await assert.rejects(paperRisk.createPostgresPaperAttemptJournal({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
+    // BEGIN PAPER PREPARED SOURCE EXPORT
+    assert.equal(typeof paperRisk.createPostgresPaperPreparedExecutionSource,'function');
+    assert.equal('createPostgresPaperPreparedExecutionSource' in paper,false);
+    await assert.rejects(paperRisk.createPostgresPaperPreparedExecutionSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
+    // END PAPER PREPARED SOURCE EXPORT
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-attempt-journal.js'));
     const paperRuntime=await import('@ctp/paper-engine/runtime');
     for(const name of ['createPostgresPaperRuntimeObservations','createPostgresPaperRuntimeSource']) {
