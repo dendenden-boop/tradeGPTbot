@@ -2785,3 +2785,155 @@ it('paper-prepared-source: one readonly transaction anchors full current FIFO to
   expect(await withdrawalInventory(f)).toEqual(stopped);
 });
 // END PAPER PREPARED SOURCE TESTS
+// BEGIN PAPER EXECUTION RISK TESTS
+interface CurrentExecutionRiskView {
+  kind: string;
+  preparation: PaperExecutionAttempt;
+  evaluation: { kind: string };
+  retained: { reservationId: string; budget: { orders: { current: number; projected: number } } };
+  policies: { user: { version: string } };
+}
+async function openCurrentExecutionRisk(
+  connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
+) {
+  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+    'createPostgresPaperExecutionRiskSource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_RISK_SOURCE_MISSING');
+  const port = await (
+    factory as (options: unknown) => Promise<{
+      read(request: unknown, context: ReturnType<typeof io>): Promise<CurrentExecutionRiskView>;
+      close(): Promise<void>;
+    }>
+  )({ connectionString, environment: 'test' });
+  handles.push(port);
+  return port;
+}
+async function currentExecutionRiskRequest(f: Ready) {
+  const request = await attemptRequest(f),
+    journal = await openAttemptJournal();
+  const preparation = await journal.prepare(request, io());
+  return {
+    preparation,
+    request: {
+      kind: 'PAPER_EXECUTION_RISK_CAPTURE',
+      preparationKey: request.key,
+      admission: request.admission,
+      authorization: request.authorization,
+    },
+  };
+}
+it('paper-execution-risk: real readonly RPC and reader evaluate current retained scope with no monetary or journal write', async () => {
+  const f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const { request, preparation } = await currentExecutionRiskRequest(f),
+    before = await withdrawalInventory(f);
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL'), max: 1 });
+  const c = await runtime.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    const raw = await c.query<{ result: { kind: string } }>(
+      'SELECT ctp_paper.reconcile_admission($1::jsonb) AS result',
+      [JSON.stringify(request)],
+    );
+    expect(raw.rows[0]!.result.kind).toBe('PAPER_EXECUTION_RISK_CAPTURE');
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+    await runtime.end();
+  }
+  const reader = await openCurrentExecutionRisk(),
+    view = await reader.read(request, io());
+  expect(view.kind).toBe('PAPER_EXECUTION_RISK_SOURCE');
+  expect(view.evaluation.kind).toBe('EVALUATED');
+  expect(view.preparation).toEqual(preparation);
+  expect(view.retained.reservationId).toBe(preparation.request.admission.reservationId);
+  expect(view.retained.budget.orders).toEqual({ current: 0, projected: 1 });
+  for (const key of [
+    'grant',
+    'permit',
+    'startedAt',
+    'submittedAt',
+    'fills',
+    'allocation',
+    'postings',
+  ])
+    expect(view).not.toHaveProperty(key);
+  await reader.close();
+  const restarted = await openCurrentExecutionRisk();
+  expect((await restarted.read(request, io())).preparation).toEqual(preparation);
+  await expect(
+    restarted.read(
+      {
+        ...request,
+        preparationKey: randomUUID(),
+        authorization: { ...request.authorization, permissionEpoch: '9223372036854775807' },
+      },
+      io(),
+    ),
+  ).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  expect(await withdrawalInventory(f)).toEqual(before);
+  const restricted = new Pool({
+    connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+    max: 1,
+  });
+  try {
+    await expect(
+      restricted.query('SELECT ctp_paper.capture_execution_risk($1::jsonb)', [
+        JSON.stringify(request),
+      ]),
+    ).rejects.toMatchObject({ code: '42501' });
+  } finally {
+    await restricted.end();
+  }
+});
+it('paper-execution-risk: current policy, tenant pause and failed health block an already prepared original reservation', async () => {
+  const f = await nativeReady();
+  await (await openAdmission()).approve(await input(f), io());
+  const { request } = await currentExecutionRiskRequest(f),
+    reader = await openCurrentExecutionRisk(),
+    before = await withdrawalInventory(f);
+  const limits = (
+    await admin.query<{ limits: Record<string, unknown> }>(
+      "SELECT v.\"limitsText\"::jsonb limits FROM ctp_risk.policy_head h JOIN ctp_risk.policy_revision v USING(scope,target,mode,version,id) WHERE h.scope='USER' AND h.target=$1 AND h.mode='PAPER'",
+      [f.c.owner.tenantId],
+    )
+  ).rows[0]!.limits;
+  await updatePolicy(f.c.owner.tenantId, 'USER', { ...limits, maxOpenOrders: 0 });
+  await expect(reader.read(request, io())).rejects.toThrow(/PAPER_ADMISSION_(LIMIT|EVIDENCE)/u);
+  await updatePolicy(f.c.owner.tenantId, 'USER', limits);
+  await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+  await updateControl(f.c.owner.tenantId, 'RUNNING');
+  await runtimeEvidence(f, 'FAILED');
+  await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution-risk: lost read COMMIT returns no source, reconnect recovers data and UNKNOWN keeps the whole hold', async () => {
+  const f = await nativeReady(),
+    admission = await (await openAdmission()).approve(await input(f), io());
+  const { request, preparation } = await currentExecutionRiskRequest(f),
+    before = await withdrawalInventory(f);
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_ADMISSION_URL'),
+    'PAPER_EXECUTION_SOURCE',
+  );
+  const reader = await openCurrentExecutionRisk(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+  } finally {
+    await reader.close();
+    await proxy.close();
+  }
+  const normal = await openCurrentExecutionRisk();
+  expect((await normal.read(request, io())).preparation).toEqual(preparation);
+  expect(await withdrawalInventory(f)).toEqual(before);
+  await (await openLifecycle()).markUnknown(await unknownRequest(f, admission.reservationId), io());
+  const unknown = await withdrawalInventory(f);
+  await expect(normal.read(request, io())).rejects.toThrow(/PAPER_ADMISSION_/u);
+  expect(await withdrawalInventory(f)).toEqual(unknown);
+});
+// END PAPER EXECUTION RISK TESTS
