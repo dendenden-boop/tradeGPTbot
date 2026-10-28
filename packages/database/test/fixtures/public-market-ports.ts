@@ -1,7 +1,7 @@
 /** Test-only lifetime for two public evidence writers, never their results. */
 export function createPublicMarketFixturePorts<S, T>(factories: {
-  snapshots(): Promise<S>;
-  trades(): Promise<T>;
+  snapshots: () => Promise<S>;
+  trades: () => Promise<T>;
 }): { snapshots(): Promise<S>; trades(): Promise<T> } {
   const openSnapshots = factories.snapshots,
     openTrades = factories.trades;

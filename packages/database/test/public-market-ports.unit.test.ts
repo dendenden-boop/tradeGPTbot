@@ -2,8 +2,8 @@ import { expect, it, vi } from 'vitest';
 import { createPublicMarketFixturePorts } from './fixtures/public-market-ports.js';
 
 it('fixture public writers are lazy and have only two fixed kinds', () => {
-  const snapshots = vi.fn(async () => ({ kind: 'snapshot' }));
-  const trades = vi.fn(async () => ({ kind: 'trade' }));
+  const snapshots = vi.fn(() => Promise.resolve({ kind: 'snapshot' }));
+  const trades = vi.fn(() => Promise.resolve({ kind: 'trade' }));
   const ports = createPublicMarketFixturePorts({ snapshots, trades });
   expect(Object.keys(ports).sort()).toEqual(['snapshots', 'trades']);
   expect(snapshots).not.toHaveBeenCalled();
@@ -21,7 +21,7 @@ it('concurrent fixture acquisition opens and registers a public writer exactly o
     owned.push(port);
     return port;
   });
-  const ports = createPublicMarketFixturePorts({ snapshots, trades: async () => ({}) });
+  const ports = createPublicMarketFixturePorts({ snapshots, trades: () => Promise.resolve({}) });
   const first = ports.snapshots(),
     second = ports.snapshots();
   expect(second).toBe(first);
@@ -37,8 +37,8 @@ it('concurrent fixture acquisition opens and registers a public writer exactly o
 it('snapshot and trade acquisition do not collapse their native identities', async () => {
   const snapshot = {},
     trade = {};
-  const snapshots = vi.fn(async () => snapshot),
-    trades = vi.fn(async () => trade);
+  const snapshots = vi.fn(() => Promise.resolve(snapshot)),
+    trades = vi.fn(() => Promise.resolve(trade));
   const ports = createPublicMarketFixturePorts({ snapshots, trades });
   const [a, b] = await Promise.all([ports.snapshots(), ports.trades()]);
   expect(a).toBe(snapshot);
@@ -52,10 +52,8 @@ it('snapshot and trade acquisition do not collapse their native identities', asy
 
 it('a failed public writer constructor stays failed without implicit retry', async () => {
   const error = new Error('native role rejected');
-  const snapshots = vi.fn(async () => {
-    throw error;
-  });
-  const ports = createPublicMarketFixturePorts({ snapshots, trades: async () => ({}) });
+  const snapshots = vi.fn(() => Promise.reject(error));
+  const ports = createPublicMarketFixturePorts({ snapshots, trades: () => Promise.resolve({}) });
   const first = ports.snapshots();
   await expect(first).rejects.toBe(error);
   expect(ports.snapshots()).toBe(first);
@@ -69,7 +67,7 @@ it('a synchronous constructor failure is retained and does not disable the other
   const snapshots = vi.fn((): Promise<object> => {
     throw error;
   });
-  const ports = createPublicMarketFixturePorts({ snapshots, trades: async () => trade });
+  const ports = createPublicMarketFixturePorts({ snapshots, trades: () => Promise.resolve(trade) });
   const first = ports.snapshots();
   await expect(first).rejects.toBe(error);
   expect(ports.snapshots()).toBe(first);
@@ -79,10 +77,12 @@ it('a synchronous constructor failure is retained and does not disable the other
 
 it('every publication still invokes the actual writer with fresh input and fresh result', async () => {
   let revision = 0;
-  const writer = { publish: vi.fn(async (input: object) => ({ input, revision: ++revision })) };
+  const writer = {
+    publish: vi.fn((input: object) => Promise.resolve({ input, revision: ++revision })),
+  };
   const ports = createPublicMarketFixturePorts({
-    snapshots: async () => writer,
-    trades: async () => ({}),
+    snapshots: () => Promise.resolve(writer),
+    trades: () => Promise.resolve({}),
   });
   const a = {},
     b = {};
@@ -98,9 +98,9 @@ it('fixture ownership tracks only two handles and teardown closes each once', as
   const owned: { close(): Promise<void> }[] = [];
   const snapshots = { close: vi.fn(async () => {}) },
     trades = { close: vi.fn(async () => {}) };
-  const own = async <T extends { close(): Promise<void> }>(port: T) => {
+  const own = <T extends { close(): Promise<void> }>(port: T) => {
     owned.push(port);
-    return port;
+    return Promise.resolve(port);
   };
   const ports = createPublicMarketFixturePorts({
     snapshots: () => own(snapshots),
