@@ -16,6 +16,7 @@ async function exerciseProgress(
   deliveryDelayMs = 0,
   witnessReadyAfterMs = 0,
   replaceLiveResult = false,
+  firstResultPending = false,
 ) {
   await mkdir(path.join(root, 'test-results/cohort-unit'), { recursive: true });
   const dir = await mkdtemp(path.join(root, 'test-results/cohort-unit/native-progress-'));
@@ -43,6 +44,15 @@ export default class ProgressReporter extends VerboseReporter {
       let reads=0;
       test=new Proxy(native,{get(target,key){
         if(key==='result') return ()=>++reads===1?native.result():{state:'pending',errors:undefined};
+        const value=Reflect.get(target,key,target);
+        return typeof value==='function'?value.bind(target):value;
+      }});
+    }
+    if(witness && ${firstResultPending}) {
+      const native=test;
+      let reads=0;
+      test=new Proxy(native,{get(target,key){
+        if(key==='result') return ()=>++reads===1?{state:'pending',errors:undefined}:native.result();
         const value=Reflect.get(target,key,target);
         return typeof value==='function'?value.bind(target):value;
       }});
@@ -167,5 +177,10 @@ it('keeps six-second startup independent of delayed delivery within the original
 it(
   'retains the completed event result when the live case view changes during reporter delivery',
   () => exerciseProgress(1000, 0, true),
+  15000,
+);
+it(
+  'waits for a genuine terminal update when the first completion callback still sees pending',
+  () => exerciseProgress(1000, 0, false, true),
   15000,
 );
