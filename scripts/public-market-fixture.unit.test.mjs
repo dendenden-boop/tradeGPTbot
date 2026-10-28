@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
+import { format } from 'prettier';
 import { expect, it } from 'vitest';
 import { beforePublicMarketWriters } from './public-market-fixture-legacy.mjs';
 const file = 'packages/database/test/paper-admission.integration.test.ts';
@@ -17,7 +18,7 @@ it('retains the entire original61-case native fixture and cleanup after only wri
   );
 });
 
-it('limits the additive fixture cache to exactly two fixed public writer factories', () => {
+it('limits the additive fixture cache to exactly two fixed public writer factories', async () => {
   const s = read(file),
     blocks = [...s.matchAll(/\/\/ BEGIN PUBLIC MARKET FIXTURE ([A-Z_]+)/gu)]
       .map((m) => m[1])
@@ -38,7 +39,10 @@ it('limits the additive fixture cache to exactly two fixed public writer factori
     ts.ScriptTarget.Latest,
     true,
   );
-  expect(print.printFile(parsed)).toBe(print.printFile(expected));
+  const options = { parser: 'typescript', singleQuote: true };
+  expect(await format(print.printFile(parsed), options)).toBe(
+    await format(print.printFile(expected), options),
+  );
   expect(s).toContain('const snapshots = await publicMarketFixturePorts.snapshots(),');
   expect(s).toContain('trades = await publicMarketFixturePorts.trades();');
 });

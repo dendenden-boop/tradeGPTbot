@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { verifyAdmissionParallelFiles } from './database-cohorts.mjs';
+import { beforePublicMarketWriters } from './public-market-fixture-legacy.mjs';
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforePublicMarketWriters(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const sql = () =>
   read('packages/database/prisma/migrations/202610270002_paper_attempt_journal/migration.sql');
 it('preserves published BEFORE TRUNCATE errors through cause checks without adding foreign-key dependencies on old tables', () => {

@@ -16,6 +16,9 @@ import {
   type PaperRuntimePublication,
 } from '@ctp/paper-engine/runtime';
 import { createPostgresMarketSnapshots, createPostgresMarketTrades } from '@ctp/market-data';
+// BEGIN PUBLIC MARKET FIXTURE IMPORT
+import { createPublicMarketFixturePorts } from './fixtures/public-market-ports.js';
+// END PUBLIC MARKET FIXTURE IMPORT
 import { createPostgresOrderStore, bindingSchema, draftSchema } from '@ctp/order-engine';
 import {
   createPostgresPolicies,
@@ -94,6 +97,24 @@ function runtimePort() {
   ));
 }
 
+// BEGIN PUBLIC MARKET FIXTURE CACHE
+const publicMarketFixturePorts = createPublicMarketFixturePorts({
+  snapshots: () =>
+    ownWriter(
+      createPostgresMarketSnapshots({
+        connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
+        environment: 'test',
+      }),
+    ),
+  trades: () =>
+    ownWriter(
+      createPostgresMarketTrades({
+        connectionString: required('DATABASE_MARKET_TRADE_URL'),
+        environment: 'test',
+      }),
+    ),
+});
+// END PUBLIC MARKET FIXTURE CACHE
 async function updatePolicy(
   tenantId: string,
   kind: 'PLATFORM' | 'USER',
@@ -387,15 +408,10 @@ async function tenantReady(liquid = false) {
       io(),
     );
   await (await openBook()).initialize(f.c.owner, io());
-  const snapshots = await createPostgresMarketSnapshots({
-      connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
-      environment: 'test',
-    }),
-    trades = await createPostgresMarketTrades({
-      connectionString: required('DATABASE_MARKET_TRADE_URL'),
-      environment: 'test',
-    });
-  handles.push(snapshots, trades);
+  // BEGIN PUBLIC MARKET FIXTURE USE
+  const snapshots = await publicMarketFixturePorts.snapshots(),
+    trades = await publicMarketFixturePorts.trades();
+  // END PUBLIC MARKET FIXTURE USE
   await ensurePolicies(f.c.owner.tenantId);
   const now = Date.now();
   f.f.s.timestamp = f.f.p.timestamp = now;
