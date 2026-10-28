@@ -2729,9 +2729,23 @@ it('paper-prepared-source: one readonly transaction anchors full current FIFO to
   expect(await withdrawalInventory(f)).toEqual(beforeMissing);
   const journal = await openAttemptJournal();
   const preparation = await journal.prepare(request, io());
-  const second = await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, io());
-  await admission.approve(await input(f, second), io());
+  const second = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
   await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
+  await admission.approve(await input(f, second), io());
   const before = await withdrawalInventory(f);
   const view = await reader.read(capture, io());
   expect(view.kind).toBe('PAPER_PREPARED_EXECUTION_SOURCE');

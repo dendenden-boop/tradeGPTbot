@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Prepared PAPER execution source candidate — 28 October 2026
+
+Protected main **6c6db6a…** accepted [PR52](https://github.com/dendenden-boop/tradeGPTbot/pull/52): full [Platform40654965808](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40654965808) / [CodeQL40654965774](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40654965774), 5,374 unit per OS / 1,392 PostgreSQL, nineteen owners, audit0, artifacts/protection verified. This closes the older owner-fixture pending acceptance below; failed historical runs remain failures.
+
+The next [readonly prepared source](docs/phase-13/prepared-execution-source.md) joins current complete FIFO and original target preparation in one bounded transaction using existing reconciliation RPCs. Tests-first RED becomes146 runtime /41 harness targeted GREEN and one selected real PostgreSQL regression. Full new-source regression/CI/protected publication remain required. No migration, START, permit, allocation or dispatch is added. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch and positive credit disabled, native AMEND Binance Spot TESTNET only. Real private exchange tests, crash/backup restore and production soak are not claimed.
+
 ## PAPER owner fixture lifetime candidate — 28 October 2026
 
 PR51 merged to **95e349e**, but [exact-main CI40645582873](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40645582873) failed the90s admission owner suite after60/61 cases; its complete owner report is missing. Other OS/native/Auth/Docker and CodeQL results do not waive this failure. The [test-only correction](docs/phase-13/owner-admission-budget.md) limits public writer construction to two handles while preserving all61 case bodies, fresh operations, isolation fingerprints and original deadlines. Tests-first RED and35 targeted GREEN contracts are retained; complete new regression/CI remains required. All59 migrations and financial/native runtime unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch and positive credit disabled, native AMEND Binance Spot TESTNET only.

@@ -18,6 +18,12 @@ export { createPostgresPaperWithdrawalRelease } from './postgres-withdrawal-rele
 export { createPostgresPaperUnsentCancellation } from './postgres-unsent-cancellation.js';
 export { createPostgresPaperExecutionSource } from './postgres-execution-source.js';
 export { createPostgresPaperAttemptJournal } from './postgres-attempt-journal.js';
+export { createPostgresPaperPreparedExecutionSource } from './postgres-attempt-journal.js';
+export type {
+  PaperPreparedExecutionSource,
+  PaperPreparedExecutionSourceRequest,
+  PaperPreparedExecutionSourceReader,
+} from './postgres-attempt-journal.js';
 export type {
   PaperAttemptJournal,
   PaperAttemptJournalView,

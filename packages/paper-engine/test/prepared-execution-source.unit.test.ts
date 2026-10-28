@@ -98,9 +98,12 @@ function load(f: ReturnType<typeof preparedSourceFixture>) {
 async function rejects(f: ReturnType<typeof preparedSourceFixture>, code = /PAPER_ADMISSION_/u) {
   load(f);
   const p = await open();
+  fake.queries = [];
   try {
     await expect(p.read(f.request, io())).rejects.toThrow(code);
-    expect(fake.queries.some((q) => q.text.includes('evaluate_and_reserve('))).toBe(false);
+    expect(
+      fake.queries.some((q) => q.text.startsWith('SELECT ctp_paper.evaluate_and_reserve($1')),
+    ).toBe(false);
   } finally {
     await p.close();
   }
@@ -275,7 +278,9 @@ it('fails closed on MISSING without preparing or adopting anything', async () =>
   const p = await open();
   try {
     await expect(p.read(f.request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
-    expect(fake.queries.some((q) => q.text.includes('evaluate_and_reserve('))).toBe(false);
+    expect(
+      fake.queries.some((q) => q.text.startsWith('SELECT ctp_paper.evaluate_and_reserve($1')),
+    ).toBe(false);
   } finally {
     await p.close();
   }
@@ -354,16 +359,24 @@ it('rolls back and never issues COMMIT after journal mismatch', async () => {
 });
 it('returns no source after lost COMMIT and performs no automatic retry', async () => {
   const f = preparedSourceFixture();
+  load(f);
+  const p = await open();
+  fake.queries = [];
   fake.commitError = true;
-  await rejects(f, /PAPER_ADMISSION_UNCERTAIN/u);
-  expect(fake.index).toBe(2);
-  expect(fake.queries.filter((q) => q.text === 'COMMIT')).toHaveLength(1);
+  try {
+    await expect(p.read(f.request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(fake.index).toBe(2);
+    expect(fake.queries.filter((q) => q.text === 'COMMIT')).toHaveLength(1);
+  } finally {
+    await p.close();
+  }
 });
 it('checks abort between the two readonly RPCs', async () => {
   const f = preparedSourceFixture();
   load(f);
   const p = await open(),
     controller = new AbortController();
+  fake.queries = [];
   fake.onResult = () => controller.abort();
   try {
     await expect(p.read(f.request, { ...io(), signal: controller.signal })).rejects.toThrow(

@@ -143,7 +143,7 @@ function lookup(raw: unknown) {
     fail('PAPER_ADMISSION_UNSUPPORTED');
   return value;
 }
-function decode(
+export function decodePaperExecutionSource(
   raw: unknown,
   expected: PaperExecutionSourceRequest,
   now: number,
@@ -331,7 +331,7 @@ export async function createPostgresPaperExecutionSource(
             [canonical(expected)],
           );
           if (rows.rows.length !== 1) fail();
-          return decode(rows.rows[0]!.result, expected, Date.now());
+          return decodePaperExecutionSource(rows.rows[0]!.result, expected, Date.now());
         },
       );
       if (io.signal.aborted || Date.now() >= io.deadline) fail('PAPER_ADMISSION_ABORTED');

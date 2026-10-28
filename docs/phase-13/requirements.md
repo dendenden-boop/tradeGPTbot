@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Coherent prepared execution input — 28 October 2026
+
+Accepted protected main **6c6db6a…** (PR52, full Platform40654965808 / CodeQL40654965774) closes the earlier public-writer fixture acceptance. The [prepared execution source](prepared-execution-source.md) must join complete current pristine FIFO to the target's durable original preparation inside one existing bounded transaction, with current ownership/epochs checked before key lookup. Missing/conflicting/stopped/UNKNOWN/stale evidence fails closed. Original expiry is historical and cannot be renewed. This increment adds no migration, authority, START, allocation or dispatch; full new-head regression/CI and protected publication remain required. PHASE 13 stays IN_PROGRESS / NOT READY FOR PHASE 14.
+
 ## Durable preparation and negative stop — 27 October 2026
 
 From accepted protected main **bb33ac4…** (PR49, full Platform40538727311 / CodeQL40538727378), the [preparation/stop journal](attempt-journal.md) requires permanent exact replay, current authenticated ownership before lookup, server-issued IDs/time and genuine immutable admission, and atomic NOT_SENT backed by the accepted withdrawal barrier. Collateral remains retained; UNKNOWN cannot weaken. Read-only reconciliation must recover uncertain COMMIT without retry. Additive59 must retain all58 published migrations/old native contracts and infer no historical attempts. Full new-head CI and protected publication remain required. No START/permit or financial dispatch is in this increment; PHASE 13 remains IN_PROGRESS / NOT READY FOR PHASE 14.
