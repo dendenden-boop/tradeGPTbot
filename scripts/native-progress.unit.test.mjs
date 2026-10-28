@@ -77,7 +77,7 @@ export default class ProgressReporter extends VerboseReporter {
   await writeFile(
     config,
     `import native from ${JSON.stringify(portable(path.join(root, 'vitest.database.config.ts')))};
-export default {...native,test:{...native.test,include:[${JSON.stringify(portable(fixture))}],reporters:[${JSON.stringify(portable(reporter))},'json'],outputFile:{json:${JSON.stringify(portable(path.join(dir, 'complete.json')))}}}};
+export default {...native,test:{...native.test,runner:${JSON.stringify(portable(path.join(root, 'scripts/fixtures/native-progress-runner.mjs')))},include:[${JSON.stringify(portable(fixture))}],reporters:[${JSON.stringify(portable(reporter))},'json'],outputFile:{json:${JSON.stringify(portable(path.join(dir, 'complete.json')))}}}};
 `,
   );
   const controller = new AbortController(),
@@ -133,6 +133,7 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
     await wait(80);
     expect(await readFile(heartbeat, 'utf8')).toBe(before);
     expect(captured).toMatch(/✓.*completed native owner progress witness/u);
+    expect(captured).not.toContain('NATIVE_PROGRESS_SENDER_FAILED');
   } finally {
     controller.abort();
     await observed;

@@ -1,5 +1,13 @@
 # Native progress fixture phase budgets
 
+## Explicit actual completion delivery — 28 October 2026
+
+The initial pending-first correction still failed one original Windows case in [source CI40697366547](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40697366547). The digest-verified artifact now preserves stdout: blocked readiness1,072ms, no progress marker and no native PASS line before8s. The failure remains retained; source Ubuntu, both PR OS and CodeQL success do not waive it.
+
+The installed Vitest4.1.12 throttle has a deterministic exact100ms trailing-timer stall: strict `>100` comparison can leave an already-fired pending handle with no new wakeup. A controlled-clock test executes the installed function to reproduce this mechanism. The failed CI's internal clock was not traced, so no claim equates that reproduction with its exact root cause.
+
+Tests-first `92d38f4` records4 RED sender/configuration contracts. A runner configured only in the owned progress fixture now forwards the actual passed witness task/result/meta from `onAfterRunTask` to native `onTaskUpdate`, bypassing only that fixture's trailing completion throttle. It does not relabel a result or print PASS. Native VerboseReporter and the deduplicating delivery helper retain the actual output and parent-delay behavior. Product/database runners, dependencies, global configuration and every original deadline remain unchanged. All15 related tests pass, including all5 physical cases, real stdout and original physical-stop/no-JSON/no-role assertions. Full corrected-source regression and CI are still mandatory.
+
 ## Pending-first completion — 28 October 2026
 
 [PR53 CI40693285440](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40693285440) failed two original Ubuntu progress cases; source OS checks and both CodeQL runs passed. The failed artifact records blocked readiness494/631ms but no progress marker before8s. It does not prove a particular reporter state or stdout flush failure. Instrumented local diagnostics passed4/4 original cases; no original CI root cause is claimed.
