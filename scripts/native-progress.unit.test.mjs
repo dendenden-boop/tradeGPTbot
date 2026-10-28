@@ -47,9 +47,17 @@ export default class ProgressReporter extends VerboseReporter {
         return typeof value==='function'?value.bind(target):value;
       }});
     }
+    // Retain this event's native result before yielding. Vitest's live case
+    // view can change while delivery is deliberately delayed.
+    const result=test.result();
+    const event=new Proxy(test,{get(target,key){
+      if(key==='result') return ()=>result;
+      const value=Reflect.get(target,key,target);
+      return typeof value==='function'?value.bind(target):value;
+    }});
     if(witness) await wait(${deliveryDelayMs});
-    super.onTestCaseResult(test);
-    if(witness && test.result().state==='passed') {
+    super.onTestCaseResult(event);
+    if(witness && result.state==='passed') {
       await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
       await writeFile(new URL('./progress.ready',import.meta.url),String(Date.now()));
     }
@@ -115,6 +123,7 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
       before = await readFile(heartbeat, 'utf8');
     await wait(80);
     expect(await readFile(heartbeat, 'utf8')).toBe(before);
+    expect(captured).toMatch(/✓.*completed native owner progress witness/u);
   } finally {
     controller.abort();
     await observed;
