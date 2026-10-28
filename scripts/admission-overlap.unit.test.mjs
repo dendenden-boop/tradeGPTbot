@@ -182,6 +182,7 @@ it('fails closed when reviewed overlap inputs or their SQL fixture helper change
   // BEGIN PAPER EXECUTION SOURCE PROXY_WATCH
   paths.push('packages/database/test/fixtures/registry-commit-proxy.ts');
   // END PAPER EXECUTION SOURCE PROXY_WATCH
+  paths.push('packages/database/test/fixtures/public-market-ports.ts');
   for (const file of paths) {
     await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
     await writeFile(
@@ -209,6 +210,7 @@ it('binds the shared readonly COMMIT proxy to renewed overlap review', async () 
     paper,
     'packages/database/test/fixtures/risk-certification.ts',
     'packages/database/test/fixtures/registry-commit-proxy.ts',
+    'packages/database/test/fixtures/public-market-ports.ts',
   ]) {
     await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
     await writeFile(path.join(copy, file), await readFile(path.join(root, file), 'utf8'));

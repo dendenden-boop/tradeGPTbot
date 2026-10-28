@@ -7,6 +7,7 @@ import ts from 'typescript';
 import { format, resolveConfig } from 'prettier';
 import { expect, it } from 'vitest';
 import { beforePaperAttemptJournal } from './paper-attempt-journal-legacy.mjs';
+import { beforePublicMarketWriters } from './public-market-fixture-legacy.mjs';
 const path = 'packages/database/test/paper-admission.integration.test.ts';
 const fixtureOnly = new Set([
   'updatePolicy',
@@ -66,7 +67,10 @@ function beforeExecutionSource(file, source) {
 const text = (file) =>
   beforeExecutionSource(
     file,
-    fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    beforePublicMarketWriters(
+      file,
+      fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    ),
   );
 const source = () =>
   ts.createSourceFile(path, text(path), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);

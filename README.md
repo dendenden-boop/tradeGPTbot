@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## PAPER owner fixture lifetime candidate — 28 October 2026
+
+PR51 merged to **95e349e**, but [exact-main CI40645582873](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40645582873) failed the90s admission owner suite after60/61 cases; its complete owner report is missing. Other OS/native/Auth/Docker and CodeQL results do not waive this failure. The [test-only correction](docs/phase-13/owner-admission-budget.md) limits public writer construction to two handles while preserving all61 case bodies, fresh operations, isolation fingerprints and original deadlines. Tests-first RED and35 targeted GREEN contracts are retained; complete new regression/CI remains required. All59 migrations and financial/native runtime unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch and positive credit disabled, native AMEND Binance Spot TESTNET only.
+
 ## Native reporter event snapshot — 28 October 2026
 
 The original [PR51 CI40640978235](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40640978235) failed an existing progress-fixture case after the phase-budget correction; its artifact records451ms child readiness but no reporter marker before8s. The failed run remains preserved. A further [tests-first contract](docs/phase-13/native-progress-fixture.md) establishes that asynchronous delivery must retain the native completion result rather than reread a mutable live case view. RED3/4 becomes targeted GREEN4/4 with actual VerboseReporter PASS output and physical process assertions retained. This is not proof of a specific CI host internal ordering or new-head acceptance. Full regression/CI remains required. All59 published migrations, production/runtime/workflows and execution deadlines are unchanged. PHASE13 IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER dispatch and positive credit disabled, native AMEND Binance Spot TESTNET only.
