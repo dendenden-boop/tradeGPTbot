@@ -103,6 +103,8 @@ const schema = z.strictObject({
       .max(3200),
   }),
 });
+// Internal composition schema; deliberately absent from package entrypoints.
+export { schema as paperRiskBudgetInputSchema };
 const add = (a: string, b: string) => decimalAdd(parseDecimal(a), parseDecimal(b));
 const sub = (a: string, b: string) => decimalSubtract(parseDecimal(a), parseDecimal(b));
 const mul = (a: string, b: string) => decimalMultiply(parseDecimal(a), parseDecimal(b));

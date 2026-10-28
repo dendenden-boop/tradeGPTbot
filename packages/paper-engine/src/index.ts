@@ -25,3 +25,7 @@ export {
 } from './risk-evaluation.js';
 export { projectPaperRiskCommitments } from './risk-commitments.js';
 export { projectPaperRiskJournalInventory } from './journal-inventory.js';
+export {
+  calculatePaperRetainedRiskBudget,
+  type PaperRetainedRiskBudgetCalculation,
+} from './retained-risk-budget.js';

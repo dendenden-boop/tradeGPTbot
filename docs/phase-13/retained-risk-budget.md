@@ -1,0 +1,29 @@
+# Retained PAPER budget before START
+
+## Accepted baseline and scope
+
+Protected main `9afaa4d33362f7a20fa81cb95d2c343c9adbb8b2` accepted PR53 through complete [Platform40706378861](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40706378861) and [CodeQL40706378872](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40706378872). All eight Platform jobs and CodeQL succeeded; six artifact ZIP digests/producer windows, 5,440 unit per OS, 1,393 PostgreSQL cases, nineteen owners, audits0, all59 published migrations and strict main protection were verified. Earlier pending/failed PR53 paragraphs are historical checkpoints, not current-main failures.
+
+The next financial boundary must revalidate an existing issuance. Feeding its complete current inventory to the ordinary new-admission budget rejects the target as replay; adding the target again would count its exposure, order and cash hold twice. The new `calculatePaperRetainedRiskBudget` is a pure prerequisite for that boundary. It adds no PostgreSQL function, migration, role, durable decision, mutation, START or permission. The accepted new-admission budget keeps its original replay rejection unchanged.
+
+## Input and retained effect
+
+Strict input contains `now`, an exclusive caller `deadline`, the original pristine PREPARED content, current database instrument/rule IDs, claimed current ACTIVE reservation revision1/expiry/decision identity, and the complete current budget input including the target order/reservation/hold. The future server writer must authenticate every one of these fields from storage and the current server clock. JSON content, UUIDs, hashes, ACTIVE labels and this result establish no ownership or persistence.
+
+Scope stays initial Spot BUY MARKET/LIMIT with PAPER/null connection, unchanged command and original admission priority/identities, cash-only reconciled inventory, PENDING orders and unreflected known holds. There must be exactly one target order, reservation and hold; all target identities, account/instrument/assets, notional and complete debit vector must agree. Missing, duplicate, conflicting, reflected, UNKNOWN or non-pristine state fails closed. Other account/tenant/currency constraints remain those of the accepted budget calculation.
+
+After validating the exact target, the calculation removes only that target's three entries from a private arithmetic copy, then calls the unchanged common budget calculator. That calculator validates all other pairs/holds and adds the unchanged target effect once. The recomputed lifetime principal/per-minimum-lot fee vector and notional must exactly match the retained reservation; stale rules cannot shrink or renew it. Current platform/user limits, cash after every other hold, open-order/potential-position counts and minimum remaining balance all apply. No hold is removed or reduced in the supplied Portfolio or in storage; no second reserve or monetary ledger effect occurs.
+
+The immutable result retains the original attempt/request hash/reservation and full original debit/hold IDs, plus the common budget calculation. Its `current` totals are the counterfactual totals excluding only this target; its `projected` totals are actual retained totals including the target exactly once. Validity ends at the earliest original admission/reservation expiry, current budget evidence/rules deadline or caller deadline. A fresh market capture never renews the original expiry. JSON roundtrip proves content determinism, not PostgreSQL restart semantics.
+
+## Failure, bounds and missing authority
+
+Preflight rejects accessors, cycles, non-JSON objects, excessive depth/nodes/bytes and oversized arrays before schema/hash traversal. Pristine orders/reservations/holds are bounded to1000, supporting300-order calculations without an unbounded queue. Bounds reject whole input rather than truncating it; errors disclose no stored financial payload.
+
+This is **retained budget arithmetic only**. It does not evaluate all Risk policy conditions: permission/session epochs, ownership/connection, ACTIVE state provenance, current capabilities, loss baseline, rate limits, controls, health/circuits and a final current-policy revision check still belong to the future fixed atomic writer. It must acquire the accepted GLOBAL→tenant→account/budget locks, reread every authoritative source immediately at one-use START, retain a durable attempt before I/O, handle uncertain COMMIT without dispatch/blind retry, and atomically commit allocation/fills/ledger/Portfolio/order/hold progress. Neither a PREPARED reader nor this pure result substitutes for that gate.
+
+No worker or financial gateway calls this calculation in this increment. Published migrations1–59, accepted Risk/Order/Portfolio/adapters, dependencies, workflows and execution budgets remain unchanged. LIVE/PAPER financial dispatch and positive native collateral credit stay disabled. Native AMEND remains Binance Spot TESTNET only; real private exchange acceptance, database crash/backup restore and production soak are not claimed. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.**
+
+## Verification requirements
+
+Tests must precede implementation and cover exact exposure/cash/count limits without duplicate reservation,300 contenders, unchanged other reservations and complete hold matching, UNKNOWN/reflection, original expiry, metadata/command/identity conflicts, current-policy tightening, serialization/reordering, bounded poisoned input and unchanged new-admission replay rejection. Full frozen format/docs/lint/typecheck/unit/HTTP/db/build/runtime/clean/audit and complete exact-head Ubuntu/Windows/native PostgreSQL/owner/upgrade/reset/Auth/Docker/CodeQL acceptance remain required. Actual outcomes are recorded separately in phase verification; these requirements alone claim no new acceptance.

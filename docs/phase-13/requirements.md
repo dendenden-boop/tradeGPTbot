@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Retained execution budget — 28 October 2026
+
+Accepted protected main **9afaa4d…** (PR53, complete Platform40706378861 / CodeQL40706378872) closes the prior prepared-source publication requirement. The [retained-budget contract](retained-risk-budget.md) requires exact original pristine preparation/current metadata/ACTIVE reservation content and full current inventory, with target counted once rather than readmitted. Missing/duplicate/conflicting/UNKNOWN/reflected/expired or foreign-valuation evidence fails closed; all other holds and current limits remain enforced. Content authenticates no source, ownership, epochs or authority. Atomic final Risk/controls/health/START/permit and the financial writer remain mandatory; this calculation adds no I/O, migration or dispatch. Full new-head regression/CI required. PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.
+
 ## Coherent prepared execution input — 28 October 2026
 
 Accepted protected main **6c6db6a…** (PR52, full Platform40654965808 / CodeQL40654965774) closes the earlier public-writer fixture acceptance. The [prepared execution source](prepared-execution-source.md) must join complete current pristine FIFO to the target's durable original preparation inside one existing bounded transaction, with current ownership/epochs checked before key lookup. Missing/conflicting/stopped/UNKNOWN/stale evidence fails closed. Original expiry is historical and cannot be renewed. This increment adds no migration, authority, START, allocation or dispatch; full new-head regression/CI and protected publication remain required. PHASE 13 stays IN_PROGRESS / NOT READY FOR PHASE 14.
