@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Retained PAPER budget candidate — 28 October 2026
+
+Protected main **9afaa4d…** accepted [PR53](https://github.com/dendenden-boop/tradeGPTbot/pull/53) through complete [Platform40706378861](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40706378861) / [CodeQL40706378872](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40706378872): 5,440 unit per OS, 1,393 PostgreSQL, nineteen owners, audits0, artifacts/protection verified. This closes the older PR53 pending publication checkpoints below; failed historical runs remain failures.
+
+The next [retained-budget calculation](docs/phase-13/retained-risk-budget.md) validates original pristine preparation and current complete reservation/hold input, counting the existing target once against current limits without a second debit. Tests-first82 RED and one further foreign-valuation RED become83 new /310 related targeted GREEN. This grants no final Risk approval, START, permit or financial effect; full frozen regression and exact source/PR/main acceptance remain required. All59 published migrations and native financial paths remain unchanged. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; LIVE/PAPER financial dispatch and positive native credit disabled, native AMEND Binance Spot TESTNET only. Real private exchange tests, crash/backup restore and production soak are not claimed.
+
 ## Prepared PAPER execution source candidate — 28 October 2026
 
 The pending-first correction still failed one original Windows fixture case in [source CI40697366547](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40697366547). An additional [tests-first fixture sender](docs/phase-13/native-progress-fixture.md) reproduces the installed exact100ms trailing-throttle stall and explicitly forwards only the actual completed native witness to its native reporter. Four new RED contracts become15 targeted GREEN across sender/delivery/physical tests. Global runners, dependencies, financial runtime and deadlines remain unchanged. Full corrected-source regression/CI remains required; neither failed run is reclassified and the original internal CI clock is not claimed as observed.

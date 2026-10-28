@@ -689,6 +689,9 @@ it('does not broaden the initial quote-cash scope through coherent foreign valua
   const f = fixture();
   f.budget.platform.valuationAsset = f.budget.user.valuationAsset = 'EUR';
   f.budget.evidence.scope.valuationAsset = 'EUR';
-  const foreign = { ...f, budget: { ...f.budget, fx: { ...f.budget.fx, to: 'EUR', kind: 'OBSERVED', rate: '1' } } };
+  const foreign = {
+    ...f,
+    budget: { ...f.budget, fx: { ...f.budget.fx, to: 'EUR', kind: 'OBSERVED', rate: '1' } },
+  };
   expect(() => calculator()(foreign)).toThrow(/PAPER_RETAINED_/u);
 });

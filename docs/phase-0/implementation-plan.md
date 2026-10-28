@@ -1,5 +1,9 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Retained PAPER budget prerequisite — 28 October 2026
+
+Protected main **9afaa4d…** accepted PR53 with complete Platform40706378861 / CodeQL40706378872, artifacts and protection verified. The next [retained-budget calculation](../phase-13/retained-risk-budget.md) checks an existing pristine issuance against current complete inventory/limits without double-counting its target exposure or hold. Tests-first82 RED plus one foreign-valuation RED become83 new /310 related targeted GREEN; complete new-head regression/CI remains required. No migration, final Risk grant, START, permit or financial dispatch is introduced. Canonical PHASE0–22 scope is unchanged: PHASE13 IN_PROGRESS / NOT READY FOR PHASE14; LIVE/PAPER financial dispatch and positive native credit disabled, native AMEND Binance Spot TESTNET only. Real private exchange acceptance, crash/backup restore and production soak not claimed. Earlier checkpoints remain historical.
+
 ## Verified PHASE13 NOT_SENT release increment — 23 October 2026
 
 The [release source](../phase-13/withdrawal-release.md), **fa923f711575aa4666a86a114503683431797524**, passed complete source/PR Ubuntu/Windows/PostgreSQL/Auth/Docker/CodeQL with4822unit/41HTTP per OS,1370native cases, all19owner reports plus39admission-owner cases, populated55→56 upgrade/reset, twelve clean deployments and audit0. Exact artifacts, earlier test identities, immutable1–55 and strict protection were verified in [verification](../phase-13/verification.md). Only proven pristine NOT_SENT collateral releases; terminal history/tombstones are permanent, UNKNOWN remains held, cash/original command/public Order remain unchanged. Final documentation-head and protected-main publication remain separate in PR40; candidate56 is not yet published. Historical checkpoints below retain their original results.
