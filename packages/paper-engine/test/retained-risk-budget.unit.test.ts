@@ -685,3 +685,10 @@ it('does not claim complete current Risk/permission/health or a durable START', 
     expect(value).not.toHaveProperty(key);
   expect(pure).not.toHaveProperty('createPostgresPaperRetainedRiskBudget');
 });
+it('does not broaden the initial quote-cash scope through coherent foreign valuation input', () => {
+  const f = fixture();
+  f.budget.platform.valuationAsset = f.budget.user.valuationAsset = 'EUR';
+  f.budget.evidence.scope.valuationAsset = 'EUR';
+  const foreign = { ...f, budget: { ...f.budget, fx: { ...f.budget.fx, to: 'EUR', kind: 'OBSERVED', rate: '1' } } };
+  expect(() => calculator()(foreign)).toThrow(/PAPER_RETAINED_/u);
+});
