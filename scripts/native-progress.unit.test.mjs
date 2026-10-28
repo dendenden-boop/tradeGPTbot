@@ -34,9 +34,21 @@ it('blocked native owner progress witness',async()=>{await writeFile(new URL('./
   await writeFile(
     reporter,
     `import {VerboseReporter} from 'vitest/reporters';
+import {createNativeProgressDelivery} from ${JSON.stringify(portable(path.join(root, 'scripts/fixtures/native-progress-event.mjs')))};
 import {writeFile} from 'node:fs/promises';
 import {setTimeout as wait} from 'node:timers/promises';
 export default class ProgressReporter extends VerboseReporter {
+  getDelivery() {
+    return this.delivery ??= createNativeProgressDelivery({
+      emit: event=>super.onTestCaseResult(event),
+      delay: ()=>wait(${deliveryDelayMs}),
+      acknowledge: async()=>{
+        await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
+        await writeFile(new URL('./progress.ready',import.meta.url),String(Date.now()));
+      },
+    });
+  }
+  onTaskUpdate() { return this.delivery?.update(); }
   async onTestCaseResult(test) {
     const witness=test.task.name==='completed native owner progress witness';
     if(witness && ${replaceLiveResult}) {
@@ -57,20 +69,7 @@ export default class ProgressReporter extends VerboseReporter {
         return typeof value==='function'?value.bind(target):value;
       }});
     }
-    // Retain this event's native result before yielding. Vitest's live case
-    // view can change while delivery is deliberately delayed.
-    const result=test.result();
-    const event=new Proxy(test,{get(target,key){
-      if(key==='result') return ()=>result;
-      const value=Reflect.get(target,key,target);
-      return typeof value==='function'?value.bind(target):value;
-    }});
-    if(witness) await wait(${deliveryDelayMs});
-    super.onTestCaseResult(event);
-    if(witness && result.state==='passed') {
-      await new Promise((resolve,reject)=>this.ctx.logger.outputStream.write('',error=>error?reject(error):resolve()));
-      await writeFile(new URL('./progress.ready',import.meta.url),String(Date.now()));
-    }
+    return this.getDelivery().result(test);
   }
 }
 `,
@@ -149,6 +148,8 @@ export default {...native,test:{...native.test,include:[${JSON.stringify(portabl
       ),
     );
     await writeFile(path.join(dir, 'timing.json'), JSON.stringify(markers));
+    // Keep physical stdout even when no terminal marker arrived before abort.
+    await writeFile(path.join(dir, 'partial.log'), output.join('\n'));
     logger.mockRestore();
   }
   return dir;
