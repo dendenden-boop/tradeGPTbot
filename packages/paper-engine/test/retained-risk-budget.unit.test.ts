@@ -563,7 +563,13 @@ const invalid: [string, (f: Fixture) => void][] = [
   [
     'different public scope',
     (f) => {
-      f.budget.record.instrument.scope.environment = 'LIVE';
+      f.budget.record = {
+        ...f.budget.record,
+        instrument: {
+          ...f.budget.record.instrument,
+          scope: { ...f.budget.record.instrument.scope, environment: 'LIVE' },
+        },
+      };
     },
   ],
 ];
@@ -602,7 +608,7 @@ it.each(['START', 'UNKNOWN', 'NOT_SENT'])(
             expectedRevision: '1',
             reason: kind === 'UNKNOWN' ? 'AMBIGUOUS_START_COMMIT' : 'CONTROL',
           };
-    const state = pure.reducePaperExecutionAttempt(f.preparation, event);
+    const { state } = pure.reducePaperExecutionAttempt({ state: f.preparation, event });
     expect(() => calculator()({ ...f, preparation: state })).toThrow(/PAPER_RETAINED_/u);
   },
 );
