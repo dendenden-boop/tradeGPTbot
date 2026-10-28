@@ -12,7 +12,11 @@ const exists = (file) =>
     () => false,
   );
 
-async function exerciseProgress(deliveryDelayMs = 0, witnessReadyAfterMs = 0) {
+async function exerciseProgress(
+  deliveryDelayMs = 0,
+  witnessReadyAfterMs = 0,
+  replaceLiveResult = false,
+) {
   await mkdir(path.join(root, 'test-results/cohort-unit'), { recursive: true });
   const dir = await mkdtemp(path.join(root, 'test-results/cohort-unit/native-progress-'));
   const fixture = path.join(dir, 'progress.test.mjs'),
@@ -34,6 +38,15 @@ import {setTimeout as wait} from 'node:timers/promises';
 export default class ProgressReporter extends VerboseReporter {
   async onTestCaseResult(test) {
     const witness=test.task.name==='completed native owner progress witness';
+    if(witness && ${replaceLiveResult}) {
+      const native=test;
+      let reads=0;
+      test=new Proxy(native,{get(target,key){
+        if(key==='result') return ()=>++reads===1?native.result():{state:'pending',errors:undefined};
+        const value=Reflect.get(target,key,target);
+        return typeof value==='function'?value.bind(target):value;
+      }});
+    }
     if(witness) await wait(${deliveryDelayMs});
     super.onTestCaseResult(test);
     if(witness && test.result().state==='passed') {
@@ -142,3 +155,8 @@ it('keeps six-second startup independent of delayed delivery within the original
   expect(delivered - start).toBeGreaterThan(6000);
   expect(delivered - start).toBeLessThan(8000);
 }, 15000);
+it(
+  'retains the completed event result when the live case view changes during reporter delivery',
+  () => exerciseProgress(1000, 0, true),
+  15000,
+);
