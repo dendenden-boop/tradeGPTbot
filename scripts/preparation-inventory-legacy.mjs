@@ -1,5 +1,7 @@
 // Test-only reconstruction of accepted65-case fixture and proof producers.
+import { beforeOrderFixturePort } from './order-fixture-port-legacy.mjs';
 export function beforePreparationInventory(file, source) {
+  source = beforeOrderFixturePort(file, source);
   const expected =
     file === 'packages/database/test/paper-admission.integration.test.ts'
       ? ['TESTS']
