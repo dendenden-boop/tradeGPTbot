@@ -104,3 +104,9 @@ it('includes the new helper in physical overlap fingerprints and existing mutati
   expect(read('scripts/database-cohorts.mjs')).toContain("'" + file + "'");
   expect(read('scripts/admission-overlap.unit.test.mjs').split("'" + file + "'")).toHaveLength(3);
 });
+it('opens readonly/journal fixture transports before the original target grant window starts', () => {
+  const s = read(file).split("it('paper-preparation-inventory: fixed readonly RPC")[1].split("it('paper-preparation-inventory: uncertain")[0];
+  expect(s.indexOf('await openAttemptJournal()')).toBeLessThan(s.indexOf('await executionPair()'));
+  expect(s.indexOf('await openPreparationInventory()')).toBeLessThan(s.indexOf('await executionPair()'));
+  expect(s.indexOf('await runtime.connect()')).toBeLessThan(s.indexOf('await executionPair()'));
+});
