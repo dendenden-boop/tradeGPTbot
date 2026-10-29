@@ -2786,6 +2786,48 @@ it('paper-prepared-source: one readonly transaction anchors full current FIFO to
 });
 // END PAPER PREPARED SOURCE TESTS
 // BEGIN PAPER EXECUTION RISK TESTS
+async function refreshExecutionRiskMarket(f: Ready) {
+  // Multiple genuinely new test observations: use actual durable head revisions,
+  // never renew an existing receipt or assume a fixed expectedRevision.
+  const key = JSON.stringify({
+    scope: f.f.s.key.scope,
+    instrumentId: f.f.s.key.instrumentId,
+    dbInstrumentId: f.f.s.key.dbInstrumentId,
+  });
+  const snapshotHead = (
+    await admin.query<{
+      revision: string;
+      payload: typeof f.f.s;
+    }>(
+      'SELECT h.revision::text revision,e.payload::jsonb payload FROM ctp_market.snapshot_head h JOIN ctp_market.snapshot_event e ON e.id=h.native WHERE h.key=$1::jsonb',
+      [key],
+    )
+  ).rows[0]!;
+  const tradeHead = (
+    await admin.query<{
+      revision: string;
+      payload: typeof f.f.p;
+    }>(
+      'SELECT h.revision::text revision,e.payload::jsonb payload FROM ctp_market.trade_head h JOIN ctp_market.trade_event e ON e.id=h.native WHERE h.key=$1::jsonb',
+      [key],
+    )
+  ).rows[0]!;
+  const snapshot = structuredClone(snapshotHead.payload),
+    trade = structuredClone(tradeHead.payload),
+    now = Date.now();
+  snapshot.id = randomUUID();
+  trade.id = randomUUID();
+  snapshot.expectedRevision = snapshotHead.revision;
+  trade.expectedRevision = tradeHead.revision;
+  snapshot.timestamp = trade.timestamp = now;
+  for (const record of [snapshot.ticker, snapshot.book, trade.trade])
+    record.exchangeTime = record.receivedAt = now;
+  snapshot.book.sourceSequence = (BigInt(snapshot.book.sourceSequence!) + 1n).toString();
+  trade.trade.sourceSequence = (BigInt(trade.trade.sourceSequence!) + 1n).toString();
+  trade.trade.tradeId = randomUUID();
+  expect((await f.snapshots.publish(snapshot, io())).status).toBe('APPLIED');
+  expect((await f.trades.publish(trade, io())).status).toBe('APPLIED');
+}
 interface CurrentExecutionRiskView {
   kind: string;
   preparation: PaperExecutionAttempt;
@@ -2825,14 +2867,14 @@ async function currentExecutionRiskRequest(f: Ready) {
 }
 it('paper-execution-risk: real readonly RPC and reader evaluate current retained scope with no monetary or journal write', async () => {
   const f = await nativeReady();
+  await refreshExecutionRiskMarket(f);
+  await runtimeEvidence(f);
   await (await openAdmission()).approve(await input(f), io());
   const { request, preparation } = await currentExecutionRiskRequest(f),
     before = await withdrawalInventory(f);
   const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL'), max: 1 });
   const c = await runtime.connect();
   try {
-    await nextFixtureMarketObservation(f);
-    await runtimeEvidence(f);
     await c.query('BEGIN');
     await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
     const raw = await c.query<{ result: { kind: string } }>(
@@ -2846,8 +2888,6 @@ it('paper-execution-risk: real readonly RPC and reader evaluate current retained
     await runtime.end();
   }
   const reader = await openCurrentExecutionRisk();
-  await nextFixtureMarketObservation(f);
-  await runtimeEvidence(f);
   const view = await reader.read(request, io());
   expect(view.kind).toBe('PAPER_EXECUTION_RISK_SOURCE');
   expect(view.evaluation.kind).toBe('EVALUATED');
@@ -2866,8 +2906,6 @@ it('paper-execution-risk: real readonly RPC and reader evaluate current retained
     expect(view).not.toHaveProperty(key);
   await reader.close();
   const restarted = await openCurrentExecutionRisk();
-  await nextFixtureMarketObservation(f);
-  await runtimeEvidence(f);
   expect((await restarted.read(request, io())).preparation).toEqual(preparation);
   await expect(
     restarted.read(
@@ -2896,6 +2934,8 @@ it('paper-execution-risk: real readonly RPC and reader evaluate current retained
 });
 it('paper-execution-risk: current policy, tenant pause and failed health block an already prepared original reservation', async () => {
   const f = await nativeReady();
+  await refreshExecutionRiskMarket(f);
+  await runtimeEvidence(f);
   await (await openAdmission()).approve(await input(f), io());
   const { request } = await currentExecutionRiskRequest(f),
     reader = await openCurrentExecutionRisk(),
@@ -2907,16 +2947,11 @@ it('paper-execution-risk: current policy, tenant pause and failed health block a
     )
   ).rows[0]!.limits;
   await updatePolicy(f.c.owner.tenantId, 'USER', { ...limits, maxOpenOrders: 0 });
-  await nextFixtureMarketObservation(f);
-  await runtimeEvidence(f);
   await expect(reader.read(request, io())).rejects.toThrow(/PAPER_ADMISSION_(LIMIT|EVIDENCE)/u);
   await updatePolicy(f.c.owner.tenantId, 'USER', limits);
   await updateControl(f.c.owner.tenantId, 'PAUSED');
-  await nextFixtureMarketObservation(f);
-  await runtimeEvidence(f);
   await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
   await updateControl(f.c.owner.tenantId, 'RUNNING');
-  await nextFixtureMarketObservation(f);
   await runtimeEvidence(f, 'FAILED');
   await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
   expect(await withdrawalInventory(f)).toEqual(before);
@@ -2932,8 +2967,6 @@ it('paper-execution-risk: lost read COMMIT returns no source, reconnect recovers
   );
   const reader = await openCurrentExecutionRisk(proxy.connectionString);
   try {
-    await nextFixtureMarketObservation(f);
-    await runtimeEvidence(f);
     proxy.arm();
     await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
     expect(proxy.dropped()).toBe(1);
@@ -2942,8 +2975,6 @@ it('paper-execution-risk: lost read COMMIT returns no source, reconnect recovers
     await proxy.close();
   }
   const normal = await openCurrentExecutionRisk();
-  await nextFixtureMarketObservation(f);
-  await runtimeEvidence(f);
   expect((await normal.read(request, io())).preparation).toEqual(preparation);
   expect(await withdrawalInventory(f)).toEqual(before);
   await (await openLifecycle()).markUnknown(await unknownRequest(f, admission.reservationId), io());
