@@ -44,6 +44,9 @@ import { verifyPaperExecutionSourceUpgrade } from './paper-execution-source-upgr
 // BEGIN PAPER ATTEMPT JOURNAL IMPORT
 import { verifyPaperAttemptJournalUpgrade } from './paper-attempt-journal-upgrade.mjs';
 // END PAPER ATTEMPT JOURNAL IMPORT
+// BEGIN PAPER EXECUTION RISK IMPORT
+import { verifyPaperExecutionRiskUpgrade } from './paper-execution-risk-upgrade.mjs';
+// END PAPER EXECUTION RISK IMPORT
 
 const proof = databaseProof(process.argv.slice(2));
 // BEGIN NATIVE PARTITION WINDOW
@@ -120,6 +123,9 @@ const expectedMigrations = [
   // BEGIN PAPER ATTEMPT JOURNAL MIGRATION
   '202610270002_paper_attempt_journal',
   // END PAPER ATTEMPT JOURNAL MIGRATION
+  // BEGIN PAPER EXECUTION RISK MIGRATION
+  '202610280001_paper_execution_risk_source',
+  // END PAPER EXECUTION RISK MIGRATION
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2357,6 +2363,22 @@ async function runDatabaseProof() {
     await attemptJournalOwner.end();
     pools.delete(attemptJournalOwner);
     // END PAPER ATTEMPT JOURNAL OWNER
+    // BEGIN PAPER EXECUTION RISK OWNER
+    const executionRiskOwner = connect(dbUrl(databases[2]));
+    assert.deepEqual(
+      (
+        await executionRiskOwner.query(
+          `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+        WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
+          [['capture_execution_risk', 'reconcile_admission_v59']],
+        )
+      ).rows,
+      [{ count: 2, safe: true }],
+    );
+    await executionRiskOwner.end();
+    pools.delete(executionRiskOwner);
+    // END PAPER EXECUTION RISK OWNER
     await run(
       process.execPath,
       [
@@ -2376,7 +2398,7 @@ async function runDatabaseProof() {
       ),
     );
     assert.equal(paperAdmissionOwner.success, true);
-    assert.equal(paperAdmissionOwner.numPassedTests, 62);
+    assert.equal(paperAdmissionOwner.numPassedTests, 65);
     assert.equal(paperAdmissionOwner.numFailedTests, 0);
     assert.equal(paperAdmissionOwner.numPendingTests, 0);
   }
@@ -4059,7 +4081,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 45); // Explicitly excluded 9 post54 + 7 post55 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 48); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
@@ -4101,7 +4123,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeWithdrawalTests.success, true);
   assert.equal(beforeWithdrawalTests.numPassedTests, 2);
   assert.equal(beforeWithdrawalTests.numFailedTests, 0);
-  assert.equal(beforeWithdrawalTests.numPendingTests, 60);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 63);
   const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
@@ -4146,7 +4168,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeReleaseTests.success, true);
   assert.equal(beforeReleaseTests.numPassedTests, 1);
   assert.equal(beforeReleaseTests.numFailedTests, 0);
-  assert.equal(beforeReleaseTests.numPendingTests, 61);
+  assert.equal(beforeReleaseTests.numPendingTests, 64);
   const beforePaperRelease = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperRelease.rows.find((x) => x.name === '"ctp_paper"."withdrawal_barrier"').rows.length >
@@ -4214,6 +4236,18 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperAttemptJournalUpgrade(paperUpgrade, beforePaperAttemptJournal);
   // END PAPER ATTEMPT JOURNAL UPGRADE
+  // BEGIN PAPER EXECUTION RISK UPGRADE
+  const beforePaperExecutionRisk = await capturePaperAdmissionUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[59]),
+    path.join(paperMigrations, expectedMigrations[59]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionRiskUpgrade(paperUpgrade, beforePaperExecutionRisk);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionRiskUpgrade(paperUpgrade, beforePaperExecutionRisk);
+  // END PAPER EXECUTION RISK UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4550,6 +4584,17 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     true,
   );
   // END PAPER ATTEMPT JOURNAL RESET_AFTER
+  // BEGIN PAPER EXECUTION RISK RESET_AFTER
+  for (const signature of [
+    'ctp_paper.capture_execution_risk(jsonb)',
+    'ctp_paper.reconcile_admission_v59(jsonb)',
+  ])
+    assert.equal(
+      (await admissionReset.query('SELECT to_regprocedure($1) IS NOT NULL ready', [signature]))
+        .rows[0].ready,
+      true,
+    );
+  // END PAPER EXECUTION RISK RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
 
@@ -4659,6 +4704,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperAttemptJournalNoInferredHistory: 'PASS',
     paperAttemptJournalFreshAndPopulatedIsolatedReset: 'PASS',
     // END PAPER ATTEMPT JOURNAL FLAGS
+    // BEGIN PAPER EXECUTION RISK FLAGS
+    paperExecutionRiskPopulatedUpgradeFromPublished59: 'PASS',
+    paperExecutionRiskNoInferredHistory: 'PASS',
+    // END PAPER EXECUTION RISK FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',

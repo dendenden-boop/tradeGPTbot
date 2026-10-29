@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Current PAPER execution Risk source — 29 October 2026
+
+Protected main **fe09999e525e24d600ada380c14a6e99fe8661bd** accepted [PR54](https://github.com/dendenden-boop/tradeGPTbot/pull/54) with complete [Platform40749665073](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40749665073) / [CodeQL40749665097](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40749665097): 5,523 unit per OS, 1,393 PostgreSQL, nineteen owners, audit0 and verified artifacts/protection. This closes the preceding retained-budget publication checkpoint; historical failures remain unchanged.
+
+The candidate [current execution Risk source](docs/phase-13/current-execution-risk.md) reads original PREPARED state, complete current inventory, policies, runtime/health, controls, market and genuine loss evidence in one bounded server-owned transaction, then re-evaluates retained exposure without reserving again. Additive60 forwards only this read through the existing reconciliation RPC; all59 published migrations remain immutable. The source returns calculation evidence, never a durable grant, START, permit or monetary effect. A future final writer must repeat current validation atomically.
+
+Tests-first commit **a2eac1f** preserves57 unit RED and3 selected native RED against published59. The first complete unit pass is5,583/5,583; after fixture-only type/freshness corrections,65 targeted tests pass. Format/docs and full lint/typecheck passed. Local populated59→60 verifies unchanged rows and221→223 functions; redeploy/reset and full native CI remain pending. Earlier57 unit and3 selected native GREEN (62 explicitly filtered) remain diagnostic evidence. Full frozen new-head regression and exact source/PR/main CI are still required. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND Binance Spot TESTNET only. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.
+
 ## Retained PAPER budget candidate — 28 October 2026
 
 Protected main **9afaa4d…** accepted [PR53](https://github.com/dendenden-boop/tradeGPTbot/pull/53) through complete [Platform40706378861](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40706378861) / [CodeQL40706378872](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40706378872): 5,440 unit per OS, 1,393 PostgreSQL, nineteen owners, audits0, artifacts/protection verified. This closes the older PR53 pending publication checkpoints below; failed historical runs remain failures.

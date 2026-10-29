@@ -1,7 +1,9 @@
 // Test-only reconstruction of the accepted61-case fixture and proof counters.
 // New readonly composition coverage is verified independently. Never remove or
 // rewrite a historical test, assertion, process deadline or migration.
+import { beforeExecutionRiskSource } from './execution-risk-source-legacy.mjs';
 export function beforePreparedExecutionSource(file, source) {
+  source = beforeExecutionRiskSource(file, source);
   if (file === 'packages/database/test/paper-admission.integration.test.ts') {
     const blocks = [
       ...source.matchAll(

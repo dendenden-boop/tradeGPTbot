@@ -3,10 +3,14 @@ import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { beforePreparedExecutionSource } from './prepared-execution-source-legacy.mjs';
 import { verifyAdmissionParallelFiles } from './database-cohorts.mjs';
+import { beforeExecutionRiskSource } from './execution-risk-source-legacy.mjs';
 
 const file = 'packages/database/test/paper-admission.integration.test.ts';
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforeExecutionRiskSource(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 
 it('retains every accepted61 native case, statement and cleanup after removing only the new case', () => {

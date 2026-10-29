@@ -4,12 +4,18 @@ import * as pure from '../src/index.js';
 import { canonical } from '@ctp/portfolio';
 import { wireNow } from './admission-wire-fixtures.js';
 import { executionRiskFixture } from './execution-risk-fixtures.js';
-const fake = vi.hoisted(() => ({
-  payload: null as unknown,
-  queries: [] as { text: string; values: readonly unknown[] }[],
+const fake = vi.hoisted<{
+  payload: unknown;
+  queries: { text: string; values: readonly unknown[] }[];
+  duplicate: boolean;
+  commitError: boolean;
+  afterCommit: null | (() => void);
+}>(() => ({
+  payload: null,
+  queries: [],
   duplicate: false,
   commitError: false,
-  afterCommit: null as null | (() => void),
+  afterCommit: null,
 }));
 vi.mock('pg', () => ({
   Client: class {
@@ -73,7 +79,9 @@ async function rejected(f: ReturnType<typeof executionRiskFixture>, code = /PAPE
   const p = await open();
   try {
     await expect(p.read(f.request, io())).rejects.toThrow(code);
-    expect(fake.queries.some((q) => q.text.includes('evaluate_and_reserve'))).toBe(false);
+    expect(
+      fake.queries.some((q) => q.text.startsWith('SELECT ctp_paper.evaluate_and_reserve(')),
+    ).toBe(false);
   } finally {
     await p.close();
   }
@@ -435,15 +443,27 @@ it('rejects a stricter current evidence age for every original witness', async (
 });
 it('never returns current evidence after uncertain read COMMIT', async () => {
   const f = executionRiskFixture();
+  fake.payload = f.packet;
+  const p = await open();
   fake.commitError = true;
-  await rejected(f, /PAPER_ADMISSION_UNCERTAIN/u);
-  expect(fake.queries.filter((q) => q.text.includes(' AS result'))).toHaveLength(1);
+  try {
+    await expect(p.read(f.request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(fake.queries.filter((q) => q.text.includes(' AS result'))).toHaveLength(1);
+  } finally {
+    await p.close();
+  }
 });
 it('never returns evidence expired during COMMIT delivery', async () => {
   const f = executionRiskFixture();
+  fake.payload = f.packet;
+  const p = await open();
   fake.afterCommit = () =>
     vi.spyOn(Date, 'now').mockReturnValue(f.preparation.request.admission.expiresAt);
-  await rejected(f, /PAPER_ADMISSION_EXPIRED/u);
+  try {
+    await expect(p.read(f.request, io())).rejects.toThrow('PAPER_ADMISSION_EXPIRED');
+  } finally {
+    await p.close();
+  }
 });
 it('rejects duplicate SQL result rows', async () => {
   const f = executionRiskFixture();

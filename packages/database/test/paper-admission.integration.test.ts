@@ -2831,6 +2831,8 @@ it('paper-execution-risk: real readonly RPC and reader evaluate current retained
   const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL'), max: 1 });
   const c = await runtime.connect();
   try {
+    await nextFixtureMarketObservation(f);
+    await runtimeEvidence(f);
     await c.query('BEGIN');
     await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
     const raw = await c.query<{ result: { kind: string } }>(
@@ -2843,8 +2845,10 @@ it('paper-execution-risk: real readonly RPC and reader evaluate current retained
     c.release();
     await runtime.end();
   }
-  const reader = await openCurrentExecutionRisk(),
-    view = await reader.read(request, io());
+  const reader = await openCurrentExecutionRisk();
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
+  const view = await reader.read(request, io());
   expect(view.kind).toBe('PAPER_EXECUTION_RISK_SOURCE');
   expect(view.evaluation.kind).toBe('EVALUATED');
   expect(view.preparation).toEqual(preparation);
@@ -2862,6 +2866,8 @@ it('paper-execution-risk: real readonly RPC and reader evaluate current retained
     expect(view).not.toHaveProperty(key);
   await reader.close();
   const restarted = await openCurrentExecutionRisk();
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
   expect((await restarted.read(request, io())).preparation).toEqual(preparation);
   await expect(
     restarted.read(
@@ -2901,11 +2907,16 @@ it('paper-execution-risk: current policy, tenant pause and failed health block a
     )
   ).rows[0]!.limits;
   await updatePolicy(f.c.owner.tenantId, 'USER', { ...limits, maxOpenOrders: 0 });
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
   await expect(reader.read(request, io())).rejects.toThrow(/PAPER_ADMISSION_(LIMIT|EVIDENCE)/u);
   await updatePolicy(f.c.owner.tenantId, 'USER', limits);
   await updateControl(f.c.owner.tenantId, 'PAUSED');
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
   await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
   await updateControl(f.c.owner.tenantId, 'RUNNING');
+  await nextFixtureMarketObservation(f);
   await runtimeEvidence(f, 'FAILED');
   await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
   expect(await withdrawalInventory(f)).toEqual(before);
@@ -2921,6 +2932,8 @@ it('paper-execution-risk: lost read COMMIT returns no source, reconnect recovers
   );
   const reader = await openCurrentExecutionRisk(proxy.connectionString);
   try {
+    await nextFixtureMarketObservation(f);
+    await runtimeEvidence(f);
     proxy.arm();
     await expect(reader.read(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
     expect(proxy.dropped()).toBe(1);
@@ -2929,6 +2942,8 @@ it('paper-execution-risk: lost read COMMIT returns no source, reconnect recovers
     await proxy.close();
   }
   const normal = await openCurrentExecutionRisk();
+  await nextFixtureMarketObservation(f);
+  await runtimeEvidence(f);
   expect((await normal.read(request, io())).preparation).toEqual(preparation);
   expect(await withdrawalInventory(f)).toEqual(before);
   await (await openLifecycle()).markUnknown(await unknownRequest(f, admission.reservationId), io());

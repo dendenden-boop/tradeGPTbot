@@ -37,6 +37,8 @@ const controlsSchema = z.strictObject({
     .array(z.strictObject({ id: z.uuid(), state: z.enum(['OPEN', 'CLOSED', 'HALF_OPEN']) }))
     .max(10000),
 });
+// Internal strict control parser, not an authority or public entrypoint.
+export { controlsSchema as paperExecutionControlsSchema };
 const wire = z.strictObject({
   kind: z.literal('PAPER_RISK_AUTHORITY_CAPTURE'),
   orderRisk: z.unknown(),
