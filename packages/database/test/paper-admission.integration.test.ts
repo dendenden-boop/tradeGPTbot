@@ -2983,3 +2983,153 @@ it('paper-execution-risk: lost read COMMIT returns no source, reconnect recovers
   expect(await withdrawalInventory(f)).toEqual(unknown);
 });
 // END PAPER EXECUTION RISK TESTS
+// BEGIN PAPER PREPARATION INVENTORY TESTS
+interface PreparationInventoryView {
+  kind: string;
+  source: { candidates: { intentId: string; admissionSequence: string }[] };
+  entries: (
+    | { kind: 'MISSING'; intentId: string }
+    | { kind: 'PREPARED'; intentId: string; key: string; preparation: PaperExecutionAttempt }
+  )[];
+}
+async function openPreparationInventory(
+  connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
+) {
+  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+    'createPostgresPaperPreparationInventorySource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_PREPARATION_INVENTORY_SOURCE_MISSING');
+  const port = await (
+    factory as (options: unknown) => Promise<{
+      read(raw: unknown, context: ReturnType<typeof io>): Promise<PreparationInventoryView>;
+      close(): Promise<void>;
+    }>
+  )({ connectionString, environment: 'test' });
+  handles.push(port);
+  return port;
+}
+async function preparationRows(f: Ready) {
+  return (
+    await admin.query(
+      'SELECT preparation_key,attempt_id,intent_id,reservation_id,prepared_ms,state,state_hash FROM ctp_paper.attempt_preparation WHERE tenant_id=$1 ORDER BY preparation_key',
+      [f.c.owner.tenantId],
+    )
+  ).rows;
+}
+it('paper-preparation-inventory: fixed readonly RPC joins the complete actual FIFO and preserves MISSING without adopting history or money', async () => {
+  const { f, other, request } = await executionPair();
+  const capture = { ...request, kind: 'PAPER_PREPARATION_INVENTORY_CAPTURE' },
+    before = await withdrawalInventory(f),
+    originalRows = await preparationRows(f);
+  const runtime = new Pool({ connectionString: required('DATABASE_PAPER_ADMISSION_URL'), max: 1 }),
+    c = await runtime.connect();
+  try {
+    await refreshExecutionRiskMarket(f);
+    await c.query('BEGIN');
+    await c.query("SELECT set_config('app.tenant_id',$1,true)", [f.c.owner.tenantId]);
+    const raw = (
+      await c.query<{ result: PreparationInventoryView }>(
+        'SELECT ctp_paper.reconcile_admission($1::jsonb) AS result',
+        [JSON.stringify(capture)],
+      )
+    ).rows[0]!.result;
+    expect(raw.kind).toBe('PAPER_PREPARATION_INVENTORY_CAPTURE');
+    expect(raw.entries).toEqual([
+      { kind: 'MISSING', intentId: other.intentId },
+      { kind: 'MISSING', intentId: f.order.intentId },
+    ]);
+    await c.query('COMMIT');
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+    await runtime.end();
+  }
+  expect(await preparationRows(f)).toEqual(originalRows);
+  const port = await openPreparationInventory();
+  // Preparation must still fit the original issuance window; this read cannot renew it.
+  const journal = await openAttemptJournal(),
+    prepRequest = { ...request, kind: 'PAPER_ATTEMPT_PREPARE', key: randomUUID() };
+  const prep = await journal.prepare(prepRequest, io());
+  const rows = await preparationRows(f);
+  await refreshExecutionRiskMarket(f);
+  const view = await port.read(capture, io());
+  expect(view.kind).toBe('PAPER_PREPARATION_INVENTORY_SOURCE');
+  expect(view.entries).toEqual([
+    { kind: 'MISSING', intentId: other.intentId },
+    { kind: 'PREPARED', intentId: f.order.intentId, key: prepRequest.key, preparation: prep },
+  ]);
+  expect(view.source.candidates.map((x) => x.intentId)).toEqual([other.intentId, f.order.intentId]);
+  expect(BigInt(view.source.candidates[0]!.admissionSequence)).toBeLessThan(
+    BigInt(view.source.candidates[1]!.admissionSequence),
+  );
+  for (const field of ['grant', 'permit', 'startedAt', 'allocation', 'fills', 'postings'])
+    expect(view).not.toHaveProperty(field);
+  expect(await preparationRows(f)).toEqual(rows);
+  expect(await withdrawalInventory(f)).toEqual(before);
+  await port.close();
+  await refreshExecutionRiskMarket(f);
+  expect((await (await openPreparationInventory()).read(capture, io())).entries).toEqual(
+    view.entries,
+  );
+  expect(await preparationRows(f)).toEqual(rows);
+});
+it('paper-preparation-inventory: uncertain read COMMIT returns no evidence, recovery is readonly and UNKNOWN cannot disappear from competition', async () => {
+  const f = await nativeReady(),
+    admission = await (await openAdmission()).approve(await input(f), io());
+  const request = await attemptRequest(f),
+    prep = await (await openAttemptJournal()).prepare(request, io());
+  const capture = { ...(await executionRequest(f)), kind: 'PAPER_PREPARATION_INVENTORY_CAPTURE' },
+    before = await withdrawalInventory(f),
+    rows = await preparationRows(f);
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_ADMISSION_URL'),
+    'PAPER_EXECUTION_SOURCE',
+  );
+  let port: Awaited<ReturnType<typeof openPreparationInventory>> | null = null;
+  try {
+    port = await openPreparationInventory(proxy.connectionString);
+    await refreshExecutionRiskMarket(f);
+    proxy.arm();
+    await expect(port.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+  } finally {
+    await port?.close();
+    await proxy.close();
+  }
+  const reader = await openPreparationInventory();
+  await refreshExecutionRiskMarket(f);
+  expect((await reader.read(capture, io())).entries).toEqual([
+    { kind: 'PREPARED', intentId: f.order.intentId, key: request.key, preparation: prep },
+  ]);
+  await expect(
+    reader.read(
+      {
+        ...capture,
+        authorization: { ...capture.authorization, permissionEpoch: '9223372036854775807' },
+      },
+      io(),
+    ),
+  ).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  expect(await preparationRows(f)).toEqual(rows);
+  expect(await withdrawalInventory(f)).toEqual(before);
+  const restricted = new Pool({
+    connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+    max: 1,
+  });
+  try {
+    await expect(
+      restricted.query('SELECT ctp_paper.capture_preparation_inventory($1::jsonb)', [
+        JSON.stringify(capture),
+      ]),
+    ).rejects.toMatchObject({ code: '42501' });
+  } finally {
+    await restricted.end();
+  }
+  await (await openLifecycle()).markUnknown(await unknownRequest(f, admission.reservationId), io());
+  const unknown = await withdrawalInventory(f);
+  await refreshExecutionRiskMarket(f);
+  await expect(reader.read(capture, io())).rejects.toThrow(/PAPER_ADMISSION_/u);
+  expect(await withdrawalInventory(f)).toEqual(unknown);
+  expect(await preparationRows(f)).toEqual(rows);
+});
+// END PAPER PREPARATION INVENTORY TESTS
