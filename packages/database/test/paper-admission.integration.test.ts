@@ -3010,7 +3010,7 @@ async function openPreparationInventory(
 }
 async function preparationRows(f: Ready) {
   return (
-    await admin.query(
+    await admin.query<Record<string, unknown>>(
       'SELECT preparation_key,attempt_id,intent_id,reservation_id,prepared_ms,state,state_hash FROM ctp_paper.attempt_preparation WHERE tenant_id=$1 ORDER BY preparation_key',
       [f.c.owner.tenantId],
     )

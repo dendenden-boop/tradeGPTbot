@@ -84,13 +84,13 @@ function fixture(count = 2, expired = false) {
   );
   return {
     request,
-    packet: {
+    packet: structuredClone({
       kind: 'PAPER_PREPARATION_INVENTORY_CAPTURE',
       request,
       asOf: wireNow,
       capture: f.packet,
       entries,
-    },
+    }),
   };
 }
 const io = () => ({ signal: new AbortController().signal, deadline: wireNow + 2000 });
@@ -297,4 +297,20 @@ it('rejects accessor/cycle/excessive arrays before visiting unexpected members',
   const cycle: Record<string, unknown> = { ...f.packet };
   cycle['cycle'] = cycle;
   await rejects(cycle);
+});
+it('rejects over-capacity entry/candidate collections before enumerating their members', async () => {
+  for (const field of ['entries', 'candidates']) {
+    const f = fixture();
+    let enumerated = 0;
+    const poison = new Proxy(Array(301), {
+      ownKeys() {
+        enumerated++;
+        throw Error('collection visited');
+      },
+    });
+    if (field === 'entries') set(f.packet, 'entries', poison);
+    else set(f.packet, 'capture.candidates', poison);
+    await rejects(f.packet);
+    expect(enumerated).toBe(0);
+  }
 });

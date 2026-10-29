@@ -47,6 +47,9 @@ import { verifyPaperAttemptJournalUpgrade } from './paper-attempt-journal-upgrad
 // BEGIN PAPER EXECUTION RISK IMPORT
 import { verifyPaperExecutionRiskUpgrade } from './paper-execution-risk-upgrade.mjs';
 // END PAPER EXECUTION RISK IMPORT
+// BEGIN PAPER PREPARATION INVENTORY IMPORT
+import { verifyPreparationInventoryUpgrade } from './preparation-inventory-upgrade.mjs';
+// END PAPER PREPARATION INVENTORY IMPORT
 
 const proof = databaseProof(process.argv.slice(2));
 // BEGIN NATIVE PARTITION WINDOW
@@ -126,6 +129,9 @@ const expectedMigrations = [
   // BEGIN PAPER EXECUTION RISK MIGRATION
   '202610280001_paper_execution_risk_source',
   // END PAPER EXECUTION RISK MIGRATION
+  // BEGIN PAPER PREPARATION INVENTORY MIGRATION
+  '202610290001_paper_preparation_inventory',
+  // END PAPER PREPARATION INVENTORY MIGRATION
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2379,6 +2385,22 @@ async function runDatabaseProof() {
     await executionRiskOwner.end();
     pools.delete(executionRiskOwner);
     // END PAPER EXECUTION RISK OWNER
+    // BEGIN PAPER PREPARATION INVENTORY OWNER
+    const preparationInventoryOwner = connect(dbUrl(databases[2]));
+    assert.deepEqual(
+      (
+        await preparationInventoryOwner.query(
+          `SELECT count(*)::int count,bool_and(NOT r.rolsuper AND NOT r.rolbypassrls) safe
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+      WHERE n.nspname='ctp_paper' AND p.proname=ANY($1::text[])`,
+          [['capture_preparation_inventory', 'reconcile_admission_v60']],
+        )
+      ).rows,
+      [{ count: 2, safe: true }],
+    );
+    await preparationInventoryOwner.end();
+    pools.delete(preparationInventoryOwner);
+    // END PAPER PREPARATION INVENTORY OWNER
     await run(
       process.execPath,
       [
@@ -2398,7 +2420,7 @@ async function runDatabaseProof() {
       ),
     );
     assert.equal(paperAdmissionOwner.success, true);
-    assert.equal(paperAdmissionOwner.numPassedTests, 65);
+    assert.equal(paperAdmissionOwner.numPassedTests, 67);
     assert.equal(paperAdmissionOwner.numFailedTests, 0);
     assert.equal(paperAdmissionOwner.numPendingTests, 0);
   }
@@ -4081,7 +4103,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 48); // Explicitly excluded 9 post54 + 7 post55 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 50); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
@@ -4123,7 +4145,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeWithdrawalTests.success, true);
   assert.equal(beforeWithdrawalTests.numPassedTests, 2);
   assert.equal(beforeWithdrawalTests.numFailedTests, 0);
-  assert.equal(beforeWithdrawalTests.numPendingTests, 63);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 65);
   const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
@@ -4168,7 +4190,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeReleaseTests.success, true);
   assert.equal(beforeReleaseTests.numPassedTests, 1);
   assert.equal(beforeReleaseTests.numFailedTests, 0);
-  assert.equal(beforeReleaseTests.numPendingTests, 64);
+  assert.equal(beforeReleaseTests.numPendingTests, 66);
   const beforePaperRelease = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperRelease.rows.find((x) => x.name === '"ctp_paper"."withdrawal_barrier"').rows.length >
@@ -4248,6 +4270,18 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperExecutionRiskUpgrade(paperUpgrade, beforePaperExecutionRisk);
   // END PAPER EXECUTION RISK UPGRADE
+  // BEGIN PAPER PREPARATION INVENTORY UPGRADE
+  const beforePreparationInventory = await capturePaperAdmissionUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[60]),
+    path.join(paperMigrations, expectedMigrations[60]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPreparationInventoryUpgrade(paperUpgrade, beforePreparationInventory);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPreparationInventoryUpgrade(paperUpgrade, beforePreparationInventory);
+  // END PAPER PREPARATION INVENTORY UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4595,6 +4629,17 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       true,
     );
   // END PAPER EXECUTION RISK RESET_AFTER
+  // BEGIN PAPER PREPARATION INVENTORY RESET_AFTER
+  for (const signature of [
+    'ctp_paper.capture_preparation_inventory(jsonb)',
+    'ctp_paper.reconcile_admission_v60(jsonb)',
+  ])
+    assert.equal(
+      (await admissionReset.query('SELECT to_regprocedure($1) IS NOT NULL ready', [signature]))
+        .rows[0].ready,
+      true,
+    );
+  // END PAPER PREPARATION INVENTORY RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
 
@@ -4708,6 +4753,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperExecutionRiskPopulatedUpgradeFromPublished59: 'PASS',
     paperExecutionRiskNoInferredHistory: 'PASS',
     // END PAPER EXECUTION RISK FLAGS
+    // BEGIN PAPER PREPARATION INVENTORY FLAGS
+    preparationInventoryPopulatedUpgradeFromPublished60: 'PASS',
+    preparationInventoryNoInferredHistory: 'PASS',
+    // END PAPER PREPARATION INVENTORY FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',

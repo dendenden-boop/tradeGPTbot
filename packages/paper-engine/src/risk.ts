@@ -63,3 +63,10 @@ export type {
   PaperTenantRiskContextSource,
   PaperTenantRiskContextReader,
 } from './tenant-risk-context-domain.js';
+
+export { createPostgresPaperPreparationInventorySource } from './postgres-preparation-inventory.js';
+export type {
+  PaperPreparationInventoryRequest,
+  PaperPreparationInventorySource,
+  PaperPreparationInventoryReader,
+} from './postgres-preparation-inventory.js';

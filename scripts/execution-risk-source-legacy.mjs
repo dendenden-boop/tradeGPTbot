@@ -1,5 +1,7 @@
 // Test-only reconstruction. Preserve all accepted native statements and deadlines.
+import { beforePreparationInventory } from './preparation-inventory-legacy.mjs';
 export function beforeExecutionRiskSource(file, source) {
+  source = beforePreparationInventory(file, source);
   const expected =
     file === 'packages/database/test/paper-admission.integration.test.ts'
       ? ['TESTS']
