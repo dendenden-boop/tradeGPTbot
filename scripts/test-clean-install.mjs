@@ -415,6 +415,10 @@ try {
     await assert.rejects(paperRisk.createPostgresPaperPreparedExecutionSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
     // END PAPER PREPARED SOURCE EXPORT
     assert.equal(typeof paperRisk.createPostgresPaperExecutionRiskSource,'function');
+    assert.equal(typeof paperRisk.createPostgresPaperPreparationInventorySource,'function');
+    assert.equal('createPostgresPaperPreparationInventorySource' in paper,false);
+    await assert.rejects(paperRisk.createPostgresPaperPreparationInventorySource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
+    assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-preparation-inventory.js'));
     assert.equal('createPostgresPaperExecutionRiskSource' in paper,false);
     await assert.rejects(paperRisk.createPostgresPaperExecutionRiskSource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-execution-risk.js'));

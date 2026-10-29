@@ -2,9 +2,13 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { verifyAdmissionParallelFiles } from './database-cohorts.mjs';
+import { beforePreparationInventory } from './preparation-inventory-legacy.mjs';
 
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforePreparationInventory(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const nativeFile = 'packages/database/test/paper-admission.integration.test.ts';
 it('retains the accepted62 native fixture and all runner statements outside explicit additions', async () => {
