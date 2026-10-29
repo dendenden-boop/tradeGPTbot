@@ -68,8 +68,12 @@ END $$;
 ALTER FUNCTION ctp_paper.reconcile_admission(jsonb) RENAME TO reconcile_admission_v59;
 CREATE FUNCTION ctp_paper.reconcile_admission(p jsonb) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN
- IF NOT coalesce(ctp_paper.valid_admission_runtime(),false) THEN RAISE EXCEPTION 'PAPER_ADMISSION_ROLE_UNSAFE'; END IF;
- IF p->>'kind'='PAPER_EXECUTION_RISK_CAPTURE' THEN RETURN ctp_paper.capture_execution_risk(p); END IF;
+ IF p->>'kind'='PAPER_EXECUTION_RISK_CAPTURE' THEN
+  IF NOT coalesce(ctp_paper.valid_admission_runtime(),false) THEN RAISE EXCEPTION 'PAPER_ADMISSION_ROLE_UNSAFE'; END IF;
+  RETURN ctp_paper.capture_execution_risk(p);
+ END IF;
+ -- Published59 already validates every delegated legacy request. Do not add
+ -- another full role/catalog scan to its established reconciliation path.
  RETURN ctp_paper.reconcile_admission_v59(p);
 END $$;
 REVOKE ALL ON FUNCTION ctp_paper.capture_execution_risk(jsonb),ctp_paper.reconcile_admission_v59(jsonb),ctp_paper.reconcile_admission(jsonb) FROM PUBLIC,ctp_paper_risk_admission;

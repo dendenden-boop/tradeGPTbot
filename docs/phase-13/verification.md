@@ -1,5 +1,9 @@
 # PHASE 13 verification
 
+## Full source CI RED — current checkpoint
+
+[Source40829332568](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40829332568) on fd4c170 failed native admission deadline after63/65 case completions. Source OS/Auth/Docker/CodeQL and the separate native owner job passed, but the run is not acceptance. The [current execution Risk record](current-execution-risk.md) retains the failure and the candidate unpublished60 legacy-delegation correction. Deadlines, all published1–59 and financial runtime remain unchanged. Corrected-head regression/CI is pending; PR55 stays draft and main remains fe09999e. PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.
+
 ## Current execution Risk checkpoint — 29 October 2026
 
 Protected main **fe09999e525e24d600ada380c14a6e99fe8661bd** accepted [PR54](https://github.com/dendenden-boop/tradeGPTbot/pull/54) with complete [Platform40749665073](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40749665073) / [CodeQL40749665097](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40749665097): 5,523 unit per OS, 1,393 PostgreSQL, nineteen owners, audit0 and verified artifacts/protection. This closes the preceding retained-budget publication checkpoint; historical failures remain unchanged.
