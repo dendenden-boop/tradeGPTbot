@@ -19,6 +19,12 @@ export { createPostgresPaperUnsentCancellation } from './postgres-unsent-cancell
 export { createPostgresPaperExecutionSource } from './postgres-execution-source.js';
 export { createPostgresPaperAttemptJournal } from './postgres-attempt-journal.js';
 export { createPostgresPaperPreparedExecutionSource } from './postgres-attempt-journal.js';
+export { createPostgresPaperExecutionRiskSource } from './postgres-execution-risk.js';
+export type {
+  PaperExecutionRiskSource,
+  PaperExecutionRiskSourceRequest,
+  PaperExecutionRiskSourceReader,
+} from './execution-risk-domain.js';
 export type {
   PaperPreparedExecutionSource,
   PaperPreparedExecutionSourceRequest,

@@ -67,6 +67,11 @@ const withdrawal = z.strictObject({
   bookHash: digest,
 });
 const requestSchema = z.union([preparationRequest, stopRequest]);
+// Internal composition only; deliberately absent from package entrypoints.
+export {
+  preparedExecutionRequest as paperPreparedExecutionRequestSchema,
+  decode as decodePaperAttemptJournalView,
+};
 const packet = z.strictObject({
   kind: z.enum(['PREPARED', 'STOPPED', 'COMMITTED']),
   request: requestSchema,
