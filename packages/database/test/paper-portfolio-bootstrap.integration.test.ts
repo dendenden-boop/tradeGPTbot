@@ -459,6 +459,60 @@ it('physically lost acknowledged bootstrap COMMIT recovers one original checkpoi
     for (const t of ['ctp_portfolio.book', 'ctp_portfolio.evidence', 'ctp_portfolio.outbox'])
       expect(await count(t, f)).toBe(1);
     await unchangedMoney(f);
+    // BEGIN BOOK UPGRADE RECOVERY NATIVE
+    const other = await prepared(),
+      recoveryProxy = await registryCommitProxy(required('DATABASE_PAPER_BOOK_URL'), 'PAPER_BOOK');
+    try {
+      const native = await openBook(recoveryProxy.connectionString);
+      const events: { stage: string; outcome: string }[] = [];
+      let mutations = 0,
+        reads = 0;
+      const options = {
+        stage: 'INITIALIZE' as const,
+        port: {
+          initialize: (...args: Parameters<typeof native.initialize>) => {
+            mutations++;
+            return native.initialize(...args);
+          },
+          read: (...args: Parameters<typeof native.read>) => {
+            reads++;
+            return native.read(...args);
+          },
+        },
+        owner: other.c.owner,
+        io,
+        verify: (value: Awaited<ReturnType<typeof native.read>>) => {
+          expect(value.kind).toBe('INITIAL_BOOK');
+          expect(value.bookId).toBe(other.fundingId);
+          expect(value.configuration.configuration.owner).toEqual(other.c.owner);
+        },
+        record: (event: { stage: string; outcome: string }) => events.push(event),
+      };
+      const module = './fixtures/book-upgrade-recovery.js';
+      const operation = ((await import(module)) as Record<string, unknown>)[
+        'bookUpgradeFixtureOperation'
+      ];
+      if (typeof operation !== 'function') throw Error('BOOK_UPGRADE_RECOVERY_MISSING');
+      recoveryProxy.arm();
+      const recovered = await (
+        operation as (o: typeof options) => Promise<Awaited<ReturnType<typeof native.read>>>
+      )(options);
+      expect(recoveryProxy.dropped()).toBe(1);
+      expect({ mutations, reads }).toEqual({ mutations: 1, reads: 1 });
+      expect(events).toEqual([
+        { stage: 'INITIALIZE', outcome: 'STARTED' },
+        { stage: 'INITIALIZE', outcome: 'UNCERTAIN' },
+        { stage: 'INITIALIZE', outcome: 'RECOVERED_READ_ONLY' },
+      ]);
+      await native.close();
+      expect(await (await openBook()).read(other.c.owner, io())).toEqual(recovered);
+      for (const table of ['ctp_portfolio.book', 'ctp_portfolio.evidence', 'ctp_portfolio.outbox'])
+        expect(await count(table, other)).toBe(1);
+      await unchangedMoney(other);
+    } finally {
+      await recoveryProxy.close();
+    }
+    // END BOOK UPGRADE RECOVERY NATIVE
   } finally {
     await proxy.close();
   }
