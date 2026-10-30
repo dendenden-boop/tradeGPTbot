@@ -196,11 +196,20 @@ it('retains the complete original runner and32-case native suite outside reviewe
 it.each(['ACKNOWLEDGED', 'RECOVERED_READ_ONLY'])(
   'waits for asynchronous receipt verification before recording %s or returning',
   async (outcome) => {
-    const run = await load(), f = fixture();
-    if (outcome === 'RECOVERED_READ_ONLY') f.port.initialize.mockRejectedValueOnce(Error('PAPER_BOOK_UNCERTAIN'));
-    let release, settled = false;
-    f.options.verify = () => new Promise((resolve) => { release = resolve; });
-    const pending = run(f.options).then((value) => { settled = true; return value; });
+    const run = await load(),
+      f = fixture();
+    if (outcome === 'RECOVERED_READ_ONLY')
+      f.port.initialize.mockRejectedValueOnce(Error('PAPER_BOOK_UNCERTAIN'));
+    let release,
+      settled = false;
+    f.options.verify = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const pending = run(f.options).then((value) => {
+      settled = true;
+      return value;
+    });
     try {
       await new Promise((resolve) => setImmediate(resolve));
       expect(release).toBeTypeOf('function');
