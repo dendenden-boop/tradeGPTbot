@@ -1,5 +1,7 @@
 // Test-only reconstruction of the complete published61 runner/native fixture.
+import { beforeExecutionContext } from './execution-context-legacy.mjs';
 export function beforeBookUpgradeRecovery(file, source) {
+  source = beforeExecutionContext(file, source);
   const runner = file === 'scripts/test-database.mjs';
   const native = file === 'packages/database/test/paper-portfolio-bootstrap.integration.test.ts';
   if (!runner && !native) return source;
