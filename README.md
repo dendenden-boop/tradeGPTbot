@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Populated bootstrap upgrade recovery — 30 October 2026
+
+PR56 published main **47e3cc037855749b7da1b246959c402f74742432**, with all 892 tracked blobs equal accepted2883812. Its [main CI40877717348](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40877717348) remains **FAIL**: after all67 admission cases passed, the populated40→41 bootstrap upgrade returned PAPER_BOOK_UNCERTAIN. OS/Auth/Docker/native1398 and CodeQL passed; the mandatory real-services gate correctly failed. Six failed-run ZIP digests are retained. The exact failed initialize/replay/read call and host cause are not proved. Earlier source/PR success is not main acceptance.
+
+The [test-only fixture recovery](docs/phase-13/book-upgrade-recovery.md) keeps each original operation and monetary assertion, then uses at most one authoritative readonly recapture only after genuine native uncertainty. It never retries initialize, renews a deadline, synthesizes an acknowledgement or accepts missing/conflicting evidence. Actual stage/outcome traces remain explicit. Tests-first76d01f9 records22 unit and one selected native RED;24 new unit/three old guards, selected physical COMMIT-loss recovery and actual raw-SQL populated40→41 diagnostic pass. The latter is not Prisma deploy/redeploy or full ownership acceptance. All61 published migrations and accepted runtime remain unchanged.
+
+Fresh local baseline passes all13 commands on47e (5640unit/41HTTP/12clean/audit0/892 unchanged inputs). New candidate acceptance requires5664unit/1398PG/67admission/19owners/29reports and complete exact-head source/PR/main CI, artifacts and protection. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** LIVE/PAPER financial dispatch and positive native credit remain disabled; native AMEND Binance Spot TESTNET only. No real private exchange/crash-backup restore/production soak claim. Historical checkpoints below remain unchanged.
+
 ## Complete pristine preparation inventory — 29 October 2026
 
 Protected main **4bc3ed819b956bf39e681fba0019c40f042abbad** accepted PR55 with complete [Platform40837902811](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40837902811) / [CodeQL40837902852](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/40837902852),5,583 unit per OS,1,396 PostgreSQL,65 admission cases,19 owners,29 reports,audits0 and verified18 final ZIP digests/protection. This closes the prior reader's protected publication requirement. All60 published migrations are immutable.

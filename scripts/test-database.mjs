@@ -50,6 +50,9 @@ import { verifyPaperExecutionRiskUpgrade } from './paper-execution-risk-upgrade.
 // BEGIN PAPER PREPARATION INVENTORY IMPORT
 import { verifyPreparationInventoryUpgrade } from './preparation-inventory-upgrade.mjs';
 // END PAPER PREPARATION INVENTORY IMPORT
+// BEGIN BOOK UPGRADE RECOVERY IMPORT
+import { bookUpgradeFixtureOperation } from '../packages/database/test/fixtures/book-upgrade-recovery.ts';
+// END BOOK UPGRADE RECOVERY IMPORT
 
 const proof = databaseProof(process.argv.slice(2));
 // BEGIN NATIVE PARTITION WINDOW
@@ -2805,6 +2808,26 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     connectionString: paperBookUrl(databases[4]),
     environment: 'test',
   });
+  // BEGIN BOOK UPGRADE RECOVERY STATE
+  const paperBookUpgradeEvidence = [];
+  outcome.paperBookUpgradeEvidence = paperBookUpgradeEvidence;
+  const bookUpgradeIo = () => ({
+    signal: new AbortController().signal,
+    deadline: Date.now() + 2500,
+  });
+  const recordBookUpgrade = (event) => {
+    assert.ok(paperBookUpgradeEvidence.length < 9);
+    paperBookUpgradeEvidence.push(event);
+  };
+  const verifyOriginalBook = (receipt) => {
+    assert.equal(receipt.kind, 'INITIAL_BOOK');
+    assert.equal(receipt.bookId, initialFunding.id);
+    assert.equal(receipt.revision, '1');
+    assert.deepEqual(receipt.configuration, initialSource.configuration);
+    assert.deepEqual(receipt.funding, initialSource.funding);
+    assert.deepEqual(receipt.state.balances, initialSource.state.balances);
+  };
+  // END BOOK UPGRADE RECOVERY STATE
   try {
     await assert.rejects(
       upgradedBook.read(paperInput.owner, {
@@ -2813,30 +2836,63 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       }),
       /PAPER_BOOK_MISSING/,
     );
-    const initialBook = await upgradedBook.initialize(paperInput.owner, {
-      signal: new AbortController().signal,
-      deadline: Date.now() + 2500,
+    // BEGIN BOOK UPGRADE RECOVERY INITIALIZE
+    const initialBook = await bookUpgradeFixtureOperation({
+      stage: 'INITIALIZE',
+      port: upgradedBook,
+      owner: paperInput.owner,
+      io: bookUpgradeIo,
+      verify: verifyOriginalBook,
+      record: recordBookUpgrade,
     });
+    // END BOOK UPGRADE RECOVERY INITIALIZE
     assert.equal(initialBook.bookId, initialFunding.id);
     assert.equal(initialBook.revision, '1');
     assert.deepEqual(initialBook.state.balances, initialSource.state.balances);
     assert.deepEqual(
-      await upgradedBook.initialize(paperInput.owner, {
-        signal: new AbortController().signal,
-        deadline: Date.now() + 2500,
+      // BEGIN BOOK UPGRADE RECOVERY REPLAY
+      await bookUpgradeFixtureOperation({
+        stage: 'REPLAY',
+        port: upgradedBook,
+        owner: paperInput.owner,
+        io: bookUpgradeIo,
+        verify: (receipt) => {
+          verifyOriginalBook(receipt);
+          assert.deepEqual(receipt, initialBook);
+        },
+        record: recordBookUpgrade,
       }),
+      // END BOOK UPGRADE RECOVERY REPLAY
       initialBook,
     );
     assert.deepEqual(
-      await upgradedBook.read(paperInput.owner, {
-        signal: new AbortController().signal,
-        deadline: Date.now() + 2500,
+      // BEGIN BOOK UPGRADE RECOVERY READ
+      await bookUpgradeFixtureOperation({
+        stage: 'READ',
+        port: upgradedBook,
+        owner: paperInput.owner,
+        io: bookUpgradeIo,
+        verify: (receipt) => {
+          verifyOriginalBook(receipt);
+          assert.deepEqual(receipt, initialBook);
+        },
+        record: recordBookUpgrade,
       }),
+      // END BOOK UPGRADE RECOVERY READ
       initialBook,
     );
   } finally {
     await upgradedBook.close();
   }
+  // BEGIN BOOK UPGRADE RECOVERY VERIFY
+  assert.deepEqual(
+    paperBookUpgradeEvidence
+      .filter((e) => ['ACKNOWLEDGED', 'RECOVERED_READ_ONLY'].includes(e.outcome))
+      .map((e) => e.stage),
+    ['INITIALIZE', 'REPLAY', 'READ'],
+  );
+  assert.ok(!paperBookUpgradeEvidence.some((e) => ['FAILED', 'UNRESOLVED'].includes(e.outcome)));
+  // END BOOK UPGRADE RECOVERY VERIFY
   assert.equal(
     (
       await paperUpgrade.query('SELECT receipt_text FROM ctp_paper.initial_funding WHERE id=$1', [
