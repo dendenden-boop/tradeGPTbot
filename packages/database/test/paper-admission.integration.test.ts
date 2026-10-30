@@ -23,6 +23,9 @@ import { createPostgresOrderStore, bindingSchema, draftSchema } from '@ctp/order
 // BEGIN ORDER FIXTURE PORT IMPORT
 import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
 // END ORDER FIXTURE PORT IMPORT
+// BEGIN ADMISSION FIXTURE PORT IMPORT
+import { createAdmissionFixturePort } from './fixtures/admission-fixture-port.js';
+// END ADMISSION FIXTURE PORT IMPORT
 import {
   createPostgresPolicies,
   createPostgresControls,
@@ -498,14 +501,19 @@ async function input(f: Ready, order = f.order) {
     commandHash: row.rows[0]!.hash,
   };
 }
+// BEGIN ADMISSION FIXTURE PORT OPEN
+const admissionFixturePort = createAdmissionFixturePort(() =>
+  ownWriter(
+    createPostgresPaperOrderRiskPort({
+      connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+      environment: 'test',
+    }),
+  ),
+);
 async function openAdmission() {
-  const port = await createPostgresPaperOrderRiskPort({
-    connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
+  return admissionFixturePort();
 }
+// END ADMISSION FIXTURE PORT OPEN
 async function openLifecycle(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
   const port = await createPostgresPaperReservationLifecycle({
     connectionString,
@@ -3145,3 +3153,151 @@ it('paper-preparation-inventory: uncertain read COMMIT returns no evidence, reco
   expect(await preparationRows(f)).toEqual(rows);
 });
 // END PAPER PREPARATION INVENTORY TESTS
+// BEGIN PAPER EXECUTION CONTEXT TESTS
+async function openExecutionContext(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+    'createPostgresPaperExecutionContextSource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_CONTEXT_SOURCE_MISSING');
+  const port = await (
+    factory as (options: unknown) => Promise<{
+      read(
+        raw: unknown,
+        context: ReturnType<typeof io>,
+      ): Promise<{
+        kind: string;
+        risk: CurrentExecutionRiskView;
+        inventory: PreparationInventoryView;
+      }>;
+      close(): Promise<void>;
+    }>
+  )({ connectionString, environment: 'test' });
+  handles.push(port);
+  return port;
+}
+it('paper-execution-context: same transaction joins real current Risk and complete original preparations, survives reopen without monetary effects', async () => {
+  const journal = await openAttemptJournal(),
+    port = await openExecutionContext(),
+    admission = await openAdmission();
+  const f = await nativeReady();
+  const other = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  const request = await executionRequest(f),
+    firstInput = await input(f),
+    otherInput = await input(f, other);
+  // Read immutable commands/auth and open handles before the finite original
+  // issuance window. SQL still rechecks every current fact, no authority cached.
+  await runtimeEvidence(f);
+  await refreshExecutionRiskMarket(f);
+  await admission.approve(otherInput, io());
+  await admission.approve(firstInput, io());
+  const prepare = { ...request, kind: 'PAPER_ATTEMPT_PREPARE', key: randomUUID() };
+  const original = await journal.prepare(prepare, io());
+  const capture = {
+    kind: 'PAPER_EXECUTION_RISK_CAPTURE',
+    preparationKey: prepare.key,
+    admission: request.admission,
+    authorization: request.authorization,
+  };
+  const before = await withdrawalInventory(f),
+    rows = await preparationRows(f);
+  await refreshExecutionRiskMarket(f);
+  const view = await port.read(capture, io());
+  expect(view.kind).toBe('PAPER_EXECUTION_CONTEXT_SOURCE');
+  expect(view.risk.evaluation.kind).toBe('EVALUATED');
+  expect(view.risk.preparation).toEqual(original);
+  expect(view.risk.retained.budget.orders).toEqual({ current: 1, projected: 2 });
+  expect(view.inventory.entries).toEqual([
+    { kind: 'MISSING', intentId: other.intentId },
+    { kind: 'PREPARED', intentId: f.order.intentId, key: prepare.key, preparation: original },
+  ]);
+  for (const field of [
+    'grant',
+    'permit',
+    'startedAt',
+    'submittedAt',
+    'fills',
+    'allocation',
+    'postings',
+  ])
+    expect(view).not.toHaveProperty(field);
+  await port.close();
+  await refreshExecutionRiskMarket(f);
+  expect((await (await openExecutionContext()).read(capture, io())).inventory.entries).toEqual(
+    view.inventory.entries,
+  );
+  expect(await preparationRows(f)).toEqual(rows);
+  expect(await withdrawalInventory(f)).toEqual(before);
+});
+it('paper-execution-context: physically lost readonly COMMIT grants nothing, explicit recapture and current scope/control/UNKNOWN remain fail closed', async () => {
+  const proxy = await registryCommitProxy(
+    required('DATABASE_PAPER_ADMISSION_URL'),
+    'PAPER_EXECUTION_SOURCE',
+  );
+  let faulty: Awaited<ReturnType<typeof openExecutionContext>> | null = null;
+  try {
+    faulty = await openExecutionContext(proxy.connectionString);
+    const port = await openExecutionContext(),
+      journal = await openAttemptJournal(),
+      admission = await openAdmission();
+    const f = await nativeReady();
+    const prepare = await attemptRequest(f),
+      originalInput = await input(f);
+    await updateControl(f.c.owner.tenantId, 'RUNNING');
+    await runtimeEvidence(f);
+    await refreshExecutionRiskMarket(f);
+    const approval = await admission.approve(originalInput, io());
+    const original = await journal.prepare(prepare, io());
+    const capture = {
+      kind: 'PAPER_EXECUTION_RISK_CAPTURE',
+      preparationKey: prepare.key,
+      admission: prepare.admission,
+      authorization: prepare.authorization,
+    };
+    const before = await withdrawalInventory(f),
+      rows = await preparationRows(f);
+    await updateControl(f.c.owner.tenantId, 'PAUSED');
+    await expect(port.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+    await updateControl(f.c.owner.tenantId, 'RUNNING');
+    await refreshExecutionRiskMarket(f);
+    await runtimeEvidence(f);
+    proxy.arm();
+    await expect(faulty.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await refreshExecutionRiskMarket(f);
+    expect((await port.read(capture, io())).risk.preparation).toEqual(original);
+    await expect(
+      port.read(
+        {
+          ...capture,
+          authorization: { ...capture.authorization, permissionEpoch: '9223372036854775807' },
+        },
+        io(),
+      ),
+    ).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+    expect(await withdrawalInventory(f)).toEqual(before);
+    await (
+      await openLifecycle()
+    ).markUnknown(await unknownRequest(f, approval.reservationId), io());
+    const unknown = await withdrawalInventory(f);
+    await expect(port.read(capture, io())).rejects.toThrow(/PAPER_ADMISSION_/u);
+    expect(await withdrawalInventory(f)).toEqual(unknown);
+    expect(await preparationRows(f)).toEqual(rows);
+  } finally {
+    await faulty?.close();
+    await proxy.close();
+  }
+});
+// END PAPER EXECUTION CONTEXT TESTS

@@ -1,5 +1,7 @@
 // Test-only reconstruction: preserve the complete accepted native fixture.
+import { beforeAdmissionFixturePort } from './admission-port-lifetime-legacy.mjs';
 export function beforeOrderFixturePort(file, source) {
+  source = beforeAdmissionFixturePort(file, source);
   if (file === 'scripts/admission-overlap.unit.test.mjs') {
     const blocks = [
       ...source.matchAll(

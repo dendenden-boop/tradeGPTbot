@@ -186,6 +186,9 @@ it('fails closed when reviewed overlap inputs or their SQL fixture helper change
   // BEGIN ORDER FIXTURE PORT WATCH
   paths.push('packages/database/test/fixtures/order-fixture-port.ts');
   // END ORDER FIXTURE PORT WATCH
+  // BEGIN ADMISSION FIXTURE PORT WATCH
+  paths.push('packages/database/test/fixtures/admission-fixture-port.ts');
+  // END ADMISSION FIXTURE PORT WATCH
   for (const file of paths) {
     await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
     await writeFile(
@@ -217,6 +220,9 @@ it('binds the shared readonly COMMIT proxy to renewed overlap review', async () 
     // BEGIN ORDER FIXTURE PORT REVIEW
     'packages/database/test/fixtures/order-fixture-port.ts',
     // END ORDER FIXTURE PORT REVIEW
+    // BEGIN ADMISSION FIXTURE PORT REVIEW
+    'packages/database/test/fixtures/admission-fixture-port.ts',
+    // END ADMISSION FIXTURE PORT REVIEW
   ]) {
     await mkdir(path.dirname(path.join(copy, file)), { recursive: true });
     await writeFile(path.join(copy, file), await readFile(path.join(root, file), 'utf8'));
