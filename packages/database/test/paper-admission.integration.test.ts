@@ -3169,9 +3169,32 @@ async function openExecutionContext(connectionString = required('DATABASE_PAPER_
 }
 it('paper-execution-context: same transaction joins real current Risk and complete original preparations, survives reopen without monetary effects', async () => {
   const journal = await openAttemptJournal(),
-    port = await openExecutionContext();
-  const { f, other, request } = await executionPair();
+    port = await openExecutionContext(),
+    admission = await openAdmission();
+  const f = await nativeReady();
+  const other = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        type: 'LIMIT',
+        limitPrice: parseDecimal('10.5'),
+        timeInForce: 'GTC',
+      },
+    },
+    io(),
+  );
+  const request = await executionRequest(f),
+    firstInput = await input(f),
+    otherInput = await input(f, other);
+  // Read immutable commands/auth and open handles before the finite original
+  // issuance window. SQL still rechecks every current fact, no authority cached.
   await runtimeEvidence(f);
+  await refreshExecutionRiskMarket(f);
+  await admission.approve(otherInput, io());
+  await admission.approve(firstInput, io());
   const prepare = { ...request, kind: 'PAPER_ATTEMPT_PREPARE', key: randomUUID() };
   const original = await journal.prepare(prepare, io());
   const capture = {
@@ -3222,11 +3245,13 @@ it('paper-execution-context: physically lost readonly COMMIT grants nothing, exp
       journal = await openAttemptJournal(),
       admission = await openAdmission();
     const f = await nativeReady();
-    await refreshExecutionRiskMarket(f);
-    await runtimeEvidence(f);
-    const approval = await admission.approve(await input(f), io());
     const prepare = await attemptRequest(f),
-      original = await journal.prepare(prepare, io());
+      originalInput = await input(f);
+    await updateControl(f.c.owner.tenantId, 'RUNNING');
+    await runtimeEvidence(f);
+    await refreshExecutionRiskMarket(f);
+    const approval = await admission.approve(originalInput, io());
+    const original = await journal.prepare(prepare, io());
     const capture = {
       kind: 'PAPER_EXECUTION_RISK_CAPTURE',
       preparationKey: prepare.key,
@@ -3235,6 +3260,11 @@ it('paper-execution-context: physically lost readonly COMMIT grants nothing, exp
     };
     const before = await withdrawalInventory(f),
       rows = await preparationRows(f);
+    await updateControl(f.c.owner.tenantId, 'PAUSED');
+    await expect(port.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+    await updateControl(f.c.owner.tenantId, 'RUNNING');
+    await refreshExecutionRiskMarket(f);
+    await runtimeEvidence(f);
     proxy.arm();
     await expect(faulty.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
     expect(proxy.dropped()).toBe(1);
@@ -3249,9 +3279,6 @@ it('paper-execution-context: physically lost readonly COMMIT grants nothing, exp
         io(),
       ),
     ).rejects.toThrow('PAPER_ADMISSION_SCOPE');
-    await updateControl(f.c.owner.tenantId, 'PAUSED');
-    await expect(port.read(capture, io())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
-    await updateControl(f.c.owner.tenantId, 'RUNNING');
     expect(await withdrawalInventory(f)).toEqual(before);
     await (
       await openLifecycle()

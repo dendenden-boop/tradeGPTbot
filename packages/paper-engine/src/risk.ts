@@ -70,3 +70,9 @@ export type {
   PaperPreparationInventorySource,
   PaperPreparationInventoryReader,
 } from './postgres-preparation-inventory.js';
+export { createPostgresPaperExecutionContextSource } from './postgres-execution-context.js';
+export type {
+  PaperExecutionContextRequest,
+  PaperExecutionContextSource,
+  PaperExecutionContextReader,
+} from './postgres-execution-context.js';

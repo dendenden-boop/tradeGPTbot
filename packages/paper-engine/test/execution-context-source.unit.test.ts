@@ -4,16 +4,27 @@ import * as pure from '../src/index.js';
 import { canonical } from '@ctp/portfolio';
 import { executionRiskFixture } from './execution-risk-fixtures.js';
 import { wireNow } from './admission-wire-fixtures.js';
-const fake = vi.hoisted(() => ({
-  risk: null as unknown,
-  inventory: null as unknown,
-  queries: [] as { text: string; values: readonly unknown[]; client: number }[],
+const fake = vi.hoisted<{
+  risk: unknown;
+  inventory: unknown;
+  queries: { text: string; values: readonly unknown[]; client: number }[];
+  clients: number;
+  duplicate: number;
+  failedQuery: number;
+  calls: number;
+  afterInventory: null | (() => void);
+  afterCommit: null | (() => void);
+  commitError: boolean;
+}>(() => ({
+  risk: null,
+  inventory: null,
+  queries: [],
   clients: 0,
   duplicate: 0,
   failedQuery: 0,
   calls: 0,
-  afterInventory: null as null | (() => void),
-  afterCommit: null as null | (() => void),
+  afterInventory: null,
+  afterCommit: null,
   commitError: false,
 }));
 vi.mock('pg', () => ({
@@ -28,7 +39,7 @@ vi.mock('pg', () => ({
       if (text.includes(' AS result')) {
         const call = ++fake.calls;
         if (call === fake.failedQuery) return Promise.reject(Error('private wire failure'));
-        const kind = JSON.parse(values[0] as string).kind as string;
+        const kind = (JSON.parse(values[0] as string) as { kind: string }).kind;
         const inventory = kind === 'PAPER_PREPARATION_INVENTORY_CAPTURE';
         if (inventory) fake.afterInventory?.();
         return Promise.resolve({
@@ -143,10 +154,9 @@ it.each([1, 2, 300])(
       expect(v.risk.retained.budget.orders).toEqual({ current: count - 1, projected: count });
       const queries = fake.queries.filter((q) => q.text.includes(' AS result'));
       expect(queries).toHaveLength(2);
-      expect(queries.map((q) => JSON.parse(q.values[0] as string).kind)).toEqual([
-        'PAPER_EXECUTION_RISK_CAPTURE',
-        'PAPER_PREPARATION_INVENTORY_CAPTURE',
-      ]);
+      expect(
+        queries.map((q) => (JSON.parse(q.values[0] as string) as { kind: string }).kind),
+      ).toEqual(['PAPER_EXECUTION_RISK_CAPTURE', 'PAPER_PREPARATION_INVENTORY_CAPTURE']);
       expect(new Set(fake.queries.map((q) => q.client)).size).toBe(1);
       expect(fake.queries.filter((q) => q.text.startsWith('BEGIN'))).toHaveLength(1);
       expect(fake.queries.filter((q) => q.text === 'COMMIT')).toHaveLength(1);
@@ -214,7 +224,7 @@ it.each([
     f.inventory.entries[0] = {
       kind: 'MISSING',
       intentId: f.request.admission.intentId,
-    } as (typeof f.inventory.entries)[number];
+    };
   if (kind === 'wrong-key') f.inventory.entries[0]!.key = 'other-real-key';
   if (kind === 'original-attempt') {
     const a = f.inventory.entries[0]!.preparation!;
