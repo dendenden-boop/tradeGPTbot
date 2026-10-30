@@ -34,6 +34,8 @@ Strict test-only reconstruction retains the complete original published61 runner
 
 ## Acceptance boundary
 
+Candidate `ca9b357dfe1b88f56b5429c3f737d086aab7ec19` completed its frozen local run with all checks except lint passing: 5,664 unit, 41 HTTP, twelve clean deployments and audits0. Lint rejected the unqualified `setImmediate` global in the two new async-verification tests. Source Platform41016575705 and PR Platform41016587423 also failed lint; both CodeQL runs passed and dependent native jobs skipped. Both failed runs and their ZIP digests remain preserved; none was cancelled or rerun. The correction explicitly imports the Node timer in that unit file, without changing the helper, runtime, native assertions, dependencies or deadlines. The corrected HEAD requires its own complete regression and CI.
+
 The candidate requires a new complete frozen regression and exact source/PR/protected-main CI: 5,664 unit, 1,398 PostgreSQL/42 files, 67 admission cases, all 19 owner suites/29 reports, real populated upgrades/deploy/redeploy/reset, Auth/Docker, CodeQL, audits and verified artifact digests/protection. The new evidence trace must be checked in both native producers. Actual run IDs/results belong to the PR and verified artifact checkpoint. Diagnostics alone do not accept the candidate or the failed published main.
 
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Final atomic Risk/START/one-use permit and shared execution/allocation/ledger/Portfolio/hold composition remain outstanding. LIVE/PAPER financial dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import ts from 'typescript';
+import { setImmediate } from 'node:timers';
 import { createHash } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 const read = (p) =>
