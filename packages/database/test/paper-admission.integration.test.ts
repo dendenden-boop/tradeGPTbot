@@ -23,6 +23,9 @@ import { createPostgresOrderStore, bindingSchema, draftSchema } from '@ctp/order
 // BEGIN ORDER FIXTURE PORT IMPORT
 import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
 // END ORDER FIXTURE PORT IMPORT
+// BEGIN ADMISSION FIXTURE PORT IMPORT
+import { createAdmissionFixturePort } from './fixtures/admission-fixture-port.js';
+// END ADMISSION FIXTURE PORT IMPORT
 import {
   createPostgresPolicies,
   createPostgresControls,
@@ -498,14 +501,19 @@ async function input(f: Ready, order = f.order) {
     commandHash: row.rows[0]!.hash,
   };
 }
+// BEGIN ADMISSION FIXTURE PORT OPEN
+const admissionFixturePort = createAdmissionFixturePort(() =>
+  ownWriter(
+    createPostgresPaperOrderRiskPort({
+      connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
+      environment: 'test',
+    }),
+  ),
+);
 async function openAdmission() {
-  const port = await createPostgresPaperOrderRiskPort({
-    connectionString: required('DATABASE_PAPER_ADMISSION_URL'),
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
+  return admissionFixturePort();
 }
+// END ADMISSION FIXTURE PORT OPEN
 async function openLifecycle(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
   const port = await createPostgresPaperReservationLifecycle({
     connectionString,

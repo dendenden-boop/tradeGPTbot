@@ -1,5 +1,7 @@
 // Test-only reconstruction of published61 bodies; never used by runtime.
+import { beforeAdmissionFixturePort } from './admission-port-lifetime-legacy.mjs';
 export function beforeExecutionContext(file, source) {
+  source = beforeAdmissionFixturePort(file, source);
   if (file === 'packages/database/test/paper-admission.integration.test.ts') {
     const blocks = [
       ...source.matchAll(
