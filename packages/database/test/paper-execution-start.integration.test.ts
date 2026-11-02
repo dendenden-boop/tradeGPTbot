@@ -135,14 +135,31 @@ it('paper-start: physically lost COMMIT grants nothing; readonly recovery finds 
 it('paper-start: private table denies runtime writes and immutable START survives policy/epoch history changes', async () => {
   const f = await readyExecutionStart(),
     receipt = await f.journal.start(f.request, startIo());
-  const runtime = new Pool({ connectionString: startFixtureConnection(), max: 1, query_timeout: 5000 });
+  const runtime = new Pool({
+    connectionString: startFixtureConnection(),
+    max: 1,
+    query_timeout: 5000,
+  });
   try {
-    const privileges = await runtime.query<{ direct: boolean }>("SELECT has_table_privilege(current_user,'ctp_paper.attempt_start','INSERT,UPDATE,DELETE,TRUNCATE') direct");
+    const privileges = await runtime.query<{ direct: boolean }>(
+      "SELECT has_table_privilege(current_user,'ctp_paper.attempt_start','INSERT,UPDATE,DELETE,TRUNCATE') direct",
+    );
     expect(privileges.rows[0]!.direct).toBe(false);
-  } finally { await runtime.end(); }
-  await expect(startFixtureSql('UPDATE ctp_paper.attempt_start SET start_key=\'forged\' WHERE tenant_id=$1', [f.c.owner.tenantId])).rejects.toThrow();
-  await expect(startFixtureSql('DELETE FROM ctp_paper.attempt_start WHERE tenant_id=$1', [f.c.owner.tenantId])).rejects.toThrow();
+  } finally {
+    await runtime.end();
+  }
+  await expect(
+    startFixtureSql("UPDATE ctp_paper.attempt_start SET start_key='forged' WHERE tenant_id=$1", [
+      f.c.owner.tenantId,
+    ]),
+  ).rejects.toThrow();
+  await expect(
+    startFixtureSql('DELETE FROM ctp_paper.attempt_start WHERE tenant_id=$1', [f.c.owner.tenantId]),
+  ).rejects.toThrow();
   await expect(startFixtureSql('TRUNCATE ctp_paper.attempt_start')).rejects.toThrow();
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
   await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
   await startFixturePause(f.c.owner.tenantId, 'PAUSED');
   expect(await f.journal.start(f.request, startIo())).toEqual(receipt);
@@ -161,4 +178,93 @@ it('paper-start: private table denies runtime writes and immutable START survive
   const view = await f.journal.read(updated, startIo());
   expect(view.kind).toBe('COMMITTED');
   if (view.kind === 'COMMITTED') expect(view.receipt).toEqual(receipt);
+});
+it('paper-start: STOP and START have exactly one winner under their shared native lock boundary', async () => {
+  const f = await readyExecutionStart(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  const results = await Promise.allSettled([
+    f.journal.start(f.request, startIo()),
+    f.preparation.stopBeforeStart(
+      {
+        ...f.prepareRequest,
+        kind: 'PAPER_ATTEMPT_STOP',
+        stopKey: 'race-stop-' + randomUUID(),
+        reason: 'CANCELLED',
+      },
+      startIo(),
+    ),
+  ]);
+  expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+  const view = await f.journal.read(f.request, startIo());
+  expect(view.kind).toBe(results[0].status === 'fulfilled' ? 'COMMITTED' : 'MISSING');
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-start: current rules replacement and failed executor health reject without a positive journal row', async () => {
+  const f = await readyExecutionStart();
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  await expect(f.journal.start(f.request, startIo())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect((await f.journal.read(f.request, startIo())).kind).toBe('MISSING');
+  const g = await readyExecutionStart(),
+    publication = structuredClone(g.publication);
+  publication.id = randomUUID();
+  publication.expectedRevision = (await g.runtime.head(g.c.owner, startIo()))!.revision;
+  publication.observation.health.executor = {
+    ...publication.observation.health.executor,
+    status: 'FAILED',
+    asOf: Date.now(),
+  };
+  await g.runtime.publish(publication, startIo());
+  await expect(g.journal.start(g.request, startIo())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+  expect((await g.journal.read(g.request, startIo())).kind).toBe('MISSING');
+});
+it('paper-start: complete preparation and earliest FIFO cannot be bypassed; old pristine views fail closed after START', async () => {
+  const f = await readyExecutionStart();
+  const second = await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, startIo());
+  const hash = (
+    await startFixtureSql<{ hash: string }>(
+      'SELECT encode("commandHash",\'hex\') hash FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2',
+      [f.c.owner.tenantId, second.intentId],
+    )
+  ).rows[0]!.hash;
+  const admission = {
+    ...f.admission,
+    orderId: second.id,
+    intentId: second.intentId,
+    commandHash: hash,
+  };
+  await f.admissionPort.approve(
+    {
+      binding: f.binding,
+      state: { id: second.id },
+      intentId: second.intentId,
+      operation: 'PLACE',
+      commandHash: hash,
+    },
+    startIo(),
+  );
+  const request = {
+    ...f.request,
+    admission,
+    preparationKey: 'prepare-second-' + randomUUID(),
+    startKey: 'start-second-' + randomUUID(),
+  };
+  await expect(f.journal.start(f.request, startIo())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  await f.preparation.prepare(
+    {
+      kind: 'PAPER_ATTEMPT_PREPARE',
+      key: request.preparationKey,
+      admission,
+      authorization: request.authorization,
+    },
+    startIo(),
+  );
+  await expect(f.journal.start(request, startIo())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  await f.journal.start(f.request, startIo());
+  await expect(f.preparation.read(f.prepareRequest, startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });

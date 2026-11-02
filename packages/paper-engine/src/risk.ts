@@ -76,3 +76,10 @@ export type {
   PaperExecutionContextSource,
   PaperExecutionContextReader,
 } from './postgres-execution-context.js';
+export { createPostgresPaperExecutionStartJournal } from './postgres-execution-start.js';
+export type {
+  PaperExecutionStartRequest,
+  PaperExecutionStartReceipt,
+  PaperExecutionStartView,
+  PaperExecutionStartJournal,
+} from './postgres-execution-start.js';

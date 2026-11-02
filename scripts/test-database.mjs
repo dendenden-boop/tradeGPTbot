@@ -1,4 +1,11 @@
 import assert from 'node:assert/strict';
+// BEGIN PAPER EXECUTION START IMPORT
+import {
+  capturePaperExecutionStartUpgrade,
+  verifyPaperExecutionStartUpgrade,
+  verifyPaperExecutionStartStorage,
+} from './paper-execution-start-upgrade.mjs';
+// END PAPER EXECUTION START IMPORT
 import { databaseProof } from './integration-proof.mjs';
 // BEGIN NATIVE PARTITION IMPORT
 import {
@@ -135,6 +142,9 @@ const expectedMigrations = [
   // BEGIN PAPER PREPARATION INVENTORY MIGRATION
   '202610290001_paper_preparation_inventory',
   // END PAPER PREPARATION INVENTORY MIGRATION
+  // BEGIN PAPER EXECUTION START MIGRATION
+  '202611020001_paper_execution_start',
+  // END PAPER EXECUTION START MIGRATION
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2426,6 +2436,34 @@ async function runDatabaseProof() {
     assert.equal(paperAdmissionOwner.numPassedTests, 69);
     assert.equal(paperAdmissionOwner.numFailedTests, 0);
     assert.equal(paperAdmissionOwner.numPendingTests, 0);
+    // BEGIN PAPER EXECUTION START OWNER
+    const executionStartDb = connect(dbUrl(databases[2]));
+    await verifyPaperExecutionStartStorage(executionStartDb);
+    await executionStartDb.end();
+    pools.delete(executionStartDb);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-execution-start.integration.test.ts',
+        '--outputFile.json=test-results/paper-execution-start-owner-tests.json',
+      ],
+      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+    );
+    const executionStartOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-execution-start-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(executionStartOwner.success, true);
+    assert.equal(executionStartOwner.numPassedTests, 9);
+    assert.equal(executionStartOwner.numFailedTests, 0);
+    assert.equal(executionStartOwner.numPendingTests, 0);
+    // END PAPER EXECUTION START OWNER
   }
   // END NATIVE PARTITION OWNER_WRAPPER
 
@@ -4338,6 +4376,18 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPreparationInventoryUpgrade(paperUpgrade, beforePreparationInventory);
   // END PAPER PREPARATION INVENTORY UPGRADE
+  // BEGIN PAPER EXECUTION START UPGRADE
+  const beforeExecutionStart = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[61]),
+    path.join(paperMigrations, expectedMigrations[61]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionStartUpgrade(paperUpgrade, beforeExecutionStart);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionStartUpgrade(paperUpgrade, beforeExecutionStart);
+  // END PAPER EXECUTION START UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4490,6 +4540,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   const cohortReports = cohortPlan.map(
     ({ id }) => new URL('../test-results/database-' + id + '-tests.json', import.meta.url),
   );
+  // BEGIN PAPER EXECUTION START COHORT_ENV
+  const executionStartEnv = admissionEnv;
+  // END PAPER EXECUTION START COHORT_ENV
   // Remove only known output files; a prior invocation cannot supply acceptance.
   for (const output of [
     ...cohortReports,
@@ -4512,12 +4565,16 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         ...cohort.files,
         '--outputFile.json=' + fileURLToPath(cohortReports[index]),
       ],
+      // BEGIN PAPER EXECUTION START ENV
       env:
-        cohort.id === 'registry'
-          ? registryEnv
-          : cohort.id === 'admission'
-            ? admissionEnv
-            : nativeEnv,
+        cohort.id === 'execution-start'
+          ? executionStartEnv
+          : cohort.id === 'registry'
+            ? registryEnv
+            : cohort.id === 'admission'
+              ? admissionEnv
+              : nativeEnv,
+      // END PAPER EXECUTION START ENV
     })),
     {
       secrets,
@@ -4541,12 +4598,16 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     tests: tests.numPassedTests,
     cohorts: cohortPlan.map((cohort) => ({
       ...cohort,
+      // BEGIN PAPER EXECUTION START DATABASE
       database:
-        cohort.id === 'registry'
-          ? databases[5]
-          : cohort.id === 'admission'
-            ? databases[6]
-            : databases[0],
+        cohort.id === 'execution-start'
+          ? databases[6]
+          : cohort.id === 'registry'
+            ? databases[5]
+            : cohort.id === 'admission'
+              ? databases[6]
+              : databases[0],
+      // END PAPER EXECUTION START DATABASE
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
     })),
   });
@@ -4696,6 +4757,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       true,
     );
   // END PAPER PREPARATION INVENTORY RESET_AFTER
+  // BEGIN PAPER EXECUTION START RESET_AFTER
+  assert.equal(
+    (await admissionReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0].n,
+    0,
+  );
+  await verifyPaperExecutionStartStorage(admissionReset);
+  // END PAPER EXECUTION START RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
 
@@ -4813,6 +4881,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     preparationInventoryPopulatedUpgradeFromPublished60: 'PASS',
     preparationInventoryNoInferredHistory: 'PASS',
     // END PAPER PREPARATION INVENTORY FLAGS
+    // BEGIN PAPER EXECUTION START FLAGS
+    paperExecutionStartUpgradePreserved: true,
+    paperExecutionStartResetValidated: true,
+    // END PAPER EXECUTION START FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
@@ -4854,6 +4926,13 @@ async function resetDatabaseProof(fresh) {
   const resetStorageMs = Date.now() - resetStorageStarted;
   await migrate(databases[0]);
   const reset = connect(dbUrl(databases[0]));
+  // BEGIN PAPER EXECUTION START RESET_FRESH
+  assert.equal(
+    (await reset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0].n,
+    0,
+  );
+  await verifyPaperExecutionStartStorage(reset);
+  // END PAPER EXECUTION START RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
   for (const table of [
     'admission_issuance',

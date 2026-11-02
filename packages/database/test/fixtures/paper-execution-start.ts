@@ -1,6 +1,6 @@
 // Isolated native test setup only. Every receipt comes from the real authority.
 import { randomUUID } from 'node:crypto';
-import { Pool } from 'pg';
+import { Pool, type QueryResultRow } from 'pg';
 import { expect } from 'vitest';
 import { parseDecimal } from '@ctp/exchange-core';
 import {
@@ -340,11 +340,14 @@ export async function readyExecutionStart() {
     c,
     f,
     binding,
+    draft,
+    admissionPort: ports.admission,
     order,
     admission,
     approval,
     request,
     prepareRequest,
+    publication,
     prepared: preparation,
   };
 }
@@ -367,8 +370,11 @@ export async function startFixtureEffects(tenantId: string) {
     )
   ).rows[0]!;
 }
-export async function startFixtureSql(text: string, values: readonly unknown[] = []) {
-  return admin.query(text, [...values]);
+export async function startFixtureSql<T extends QueryResultRow = Record<string, unknown>>(
+  text: string,
+  values: readonly unknown[] = [],
+) {
+  return admin.query<T>(text, [...values]);
 }
 export function startFixtureConnection() {
   return required('DATABASE_PAPER_ADMISSION_URL');

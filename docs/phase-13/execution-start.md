@@ -47,6 +47,9 @@ the same attempt conflicts. Readonly MISSING creates nothing.
   active reservation/metadata/capability identity, real public evidence and
   liquidity freshness, health/controls/circuits and the original finite deadline.
   Missing, stale, inconsistent or unsupported evidence rejects without START.
+- This first positive journal path requires the earliest retained contender and
+  a complete PREPARED inventory. It does not skip an earlier/missing contender or
+  extend the old pristine readers to started/partially executed accounts.
 - Server SQL derives event UUID/time and the current-validation witness. New
   rows have permanent uniqueness, forced tenant RLS and immutable causal guards.
   Published migrations1–61 are immutable; schema additions must be additive62.
@@ -61,6 +64,25 @@ the same attempt conflicts. Readonly MISSING creates nothing.
   anything or resets a one-use boundary. No blind retry or synthetic NOT_SENT.
 
 ## Acceptance
+
+Local candidate checkpoints (not CI acceptance):32 unit contracts reproduced
+the missing factory before implementation and pass afterwards. Nine real native
+cases reproduce `PAPER_ADMISSION_INPUT` on populated published61, then all pass
+after additive62 under a NOBYPASSRLS DDL owner. The local upgrade check retains
+all125 prior table inventories and225 function definitions/settings; only the
+four renamed private aliases intentionally lose runtime EXECUTE. A separate
+clean PostgreSQL stop/start retains all six START rows byte-for-byte and returns
+the same receipt through restricted readonly reconciliation. This is a clean
+restart diagnostic, not crash/backup recovery or a complete owner-topology test.
+
+Five tests-first cohort cases now pass with the separate serial execution-start
+process after both old admissions and before role mutation. Existing cohort
+tests pass; the old69-case source and90s/480s/1020s budgets are retained. Full local
+unit regression passes5778/5778 after allowing actual loopback sockets. The
+earlier restricted-sandbox run failed258 tests with network errors including
+`connect EACCES 127.0.0.1`; that failure is retained, not relabelled as a pass.
+Full frozen regression, real Prisma deploy/redeploy/reset and remote CI remain
+pending for this candidate. No READY gate is granted by these local diagnostics.
 
 Tests-first unit and real PostgreSQL cases must cover permanent replay/conflict,
 current policy/rule/control/health/epoch changes, start/stop races, UNKNOWN,

@@ -11,6 +11,7 @@ const registry = 'packages/database/test/instrument-registry.integration.test.ts
 const roles = 'packages/database/test/runtime-role-graph.integration.test.ts';
 const admission = 'packages/database/test/paper-admission.integration.test.ts';
 const nativeAdmission = 'packages/database/test/risk-admission.integration.test.ts';
+const executionStart = 'packages/database/test/paper-execution-start.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 // Only reviewed files without cluster-role DDL may overlap after the mutator
@@ -59,12 +60,15 @@ export function planDatabaseCohorts(files) {
   assert.equal(new Set(files).size, files.length, 'Duplicate native input');
   assert.ok(files.includes(registry) && files.includes(roles), 'Missing isolation contracts');
   const overlap = files.includes(admission) && files.includes(nativeAdmission);
+  const hasStart = files.includes(executionStart);
+  assert.ok(!hasStart || overlap, 'Execution-start requires both admission isolation contracts');
   const main = files
     .filter(
       (file) =>
         file !== registry &&
         file !== roles &&
         file !== admission &&
+        file !== executionStart &&
         (!overlap || file !== nativeAdmission),
     )
     .sort();
@@ -82,6 +86,16 @@ export function planDatabaseCohorts(files) {
             files: [nativeAdmission],
             parallel: true,
             after: ['main', 'registry'],
+          },
+        ]
+      : []),
+    ...(hasStart
+      ? [
+          {
+            id: 'execution-start',
+            files: [executionStart],
+            parallel: false,
+            after: ['main', 'registry', 'admission', 'native-admission'],
           },
         ]
       : []),
@@ -178,8 +192,9 @@ export async function runDatabaseCohorts(
   jobs,
   { timeoutMs, signal, secrets = [], echo = false, cwd = workspace },
 ) {
-  const hasAdmission = jobs.length === 4 || jobs.length === 5;
-  const hasOverlap = jobs.length === 5;
+  const hasStart = jobs.length === 6;
+  const hasAdmission = jobs.length === 4 || jobs.length === 5 || hasStart;
+  const hasOverlap = jobs.length === 5 || hasStart;
   assert.deepEqual(
     jobs.map(({ id, parallel, after }) => ({
       id,
@@ -192,6 +207,15 @@ export async function runDatabaseCohorts(
       ...(hasAdmission ? [{ id: 'admission', parallel: true, after: ['main', 'registry'] }] : []),
       ...(hasOverlap
         ? [{ id: 'native-admission', parallel: true, after: ['main', 'registry'] }]
+        : []),
+      ...(hasStart
+        ? [
+            {
+              id: 'execution-start',
+              parallel: false,
+              after: ['main', 'registry', 'admission', 'native-admission'],
+            },
+          ]
         : []),
       { id: 'roles', parallel: false },
     ],
@@ -304,6 +328,10 @@ export async function runDatabaseCohorts(
       const failure = overlap.find((result) => result.status === 'rejected');
       if (failure) throw firstFailure ?? failure.reason;
     } else if (hasAdmission) await run(jobs[2]);
+    // A separate process owns START's new scenarios. It reuses the admission
+    // database only after both old admission processes physically settle. The
+    // existing owner90s/aggregate480s/shared1020s budgets are not increased.
+    if (hasStart) await run(jobs[4]);
     await run(jobs.at(-1));
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native cohort aggregate deadline/abort');
