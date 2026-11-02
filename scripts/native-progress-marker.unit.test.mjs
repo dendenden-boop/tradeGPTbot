@@ -16,11 +16,11 @@ async function marker() {
 
 it('does not accept a visible empty acknowledgement before its actual write completes', async () => {
   const file = await marker(),
-    handle = await open(file, 'w');
+    handle = await open(file, 'w+');
   try {
     // The real file is now visible, exactly as in the failed PR artifact. The
     // writer stays open; no scheduler delay or sleep creates this interleaving.
-    expect(await readFile(file, 'utf8')).toBe('');
+    expect(await handle.readFile('utf8')).toBe('');
     expect(await isNativeProgressMarkerReady(file, bounds)).toBe(false);
     await handle.writeFile(String(timestamp));
     expect(await isNativeProgressMarkerReady(file, bounds)).toBe(true);
