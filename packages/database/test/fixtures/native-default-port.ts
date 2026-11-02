@@ -1,5 +1,28 @@
 type Closable = { close(): Promise<void> };
 
+/** Test-only setup of three independent lanes. Drain every actual operation,
+ * including on failure, before callers may initialize the book or admit risk.
+ * No result cache, retry, synthetic receipt or change to an IO deadline. */
+export async function runIndependentFixtureSetup<A, B, C>(
+  lanes: readonly [() => Promise<A>, () => Promise<B>, () => Promise<C>],
+): Promise<[A, B, C]> {
+  if (
+    !Array.isArray(lanes) ||
+    lanes.length !== 3 ||
+    lanes.some((lane) => typeof lane !== 'function')
+  )
+    throw Error('NATIVE_SETUP_LANES');
+  const outcomes = await Promise.allSettled([
+    Promise.resolve().then(lanes[0]),
+    Promise.resolve().then(lanes[1]),
+    Promise.resolve().then(lanes[2]),
+  ]);
+  if (outcomes[0].status === 'rejected') throw outcomes[0].reason;
+  if (outcomes[1].status === 'rejected') throw outcomes[1].reason;
+  if (outcomes[2].status === 'rejected') throw outcomes[2].reason;
+  return [outcomes[0].value, outcomes[1].value, outcomes[2].value];
+}
+
 // Test-only default transport lifetime. Every method still executes the actual
 // authority, including its independent physical client/transaction per call.
 // Explicit proxy connections always construct fresh real transports.
