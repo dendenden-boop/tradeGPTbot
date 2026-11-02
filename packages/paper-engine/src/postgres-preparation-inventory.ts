@@ -110,6 +110,9 @@ function lookup(raw: unknown): PaperPreparationInventoryRequest {
     fail('PAPER_ADMISSION_INPUT');
   }
 }
+// Internal composition only; absent from all package entrypoints. Decoding
+// caller content cannot establish storage provenance or grant authority.
+export { decodeInventory as decodePaperPreparationInventory };
 function decodeInventory(raw: unknown, expected: PaperPreparationInventoryRequest, now: number) {
   try {
     bounded(raw);

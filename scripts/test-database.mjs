@@ -2423,7 +2423,7 @@ async function runDatabaseProof() {
       ),
     );
     assert.equal(paperAdmissionOwner.success, true);
-    assert.equal(paperAdmissionOwner.numPassedTests, 67);
+    assert.equal(paperAdmissionOwner.numPassedTests, 69);
     assert.equal(paperAdmissionOwner.numFailedTests, 0);
     assert.equal(paperAdmissionOwner.numPendingTests, 0);
   }
@@ -4159,7 +4159,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeUnknownTests.success, true);
   assert.equal(beforeUnknownTests.numPassedTests, 17);
   assert.equal(beforeUnknownTests.numFailedTests, 0);
-  assert.equal(beforeUnknownTests.numPendingTests, 50); // Explicitly excluded 9 post54 + 7 post55 contracts only.
+  assert.equal(beforeUnknownTests.numPendingTests, 52); // Explicitly excluded 9 post54 + 7 post55 contracts only.
   const beforePaperUnknown = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperUnknown.rows.find((x) => x.name === '"ctp_paper"."admission_issuance"').rows.length >
@@ -4201,7 +4201,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeWithdrawalTests.success, true);
   assert.equal(beforeWithdrawalTests.numPassedTests, 2);
   assert.equal(beforeWithdrawalTests.numFailedTests, 0);
-  assert.equal(beforeWithdrawalTests.numPendingTests, 65);
+  assert.equal(beforeWithdrawalTests.numPendingTests, 67);
   const beforePaperWithdrawal = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperWithdrawal.rows.find((x) => x.name === '"ctp_paper"."admission_unknown_event"').rows
@@ -4246,7 +4246,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(beforeReleaseTests.success, true);
   assert.equal(beforeReleaseTests.numPassedTests, 1);
   assert.equal(beforeReleaseTests.numFailedTests, 0);
-  assert.equal(beforeReleaseTests.numPendingTests, 66);
+  assert.equal(beforeReleaseTests.numPendingTests, 68);
   const beforePaperRelease = await capturePaperAdmissionUpgrade(paperUpgrade);
   assert.ok(
     beforePaperRelease.rows.find((x) => x.name === '"ctp_paper"."withdrawal_barrier"').rows.length >

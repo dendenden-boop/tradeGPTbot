@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { verifyAdmissionParallelFiles } from './database-cohorts.mjs';
+import { beforeExecutionContext } from './execution-context-legacy.mjs';
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforeExecutionContext(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 const file = 'packages/database/test/paper-admission.integration.test.ts';
 it('preserves all accepted65 native statements and runner/proof bodies outside explicit additions', async () => {

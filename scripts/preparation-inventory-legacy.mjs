@@ -1,7 +1,9 @@
 // Test-only reconstruction of accepted65-case fixture and proof producers.
 import { beforeOrderFixturePort } from './order-fixture-port-legacy.mjs';
 import { beforeBookUpgradeRecovery } from './book-upgrade-recovery-legacy.mjs';
+import { beforeExecutionContext } from './execution-context-legacy.mjs';
 export function beforePreparationInventory(file, source) {
+  source = beforeExecutionContext(file, source);
   source = beforeBookUpgradeRecovery(file, source);
   source = beforeOrderFixturePort(file, source);
   const expected =

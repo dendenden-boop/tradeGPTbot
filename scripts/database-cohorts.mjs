@@ -23,7 +23,7 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
       'packages/database/test/fixtures/risk-certification.ts',
       '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c',
     ],
-    [admission, '463ae5db6eda9a821a2f1f2c717ebad0ce2eb7e54e830aa6517e0c214ea8ddeb'],
+    [admission, 'ca1c260666de2c19246f21f9101a5b79c988e17d251925b0fe3636236ec90585'],
     [
       'packages/database/test/fixtures/registry-commit-proxy.ts',
       'a64aefc8526cea37cc6f218c407ee730d82e58f504d8a111888d03ca0a915af4',
@@ -35,6 +35,14 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
     [
       'packages/database/test/fixtures/order-fixture-port.ts',
       '7314b93a91e28e704167af54f160a88251938822f83a25765882903f2474bd94',
+    ],
+    [
+      'packages/database/test/fixtures/admission-fixture-port.ts',
+      '19418d89ab6119a3ef45783376ecfa926bd0588d9fa82a1238c940284ecdd09f',
+    ],
+    [
+      'packages/database/test/fixtures/native-default-port.ts',
+      '977e31455cb3b9117d018bac63fb93317862481c6dc690de7aee9f9e5b8319c0',
     ],
   ]) {
     const text = (await readFile(path.join(root, file), 'utf8')).replaceAll('\r\n', '\n');

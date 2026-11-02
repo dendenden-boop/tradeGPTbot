@@ -17,7 +17,8 @@ overrides:
   'ajv@8.20.0>fast-uri': 3.1.9
   '@fastify/ajv-compiler@4.0.6>fast-uri': 4.2.3
   'fast-json-stringify@7.0.1>fast-uri': 4.2.3
-  'minimatch@10.2.6>brace-expansion': 5.0.12
+  'minimatch@10.2.6': 11.0.1
+  'minimatch@11.0.1>brace-expansion': 5.0.12
   'postcss@8.5.28>source-map-js': 1.2.2
 allowBuilds:
   argon2@0.45.1: true

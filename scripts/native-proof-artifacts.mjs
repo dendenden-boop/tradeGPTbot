@@ -18,7 +18,7 @@ export const ownerReports = Object.freeze({
   'paper-reservation-storage': 30,
   'paper-reservation-state': 34,
   'paper-runtime': 49,
-  'paper-admission': 67,
+  'paper-admission': 69,
 });
 
 // Exact existing process limits in test-database.mjs, not a new allowance.
@@ -89,7 +89,7 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   }
   for (const [name, minimum] of Object.entries(ownerReports))
     passed(owners[name], minimum, ownerDeadlines[name]);
-  passed(native, 1398, 480000);
+  passed(native, 1400, 480000);
   if (
     !cohorts ||
     cohorts.status !== 'PASS' ||
