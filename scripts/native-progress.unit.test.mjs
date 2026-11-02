@@ -4,6 +4,9 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { runDatabaseCohorts } from './database-cohorts.mjs';
+// NATIVE PROGRESS MARKER IMPORT BEGIN
+import { isNativeProgressMarkerReady } from './fixtures/native-progress-marker.mjs';
+// NATIVE PROGRESS MARKER IMPORT END
 const root = fileURLToPath(new URL('../', import.meta.url));
 const worker = fileURLToPath(new URL('./fixtures/database-cohort-worker.mjs', import.meta.url));
 const exists = (file) =>
@@ -112,7 +115,15 @@ export default {...native,test:{...native.test,runner:${JSON.stringify(portable(
     // Startup has its original six-second bound. Delayed reporter delivery
     // shares the existing eight-second cohort deadline; it cannot consume the
     // startup allowance after the fixture is already running and blocked.
-    while (!(await exists(path.join(dir, 'progress.ready')))) {
+    // NATIVE PROGRESS MARKER WAIT BEGIN
+    const progressStartedAt = Number(await readFile(path.join(dir, 'start.at'), 'utf8'));
+    while (
+      !(await isNativeProgressMarkerReady(path.join(dir, 'progress.ready'), {
+        notBefore: progressStartedAt,
+        notAfter: Date.now(),
+      }))
+    ) {
+      // NATIVE PROGRESS MARKER WAIT END
       const early = await Promise.race([observed, wait(10).then(() => null)]);
       if (early?.error) throw early.error;
       if (early) throw Error('Native progress cohort completed before its witness');
