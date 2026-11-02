@@ -27,7 +27,10 @@ import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
 import { createAdmissionFixturePort } from './fixtures/admission-fixture-port.js';
 // END ADMISSION FIXTURE PORT IMPORT
 // BEGIN NATIVE DEFAULT PORT IMPORT
-import { createNativeDefaultFixturePort } from './fixtures/native-default-port.js';
+import {
+  createNativeDefaultFixturePort,
+  runIndependentFixtureSetup,
+} from './fixtures/native-default-port.js';
 // Earlier writer-only lifetime notes predate the explicitly marked default
 // transport wrappers. These retain handles only, never current SQL or results.
 // END NATIVE DEFAULT PORT IMPORT
@@ -409,36 +412,47 @@ async function fundCash(c: PaperConfiguration, noncash = false) {
   return fundingId;
 }
 
+// BEGIN NATIVE SETUP BARRIERS
 async function tenantReady(liquid = false) {
   const f = await fixture(),
-    fundingId = await fundCash(f.c),
-    orders = await openOrders(),
-    order = await orders.create(
-      f.binding,
-      liquid
-        ? draftSchema.parse({
-            ...f.draft,
-            order: { ...f.draft.order, type: 'LIMIT', limitPrice: '10.5', timeInForce: 'GTC' },
-          })
-        : f.draft,
-      io(),
-    );
+    fundingId = await fundCash(f.c);
+  const [{ orders, order }, { snapshots, trades }] = await runIndependentFixtureSetup([
+    async () => {
+      const orders = await openOrders();
+      const order = await orders.create(
+        f.binding,
+        liquid
+          ? draftSchema.parse({
+              ...f.draft,
+              order: { ...f.draft.order, type: 'LIMIT', limitPrice: '10.5', timeInForce: 'GTC' },
+            })
+          : f.draft,
+        io(),
+      );
+      return { orders, order };
+    },
+    async () => {
+      // BEGIN PUBLIC MARKET FIXTURE USE
+      const snapshots = await publicMarketFixturePorts.snapshots(),
+        trades = await publicMarketFixturePorts.trades();
+      // END PUBLIC MARKET FIXTURE USE
+      const now = Date.now();
+      f.f.s.timestamp = f.f.p.timestamp = now;
+      for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;
+      if (liquid) {
+        f.f.s.book.bids = f.f.s.book.bids.map((v) => ({ ...v, quantity: parseDecimal('100') }));
+        f.f.s.book.asks = f.f.s.book.asks.map((v) => ({ ...v, quantity: parseDecimal('100') }));
+        f.f.p.trade.quantity = parseDecimal('100');
+      }
+      await snapshots.publish(f.f.s, io());
+      await trades.publish(f.f.p, io());
+      return { snapshots, trades };
+    },
+    () => ensurePolicies(f.c.owner.tenantId),
+  ]);
+  // Both funding and the complete genuine DRAFT must precede bootstrap. Never
+  // race book_activity against draft creation or return after a partial setup.
   await (await openBook()).initialize(f.c.owner, io());
-  // BEGIN PUBLIC MARKET FIXTURE USE
-  const snapshots = await publicMarketFixturePorts.snapshots(),
-    trades = await publicMarketFixturePorts.trades();
-  // END PUBLIC MARKET FIXTURE USE
-  await ensurePolicies(f.c.owner.tenantId);
-  const now = Date.now();
-  f.f.s.timestamp = f.f.p.timestamp = now;
-  for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;
-  if (liquid) {
-    f.f.s.book.bids = f.f.s.book.bids.map((v) => ({ ...v, quantity: parseDecimal('100') }));
-    f.f.s.book.asks = f.f.s.book.asks.map((v) => ({ ...v, quantity: parseDecimal('100') }));
-    f.f.p.trade.quantity = parseDecimal('100');
-  }
-  await snapshots.publish(f.f.s, io());
-  await trades.publish(f.f.p, io());
   return {
     ...f,
     fundingId,
@@ -449,6 +463,7 @@ async function tenantReady(liquid = false) {
     request: { owner: f.c.owner, intentId: order.intentId },
   };
 }
+// END NATIVE SETUP BARRIERS
 
 import {
   createPostgresPaperOrderRiskPort,

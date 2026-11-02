@@ -1,4 +1,5 @@
 // Strictly reconstruct the original 69 native cases before fixture composition.
+import { beforeNativeSetupBarriers } from './native-setup-barriers-legacy.mjs';
 const helpers = [
   ['LIFECYCLE', 'openLifecycle'],
   ['WITHDRAWAL', 'openWithdrawal'],
@@ -11,6 +12,7 @@ const helpers = [
   ['CONTEXT', 'openExecutionContext'],
 ];
 export function beforeNativeDefaultPort(file, source) {
+  source = beforeNativeSetupBarriers(file, source);
   const native = file === 'packages/database/test/paper-admission.integration.test.ts';
   const overlap = file === 'scripts/admission-overlap.unit.test.mjs';
   if (!native && !overlap) return source;
