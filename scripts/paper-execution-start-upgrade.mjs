@@ -77,9 +77,13 @@ export async function verifyPaperExecutionStartUpgrade(db, before) {
     after.retained.rows.filter((t) => !before.retained.rows.some((old) => old.name === t.name)),
     [{ name: '"ctp_paper"."attempt_start"', rows: [] }],
   );
-  await verifyPaperExecutionStartStorage(db);
+  await verifyPaperExecutionStartStorage(db, { ownership: 'REQUIRE_NON_BYPASS' });
 }
-export async function verifyPaperExecutionStartStorage(db) {
+export async function verifyPaperExecutionStartStorage(db, options) {
+  assert.ok(
+    options && ['STORAGE_ONLY', 'REQUIRE_NON_BYPASS'].includes(options.ownership),
+    'EXECUTION_START_OWNER_SCOPE_REQUIRED',
+  );
   assert.deepEqual(
     (
       await db.query(
@@ -108,8 +112,10 @@ export async function verifyPaperExecutionStartStorage(db) {
   ).rows;
   assert.equal(functions.length, 13);
   for (const f of functions) {
-    assert.equal(f.rolsuper, false);
-    assert.equal(f.rolbypassrls, false);
+    if (options.ownership === 'REQUIRE_NON_BYPASS') {
+      assert.equal(f.rolsuper, false);
+      assert.equal(f.rolbypassrls, false);
+    }
     assert.equal(f.public, false);
     assert.equal(f.allowed, ['evaluate_and_reserve', 'reconcile_admission'].includes(f.proname));
   }

@@ -84,6 +84,26 @@ earlier restricted-sandbox run failed258 tests with network errors including
 Full frozen regression, real Prisma deploy/redeploy/reset and remote CI remain
 pending for this candidate. No READY gate is granted by these local diagnostics.
 
+The later frozen `4399e0d` checkpoint passes all13 commands on926 unchanged
+inputs:5778unit/2154Paper/41HTTP,12 clean deployments and audit0. Its source
+[Platform41500706735](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41500706735)
+and PR60 [Platform41500896044](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41500896044)
+are **not accepted**: the isolated Auth proof fails the new reset owner assertion
+after its genuine compiled runtime and load/fault checks pass. Source/PR Ubuntu,
+Windows and both CodeQL workflows pass; source migration-owner acceptance passes.
+These positive jobs do not waive the failed aggregate.
+
+Tests-first `62aaa82` reproduces the harness defect with2 RED/3 PASS cases. A
+shared fresh reset runs administrative migrations and proves storage; it is not
+the independent NOBYPASSRLS owner project. Proof callers now explicitly choose
+`STORAGE_ONLY` or `REQUIRE_NON_BYPASS`. Forced RLS, complete private-function
+inventory and all ACL/trigger checks remain mandatory in both scopes. Dedicated
+owner and populated-upgrade callers still reject superuser/BYPASSRLS owners;
+missing or unknown scope rejects. All5 new contracts and30 targeted regressions
+pass. Fresh real PostgreSQL independently verifies all three scope outcomes and
+passes all9 native scenarios. The new-head full regression/CI remains pending;
+no runtime, migration, deadline or owner acceptance requirement is relaxed.
+
 Tests-first unit and real PostgreSQL cases must cover permanent replay/conflict,
 current policy/rule/control/health/epoch changes, start/stop races, UNKNOWN,
 private-role denial, immutable storage, lost COMMIT and actual database restart.

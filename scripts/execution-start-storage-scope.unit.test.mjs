@@ -5,7 +5,7 @@ import {
 } from './paper-execution-start-upgrade.mjs';
 // Model catalog evidence independently: an administrative reset and a genuine
 // NOBYPASSRLS owner are different proof producers, with identical storage ACLs.
-function catalog({ superuser = false, leaked = false, missing = false } = {}) {
+function catalog({ superuser = false, bypass = false, leaked = false, missing = false } = {}) {
   return {
     async query(sql) {
       if (sql.includes('relrowsecurity'))
@@ -18,7 +18,7 @@ function catalog({ superuser = false, leaked = false, missing = false } = {}) {
             .map((proname) => ({
               proname,
               rolsuper: superuser,
-              rolbypassrls: false,
+              rolbypassrls: bypass,
               public: false,
               allowed:
                 ['evaluate_and_reserve', 'reconcile_admission'].includes(proname) ||
@@ -45,6 +45,11 @@ it('execution-start administrative reset proves storage without masquerading as 
 it('execution-start dedicated owner proof still rejects an administrative or bypass owner', async () => {
   await expect(
     verifyPaperExecutionStartStorage(catalog({ superuser: true }), {
+      ownership: 'REQUIRE_NON_BYPASS',
+    }),
+  ).rejects.toThrow();
+  await expect(
+    verifyPaperExecutionStartStorage(catalog({ bypass: true }), {
       ownership: 'REQUIRE_NON_BYPASS',
     }),
   ).rejects.toThrow();

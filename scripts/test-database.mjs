@@ -2438,7 +2438,7 @@ async function runDatabaseProof() {
     assert.equal(paperAdmissionOwner.numPendingTests, 0);
     // BEGIN PAPER EXECUTION START OWNER
     const executionStartDb = connect(dbUrl(databases[2]));
-    await verifyPaperExecutionStartStorage(executionStartDb);
+    await verifyPaperExecutionStartStorage(executionStartDb, { ownership: 'REQUIRE_NON_BYPASS' });
     await executionStartDb.end();
     pools.delete(executionStartDb);
     await run(
@@ -4762,7 +4762,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     (await admissionReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0].n,
     0,
   );
-  await verifyPaperExecutionStartStorage(admissionReset);
+  await verifyPaperExecutionStartStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
   // END PAPER EXECUTION START RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
@@ -4931,7 +4931,7 @@ async function resetDatabaseProof(fresh) {
     (await reset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0].n,
     0,
   );
-  await verifyPaperExecutionStartStorage(reset);
+  await verifyPaperExecutionStartStorage(reset, { ownership: 'STORAGE_ONLY' });
   // END PAPER EXECUTION START RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
   for (const table of [
