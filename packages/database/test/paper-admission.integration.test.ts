@@ -26,6 +26,11 @@ import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
 // BEGIN ADMISSION FIXTURE PORT IMPORT
 import { createAdmissionFixturePort } from './fixtures/admission-fixture-port.js';
 // END ADMISSION FIXTURE PORT IMPORT
+// BEGIN NATIVE DEFAULT PORT IMPORT
+import { createNativeDefaultFixturePort } from './fixtures/native-default-port.js';
+// Earlier writer-only lifetime notes predate the explicitly marked default
+// transport wrappers. These retain handles only, never current SQL or results.
+// END NATIVE DEFAULT PORT IMPORT
 import {
   createPostgresPolicies,
   createPostgresControls,
@@ -514,14 +519,19 @@ async function openAdmission() {
   return admissionFixturePort();
 }
 // END ADMISSION FIXTURE PORT OPEN
-async function openLifecycle(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const port = await createPostgresPaperReservationLifecycle({
-    connectionString,
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT LIFECYCLE
+const openLifecycle = createNativeDefaultFixturePort(
+  async function openLifecycle(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+    const port = await createPostgresPaperReservationLifecycle({
+      connectionString,
+      environment: 'test',
+    });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT LIFECYCLE
 async function unknownRequest(f: Ready, reservationId: string) {
   const { state, ...request } = await input(f);
   return {
@@ -1272,17 +1282,22 @@ type Withdrawal = {
   reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
   close(): Promise<void>;
 };
-async function openWithdrawal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
-  const factory = exports['createPostgresPaperWithdrawalBarrier'];
-  expect(factory, 'Real durable PAPER withdrawal factory is required').toBeTypeOf('function');
-  const port = await (factory as (options: unknown) => Promise<Withdrawal>)({
-    connectionString,
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT WITHDRAWAL
+const openWithdrawal = createNativeDefaultFixturePort(
+  async function openWithdrawal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+    const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+    const factory = exports['createPostgresPaperWithdrawalBarrier'];
+    expect(factory, 'Real durable PAPER withdrawal factory is required').toBeTypeOf('function');
+    const port = await (factory as (options: unknown) => Promise<Withdrawal>)({
+      connectionString,
+      environment: 'test',
+    });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT WITHDRAWAL
 async function withdrawalRequest(f: Ready, reservationId: string) {
   return { ...(await unknownRequest(f, reservationId)), kind: 'PAPER_WITHDRAW_BEFORE_DISPATCH' };
 }
@@ -1497,17 +1512,24 @@ type WithdrawalRelease = {
   reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<unknown>;
   close(): Promise<void>;
 };
-async function openWithdrawalRelease(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
-  const factory = exports['createPostgresPaperWithdrawalRelease'];
-  expect(factory, 'Trusted durable NOT_SENT release factory is required').toBeTypeOf('function');
-  const port = await (factory as (options: unknown) => Promise<WithdrawalRelease>)({
-    connectionString,
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT RELEASE
+const openWithdrawalRelease = createNativeDefaultFixturePort(
+  async function openWithdrawalRelease(
+    connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
+  ) {
+    const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+    const factory = exports['createPostgresPaperWithdrawalRelease'];
+    expect(factory, 'Trusted durable NOT_SENT release factory is required').toBeTypeOf('function');
+    const port = await (factory as (options: unknown) => Promise<WithdrawalRelease>)({
+      connectionString,
+      environment: 'test',
+    });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT RELEASE
 async function releaseFixture() {
   const f = await nativeReady(),
     admission = await openAdmission(),
@@ -1551,19 +1573,26 @@ type UnsentCancellation = {
   reconcile(raw: unknown, options: ReturnType<typeof io>): Promise<Record<string, unknown>>;
   close(): Promise<void>;
 };
-async function openUnsentCancellation(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
-  const factory = exports['createPostgresPaperUnsentCancellation'];
-  expect(factory, 'The genuine durable PAPER cancellation bridge is required').toBeTypeOf(
-    'function',
-  );
-  const port = await (factory as (options: unknown) => Promise<UnsentCancellation>)({
-    connectionString,
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT CANCELLATION
+const openUnsentCancellation = createNativeDefaultFixturePort(
+  async function openUnsentCancellation(
+    connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
+  ) {
+    const exports = (await import('@ctp/paper-engine/risk')) as unknown as Record<string, unknown>;
+    const factory = exports['createPostgresPaperUnsentCancellation'];
+    expect(factory, 'The genuine durable PAPER cancellation bridge is required').toBeTypeOf(
+      'function',
+    );
+    const port = await (factory as (options: unknown) => Promise<UnsentCancellation>)({
+      connectionString,
+      environment: 'test',
+    });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT CANCELLATION
 async function cancellationRequest(f: Ready, key = randomUUID()) {
   const { rows } = await admin.query<{ permissionEpoch: string; userSessionEpoch: string }>(
     `SELECT a."permissionEpoch"::text AS "permissionEpoch",u."sessionEpoch"::text AS "userSessionEpoch"
@@ -2244,18 +2273,23 @@ interface ExecutionCandidateRead {
   }>;
   close(): Promise<void>;
 }
-async function openExecutionSource(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
-    'createPostgresPaperExecutionSource'
-  ];
-  if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_SOURCE_MISSING');
-  const port = await (factory as (o: unknown) => Promise<ExecutionCandidateRead>)({
-    connectionString,
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT EXECUTION
+const openExecutionSource = createNativeDefaultFixturePort(
+  async function openExecutionSource(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+    const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+      'createPostgresPaperExecutionSource'
+    ];
+    if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_SOURCE_MISSING');
+    const port = await (factory as (o: unknown) => Promise<ExecutionCandidateRead>)({
+      connectionString,
+      environment: 'test',
+    });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT EXECUTION
 async function executionRequest(f: Ready, order = f.order) {
   const { state, ...admission } = await input(f, order);
   const auth = (
@@ -2452,18 +2486,23 @@ interface AttemptJournal {
   reconcileStop(raw: unknown, context: ReturnType<typeof io>): ReturnType<AttemptJournal['read']>;
   close(): Promise<void>;
 }
-async function openAttemptJournal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
-    'createPostgresPaperAttemptJournal'
-  ];
-  if (typeof factory !== 'function') throw Error('PAPER_ATTEMPT_JOURNAL_MISSING');
-  const port = await (factory as (options: unknown) => Promise<AttemptJournal>)({
-    connectionString,
-    environment: 'test',
-  });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT ATTEMPT
+const openAttemptJournal = createNativeDefaultFixturePort(
+  async function openAttemptJournal(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+    const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+      'createPostgresPaperAttemptJournal'
+    ];
+    if (typeof factory !== 'function') throw Error('PAPER_ATTEMPT_JOURNAL_MISSING');
+    const port = await (factory as (options: unknown) => Promise<AttemptJournal>)({
+      connectionString,
+      environment: 'test',
+    });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT ATTEMPT
 async function attemptRequest(f: Ready, key = randomUUID()) {
   return { ...(await executionRequest(f)), kind: 'PAPER_ATTEMPT_PREPARE', key };
 }
@@ -2851,22 +2890,27 @@ interface CurrentExecutionRiskView {
   retained: { reservationId: string; budget: { orders: { current: number; projected: number } } };
   policies: { user: { version: string } };
 }
-async function openCurrentExecutionRisk(
-  connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
-) {
-  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
-    'createPostgresPaperExecutionRiskSource'
-  ];
-  if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_RISK_SOURCE_MISSING');
-  const port = await (
-    factory as (options: unknown) => Promise<{
-      read(request: unknown, context: ReturnType<typeof io>): Promise<CurrentExecutionRiskView>;
-      close(): Promise<void>;
-    }>
-  )({ connectionString, environment: 'test' });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT CURRENT_RISK
+const openCurrentExecutionRisk = createNativeDefaultFixturePort(
+  async function openCurrentExecutionRisk(
+    connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
+  ) {
+    const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+      'createPostgresPaperExecutionRiskSource'
+    ];
+    if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_RISK_SOURCE_MISSING');
+    const port = await (
+      factory as (options: unknown) => Promise<{
+        read(request: unknown, context: ReturnType<typeof io>): Promise<CurrentExecutionRiskView>;
+        close(): Promise<void>;
+      }>
+    )({ connectionString, environment: 'test' });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT CURRENT_RISK
 async function currentExecutionRiskRequest(f: Ready) {
   const request = await attemptRequest(f),
     journal = await openAttemptJournal();
@@ -3008,22 +3052,27 @@ interface PreparationInventoryView {
     | { kind: 'PREPARED'; intentId: string; key: string; preparation: PaperExecutionAttempt }
   )[];
 }
-async function openPreparationInventory(
-  connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
-) {
-  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
-    'createPostgresPaperPreparationInventorySource'
-  ];
-  if (typeof factory !== 'function') throw Error('PAPER_PREPARATION_INVENTORY_SOURCE_MISSING');
-  const port = await (
-    factory as (options: unknown) => Promise<{
-      read(raw: unknown, context: ReturnType<typeof io>): Promise<PreparationInventoryView>;
-      close(): Promise<void>;
-    }>
-  )({ connectionString, environment: 'test' });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT INVENTORY
+const openPreparationInventory = createNativeDefaultFixturePort(
+  async function openPreparationInventory(
+    connectionString = required('DATABASE_PAPER_ADMISSION_URL'),
+  ) {
+    const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+      'createPostgresPaperPreparationInventorySource'
+    ];
+    if (typeof factory !== 'function') throw Error('PAPER_PREPARATION_INVENTORY_SOURCE_MISSING');
+    const port = await (
+      factory as (options: unknown) => Promise<{
+        read(raw: unknown, context: ReturnType<typeof io>): Promise<PreparationInventoryView>;
+        close(): Promise<void>;
+      }>
+    )({ connectionString, environment: 'test' });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT INVENTORY
 async function preparationRows(f: Ready) {
   return (
     await admin.query<Record<string, unknown>>(
@@ -3154,27 +3203,32 @@ it('paper-preparation-inventory: uncertain read COMMIT returns no evidence, reco
 });
 // END PAPER PREPARATION INVENTORY TESTS
 // BEGIN PAPER EXECUTION CONTEXT TESTS
-async function openExecutionContext(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
-  const factory = (paperSourceServer as unknown as Record<string, unknown>)[
-    'createPostgresPaperExecutionContextSource'
-  ];
-  if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_CONTEXT_SOURCE_MISSING');
-  const port = await (
-    factory as (options: unknown) => Promise<{
-      read(
-        raw: unknown,
-        context: ReturnType<typeof io>,
-      ): Promise<{
-        kind: string;
-        risk: CurrentExecutionRiskView;
-        inventory: PreparationInventoryView;
-      }>;
-      close(): Promise<void>;
-    }>
-  )({ connectionString, environment: 'test' });
-  handles.push(port);
-  return port;
-}
+// BEGIN NATIVE DEFAULT PORT CONTEXT
+const openExecutionContext = createNativeDefaultFixturePort(
+  async function openExecutionContext(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {
+    const factory = (paperSourceServer as unknown as Record<string, unknown>)[
+      'createPostgresPaperExecutionContextSource'
+    ];
+    if (typeof factory !== 'function') throw Error('PAPER_EXECUTION_CONTEXT_SOURCE_MISSING');
+    const port = await (
+      factory as (options: unknown) => Promise<{
+        read(
+          raw: unknown,
+          context: ReturnType<typeof io>,
+        ): Promise<{
+          kind: string;
+          risk: CurrentExecutionRiskView;
+          inventory: PreparationInventoryView;
+        }>;
+        close(): Promise<void>;
+      }>
+    )({ connectionString, environment: 'test' });
+    handles.push(port);
+    return port;
+  },
+  () => required('DATABASE_PAPER_ADMISSION_URL'),
+);
+// END NATIVE DEFAULT PORT CONTEXT
 it('paper-execution-context: same transaction joins real current Risk and complete original preparations, survives reopen without monetary effects', async () => {
   const journal = await openAttemptJournal(),
     port = await openExecutionContext(),

@@ -1,5 +1,7 @@
+import { beforeNativeDefaultPort } from './native-default-port-legacy.mjs';
 // Test-only reconstruction of every accepted69-case statement and overlap probe.
 export function beforeAdmissionFixturePort(file, source) {
+  source = beforeNativeDefaultPort(file, source);
   const expected =
     file === 'packages/database/test/paper-admission.integration.test.ts'
       ? ['IMPORT', 'OPEN']

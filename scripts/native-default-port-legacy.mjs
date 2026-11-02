@@ -17,7 +17,7 @@ export function beforeNativeDefaultPort(file, source) {
   if (!source.includes('NATIVE DEFAULT PORT')) return source;
   const blocks = [
     ...source.matchAll(
-      /^\/\/ BEGIN NATIVE DEFAULT PORT ([A-Z_]+)\n([\s\S]*?)^\/\/ END NATIVE DEFAULT PORT \1\n/gm,
+      /^[ \t]*\/\/ BEGIN NATIVE DEFAULT PORT ([A-Z_]+)\n([\s\S]*?)^[ \t]*\/\/ END NATIVE DEFAULT PORT \1\n/gm,
     ),
   ];
   const expected = native ? ['IMPORT', ...helpers.map(([tag]) => tag)] : ['WATCH', 'REVIEW'];
@@ -51,6 +51,11 @@ export function beforeNativeDefaultPort(file, source) {
                   })(),
           )
           .join('\n') + '\n';
+      if (['openWithdrawalRelease', 'openUnsentCancellation'].includes(name))
+        original = original.replace(
+          `async function ${name}(\n  connectionString = required('DATABASE_PAPER_ADMISSION_URL'),\n) {\n`,
+          `async function ${name}(connectionString = required('DATABASE_PAPER_ADMISSION_URL')) {\n`,
+        );
     }
     source = source.replace(block[0], original);
   }
