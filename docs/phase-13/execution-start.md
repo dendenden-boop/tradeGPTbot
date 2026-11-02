@@ -104,6 +104,28 @@ pass. Fresh real PostgreSQL independently verifies all three scope outcomes and
 passes all9 native scenarios. The new-head full regression/CI remains pending;
 no runtime, migration, deadline or owner acceptance requirement is relaxed.
 
+The corrected `142d6e9` frozen checkpoint passes13 commands on927 unchanged
+inputs:5783unit/2154Paper/41HTTP,12 clean deployments,audit0. Its PR60 Platform
+workflow passes all8 jobs, including1409 native cases/43 files and20 owner suites.
+Source attempt1 is cancelled at the shared-window job despite all9 successful
+steps, including window creation and cleanup; the cause is unknown. Its native
+jobs are skipped, so it is not acceptance. Four available ZIP sets and raw
+metadata/logs are retained. One qualified full source attempt2 uses the same
+source/checks/deadlines with a fresh shared window; no partial attempts are
+combined into a positive result.
+
+Workflow success also does not satisfy the separate required Advanced Security
+CodeQL check. Alert[11](https://github.com/dendenden-boop/tradeGPTbot/security/code-scanning/11)
+reports high `js/incomplete-sanitization` in the test-only history mutation
+fixture's first-newline replacement. Both rejected candidates retain this
+security failure and SARIF evidence. Tests-first `5a31aa9` records a RED guard.
+The fixture now constructs the same single marker-body insertion with an explicit
+boundary index and slices, preserving its remaining bytes and mutation probes.
+All14 targeted tests pass. No runtime/SQL, scanning rule, query, suppression,
+source-path exclusion or alert status is changed. New-head full regression,
+both ref-qualified zero-alert results and a successful separate security check
+are required before this candidate can be accepted.
+
 Tests-first unit and real PostgreSQL cases must cover permanent replay/conflict,
 current policy/rule/control/health/epoch changes, start/stop races, UNKNOWN,
 private-role denial, immutable storage, lost COMMIT and actual database restart.

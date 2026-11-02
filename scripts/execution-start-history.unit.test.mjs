@@ -26,10 +26,16 @@ it.each(['scripts/test-database.mjs', 'scripts/native-proof-artifacts.mjs'])(
     const block = source.match(
       /^[ \t]*\/\/ BEGIN PAPER EXECUTION START ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PAPER EXECUTION START \1\n/mu,
     )[0];
+    const firstBoundary = block.indexOf('\n') + 1;
+    expect(firstBoundary).toBeGreaterThan(0);
+    // Construct one intentional marker-body insertion; no escaping/sanitizing
+    // or replacement of line delimiters is part of this fixture's contract.
+    const changedBlock =
+      block.slice(0, firstBoundary) + '// altered\n' + block.slice(firstBoundary);
     for (const changed of [
       source + block,
       source.replace('END PAPER EXECUTION START', 'END ALTERED EXECUTION START'),
-      source.replace(block, block.replace('\n', '\n// altered\n')),
+      source.replace(block, changedBlock),
     ]) {
       expect(() => beforeExecutionStart(file, changed)).toThrow(
         'PAPER_EXECUTION_START_REVIEW_REQUIRED',
