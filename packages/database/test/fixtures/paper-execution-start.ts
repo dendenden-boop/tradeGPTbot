@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool, type QueryResultRow } from 'pg';
 import { expect } from 'vitest';
 import { parseDecimal } from '@ctp/exchange-core';
+import { canonical } from '@ctp/portfolio';
 import {
   createPostgresPaperConfiguration,
   paperConfigurationSchema,
@@ -26,6 +27,7 @@ import * as paper from '@ctp/paper-engine/risk';
 import { frameFixture } from '../../../paper-engine/test/frame-fixture.js';
 import { fixture as riskFixture } from '../../../risk-engine/test/fixtures.js';
 import { state } from '../../../order-engine/test/fixtures.js';
+import { runIndependentFixtureSetup } from './native-default-port.js';
 
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw Error('ISOLATED_EXECUTION_START_RUNNER_REQUIRED');
@@ -55,66 +57,65 @@ const options = (key: string) => ({
 });
 let opening: ReturnType<typeof open> | undefined;
 async function open() {
-  const config = await own(
-    createPostgresPaperConfiguration(options('DATABASE_PAPER_CONFIGURATION_URL')),
-  );
-  const funding = await own(createPostgresPaperFunding(options('DATABASE_PAPER_FUNDING_URL')));
-  const orders = await own(createPostgresOrderStore(options('DATABASE_EXECUTION_URL')));
-  const book = await own(createPostgresPaperPortfolioBootstrap(options('DATABASE_PAPER_BOOK_URL')));
-  const snapshots = await own(
-    createPostgresMarketSnapshots(options('DATABASE_MARKET_SNAPSHOT_URL')),
-  );
-  const trades = await own(createPostgresMarketTrades(options('DATABASE_MARKET_TRADE_URL')));
-  const runtime = await own(
-    createPostgresPaperRuntimeObservations(options('DATABASE_PAPER_RUNTIME_OBSERVER_URL')),
-  );
-  const platform = await own(
-    createPostgresPolicies({
-      ...options('DATABASE_RISK_POLICY_OPERATOR_URL'),
-      authority: 'PLATFORM',
-    }),
-  );
-  const user = await own(
-    createPostgresPolicies({
-      ...options('DATABASE_RISK_POLICY_CONTROLLER_URL'),
-      authority: 'USER',
-    }),
-  );
-  const global = await own(
-    createPostgresControls({ ...options('DATABASE_RISK_OPERATOR_URL'), authority: 'GLOBAL' }),
-  );
-  const tenant = await own(
-    createPostgresControls({ ...options('DATABASE_RISK_CONTROL_URL'), authority: 'TENANT' }),
-  );
-  const admission = await own(
-    paper.createPostgresPaperOrderRiskPort(options('DATABASE_PAPER_ADMISSION_URL')),
-  );
-  const preparation = await own(
-    paper.createPostgresPaperAttemptJournal(options('DATABASE_PAPER_ADMISSION_URL')),
-  );
-  const journal = await own(
-    paper.createPostgresPaperExecutionStartJournal(options('DATABASE_PAPER_ADMISSION_URL')),
-  );
-  const lifecycle = await own(
-    paper.createPostgresPaperReservationLifecycle(options('DATABASE_PAPER_ADMISSION_URL')),
-  );
-  return {
-    config,
-    funding,
-    orders,
-    book,
-    snapshots,
-    trades,
-    runtime,
-    platform,
-    user,
-    global,
-    tenant,
-    admission,
-    preparation,
-    journal,
-    lifecycle,
-  };
+  // Three bounded groups perform genuine readonly constructor/role probes.
+  // The existing helper drains every group before any setup mutation begins.
+  const [account, publication, risk] = await runIndependentFixtureSetup([
+    async () => {
+      const config = await own(
+        createPostgresPaperConfiguration(options('DATABASE_PAPER_CONFIGURATION_URL')),
+      );
+      const funding = await own(createPostgresPaperFunding(options('DATABASE_PAPER_FUNDING_URL')));
+      const orders = await own(createPostgresOrderStore(options('DATABASE_EXECUTION_URL')));
+      const book = await own(
+        createPostgresPaperPortfolioBootstrap(options('DATABASE_PAPER_BOOK_URL')),
+      );
+      const runtime = await own(
+        createPostgresPaperRuntimeObservations(options('DATABASE_PAPER_RUNTIME_OBSERVER_URL')),
+      );
+      return { config, funding, orders, book, runtime };
+    },
+    async () => {
+      const snapshots = await own(
+        createPostgresMarketSnapshots(options('DATABASE_MARKET_SNAPSHOT_URL')),
+      );
+      const trades = await own(createPostgresMarketTrades(options('DATABASE_MARKET_TRADE_URL')));
+      const platform = await own(
+        createPostgresPolicies({
+          ...options('DATABASE_RISK_POLICY_OPERATOR_URL'),
+          authority: 'PLATFORM',
+        }),
+      );
+      const user = await own(
+        createPostgresPolicies({
+          ...options('DATABASE_RISK_POLICY_CONTROLLER_URL'),
+          authority: 'USER',
+        }),
+      );
+      const global = await own(
+        createPostgresControls({ ...options('DATABASE_RISK_OPERATOR_URL'), authority: 'GLOBAL' }),
+      );
+      return { snapshots, trades, platform, user, global };
+    },
+    async () => {
+      const tenant = await own(
+        createPostgresControls({ ...options('DATABASE_RISK_CONTROL_URL'), authority: 'TENANT' }),
+      );
+      const admission = await own(
+        paper.createPostgresPaperOrderRiskPort(options('DATABASE_PAPER_ADMISSION_URL')),
+      );
+      const preparation = await own(
+        paper.createPostgresPaperAttemptJournal(options('DATABASE_PAPER_ADMISSION_URL')),
+      );
+      const journal = await own(
+        paper.createPostgresPaperExecutionStartJournal(options('DATABASE_PAPER_ADMISSION_URL')),
+      );
+      const lifecycle = await own(
+        paper.createPostgresPaperReservationLifecycle(options('DATABASE_PAPER_ADMISSION_URL')),
+      );
+      return { tenant, admission, preparation, journal, lifecycle };
+    },
+  ]);
+  return { ...account, ...publication, ...risk };
 }
 export async function closeStartFixture() {
   await Promise.all(handles.map((handle) => handle.close()));
@@ -171,6 +172,26 @@ export async function startFixturePause(tenantId: string | null, state: 'RUNNING
     }),
     startIo(),
   );
+}
+async function ensureFixtureDefaults(tenantId: string) {
+  // Read actual immutable config heads on every setup. Identical configuration
+  // needs no new publication; no Risk result, epoch, time or receipt is cached.
+  const platform = (
+    await admin.query<{
+      text: string;
+    }>(`SELECT v."limitsText" text FROM ctp_risk.policy_head h JOIN ctp_risk.policy_revision v USING(scope,target,mode,version,id)
+    WHERE h.scope='PLATFORM' AND h.target='00000000-0000-0000-0000-000000000000' AND h.mode='PAPER'`)
+  ).rows[0];
+  if (!platform || canonical(JSON.parse(platform.text)) !== canonical(riskFixture().platform))
+    await startFixturePolicy(tenantId, 'PLATFORM');
+  const control = (
+    await admin.query<{ state: string }>(
+      "SELECT state FROM ctp_risk.global_head WHERE kind='KILL_SWITCH' AND key='kill'",
+    )
+  ).rows[0];
+  if (!control || !['RUNNING', 'PAUSED'].includes(control.state))
+    throw Error('START_FIXTURE_GLOBAL_CONTROL_MISSING');
+  if (control.state === 'PAUSED') await startFixturePause(null, 'RUNNING');
 }
 export async function readyExecutionStart() {
   const ports = await (opening ??= open()),
@@ -265,13 +286,17 @@ export async function readyExecutionStart() {
       size: { kind: 'BASE_QUANTITY', asset: instrument.baseAsset, value: '0.5' },
     },
   });
-  const order = await ports.orders.create(binding, draft, startIo());
+  const [order, , head] = await runIndependentFixtureSetup([
+    () => ports.orders.create(binding, draft, startIo()),
+    async () => {
+      await ensureFixtureDefaults(c.owner.tenantId);
+      await startFixturePolicy(c.owner.tenantId, 'USER');
+    },
+    () => ports.runtime.head(c.owner, startIo()),
+  ]);
+  // Genuine funding and the complete DRAFT still precede book bootstrap.
   await ports.book.initialize(c.owner, startIo());
-  await startFixturePolicy(c.owner.tenantId, 'PLATFORM');
-  await startFixturePolicy(c.owner.tenantId, 'USER');
-  await startFixturePause(null, 'RUNNING');
-  const context = await ports.runtime.context(c.owner, startIo()),
-    head = await ports.runtime.head(c.owner, startIo());
+  const context = await ports.runtime.context(c.owner, startIo());
   const now = Date.now();
   f.p.timestamp = f.s.timestamp = now;
   for (const record of [f.p.trade, f.s.book, f.s.ticker])

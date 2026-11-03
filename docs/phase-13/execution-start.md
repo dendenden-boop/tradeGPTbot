@@ -126,6 +126,45 @@ source-path exclusion or alert status is changed. New-head full regression,
 both ref-qualified zero-alert results and a successful separate security check
 are required before this candidate can be accepted.
 
+## Reviewed cohort and fresh setup candidate — 3 November 2026
+
+Source41504065585 attempt2 remains **FAILED**: the main986, registry23, original
+PAPER69, native-admission95 and new START9 cases complete, but the final roles
+process reaches the unchanged480-second aggregate deadline. Its role report is
+incomplete; this is not a1409-case acceptance. All six attempt2 ZIP sets/raw logs
+are preserved, separately from the earlier cancellation. No further unchanged
+retry is used. The independently passing PR cohort takes469472.622346ms within
+480000ms; that result does not waive the failed source.
+
+Tests-first `09ee37b` records nine RED overlap/setup contracts. A supplementary
+first-slot contract records7 RED/1 PASS before implementation. Reviewed overlap
+is explicit; the legacy serial planner remains the default. Both initial shared
+role-mutator processes must physically close first. The new START process owns
+an independent eighth fixture database and may reuse the first physically
+settled admission slot. At most two children run, the roles process waits for
+every child to close, and the original480s aggregate/1020s shared/90s owner
+limits remain. Six native/helper input fingerprints and a no-cluster-role-DDL
+check guard this opt-in. The original69-case source and all prior cases remain.
+The isolated START database must contain real START rows before its own
+drop/recreate, two actual deployments and empty forced-RLS/private-ACL checks;
+this introduces no application Paper reset.
+
+The new fixture reuses the accepted three-lane all-settled helper for actual
+readonly constructors and independent setup. Genuine funding precedes DRAFT;
+the complete DRAFT and all setup operations precede book initialization. The
+first early-market candidate is rejected by6 of9 actual native scenarios with
+`PAPER_ADMISSION_EVIDENCE`; its raw report/stopped cluster remain retained.
+A further RED contract requires market publication after book/runtime context
+and immediately before admission. The corrected fresh PostgreSQL diagnostic
+passes all9 cases with unchanged freshness/expiry checks. Actual configuration
+heads remain platform version1/global epoch2: every setup reads current durable
+config, identical configured heads need no new publication, and no Risk result,
+receipt, clock or financial effect is cached. Missing/invalid control evidence
+fails. Ninety targeted contracts, typecheck and lint pass; full new-head
+regression/CI and CodeQL11 closure by new analysis remain pending. Runtime,
+SQL, published migrations, workflows and security rules are unchanged by this
+fixture/scheduler correction.
+
 Tests-first unit and real PostgreSQL cases must cover permanent replay/conflict,
 current policy/rule/control/health/epoch changes, start/stop races, UNKNOWN,
 private-role denial, immutable storage, lost COMMIT and actual database restart.

@@ -15,7 +15,8 @@ const paths = [
   'packages/database/test/runtime-role-graph.integration.test.ts',
 ];
 const initial = ['main', 'registry'],
-  after = [...initial, 'native-admission'];
+  after = initial,
+  afterAny = ['admission', 'native-admission'];
 const observe = (p) =>
   p.then(
     (value) => ({ value, error: null }),
@@ -37,7 +38,7 @@ async function fixture(modes = {}) {
       ...(['admission', 'native-admission'].includes(id)
         ? { after: initial }
         : id === 'execution-start'
-          ? { after }
+          ? { after, afterAny }
           : {}),
       binary: process.execPath,
       args: [worker, dir, id, modes[id] ?? 'normal'],
@@ -59,11 +60,42 @@ it('reviewed execution-start overlap is explicit and retains the original serial
     files: [paths[4]],
     parallel: true,
     after,
+    afterAny,
   });
   expect(cohorts.planDatabaseCohorts(paths).find((c) => c.id === 'execution-start').parallel).toBe(
     false,
   );
   expect(plan.flatMap((c) => c.files).sort()).toEqual([...paths].sort());
+});
+it('reviewed execution-start can reuse the PAPER slot first while native-admission is still live', async () => {
+  const { dir, jobs } = await fixture({
+      admission: 'controlled',
+      'native-admission': 'controlled',
+      'execution-start': 'controlled',
+    }),
+    controller = new AbortController(),
+    pending = observe(
+      cohorts.runDatabaseCohorts(jobs, { timeoutMs: 4000, signal: controller.signal }),
+    );
+  try {
+    await until(() => exists(path.join(dir, 'native-admission.started')), pending);
+    await writeFile(path.join(dir, 'admission.release'), 'release');
+    await until(() => exists(path.join(dir, 'execution-start.started')), pending);
+    expect(await exists(path.join(dir, 'native-admission.done'))).toBe(false);
+    await writeFile(path.join(dir, 'execution-start.release'), 'release');
+    await until(() => exists(path.join(dir, 'execution-start.done')), pending);
+    expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
+    await writeFile(path.join(dir, 'native-admission.release'), 'release');
+    const r = await pending;
+    expect(r.error).toBeNull();
+    const entry = (id) => r.value.completed.find((e) => e.id === id);
+    expect(entry('execution-start').startMs).toBeGreaterThanOrEqual(entry('admission').settledMs);
+    expect(entry('execution-start').startMs).toBeLessThan(entry('native-admission').settledMs);
+    expect(entry('roles').startMs).toBeGreaterThanOrEqual(entry('native-admission').settledMs);
+  } finally {
+    controller.abort();
+    await pending;
+  }
 });
 it('execution-start overlaps the remaining PAPER child only after native-admission physically closes, before final roles and within two children', async () => {
   const { dir, jobs } = await fixture({

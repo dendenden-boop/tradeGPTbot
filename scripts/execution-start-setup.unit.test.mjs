@@ -35,9 +35,15 @@ it('execution-start setup completes genuine funding before independent lanes and
   expect(ts.isArrayLiteralExpression(lanes)).toBe(true);
   expect(lanes.elements).toHaveLength(3);
   expect(calls(lanes.elements[0], 'orders.create')).toHaveLength(1);
-  expect(calls(lanes.elements[1], 'startFixturePolicy')).toHaveLength(2);
-  expect(calls(lanes.elements[2], 'snapshots.publish')).toHaveLength(1);
-  expect(calls(lanes.elements[2], 'trades.publish')).toHaveLength(1);
+  expect(calls(lanes.elements[1], 'startFixturePolicy')).toHaveLength(1);
+  expect(calls(lanes.elements[2], 'runtime.head')).toHaveLength(1);
+  for (const name of ['snapshots.publish', 'trades.publish']) {
+    const publication = calls(fn, name);
+    expect(publication).toHaveLength(1);
+    expect(publication[0].pos).toBeGreaterThan(book.end);
+    expect(publication[0].pos).toBeGreaterThan(calls(fn, 'runtime.context')[0].end);
+    expect(publication[0].end).toBeLessThan(calls(fn, 'admission.approve')[0].pos);
+  }
 });
 it('execution-start port constructors use three drainable readonly groups without dropping or duplicating any real authority', () => {
   const fn = declaration('open'),

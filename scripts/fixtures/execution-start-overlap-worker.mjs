@@ -10,12 +10,18 @@ const initial = ['main', 'registry'];
 const dependencies = ['admission', 'native-admission'].includes(id)
   ? initial
   : id === 'execution-start'
-    ? [...initial, 'native-admission']
+    ? initial
     : id === 'roles'
       ? [...initial, 'admission', 'native-admission', 'execution-start']
       : [];
 for (const dependency of dependencies)
   if (readFileSync(file(dependency + '.done'), 'utf8') !== 'done') process.exit(8);
+if (
+  id === 'execution-start' &&
+  !existsSync(file('admission.done')) &&
+  !existsSync(file('native-admission.done'))
+)
+  process.exit(8);
 if (mode === 'fail') {
   while (!existsSync(file('admission.heartbeat'))) await delay(5);
   process.exit(7);

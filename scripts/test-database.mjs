@@ -26,6 +26,9 @@ import {
   runDatabaseCohorts,
   mergeDatabaseReports,
   verifyAdmissionParallelFiles,
+  // BEGIN PAPER EXECUTION START OVERLAP_IMPORT
+  verifyExecutionStartParallelFiles,
+  // END PAPER EXECUTION START OVERLAP_IMPORT
 } from './database-cohorts.mjs';
 import { prepareAuditUpgrade, verifyAuditUpgrade } from './test-database-audit-upgrade.mjs';
 import { exerciseAuthDatabaseHardening } from './test-auth-database-hardening.mjs';
@@ -259,6 +262,9 @@ const databases = [
   `ctp_p2_paper_upgrade_${suffix}`,
   `ctp_p2_registry_cohort_${suffix}`,
   `ctp_p2_admission_cohort_${suffix}`,
+  // BEGIN PAPER EXECUTION START DB_NAME
+  `ctp_p2_execution_start_cohort_${suffix}`,
+  // END PAPER EXECUTION START DB_NAME
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
@@ -4489,7 +4495,15 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // legacy cohort. Cluster-wide role mutation tests run only after both settle.
   await migrate(databases[5]);
   await migrate(databases[6]);
-  const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles());
+  // BEGIN PAPER EXECUTION START OVERLAP_SETUP
+  await migrate(databases[7]);
+  await verifyExecutionStartParallelFiles();
+  // END PAPER EXECUTION START OVERLAP_SETUP
+  // BEGIN PAPER EXECUTION START PLAN
+  const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
+    executionStartOverlap: true,
+  });
+  // END PAPER EXECUTION START PLAN
   if (cohortPlan.some(({ id }) => id === 'native-admission')) await verifyAdmissionParallelFiles();
   const nativeEnv = {
     ...process.env,
@@ -4541,7 +4555,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     ({ id }) => new URL('../test-results/database-' + id + '-tests.json', import.meta.url),
   );
   // BEGIN PAPER EXECUTION START COHORT_ENV
-  const executionStartEnv = admissionEnv;
+  const executionStartEnv = paperAdmissionEnvironment(databases[7]);
+  for (const [key, value] of Object.entries(executionStartEnv))
+    if (key.startsWith('DATABASE_')) assert.equal(new URL(value).pathname, '/' + databases[7]);
+  assert.notEqual(databases[7], databases[6]);
   // END PAPER EXECUTION START COHORT_ENV
   // Remove only known output files; a prior invocation cannot supply acceptance.
   for (const output of [
@@ -4601,7 +4618,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // BEGIN PAPER EXECUTION START DATABASE
       database:
         cohort.id === 'execution-start'
-          ? databases[6]
+          ? databases[7]
           : cohort.id === 'registry'
             ? databases[5]
             : cohort.id === 'admission'
@@ -4766,6 +4783,30 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER EXECUTION START RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
+  // BEGIN PAPER EXECUTION START POPULATED_RESET
+  const startedBeforeReset = connect(dbUrl(databases[7]));
+  assert.ok(
+    (await startedBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0]
+      .n > 0,
+  );
+  await startedBeforeReset.end();
+  pools.delete(startedBeforeReset);
+  // Only the explicitly created isolated fixture DB is destroyed; this is not
+  // an application Paper reset or authority to discard retained live history.
+  await admin.query(`DROP DATABASE ${identifier(databases[7])} WITH (FORCE)`);
+  await admin.query(`CREATE DATABASE ${identifier(databases[7])}`);
+  await migrate(databases[7]);
+  await migrate(databases[7]);
+  const startedAfterReset = connect(dbUrl(databases[7]));
+  assert.equal(
+    (await startedAfterReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0]
+      .n,
+    0,
+  );
+  await verifyPaperExecutionStartStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  await startedAfterReset.end();
+  pools.delete(startedAfterReset);
+  // END PAPER EXECUTION START POPULATED_RESET
 
   // The database-only CI scope delegates these exact scripts to an isolated
   // mandatory Auth job. Default/legacy runs retain their inline execution.
