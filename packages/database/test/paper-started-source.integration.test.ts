@@ -170,15 +170,29 @@ it('paper-started-source: current metadata replacement rejects without rewriting
   expect(view.kind === 'COMMITTED' && view.receipt).toEqual(receipt);
 });
 it('paper-started-source: complete FIFO retains later preparations and fails closed on newly unprepared contenders', async () => {
-  const f = await readyExecutionStart();
-  const enqueue = async () => {
-    const order = await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, startIo());
-    const hash = (
-      await startFixtureSql<{ hash: string }>(
-        'SELECT encode("commandHash",\'hex\') hash FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2',
-        [f.c.owner.tenantId, order.intentId],
-      )
-    ).rows[0]!.hash;
+  const port = await open();
+  let secondOrder: Awaited<ReturnType<typeof readyExecutionStart>>['order'] | undefined,
+    third: typeof secondOrder;
+  const hashes = new Map<string, string>();
+  const f = await readyExecutionStart(async ({ orders, binding, draft }) => {
+    const outcomes = await Promise.allSettled([
+      orders.create(binding, { ...draft, key: randomUUID() }, startIo()),
+      orders.create(binding, { ...draft, key: randomUUID() }, startIo()),
+    ]);
+    const [secondResult, thirdResult] = outcomes;
+    if (secondResult!.status === 'rejected') throw secondResult!.reason;
+    if (thirdResult!.status === 'rejected') throw thirdResult!.reason;
+    secondOrder = secondResult!.value;
+    third = thirdResult!.value;
+    const commands = await startFixtureSql<{ intent: string; hash: string }>(
+      'SELECT "intentId" intent,encode("commandHash",\'hex\') hash FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=ANY($2::uuid[])',
+      [binding.tenantId, [secondOrder.intentId, third.intentId]],
+    );
+    for (const command of commands.rows) hashes.set(command.intent, command.hash);
+    expect(hashes.size).toBe(2);
+  });
+  const enqueue = async (order: NonNullable<typeof secondOrder>) => {
+    const hash = hashes.get(order.intentId)!;
     await f.admissionPort.approve(
       {
         binding: f.binding,
@@ -191,17 +205,16 @@ it('paper-started-source: complete FIFO retains later preparations and fails clo
     );
     return { ...f.admission, orderId: order.id, intentId: order.intentId, commandHash: hash };
   };
-  const second = await enqueue();
+  const second = await enqueue(secondOrder!);
   await f.preparation.prepare(
     { ...f.prepareRequest, key: 'second-' + randomUUID(), admission: second },
     startIo(),
   );
   await f.journal.start(f.request, startIo());
-  const port = await open();
   try {
     const r = await port.read(requestFor(f.request), startIo());
     expect(r.entries.map((e) => e.kind)).toEqual(['STARTED', 'PREPARED']);
-    await enqueue();
+    await enqueue(third!);
     await expect(port.read(requestFor(f.request), startIo())).rejects.toThrow(
       'PAPER_ADMISSION_EVIDENCE',
     );
@@ -210,28 +223,23 @@ it('paper-started-source: complete FIFO retains later preparations and fails clo
   }
 });
 it('paper-started-source: physically dropped read COMMIT yields no source and an explicit reread has no money effect', async () => {
-  const f = await readyExecutionStart(),
-    receipt = await f.journal.start(f.request, startIo()),
-    before = await startFixtureEffects(f.c.owner.tenantId);
   const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE'),
-    port = await open(proxy.connectionString);
+    port = await open(proxy.connectionString),
+    direct = await open();
   try {
+    const f = await readyExecutionStart(),
+      receipt = await f.journal.start(f.request, startIo()),
+      before = await startFixtureEffects(f.c.owner.tenantId);
     proxy.arm();
     await expect(port.read(requestFor(f.request), startIo())).rejects.toThrow(
       'PAPER_ADMISSION_UNCERTAIN',
     );
     expect(proxy.dropped()).toBe(1);
-    const direct = await open();
-    try {
-      expect((await direct.read(requestFor(f.request), startIo())).journal.receipt).toEqual(
-        receipt,
-      );
-    } finally {
-      await direct.close();
-    }
+    expect((await direct.read(requestFor(f.request), startIo())).journal.receipt).toEqual(receipt);
     expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
   } finally {
     await port.close();
+    await direct.close();
     await proxy.close();
   }
 });

@@ -1,0 +1,41 @@
+# Known-START execution source
+
+## Status and scope
+
+This PHASE 13 candidate follows accepted protected main `74d2232983c6d91a508beabfd979112b76e0ad6b` (PR61), with its own [Platform 41615526862](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41615526862) and [CodeQL 41615526813](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41615526813). Published migrations 1–62 remain unchanged. Additive migration 63 introduces a readonly source, without a table, monetary entry, allocation or dispatch permission. Full candidate CI remains pending.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Financial PAPER/LIVE dispatch and positive native collateral credit remain disabled. Collateral remains conservative; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.
+
+## Server boundary
+
+`createPostgresPaperStartedExecutionSource` is exported from the server-only `@ctp/paper-engine/risk` path. The pure package root does not export the PostgreSQL factory. Its `read()` request contains the exact immutable admission selector, START key, preparation key and current permission/session epochs. It accepts no caller-provided source packet, clock, credentials or authorization result.
+
+The reader uses the existing fixed `ctp_paper.reconcile_admission(jsonb)` RPC in one bounded physical transaction. Existing admission connection limits, abort/drain behavior and deadlines apply. There is no automatic retry. A lost read COMMIT returns uncertainty and no source; an explicit subsequent readonly read may recover current data without repeating a monetary operation.
+
+Migration 63 preserves the old RPC as a private `reconcile_admission_v62` alias and delegates all older request kinds unchanged. The new private `capture_started_execution` helper is inaccessible to PUBLIC and the runtime login. Only the existing public admission RPC pair remains executable by that login. Owner acceptance requires non-superuser, non-BYPASSRLS owners and fixed search paths; an administrative reset proves storage only.
+
+## Evidence contract
+
+Current ownership/epochs and existing lock order are checked before durable START lookup. The journal must be COMMITTED and STARTED, with no UNKNOWN marker. Historical START content remains immutable. A current permission epoch can authorize a fresh read without rewriting the old receipt or renewing an original reservation lease.
+
+After that gate, the private historical economic capture assembles the current pristine Portfolio book, current market data/model and all contenders for the exact account/instrument. Existing public pristine readers continue rejecting post-START calls. The target must be first in FIFO and the sole started attempt in that account; every later candidate must have a genuine matching immutable preparation. Missing preparation, another START, stale metadata, changed ownership or conflicting book evidence fails closed.
+
+The packet also includes current server configuration and account context from the actual runtime-context authority. Configuration, market profile, external account, model, current epochs, command hashes and preparation selectors must agree across every component. The book identity must match START history; revisions cannot regress and an equal revision requires the same hash.
+
+The reader bounds descriptors before schema parsing, rejects accessors/cycles/oversized arrays, correlates all components and returns immutable content. Request bounds are 16 KiB, 256 nodes and depth 16; response bounds are 16 MiB, 400,000 nodes and depth 24, with at most 300 candidates. Its hash is correlation content, not a grant or proof of current authority at a later dispatch.
+
+`validUntil` is the earliest source/context freshness deadline and every candidate's original finite expiry. SQL checks it against server time; the reader checks freshness after callback and after known COMMIT. No lease is renewed. UNKNOWN retains the existing reservation/hold and cannot produce a source.
+
+## Financial boundary still outstanding
+
+The source authenticates a coherent readonly capture at its transaction boundary. It does not certify final current Risk, health, controls or circuits, consume a permit, allocate liquidity, or write an order, ledger entry, Portfolio position or hold transition. The future fixed financial writer must authenticate current storage and full history, reread policies/rules/capabilities/epochs/controls/health/deadline, and atomically enforce one-use execution, shared liquidity, replay and monetary effects. An old returned packet cannot bypass that writer.
+
+## Reproduction and regression
+
+Before implementation, 30 targeted unit contracts failed because the factory was absent. On actual PostgreSQL at published62, all nine new native contracts failed: the fixed RPC rejected the new request, the factory was absent and the private helper did not exist. These RED results are retained alongside subsequent diagnostics.
+
+Native coverage exercises the real RPC and real funding/DRAFT/Risk/preparation/START authorities: immutable receipts, reopen/restart reads, UNKNOWN holds, current epochs, metadata replacement, complete FIFO, an unprepared contender, physically dropped read COMMIT, private ACLs and unchanged financial effects. Reopening clients is not a database crash/restore test.
+
+An initial FIFO fixture performed extra DRAFT I/O inside the original five-second evidence window. A controlled response-delay trace reproduced rejection in `admission_market`; a preceding hypothesis about unconditional post-START admission rejection was disproved and withdrawn. Extra DRAFTs now complete through a drained test-only hook before fresh context/market publication. An exact reconstruction contract preserves the accepted helper's default behavior and all original freshness limits. The controlled ten-millisecond-delay FIFO diagnostic passes; filtered diagnostics do not count as full acceptance.
+
+The acceptance harness adds a separate unfiltered nine-case owner process with a 90-second limit, and includes the source in the reviewed START database cohort. Existing tests and the 480-second aggregate / 1,020-second shared native budgets remain. Populated62 → 63 deploy/redeploy must preserve all old rows, function bodies, OIDs, owners and settings, except the explicit RPC alias rename/private ACL. Fresh and populated isolated resets check the new helper privacy separately from the original START storage proof. Full frozen regression, native owner/cohort evidence, both OS checks, Docker and CodeQL remain mandatory before acceptance.

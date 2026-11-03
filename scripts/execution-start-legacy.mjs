@@ -1,6 +1,7 @@
 // Test-only reconstruction of the complete accepted main62 harness. Exact
 // reviewed blocks prevent a new marker from concealing edits to old checks.
 import { createHash } from 'node:crypto';
+import { beforeStartedSource } from './started-source-legacy.mjs';
 const pins = {
   'scripts/test-database.mjs': {
     IMPORT: '224bac97b5b1ea8f4344a5c7ab128d8ba0cbb8d23d6057f2b89b24da948513d2',
@@ -44,6 +45,7 @@ const original = {
 `,
 };
 export function beforeExecutionStart(file, source) {
+  source = beforeStartedSource(file, source);
   const expected = pins[file];
   if (!expected || !source.includes('PAPER EXECUTION START')) return source;
   const blocks = [

@@ -1,5 +1,13 @@
 # PHASE 13 contracts
 
+## Known-START readonly source candidate — 3 November 2026
+
+Current accepted protected main is **74d2232983c6d91a508beabfd979112b76e0ad6b** (PR61), with its own [Platform 41615526862](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41615526862) / [CodeQL 41615526813](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41615526813). Earlier pending-main and candidate statements below are historical checkpoints. Published migrations 1–62 remain immutable.
+
+The [known-START source](started-source.md) joins the actual immutable START receipt with current server account/configuration context, pristine economic evidence and the complete prepared FIFO in one bounded readonly transaction. Additive migration 63 adds no monetary effect or permission. RED unit/native reproductions are retained; full candidate regression and CI are pending. This source supplies data for the future atomic financial writer; it does not certify final Risk/health/controls or allocate execution.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Final atomic current financial Risk, one-use allocation and durable execution/ledger/Portfolio/hold progression remain outstanding. Financial PAPER/LIVE dispatch and positive native credit stay disabled; collateral is conservative and native AMEND is Binance Spot TESTNET only. No real private exchange, crash/backup restore or production soak acceptance is claimed.
+
 ## Verified started execution calculation code checkpoint — 3 November 2026
 
 Starting protected main **8a1b257e311b405801b725f657002f663d0b6b67** is the accepted PR60 result, with [main Platform 41603133527](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41603133527) / [CodeQL 41603133446](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41603133446). Published migrations 1–62 remain immutable. Earlier candidate or pending-main statements below are preserved historical checkpoints.

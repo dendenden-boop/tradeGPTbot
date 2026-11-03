@@ -180,7 +180,7 @@ it('rechecks evidence expiry after the actual COMMIT', async () => {
   fake.afterCommit = () => vi.mocked(Date.now).mockReturnValue(f.packet.validUntil);
   await expect(read(f.packet, f.request)).rejects.toThrow('PAPER_ADMISSION_EXPIRED');
 });
-it('rejects abort after COMMIT without yielding a source or grant', async () => {
+it('rejects abort while COMMIT is being confirmed without yielding a source or grant', async () => {
   const f = startedSourceFixture(),
     controller = new AbortController(),
     port = await factory()(options);
@@ -188,7 +188,7 @@ it('rejects abort after COMMIT without yielding a source or grant', async () => 
   fake.afterCommit = () => controller.abort();
   try {
     await expect(port.read(f.request, io(controller.signal))).rejects.toThrow(
-      'PAPER_ADMISSION_ABORTED',
+      'PAPER_ADMISSION_UNCERTAIN',
     );
   } finally {
     await port.close();
