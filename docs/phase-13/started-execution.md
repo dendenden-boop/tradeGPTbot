@@ -1,0 +1,27 @@
+# Pristine started execution calculation — candidate
+
+Starting protected main is `8a1b257e311b405801b725f657002f663d0b6b67`, accepted through [PR60](https://github.com/dendenden-boop/tradeGPTbot/pull/60), [main Platform 41603133527](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41603133527) and [CodeQL 41603133446](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41603133446). Its 5,794 unit / 1,409 PostgreSQL / 20 owner suites and audit zero are accepted; the new calculation increment requires its own full regression and source/PR/main acceptance. Published migrations 1–62 are immutable.
+
+## Contract
+
+`calculatePaperStartedExecutionPortfolio({ now, attempt, frame, portfolio })` is a pure first-execution composition on the calculation root. It reuses the existing validated `projectPristinePaperExecutionAttempt` and `calculatePaperExecutionPortfolio`. Original order ID, immutable command, admission sequence, zero initial execution quantity and null trigger are derived from the STARTED attempt. Its `startedAt` is the sole submission/latency origin. The request accepts no caller `submittedAt`, order replacement, executed quantity, trigger state, contenders, permit or grant.
+
+The supported attempt is the existing pristine Spot BUY base-quantity LIMIT/MARKET protocol. PREPARED, NOT_SENT, UNKNOWN, future START and inconsistent request hash/event/time reject. Portfolio tenant, account, exact mode, connection, external account and market scope must match the original admission binding. Positions, pending economic projections, any economic-history timestamp and UNKNOWN holds reject. The existing calculator separately checks reconciled Portfolio contents, cash, instrument/rules, frame freshness, current structural evidence and accounting. The wrapper changes no prior calculation or state-machine semantics.
+
+Book/trade received and native timestamps must meet START plus deterministic model latency. Evidence eligible only relative to earlier PREPARE must not fill. The existing remaining frame volume/depth budget is retained. Partial fills, per-fill fees, postings, balances and positions come from the original calculator and Portfolio reducer; holds remain unchanged. The result identifies the attempt and START event alongside the immutable calculation.
+
+Descriptor, depth, node, string, byte and collection bounds run before schema traversal. Accessors, executable properties, cycles, unexpected prototypes, sparse/extended arrays and unsupported arrays reject. Existing rules collections retain their bounded order-type, time-in-force and leverage-tier shapes.
+
+## Trust and lifecycle boundary
+
+This function validates calculation content. It authenticates neither SQL provenance nor a current ownership/permission decision, complete history, immutable server configuration, exact durable book identity or unconsumed shared liquidity. A plain START object and its hashes can be fabricated; they provide no authority. There is no database, credential port, clock callback, HTTP/WS request or financial writer in this composition.
+
+Exact recalculation returns identical content and fill identities. It does not perform durable deduplication or prove a monetary commit; providing the resulting post-fill Portfolio cannot reset this pristine calculation to zero execution. A known historical START may still be calculated after its old admission expires, without rewriting history as NOT_SENT. This grants no fresh Risk or execution authority. The future fixed writer must load the actual journal/current book and immutable model, verify the complete current history, recheck current Risk/controls/rules/capabilities/auth/deadline and atomically own permanent replay, one-use authorization, shared allocation, postings and Order/Portfolio/hold progression. No caller calculation can bypass that boundary.
+
+## Evidence and gate
+
+Fresh starting-main unit baseline passes 5,794 cases. Thirty initial contracts reproduce the missing entry point before implementation. The first implementation run is rejected by the new fixture passing serialized Portfolio text instead of parsed state (24 FAIL / 6 PASS). After correcting that fixture, nine cases still reject because the new bounded visitor omitted legitimate rule collections. Adding their existing schema limits leaves one rejected inconsistent shared-consumption fixture; its per-level consumption must agree with total volume. Correcting that fixture preserves the original frame validator. All 30 initial contracts plus a supplemental historical-expiry contract now pass (31 total). Initial test typecheck diagnostics are retained; they do not represent acceptance.
+
+Full format/docs/lint/typecheck/unit/HTTP/build/db/runtime/clean/audit and existing native PostgreSQL/Ubuntu/Windows/real-services/Docker/CodeQL CI remain required. No published migration, SQL, accepted financial/adapters runtime, workflow, original test or time budget is changed by this candidate. No new trusted source, durable execution or restart/monetary acceptance is claimed by these pure tests.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Final current atomic financial Risk/one-use allocation/shared liquidity/ledger/Portfolio/hold progression, execution recovery and operational composition remain outstanding. Financial PAPER/LIVE dispatch and positive native collateral credit stay disabled; conservative collateral and Binance Spot TESTNET-only native AMEND remain. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.

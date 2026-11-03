@@ -14,6 +14,10 @@ export {
 } from './execution-attempt.js';
 export * from './execution-ledger.js';
 export {
+  calculatePaperStartedExecutionPortfolio,
+  type PaperStartedExecutionPortfolioCalculation,
+} from './started-execution.js';
+export {
   calculatePaperExecutionPortfolio,
   type PaperExecutionPortfolioCalculation,
   type PaperExecutionPortfolioFill,

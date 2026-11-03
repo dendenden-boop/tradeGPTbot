@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Pristine started execution calculation candidate — 3 November 2026
+
+Protected main **8a1b257e311b405801b725f657002f663d0b6b67** is the accepted PR60 journal result: [main Platform 41603133527](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41603133527) / [CodeQL 41603133446](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41603133446). Its own full CI/artifacts/security/strict protection are verified; published migrations 1–62 are immutable. Earlier candidate/pending-main statements below remain historical checkpoints.
+
+The next [started execution calculation](docs/phase-13/started-execution.md) composes the existing START projection with exact Portfolio execution math. It derives submission time and the original command from START, checks account scope/pristine history, preserves remaining frame liquidity and returns calculation content only. Thirty initial RED contracts and 31 current passing contracts cover latency, partial-fill accounting, replay, UNKNOWN, scope and bounded inputs; full candidate regression/CI is pending. No SQL, dispatch, financial authority or published migration is added. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Financial PAPER/LIVE dispatch and positive native collateral credit remain disabled; native AMEND remains Binance Spot TESTNET only. Future atomic current Risk/one-use allocation/ledger/Portfolio/hold execution remains required.
+
 ## Current execution-start code checkpoint — 3 November 2026
 
 Starting protected main **62d627a1f64aa8bc4253be26c36b242f7dd56e9e** is the accepted PR59 result: [main Platform 41461459890](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41461459890) / [CodeQL 41461460246](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41461460246). Earlier failed-main and pending-PR59 statements below are preserved historical checkpoints and do not describe this starting main.
