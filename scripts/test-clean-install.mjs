@@ -416,6 +416,9 @@ try {
     // END PAPER PREPARED SOURCE EXPORT
     assert.equal(typeof paperRisk.createPostgresPaperExecutionRiskSource,'function');
     assert.equal(typeof paperRisk.createPostgresPaperPreparationInventorySource,'function');
+    assert.equal(typeof paperRisk.createPostgresPaperExecutionStartJournal,'function');
+    assert.equal('createPostgresPaperExecutionStartJournal' in paper,false);
+    await assert.rejects(paperRisk.createPostgresPaperExecutionStartJournal({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
     assert.equal('createPostgresPaperPreparationInventorySource' in paper,false);
     await assert.rejects(paperRisk.createPostgresPaperPreparationInventorySource({connectionString:'https://example.invalid',environment:'test'}),/PAPER_ADMISSION_DATABASE_URL/);
     assert.throws(()=>import.meta.resolve('@ctp/paper-engine/src/postgres-preparation-inventory.js'));

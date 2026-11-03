@@ -19,6 +19,9 @@ export const ownerReports = Object.freeze({
   'paper-reservation-state': 34,
   'paper-runtime': 49,
   'paper-admission': 69,
+  // BEGIN PAPER EXECUTION START REPORT
+  'paper-execution-start': 9,
+  // END PAPER EXECUTION START REPORT
 });
 
 // Exact existing process limits in test-database.mjs, not a new allowance.
@@ -43,6 +46,9 @@ const ownerDeadlines = Object.freeze({
   'paper-reservation-state': 30000,
   'paper-runtime': 90000,
   'paper-admission': 90000,
+  // BEGIN PAPER EXECUTION START DEADLINE
+  'paper-execution-start': 90000,
+  // END PAPER EXECUTION START DEADLINE
 });
 
 export function requireNativeTestArtifacts(owners, native, cohorts, window) {
@@ -90,6 +96,16 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   for (const [name, minimum] of Object.entries(ownerReports))
     passed(owners[name], minimum, ownerDeadlines[name]);
   passed(native, 1400, 480000);
+  // BEGIN PAPER EXECUTION START EVIDENCE
+  if (
+    native.numPassedTests < 1409 ||
+    !cohorts ||
+    cohorts.files < 43 ||
+    !Array.isArray(cohorts.completed) ||
+    cohorts.completed.filter((c) => c.id === 'execution-start').length !== 1
+  )
+    fail();
+  // END PAPER EXECUTION START EVIDENCE
   if (
     !cohorts ||
     cohorts.status !== 'PASS' ||
@@ -102,6 +118,9 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
     cohorts.files < 42 ||
     !Array.isArray(cohorts.completed) ||
     cohorts.completed
+      // BEGIN PAPER EXECUTION START LEGACY_PLAN
+      .filter((c) => c.id !== 'execution-start')
+      // END PAPER EXECUTION START LEGACY_PLAN
       .map((c) => c.id)
       .sort()
       .join(',') !== 'admission,main,native-admission,registry,roles'

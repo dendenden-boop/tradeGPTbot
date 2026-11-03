@@ -1,6 +1,7 @@
 // Reconstruct the complete accepted native fixture before independent setup.
 // The exact reviewed block hash rejects changes hidden inside the marker range.
 import { createHash } from 'node:crypto';
+import { beforeExecutionStart } from './execution-start-legacy.mjs';
 const original = `async function tenantReady(liquid = false) {
   const f = await fixture(),
     fundingId = await fundCash(f.c),
@@ -43,6 +44,7 @@ const original = `async function tenantReady(liquid = false) {
 }
 `;
 export function beforeNativeSetupBarriers(file, source) {
+  source = beforeExecutionStart(file, source);
   if (
     file !== 'packages/database/test/paper-admission.integration.test.ts' ||
     !source.includes('NATIVE SETUP BARRIERS')
