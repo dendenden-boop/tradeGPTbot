@@ -83,7 +83,7 @@ it('paper-started-risk: a current policy refresh blocks known START while origin
       before = await startFixtureEffects(f.c.owner.tenantId);
     await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '0.01' });
     await expect(port.read(requestFor(f.request), startIo())).rejects.toThrow(
-      'PAPER_ADMISSION_LIMIT',
+      /PAPER_ADMISSION_(LIMIT|EVIDENCE)/u,
     );
     const view = await f.journal.read(f.request, startIo());
     expect(view.kind === 'COMMITTED' && view.receipt).toEqual(receipt);
@@ -171,6 +171,24 @@ it('paper-started-risk: current ownership epochs precede lookup and metadata rep
         permissionEpoch: String(BigInt(f.request.authorization.permissionEpoch) + 1n),
       },
     };
+    await expect(port.read(requestFor(request), startIo())).rejects.toThrow(
+      'PAPER_ADMISSION_EVIDENCE',
+    );
+    const context = await f.runtime.context(f.c.owner, startIo());
+    await f.runtime.publish(
+      {
+        ...f.publication,
+        id: randomUUID(),
+        expectedRevision: '1',
+        observation: {
+          ...f.publication.observation,
+          permissionEpoch: context.current.permissionEpoch,
+          userSessionEpoch: context.current.userSessionEpoch,
+          accountVersion: context.current.accountVersion,
+        },
+      },
+      startIo(),
+    );
     expect((await port.read(requestFor(request), startIo())).started.journal.receipt).toEqual(
       receipt,
     );

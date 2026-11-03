@@ -26,6 +26,7 @@ import { calculatePaperRetainedRiskBudget } from './retained-risk-budget.js';
 import { paperExecutionControlsSchema } from './risk-authority-domain.js';
 import { decodePaperRuntimeSource, paperRuntimeDependencies } from './runtime-domain.js';
 import type { PaperFundingIo } from './funding-domain.js';
+import type { PaperStartedExecutionSource } from './postgres-started-source.js';
 const uuid = z.uuid().transform((v) => v.toLowerCase()),
   digest = z.string().regex(/^[a-f0-9]{64}$/u),
   counter = z
@@ -189,6 +190,51 @@ export function decodePaperExecutionRiskSource(
   request: PaperExecutionRiskSourceRequest,
   now: number,
 ) {
+  return decodeRiskEvidence(raw, request, now);
+}
+
+/** Internal known-START evidence path; the caller first validates the actual
+ * fixed SQL START capture. Never synthesize a PREPARED journal for this path. */
+export function decodePaperStartedExecutionRiskEvidence(
+  raw: unknown,
+  request: PaperExecutionRiskSourceRequest,
+  now: number,
+  started: PaperStartedExecutionSource,
+) {
+  return decodeRiskEvidence(raw, request, now, started);
+}
+
+function preparationEvidence(
+  raw: unknown,
+  request: PaperExecutionRiskSourceRequest,
+  started?: PaperStartedExecutionSource,
+) {
+  if (started) {
+    if (!same(raw, started.journal)) fail();
+    return started.journal.preparation;
+  }
+  const journalRequest = {
+    kind: 'PAPER_ATTEMPT_PREPARE' as const,
+    key: request.preparationKey,
+    admission: request.admission,
+    authorization: request.authorization,
+  };
+  const journal = decodePaperAttemptJournalView(raw, journalRequest, 'COMMITTED');
+  if (
+    journal.kind !== 'COMMITTED' ||
+    journal.withdrawal !== null ||
+    journal.state.phase !== 'PREPARED'
+  )
+    fail();
+  return journal.preparation;
+}
+
+function decodeRiskEvidence(
+  raw: unknown,
+  request: PaperExecutionRiskSourceRequest,
+  now: number,
+  started?: PaperStartedExecutionSource,
+) {
   try {
     bounded(raw);
     const w = packet.parse(raw);
@@ -201,20 +247,8 @@ export function decodePaperExecutionRiskSource(
       authorization: request.authorization,
     };
     const source = decodePaperExecutionSource(w.capture, captureRequest, now);
-    const journalRequest = {
-      kind: 'PAPER_ATTEMPT_PREPARE' as const,
-      key: request.preparationKey,
-      admission: request.admission,
-      authorization: request.authorization,
-    };
-    const journal = decodePaperAttemptJournalView(w.journal, journalRequest, 'COMMITTED');
-    if (
-      journal.kind !== 'COMMITTED' ||
-      journal.withdrawal !== null ||
-      journal.state.phase !== 'PREPARED'
-    )
-      fail();
-    const preparation = journal.preparation,
+    if (started && !same(source, started.source)) fail();
+    const preparation = preparationEvidence(w.journal, request, started),
       a = preparation.request.admission,
       target = source.candidates.find((c) => c.orderId === a.orderId && c.intentId === a.intentId);
     if (

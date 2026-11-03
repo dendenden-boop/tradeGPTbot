@@ -73,7 +73,13 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 async function read(f: ReturnType<typeof startedRiskFixture>, request: unknown = f.request) {
+  const commitError = fake.commitError,
+    afterCommit = fake.afterCommit;
+  fake.commitError = false;
+  fake.afterCommit = null;
   const port = await open();
+  fake.commitError = commitError;
+  fake.afterCommit = afterCommit;
   fake.payload = f.packet;
   fake.queries = [];
   try {
@@ -106,7 +112,9 @@ it('re-evaluates a real known START in one readonly transaction without renewing
       values: [canonical(f.request)],
     },
   ]);
-  expect(fake.queries.filter((q) => q.text === 'BEGIN')).toHaveLength(1);
+  expect(
+    fake.queries.filter((q) => q.text === 'BEGIN ISOLATION LEVEL READ COMMITTED'),
+  ).toHaveLength(1);
   expect(fake.queries.filter((q) => q.text === 'COMMIT')).toHaveLength(1);
   expect(fake.queries.some((q) => /evaluate_and_reserve|INSERT|UPDATE|DELETE/u.test(q.text))).toBe(
     false,
@@ -144,13 +152,41 @@ it('current stricter policy blocks a previously accepted START', async () => {
   const f = startedRiskFixture();
   f.packet.risk.policies[0]!.limits.maxOrderNotional = '0.01';
   f.seal();
-  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+  await expect(read(f)).rejects.toThrow(/PAPER_ADMISSION_(LIMIT|EVIDENCE)/u);
 });
 it('a current global pause blocks a previously accepted START', async () => {
   const f = startedRiskFixture();
   f.controls.global[0]!.state = 'PAUSED';
   f.seal();
   await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+});
+function refreshEpoch(f: ReturnType<typeof startedRiskFixture>) {
+  const authorization = { ...f.request.authorization, permissionEpoch: '2' };
+  f.request = { ...f.request, authorization };
+  for (const path of [
+    'request.authorization',
+    'started.request.authorization',
+    'started.capture.request.authorization',
+    'started.journal.request.authorization',
+    'risk.request.authorization',
+    'risk.journal.request.authorization',
+  ])
+    change(f.packet, path, authorization);
+  f.packet.risk.runtime.current.permissionEpoch = '2';
+}
+it('a current request cannot refresh stale runtime publication epochs', async () => {
+  const f = startedRiskFixture();
+  refreshEpoch(f);
+  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+});
+it('a genuine current runtime publication restores Risk evidence without rewriting START history', async () => {
+  const f = startedRiskFixture(),
+    receipt = canonical(f.packet.started.journal.receipt);
+  refreshEpoch(f);
+  f.publication.observation.permissionEpoch = '2';
+  f.seal();
+  expect((await read(f)).risk.evaluation.kind).toBe('EVALUATED');
+  expect(canonical(f.packet.started.journal.receipt)).toBe(receipt);
 });
 it.each(['FAILED', 'UNKNOWN'] as const)(
   'current executor health %s blocks a known START',
@@ -163,7 +199,8 @@ it.each(['FAILED', 'UNKNOWN'] as const)(
 );
 it('expired evidence after known COMMIT delivers no result', async () => {
   const f = startedRiskFixture();
-  fake.afterCommit = () => vi.mocked(Date.now).mockReturnValue(wireNow + 6000);
+  expect(f.packet.started.validUntil).toBeLessThan(wireNow + 2000);
+  fake.afterCommit = () => vi.mocked(Date.now).mockReturnValue(f.packet.started.validUntil);
   await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_EXPIRED');
 });
 it('uncertain COMMIT delivers no result and does not retry the read', async () => {

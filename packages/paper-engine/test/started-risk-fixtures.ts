@@ -6,12 +6,18 @@ import { startedSourceFixture } from './started-source-fixtures.js';
 export function startedRiskFixture(count = 1) {
   const current = executionRiskFixture(count),
     started = startedSourceFixture(count);
+  if (count > 1) current.packet.capture.portfolio.revision = '3';
   started.packet.capture = current.packet.capture;
+  started.packet.journal = structuredClone(started.packet.journal);
   const { publication, ...context } = current.packet.runtime;
   void publication;
   started.packet.context = { ...context, kind: 'PAPER_RUNTIME_CONTEXT' };
   const request = { ...started.request, kind: 'PAPER_STARTED_RISK_CAPTURE' as const };
-  const risk = { ...current.packet, asOf: wireNow + 1, journal: started.packet.journal };
+  const risk = {
+    ...current.packet,
+    asOf: wireNow + 1,
+    journal: structuredClone(started.packet.journal),
+  };
   const packet = {
     kind: 'PAPER_STARTED_RISK_CAPTURE',
     request,

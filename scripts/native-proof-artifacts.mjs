@@ -25,6 +25,9 @@ export const ownerReports = Object.freeze({
   // BEGIN PAPER STARTED SOURCE REPORT
   'paper-started-source': 9,
   // END PAPER STARTED SOURCE REPORT
+  // BEGIN PAPER STARTED RISK REPORT
+  'paper-started-risk': 8,
+  // END PAPER STARTED RISK REPORT
 });
 
 // Exact existing process limits in test-database.mjs, not a new allowance.
@@ -55,6 +58,9 @@ const ownerDeadlines = Object.freeze({
   // BEGIN PAPER STARTED SOURCE DEADLINE
   'paper-started-source': 90000,
   // END PAPER STARTED SOURCE DEADLINE
+  // BEGIN PAPER STARTED RISK DEADLINE
+  'paper-started-risk': 90000,
+  // END PAPER STARTED RISK DEADLINE
 });
 
 export function requireNativeTestArtifacts(owners, native, cohorts, window) {
@@ -115,6 +121,9 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   // BEGIN PAPER STARTED SOURCE EVIDENCE
   if (native.numPassedTests < 1418 || !cohorts || cohorts.files < 44) fail();
   // END PAPER STARTED SOURCE EVIDENCE
+  // BEGIN PAPER STARTED RISK EVIDENCE
+  if (native.numPassedTests < 1426 || !cohorts || cohorts.files < 45) fail();
+  // END PAPER STARTED RISK EVIDENCE
   if (
     !cohorts ||
     cohorts.status !== 'PASS' ||

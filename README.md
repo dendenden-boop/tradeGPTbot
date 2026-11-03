@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Known-START current Risk candidate — 3 November 2026
+
+Starting accepted protected main is **c9cfca8422812ee48888c75465813727b4a90a17** (PR62), with its own [Platform 41676554143](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41676554143) / [CodeQL 41676554104](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41676554104). Published migrations 1–63 are immutable. Earlier pending-main and candidate statements below remain historical checkpoints.
+
+The [current Risk path for a known START](docs/phase-13/started-risk.md) authenticates the actual immutable START, coherent current source and current policy/runtime/controls/loss evidence in one bounded readonly transaction. It reuses the accepted Risk evaluator without creating a second reservation or renewing an original lease. Twenty-five initial unit and eight native RED results are retained; 27 current unit and all eight corrected native diagnostic cases pass. Full regression and independent source/PR CI are pending. Additive 64 adds only private readonly routing; the PREPARED-only path remains unchanged.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** This read/re-evaluation is not a final atomic financial grant, one-use permit, allocation or monetary writer. Financial PAPER/LIVE dispatch and positive native collateral credit remain disabled; collateral is conservative and native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.
+
 ## Verified known-START readonly source code checkpoint — 3 November 2026
 
 Starting protected main **74d2232983c6d91a508beabfd979112b76e0ad6b** is the accepted PR61 result, with its own [Platform 41615526862](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41615526862) / [CodeQL 41615526813](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41615526813). Published migrations 1–62 remain immutable; additive 63 introduces only private readonly source functions/RPC routing. Earlier candidate statements below remain historical checkpoints.

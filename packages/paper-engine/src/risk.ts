@@ -89,3 +89,9 @@ export type {
   PaperStartedExecutionSource,
   PaperStartedExecutionSourceReader,
 } from './postgres-started-source.js';
+export { createPostgresPaperStartedRiskSource } from './postgres-started-risk.js';
+export type {
+  PaperStartedRiskRequest,
+  PaperStartedRiskSource,
+  PaperStartedRiskReader,
+} from './postgres-started-risk.js';
