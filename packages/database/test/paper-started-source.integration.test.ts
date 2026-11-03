@@ -180,10 +180,10 @@ it('paper-started-source: complete FIFO retains later preparations and fails clo
       orders.create(binding, { ...draft, key: randomUUID() }, startIo()),
     ]);
     const [secondResult, thirdResult] = outcomes;
-    if (secondResult!.status === 'rejected') throw secondResult!.reason;
-    if (thirdResult!.status === 'rejected') throw thirdResult!.reason;
-    secondOrder = secondResult!.value;
-    third = thirdResult!.value;
+    if (secondResult.status === 'rejected') throw secondResult.reason;
+    if (thirdResult.status === 'rejected') throw thirdResult.reason;
+    secondOrder = secondResult.value;
+    third = thirdResult.value;
     const commands = await startFixtureSql<{ intent: string; hash: string }>(
       'SELECT "intentId" intent,encode("commandHash",\'hex\') hash FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=ANY($2::uuid[])',
       [binding.tenantId, [secondOrder.intentId, third.intentId]],

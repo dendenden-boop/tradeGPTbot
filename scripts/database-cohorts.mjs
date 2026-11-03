@@ -99,7 +99,7 @@ export async function verifyStartedSourceParallelFiles(root = workspace) {
   const source = (await readFile(path.join(root, startedSource), 'utf8')).replaceAll('\r\n', '\n');
   assert.equal(
     createHash('sha256').update(source).digest('hex'),
-    '70764a51ce27b1ca814d4f2a12b5a8256531a3eb5811049bb37b1ef8cc2bc16f',
+    'b26cca86fe67439639619290218244029c930d8a14999f4ec38193e1d61492a2',
     'Started-source overlap requires renewed cluster-role review',
   );
   assert(
