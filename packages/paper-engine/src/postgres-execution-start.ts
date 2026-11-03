@@ -255,6 +255,15 @@ function decode(
   }
 }
 
+/** Internal read-content decoder shared by coherent SQL captures. Shape/hash
+ * validation authenticates no caller data or financial authorization. */
+export function decodePaperExecutionStartRead(
+  raw: unknown,
+  request: PaperExecutionStartRequest,
+): PaperExecutionStartView {
+  return decode(raw, lookup(request), true);
+}
+
 /** Fixed server-only journal port. Historical START content is not a financial
  * permit: neither replay nor reconciliation can dispatch, allocate or post. */
 export async function createPostgresPaperExecutionStartJournal(

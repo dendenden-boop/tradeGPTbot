@@ -83,3 +83,9 @@ export type {
   PaperExecutionStartView,
   PaperExecutionStartJournal,
 } from './postgres-execution-start.js';
+export { createPostgresPaperStartedExecutionSource } from './postgres-started-source.js';
+export type {
+  PaperStartedExecutionSourceRequest,
+  PaperStartedExecutionSource,
+  PaperStartedExecutionSourceReader,
+} from './postgres-started-source.js';

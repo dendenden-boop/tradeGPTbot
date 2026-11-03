@@ -193,7 +193,13 @@ async function ensureFixtureDefaults(tenantId: string) {
     throw Error('START_FIXTURE_GLOBAL_CONTROL_MISSING');
   if (control.state === 'PAUSED') await startFixturePause(null, 'RUNNING');
 }
-export async function readyExecutionStart() {
+export async function readyExecutionStart(
+  beforeEvidence?: (setup: {
+    orders: Awaited<ReturnType<typeof open>>['orders'];
+    binding: ReturnType<typeof bindingSchema.parse>;
+    draft: ReturnType<typeof draftSchema.parse>;
+  }) => Promise<void>,
+) {
   const ports = await (opening ??= open()),
     f = frameFixture(),
     c = paperConfigurationSchema.parse(f.configuration.configuration);
@@ -296,6 +302,7 @@ export async function readyExecutionStart() {
   ]);
   // Genuine funding and the complete DRAFT still precede book bootstrap.
   await ports.book.initialize(c.owner, startIo());
+  await beforeEvidence?.({ orders: ports.orders, binding, draft });
   const context = await ports.runtime.context(c.owner, startIo());
   const now = Date.now();
   f.p.timestamp = f.s.timestamp = now;

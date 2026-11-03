@@ -12,6 +12,7 @@ const roles = 'packages/database/test/runtime-role-graph.integration.test.ts';
 const admission = 'packages/database/test/paper-admission.integration.test.ts';
 const nativeAdmission = 'packages/database/test/risk-admission.integration.test.ts';
 const executionStart = 'packages/database/test/paper-execution-start.integration.test.ts';
+const startedSource = 'packages/database/test/paper-started-source.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 // Only reviewed files without cluster-role DDL may overlap after the mutator
@@ -62,7 +63,7 @@ export async function verifyExecutionStartParallelFiles(root = workspace) {
     [executionStart, '2c47c4bfe6bb7fa1774488b7020bb78af6b2780b2ff6d9e14d870c76ca1e0298'],
     [
       'packages/database/test/fixtures/paper-execution-start.ts',
-      '806e35264ce573a11a995c161233d1ad875983639773d22b555427364b107f5b',
+      '22fc143b5771bef5b886cb7122bdc4a60c2db9758d29f9560c1ec18ddf4285fb',
     ],
     [
       'packages/database/test/fixtures/native-default-port.ts',
@@ -94,6 +95,19 @@ export async function verifyExecutionStartParallelFiles(root = workspace) {
   }
 }
 
+export async function verifyStartedSourceParallelFiles(root = workspace) {
+  const source = (await readFile(path.join(root, startedSource), 'utf8')).replaceAll('\r\n', '\n');
+  assert.equal(
+    createHash('sha256').update(source).digest('hex'),
+    'b26cca86fe67439639619290218244029c930d8a14999f4ec38193e1d61492a2',
+    'Started-source overlap requires renewed cluster-role review',
+  );
+  assert(
+    !/\b(?:CREATE|ALTER|DROP)\s+(?:ROLE|DATABASE)\b|\bGRANT\s|\bREVOKE\s/iu.test(source),
+    'Started-source overlap cannot mutate cluster roles',
+  );
+}
+
 export function planDatabaseCohorts(files, { executionStartOverlap = false } = {}) {
   assert.equal(typeof executionStartOverlap, 'boolean');
   assert.ok(Array.isArray(files) && files.every((file) => nativeFile.test(file)));
@@ -101,6 +115,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
   assert.ok(files.includes(registry) && files.includes(roles), 'Missing isolation contracts');
   const overlap = files.includes(admission) && files.includes(nativeAdmission);
   const hasStart = files.includes(executionStart);
+  assert.ok(!files.includes(startedSource) || hasStart, 'Started source requires START isolation');
   assert.ok(!executionStartOverlap || hasStart, 'Missing reviewed execution-start input');
   assert.ok(!hasStart || overlap, 'Execution-start requires both admission isolation contracts');
   const main = files
@@ -110,6 +125,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
         file !== roles &&
         file !== admission &&
         file !== executionStart &&
+        file !== startedSource &&
         (!overlap || file !== nativeAdmission),
     )
     .sort();
@@ -118,7 +134,14 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
     { id: 'main', files: main, parallel: true },
     { id: 'registry', files: [registry], parallel: true },
     ...(files.includes(admission)
-      ? [{ id: 'admission', files: [admission], parallel: true, after: ['main', 'registry'] }]
+      ? [
+          {
+            id: 'admission',
+            files: [admission, ...(files.includes(startedSource) ? [startedSource] : [])],
+            parallel: true,
+            after: ['main', 'registry'],
+          },
+        ]
       : []),
     ...(overlap
       ? [

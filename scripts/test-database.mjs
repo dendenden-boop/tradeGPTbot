@@ -1,4 +1,11 @@
 import assert from 'node:assert/strict';
+// BEGIN PAPER STARTED SOURCE IMPORT
+import {
+  verifyPaperStartedSourceUpgrade,
+  verifyPaperStartedSourceStorage,
+} from './paper-started-source-upgrade.mjs';
+import { verifyStartedSourceParallelFiles } from './database-cohorts.mjs';
+// END PAPER STARTED SOURCE IMPORT
 // BEGIN PAPER EXECUTION START IMPORT
 import {
   capturePaperExecutionStartUpgrade,
@@ -148,6 +155,9 @@ const expectedMigrations = [
   // BEGIN PAPER EXECUTION START MIGRATION
   '202611020001_paper_execution_start',
   // END PAPER EXECUTION START MIGRATION
+  // BEGIN PAPER STARTED SOURCE MIGRATION
+  '202611030001_paper_started_execution_source',
+  // END PAPER STARTED SOURCE MIGRATION
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2470,6 +2480,34 @@ async function runDatabaseProof() {
     assert.equal(executionStartOwner.numFailedTests, 0);
     assert.equal(executionStartOwner.numPendingTests, 0);
     // END PAPER EXECUTION START OWNER
+    // BEGIN PAPER STARTED SOURCE OWNER
+    const startedSourceDb = connect(dbUrl(databases[2]));
+    await verifyPaperStartedSourceStorage(startedSourceDb, { ownership: 'REQUIRE_NON_BYPASS' });
+    await startedSourceDb.end();
+    pools.delete(startedSourceDb);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-started-source.integration.test.ts',
+        '--outputFile.json=test-results/paper-started-source-owner-tests.json',
+      ],
+      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+    );
+    const startedSourceOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-started-source-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(startedSourceOwner.success, true);
+    assert.equal(startedSourceOwner.numPassedTests, 9);
+    assert.equal(startedSourceOwner.numFailedTests, 0);
+    assert.equal(startedSourceOwner.numPendingTests, 0);
+    // END PAPER STARTED SOURCE OWNER
   }
   // END NATIVE PARTITION OWNER_WRAPPER
 
@@ -4394,6 +4432,18 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperExecutionStartUpgrade(paperUpgrade, beforeExecutionStart);
   // END PAPER EXECUTION START UPGRADE
+  // BEGIN PAPER STARTED SOURCE UPGRADE
+  const beforeStartedSource = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[62]),
+    path.join(paperMigrations, expectedMigrations[62]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperStartedSourceUpgrade(paperUpgrade, beforeStartedSource);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperStartedSourceUpgrade(paperUpgrade, beforeStartedSource);
+  // END PAPER STARTED SOURCE UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4499,6 +4549,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[7]);
   await verifyExecutionStartParallelFiles();
   // END PAPER EXECUTION START OVERLAP_SETUP
+  // BEGIN PAPER STARTED SOURCE OVERLAP
+  await verifyStartedSourceParallelFiles();
+  // END PAPER STARTED SOURCE OVERLAP
   // BEGIN PAPER EXECUTION START PLAN
   const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
     executionStartOverlap: true,
@@ -4781,6 +4834,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   );
   await verifyPaperExecutionStartStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
   // END PAPER EXECUTION START RESET_AFTER
+  // BEGIN PAPER STARTED SOURCE RESET_AFTER
+  await verifyPaperStartedSourceStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER STARTED SOURCE RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
   // BEGIN PAPER EXECUTION START POPULATED_RESET
@@ -4804,6 +4860,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     0,
   );
   await verifyPaperExecutionStartStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER STARTED SOURCE POPULATED_RESET
+  await verifyPaperStartedSourceStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER STARTED SOURCE POPULATED_RESET
   await startedAfterReset.end();
   pools.delete(startedAfterReset);
   // END PAPER EXECUTION START POPULATED_RESET
@@ -4926,6 +4985,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperExecutionStartUpgradePreserved: true,
     paperExecutionStartResetValidated: true,
     // END PAPER EXECUTION START FLAGS
+    // BEGIN PAPER STARTED SOURCE FLAGS
+    paperStartedSourceUpgradePreserved: true,
+    paperStartedSourceResetValidated: true,
+    // END PAPER STARTED SOURCE FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
     paperRuntimeNonBypassOwner: 'PASS',
@@ -4974,6 +5037,9 @@ async function resetDatabaseProof(fresh) {
   );
   await verifyPaperExecutionStartStorage(reset, { ownership: 'STORAGE_ONLY' });
   // END PAPER EXECUTION START RESET_FRESH
+  // BEGIN PAPER STARTED SOURCE RESET_FRESH
+  await verifyPaperStartedSourceStorage(reset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER STARTED SOURCE RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
   for (const table of [
     'admission_issuance',
