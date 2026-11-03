@@ -13,17 +13,21 @@ it('started-source gets a complete independent nine-case owner process within 90
   expect(runner).toContain('verifyPaperStartedSourceStorage(startedSourceDb');
   expect(read('scripts/native-proof-artifacts.mjs')).toContain("'paper-started-source': 90000");
 });
-it('started-source shares the reviewed START database and physically drained scheduling slot', async () => {
+it('started-source uses the PAPER tail while the original START retains the first drained scheduling slot', async () => {
   const files = await cohorts.discoverDatabaseFiles();
   const plan = cohorts.planDatabaseCohorts(files, { executionStartOverlap: true });
   expect(plan.find((c) => c.id === 'execution-start')).toEqual({
     id: 'execution-start',
-    files: ['packages/database/test/paper-execution-start.integration.test.ts', source],
+    files: ['packages/database/test/paper-execution-start.integration.test.ts'],
     parallel: true,
     after: ['main', 'registry'],
     afterAny: ['admission', 'native-admission'],
   });
   expect(plan.flatMap((c) => c.files).sort()).toEqual(files);
+  expect(plan.find((c) => c.id === 'admission').files).toEqual([
+    'packages/database/test/paper-admission.integration.test.ts',
+    source,
+  ]);
   expect(plan.find((c) => c.id === 'main').files).not.toContain(source);
   expect(cohorts.verifyStartedSourceParallelFiles).toBeTypeOf('function');
   await cohorts.verifyStartedSourceParallelFiles();

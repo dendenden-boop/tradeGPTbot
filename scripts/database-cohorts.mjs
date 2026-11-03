@@ -134,7 +134,14 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
     { id: 'main', files: main, parallel: true },
     { id: 'registry', files: [registry], parallel: true },
     ...(files.includes(admission)
-      ? [{ id: 'admission', files: [admission], parallel: true, after: ['main', 'registry'] }]
+      ? [
+          {
+            id: 'admission',
+            files: [admission, ...(files.includes(startedSource) ? [startedSource] : [])],
+            parallel: true,
+            after: ['main', 'registry'],
+          },
+        ]
       : []),
     ...(overlap
       ? [
@@ -150,7 +157,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
       ? [
           {
             id: 'execution-start',
-            files: [executionStart, ...(files.includes(startedSource) ? [startedSource] : [])],
+            files: [executionStart],
             parallel: executionStartOverlap,
             after: executionStartOverlap
               ? ['main', 'registry']
