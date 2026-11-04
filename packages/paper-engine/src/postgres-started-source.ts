@@ -231,6 +231,15 @@ function decode(raw: unknown, request: PaperStartedExecutionSourceRequest, now: 
     fail();
   }
 }
+/** Internal content decoder. Only the fixed locked SQL call establishes origin. */
+export function decodePaperStartedExecutionSourceWire(
+  raw: unknown,
+  request: PaperStartedExecutionSourceRequest,
+  now: number,
+) {
+  return decode(raw, lookup(request), now);
+}
+
 /** Coherent server-owned data for one known START, not current Risk approval or
  * a financial permit. The fixed writer must repeat current authority/history
  * validation atomically with one-use allocation and monetary effects. */

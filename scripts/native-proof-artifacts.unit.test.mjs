@@ -36,13 +36,13 @@ function evidence() {
     owners: Object.fromEntries(
       Object.entries(ownerReports).map(([name, minimum]) => [name, report(minimum)]),
     ),
-    native: report(1418, 44),
+    native: report(1426, 45),
     cohorts: {
       status: 'PASS',
       timeoutMs: 480000,
       elapsedMs: 400000,
-      tests: 1418,
-      files: 44,
+      tests: 1426,
+      files: 45,
       completed: [
         'main',
         'registry',
@@ -195,7 +195,7 @@ it('actual gate accepts only complete artifacts from both isolated projects', as
         requiredAuthJob: 'Auth runtime and faults',
         ...(scope === 'owners'
           ? { requiredNativeJob: 'Native PostgreSQL and real services' }
-          : { requiredOwnerJob: 'Native migration owners', tests: 1418 }),
+          : { requiredOwnerJob: 'Native migration owners', tests: 1426 }),
       };
       await store(scope, 'integration', data);
       await store(scope, scope === 'owners' ? 'database-owners' : 'database', data);

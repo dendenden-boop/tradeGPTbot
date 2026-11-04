@@ -13,6 +13,7 @@ const admission = 'packages/database/test/paper-admission.integration.test.ts';
 const nativeAdmission = 'packages/database/test/risk-admission.integration.test.ts';
 const executionStart = 'packages/database/test/paper-execution-start.integration.test.ts';
 const startedSource = 'packages/database/test/paper-started-source.integration.test.ts';
+const startedRisk = 'packages/database/test/paper-started-risk.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 // Only reviewed files without cluster-role DDL may overlap after the mutator
@@ -108,6 +109,19 @@ export async function verifyStartedSourceParallelFiles(root = workspace) {
   );
 }
 
+export async function verifyStartedRiskParallelFiles(root = workspace) {
+  const source = (await readFile(path.join(root, startedRisk), 'utf8')).replaceAll('\r\n', '\n');
+  assert.equal(
+    createHash('sha256').update(source).digest('hex'),
+    '61af490ea2283fd34ab08ab460c59973b5367221700644aa284e9adbd8e6ffb7',
+    'Started-risk overlap requires renewed cluster-role review',
+  );
+  assert(
+    !/\b(?:CREATE|ALTER|DROP)\s+(?:ROLE|DATABASE)\b|\bGRANT\s|\bREVOKE\s/iu.test(source),
+    'Started-risk overlap cannot mutate cluster roles',
+  );
+}
+
 export function planDatabaseCohorts(files, { executionStartOverlap = false } = {}) {
   assert.equal(typeof executionStartOverlap, 'boolean');
   assert.ok(Array.isArray(files) && files.every((file) => nativeFile.test(file)));
@@ -116,6 +130,10 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
   const overlap = files.includes(admission) && files.includes(nativeAdmission);
   const hasStart = files.includes(executionStart);
   assert.ok(!files.includes(startedSource) || hasStart, 'Started source requires START isolation');
+  assert.ok(
+    !files.includes(startedRisk) || files.includes(startedSource),
+    'Started Risk requires reviewed START source',
+  );
   assert.ok(!executionStartOverlap || hasStart, 'Missing reviewed execution-start input');
   assert.ok(!hasStart || overlap, 'Execution-start requires both admission isolation contracts');
   const main = files
@@ -126,6 +144,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
         file !== admission &&
         file !== executionStart &&
         file !== startedSource &&
+        file !== startedRisk &&
         (!overlap || file !== nativeAdmission),
     )
     .sort();
@@ -137,7 +156,11 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
       ? [
           {
             id: 'admission',
-            files: [admission, ...(files.includes(startedSource) ? [startedSource] : [])],
+            files: [
+              admission,
+              ...(files.includes(startedSource) ? [startedSource] : []),
+              ...(files.includes(startedRisk) ? [startedRisk] : []),
+            ],
             parallel: true,
             after: ['main', 'registry'],
           },

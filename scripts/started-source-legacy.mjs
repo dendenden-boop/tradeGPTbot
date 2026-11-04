@@ -1,5 +1,6 @@
 // Exact reviewed additions peel off before the older accepted harness checks.
 import { createHash } from 'node:crypto';
+import { beforeStartedRisk } from './started-risk-legacy.mjs';
 const pins = {
   'scripts/test-database.mjs': {
     IMPORT: 'f3a137fb6a146abbc41167c397ee9ff1cba67d5e25f339d5f6bda66326a0926b',
@@ -19,6 +20,7 @@ const pins = {
   },
 };
 export function beforeStartedSource(file, source) {
+  source = beforeStartedRisk(file, source);
   const expected = pins[file];
   if (!expected || !source.includes('PAPER STARTED SOURCE')) return source;
   const blocks = [

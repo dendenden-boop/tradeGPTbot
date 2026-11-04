@@ -14,7 +14,9 @@ it('started-source gets a complete independent nine-case owner process within 90
   expect(read('scripts/native-proof-artifacts.mjs')).toContain("'paper-started-source': 90000");
 });
 it('started-source uses the PAPER tail while the original START retains the first drained scheduling slot', async () => {
-  const files = await cohorts.discoverDatabaseFiles();
+  const files = (await cohorts.discoverDatabaseFiles()).filter(
+    (file) => file !== 'packages/database/test/paper-started-risk.integration.test.ts',
+  );
   const plan = cohorts.planDatabaseCohorts(files, { executionStartOverlap: true });
   expect(plan.find((c) => c.id === 'execution-start')).toEqual({
     id: 'execution-start',
