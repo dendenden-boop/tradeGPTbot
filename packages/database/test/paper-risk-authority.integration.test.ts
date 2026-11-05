@@ -30,6 +30,11 @@ import {
 } from '@ctp/paper-engine/configuration';
 import { frameFixture } from '../../paper-engine/test/frame-fixture.js';
 import { state } from '../../order-engine/test/fixtures.js';
+// BEGIN AUTHORITY FIXTURE SETUP IMPORT
+import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
+import { runIndependentFixtureSetup } from './fixtures/native-default-port.js';
+import { settleAuthorityFixturePair } from './fixtures/authority-setup.js';
+// END AUTHORITY FIXTURE SETUP IMPORT
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('ISOLATED_PAPER_DRAFT_RUNNER_REQUIRED');
 const required = (key: string) => {
@@ -208,14 +213,19 @@ afterAll(async () => {
   await Promise.all(handles.map((h) => h.close()));
   await admin.end();
 });
+// BEGIN AUTHORITY FIXTURE SETUP ORDERS
+const orderFixturePort = createOrderFixturePort(() =>
+  ownWriter(
+    createPostgresOrderStore({
+      connectionString: required('DATABASE_EXECUTION_URL'),
+      environment: 'test',
+    }),
+  ),
+);
 async function openOrders() {
-  const h = await createPostgresOrderStore({
-    connectionString: required('DATABASE_EXECUTION_URL'),
-    environment: 'test',
-  });
-  handles.push(h);
-  return h;
+  return orderFixturePort();
 }
+// END AUTHORITY FIXTURE SETUP ORDERS
 async function fixture({
   configure = true,
   region,
@@ -301,6 +311,7 @@ async function fixture({
   return { f, c, binding, draft };
 }
 
+// BEGIN AUTHORITY FIXTURE SETUP PREPARED
 async function prepared({
   draft = true,
   fund = true,
@@ -308,8 +319,14 @@ async function prepared({
 }: { draft?: boolean; fund?: boolean; region?: string } = {}) {
   const f = await fixture(region ? { region } : {});
   const fundingId = randomUUID();
-  if (fund) {
-    const funding = await fundingPort();
+  const [maybeFunding, orders] = await settleAuthorityFixturePair([
+    async () => (fund ? { funding: await fundingPort() } : null),
+    () => openOrders(),
+  ]);
+  // Opening connections is independent; monetary initialization must settle
+  // before the original Order draft can advance the account history.
+  if (maybeFunding) {
+    const { funding } = maybeFunding;
     await funding.initialize(
       paperFundingSchema.parse({
         id: fundingId,
@@ -323,10 +340,10 @@ async function prepared({
       io(),
     );
   }
-  const orders = await openOrders();
   const order = draft ? await orders.create(f.binding, f.draft, io()) : null;
   return { ...f, fundingId, orders, order };
 }
+// END AUTHORITY FIXTURE SETUP PREPARED
 async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) {
   // Explicit URLs (including foreign-authority probes) always open a fresh port.
   if (arguments.length === 0)
@@ -338,11 +355,16 @@ async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) 
   return h;
 }
 
+// BEGIN AUTHORITY FIXTURE SETUP READY
 async function ready(withPolicies = true) {
   const f = await prepared();
-  await (await openBook()).initialize(f.c.owner, io());
-  const [snapshots, trades] = await marketPorts();
-  if (withPolicies) await ensurePolicies(f.c.owner.tenantId);
+  const [, , [snapshots, trades]] = await runIndependentFixtureSetup([
+    async () => (await openBook()).initialize(f.c.owner, io()),
+    async () => {
+      if (withPolicies) await ensurePolicies(f.c.owner.tenantId);
+    },
+    () => marketPorts(),
+  ]);
   const now = Date.now();
   f.f.s.timestamp = f.f.p.timestamp = now;
   for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;
@@ -351,6 +373,7 @@ async function ready(withPolicies = true) {
   const request = { owner: f.c.owner, intentId: f.order!.intentId };
   return { ...f, snapshots, trades, request };
 }
+// END AUTHORITY FIXTURE SETUP READY
 async function openAuthority(connectionString = required('DATABASE_PAPER_RISK_AUTHORITY_URL')) {
   const h = await authority.createPostgresPaperRiskAuthoritySource({
     connectionString,
