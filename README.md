@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Preview clock and native setup acceptance checkpoint — 5 November 2026
+
+Clock candidate `788313c` passes [PR66 Platform 42069734974](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42069734974) and both CodeQL workflows, including all 23 owners and the previously failing positive-fill preview. Independent [source Platform 42069721806](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42069721806) fails the unchanged 480-second cap in the final roles cohort after all preceding native cohorts pass. The PR native aggregate is 474.880 seconds; it cannot replace the failed source acceptance. Both sets of six diagnostic ZIPs are retained. Protected main remains `b4e200a207a614c420d6b820c91f585e74943e08` / **HOLD**.
+
+The final test-only candidate also bounds producer constructor lifetimes in the 44-case Risk Portfolio and 37-case book-source fixtures. Every original register/initialize/create and SQL payload remains fresh; readers, restart/role probes, operation ordering and cleanup remain mandatory. Two further tests-first RED cases reproduce 300 constructors for 300 fixture openings; the revised defaults own one constructor, while all 300 actual method calls still occur. Local all 81 original native cases pass. No runtime, SQL migration, cohort scheduling or 90/480/1,020-second limit changes. Full final-HEAD regression and independent CI remain required. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; financial PAPER/LIVE dispatch and positive native collateral credit remain disabled. Earlier checkpoints retain their history.
+
 ## PR65 own-main checkpoint and preview clock repair — 5 November 2026
 
 The authorized protected merge of [PR65](https://github.com/dendenden-boop/tradeGPTbot/pull/65) produced main `b4e200a207a614c420d6b820c91f585e74943e08`. Its own [Platform 42018807588](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42018807588) remains **RED / HOLD**: primary native 1,432 tests and reset pass, but the preview owner suite has five passed / one failed positive-fill assertion. Other 22 owner suites and [main CodeQL 42018807563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42018807563) pass. Source/PR green results cannot replace this failed own-main acceptance.
