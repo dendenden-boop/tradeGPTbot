@@ -17,6 +17,9 @@ import {
 } from '@ctp/paper-engine/configuration';
 import { frameFixture } from '../../paper-engine/test/frame-fixture.js';
 import { state } from '../../order-engine/test/fixtures.js';
+// BEGIN NATIVE PRODUCER LIFETIME IMPORT
+import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
+// END NATIVE PRODUCER LIFETIME IMPORT
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('ISOLATED_PAPER_DRAFT_RUNNER_REQUIRED');
 const required = (key: string) => {
@@ -65,14 +68,19 @@ afterAll(async () => {
   await Promise.all(handles.map((h) => h.close()));
   await admin.end();
 });
+// BEGIN NATIVE PRODUCER LIFETIME ORDERS
+const orderFixturePort = createOrderFixturePort(() =>
+  ownWriter(
+    createPostgresOrderStore({
+      connectionString: required('DATABASE_EXECUTION_URL'),
+      environment: 'test',
+    }),
+  ),
+);
 async function openOrders() {
-  const h = await createPostgresOrderStore({
-    connectionString: required('DATABASE_EXECUTION_URL'),
-    environment: 'test',
-  });
-  handles.push(h);
-  return h;
+  return orderFixturePort();
 }
+// END NATIVE PRODUCER LIFETIME ORDERS
 async function fixture({
   configure = true,
   region,

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
+// BEGIN PREVIEW CLOCK FIXTURE IMPORT
+import { waitForFixtureClock } from './fixtures/preview-clock.js';
+// END PREVIEW CLOCK FIXTURE IMPORT
 import { afterAll, expect, it } from 'vitest';
 import { canonical } from '@ctp/portfolio';
 import * as paper from '@ctp/paper-engine/risk';
@@ -64,11 +66,11 @@ it('paper-started-preview: fresh post-START public evidence yields repeatable ec
     const f = await readyExecutionStart(),
       receipt = await f.journal.start(f.request, startIo());
     const eligible = receipt.startedAt + f.c.model.latencyMs + f.c.model.latencyJitterMs;
-    const wait = eligible - Date.now();
-    if (wait > 0) await delay(wait);
-    const now = Date.now(),
+    // BEGIN PREVIEW CLOCK FIXTURE WAIT
+    const now = await waitForFixtureClock(eligible, startIo()),
       snapshot = structuredClone(f.f.s),
       trade = structuredClone(f.f.p);
+    // END PREVIEW CLOCK FIXTURE WAIT
     const snapshotHead = await f.snapshots.read(snapshot.key, startIo()),
       tradeHead = await f.trades.read(trade.key, startIo());
     expect(snapshotHead).not.toBeNull();
@@ -92,7 +94,20 @@ it('paper-started-preview: fresh post-START public evidence yields repeatable ec
       results = [];
     for (const port of ports) {
       const r = await port.preview(requestFor(f.request), startIo());
-      expect(r.execution.calculation.fills.length).toBeGreaterThan(0);
+      // BEGIN PREVIEW CLOCK FIXTURE ASSERTION
+      expect(
+        r.execution.calculation.fills.length,
+        JSON.stringify({
+          sampledAt: now,
+          boundary: eligible,
+          executions: r.execution.calculation.ledger.execution.executions.map((e) => ({
+            status: e.status,
+            reason: e.reason,
+            eligibleAfter: e.eligibleAfter,
+          })),
+        }),
+      ).toBeGreaterThan(0);
+      // END PREVIEW CLOCK FIXTURE ASSERTION
       expect(r.source.started.journal.receipt).toEqual(receipt);
       expect(r.execution.calculation.state.holds).toEqual(r.execution.calculation.before.holds);
       results.push(r);

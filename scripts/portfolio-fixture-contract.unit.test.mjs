@@ -4,11 +4,15 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
+import { beforeNativeProducerLifetime } from './native-producer-lifetime-legacy.mjs';
 const path = 'packages/database/test/paper-risk-portfolio.integration.test.ts';
 const source = () =>
   ts.createSourceFile(
     path,
-    fs.readFileSync(new URL('../' + path, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    beforeNativeProducerLifetime(
+      path,
+      fs.readFileSync(new URL('../' + path, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    ),
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TS,

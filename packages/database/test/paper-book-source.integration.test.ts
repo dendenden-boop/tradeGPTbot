@@ -14,6 +14,9 @@ import {
 } from '@ctp/paper-engine/configuration';
 import { frameFixture } from '../../paper-engine/test/frame-fixture.js';
 import { state } from '../../order-engine/test/fixtures.js';
+// BEGIN NATIVE PRODUCER LIFETIME IMPORT
+import { createOrderFixturePort } from './fixtures/order-fixture-port.js';
+// END NATIVE PRODUCER LIFETIME IMPORT
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw new Error('ISOLATED_PAPER_DRAFT_RUNNER_REQUIRED');
 const required = (key: string) => {
@@ -31,18 +34,52 @@ const io = (signal = new AbortController().signal, ms = 2500) => ({
   deadline: Date.now() + ms,
 });
 const handles: { close(): Promise<void> }[] = [];
+// BEGIN NATIVE PRODUCER LIFETIME OWNERS
+// Fixed default producer handles only; every register/initialize/create remains
+// a genuine operation. Financial readers and explicit URL probes stay fresh.
+let configurationWriter: ReturnType<typeof createPostgresPaperConfiguration> | undefined;
+let fundingWriter: ReturnType<typeof createPostgresPaperFunding> | undefined;
+let bookWriter: ReturnType<typeof createPostgresPaperPortfolioBootstrap> | undefined;
+function ownWriter<T extends { close(): Promise<void> }>(opening: Promise<T>): Promise<T> {
+  return opening.then((handle) => {
+    handles.push(handle);
+    return handle;
+  });
+}
+function configurationPort() {
+  return (configurationWriter ??= ownWriter(
+    createPostgresPaperConfiguration({
+      connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+function fundingPort() {
+  return (fundingWriter ??= ownWriter(
+    createPostgresPaperFunding({
+      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
+      environment: 'test',
+    }),
+  ));
+}
+const orderFixturePort = createOrderFixturePort(() =>
+  ownWriter(
+    createPostgresOrderStore({
+      connectionString: required('DATABASE_EXECUTION_URL'),
+      environment: 'test',
+    }),
+  ),
+);
+// END NATIVE PRODUCER LIFETIME OWNERS
 afterAll(async () => {
   await Promise.all(handles.map((h) => h.close()));
   await admin.end();
 });
+// BEGIN NATIVE PRODUCER LIFETIME ORDERS
 async function openOrders() {
-  const h = await createPostgresOrderStore({
-    connectionString: required('DATABASE_EXECUTION_URL'),
-    environment: 'test',
-  });
-  handles.push(h);
-  return h;
+  return orderFixturePort();
 }
+// END NATIVE PRODUCER LIFETIME ORDERS
 async function fixture({ configure = true } = {}) {
   const f = frameFixture(),
     c = paperConfigurationSchema.parse(f.configuration.configuration);
@@ -55,15 +92,10 @@ async function fixture({ configure = true } = {}) {
     'INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt") VALUES($1,$2,$3,\'PAPER\',$4,$5,\'SIMULATED\',\'ACTIVE\',\'paper-draft-epoch\',now())',
     [c.owner.accountId, c.owner.tenantId, c.source.exchange, externalAccountId, c.source.region],
   );
-  const config = await createPostgresPaperConfiguration({
-    connectionString: required('DATABASE_PAPER_CONFIGURATION_URL'),
-    environment: 'test',
-  });
-  try {
-    if (configure) await config.register(c, io());
-  } finally {
-    await config.close();
-  }
+  // BEGIN NATIVE PRODUCER LIFETIME CONFIGURATION
+  const config = await configurationPort();
+  if (configure) await config.register(c, io());
+  // END NATIVE PRODUCER LIFETIME CONFIGURATION
   const i = f.p.record.instrument,
     r = f.p.record.rules;
   await admin.query(
@@ -122,36 +154,37 @@ async function prepared({ draft = true, fund = true } = {}) {
   const f = await fixture();
   const fundingId = randomUUID();
   if (fund) {
-    const funding = await createPostgresPaperFunding({
-      connectionString: required('DATABASE_PAPER_FUNDING_URL'),
-      environment: 'test',
-    });
-    try {
-      await funding.initialize(
-        paperFundingSchema.parse({
-          id: fundingId,
-          owner: f.c.owner,
-          configurationId: f.c.id,
-          balances: [
-            { asset: 'BTC', amount: '0.000000000000000001' },
-            { asset: 'USDT', amount: '9007199254740993' },
-          ],
-        }),
-        io(),
-      );
-    } finally {
-      await funding.close();
-    }
+    // BEGIN NATIVE PRODUCER LIFETIME FUNDING
+    const funding = await fundingPort();
+    await funding.initialize(
+      paperFundingSchema.parse({
+        id: fundingId,
+        owner: f.c.owner,
+        configurationId: f.c.id,
+        balances: [
+          { asset: 'BTC', amount: '0.000000000000000001' },
+          { asset: 'USDT', amount: '9007199254740993' },
+        ],
+      }),
+      io(),
+    );
+    // END NATIVE PRODUCER LIFETIME FUNDING
   }
   const orders = await openOrders();
   const order = draft ? await orders.create(f.binding, f.draft, io()) : null;
   return { ...f, fundingId, orders, order };
 }
+// BEGIN NATIVE PRODUCER LIFETIME BOOK
 async function openBook(connectionString = required('DATABASE_PAPER_BOOK_URL')) {
+  if (arguments.length === 0)
+    return (bookWriter ??= ownWriter(
+      createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' }),
+    ));
   const h = await createPostgresPaperPortfolioBootstrap({ connectionString, environment: 'test' });
   handles.push(h);
   return h;
 }
+// END NATIVE PRODUCER LIFETIME BOOK
 
 it('current PAPER book capture after common drafts preserves original snapshot and adds no financial authority', async () => {
   const f = await prepared(),
