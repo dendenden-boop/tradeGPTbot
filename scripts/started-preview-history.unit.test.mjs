@@ -23,9 +23,11 @@ it.each(Object.entries(pins))(
     const block = source.match(
       /^[ \t]*\/\/ BEGIN PAPER STARTED PREVIEW ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PAPER STARTED PREVIEW \1\n/mu,
     )[0];
+    const insertion = block.indexOf('\n') + 1;
+    const changed = block.slice(0, insertion) + '// unreviewed\n' + block.slice(insertion);
     for (const corrupt of [
       source + block,
-      source.replace(block, block.replace('\n', '\n// unreviewed\n')),
+      source.replace(block, changed),
       source.replace('END PAPER STARTED PREVIEW', 'END CHANGED PREVIEW'),
     ])
       expect(() => beforeStartedPreview(file, corrupt)).toThrow(
