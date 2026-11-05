@@ -56,6 +56,24 @@ function evidence() {
     },
   };
 }
+it.each(['missing', 'early', 'roles'])(
+  'rejects %s post-START preview completion evidence',
+  (kind) => {
+    const e = evidence();
+    e.cohorts.completed = e.cohorts.completed.map((entry, index) => ({
+      ...entry,
+      startMs: index * 1000,
+      settledMs: (index + 1) * 1000,
+    }));
+    if (kind !== 'missing') {
+      e.cohorts.completed.push({ id: 'execution-preview', startMs: 5000, settledMs: 6000 });
+      if (kind === 'early') e.cohorts.completed.at(-1).startMs = 0;
+    }
+    expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).toThrow(
+      'NATIVE_TEST_EVIDENCE_INCOMPLETE',
+    );
+  },
+);
 it('retains the original 120s admission owner allowance instead of imposing 90s', () => {
   const e = evidence(),
     owner = e.owners['risk-admission'];
