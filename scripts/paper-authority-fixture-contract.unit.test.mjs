@@ -3,9 +3,13 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
+import { beforeAuthoritySetup } from './authority-setup-legacy.mjs';
 const path = 'packages/database/test/paper-risk-authority.integration.test.ts';
 const text = () =>
-  fs.readFileSync(new URL('../' + path, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforeAuthoritySetup(
+    path,
+    fs.readFileSync(new URL('../' + path, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const source = () =>
   ts.createSourceFile(path, text(), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const hash = (values) => createHash('sha256').update(JSON.stringify(values)).digest('hex');

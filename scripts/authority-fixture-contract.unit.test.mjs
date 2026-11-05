@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
+import { beforeAuthoritySetup } from './authority-setup-legacy.mjs';
 
 // The existing native78/90s invocation is the performance regression. Only
 // write-only fixture ownership may change; all original tests, readers,
@@ -35,7 +36,10 @@ const writerCaches = new Set([
 const source = (file, kind = ts.ScriptKind.TS) =>
   ts.createSourceFile(
     file,
-    fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    beforeAuthoritySetup(
+      file,
+      fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+    ),
     ts.ScriptTarget.Latest,
     true,
     kind,

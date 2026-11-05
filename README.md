@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## PR64 own-main CI checkpoint — 5 November 2026
+
+The authorized protected squash merge of [PR64](https://github.com/dendenden-boop/tradeGPTbot/pull/64) produced `61e5af6a74884f35652012c7d92cc2f6f5035fcb`. Its own [Platform 42005536552](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42005536552) is **RED / HOLD**: the original PAPER admission cohort exhausted the unchanged 480-second native aggregate deadline. [Main CodeQL 42005536473](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42005536473), both OS checks and all 23 restricted-owner suites pass; full native regression and reset are not accepted. Earlier green source/PR runs cannot replace this failed main run. The last fully accepted main at this checkpoint remains `faff84f3d406b9f8ed16bfe3b9ef83ed7fcd5f23`.
+
+The repair candidate changes only isolated native test setup and its preservation tests: reuse the fixture-owned OrderStore constructor, drain independent connection openings, preserve funding-before-draft ordering, and settle book/policy/market-handle setup before publishing fresh market evidence. All prior assertions, real authority calls, runtime and 64 published migrations remain intact. CI budgets, cohorts, owner boundaries and workflows are unchanged. See [verification](docs/phase-13/verification.md) for RED evidence and acceptance requirements. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; financial PAPER/LIVE dispatch and positive native collateral credit remain disabled. Historical checkpoints below retain their original scope and results.
+
 ## Verified known-START execution preview code checkpoint — 5 November 2026
 
 Starting protected main **faff84f3d406b9f8ed16bfe3b9ef83ed7fcd5f23** is the accepted PR63 result, with its own [Platform 41798150077](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798150077) / [CodeQL 41798149979](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798149979). All published migrations 1–64 remain immutable; this increment adds no SQL, migration or role. Earlier candidate statements below retain their historical context.
