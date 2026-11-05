@@ -1,3 +1,4 @@
+import { beforeStartedPreview } from './started-preview-legacy.mjs';
 // Exact reviewed additions peel off before all accepted predecessor checks.
 import { createHash } from 'node:crypto';
 const pins = {
@@ -19,6 +20,7 @@ const pins = {
   },
 };
 export function beforeStartedRisk(file, source) {
+  source = beforeStartedPreview(file, source);
   const expected = pins[file];
   if (!expected || !source.includes('PAPER STARTED RISK')) return source;
   const blocks = [

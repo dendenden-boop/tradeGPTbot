@@ -28,6 +28,9 @@ export const ownerReports = Object.freeze({
   // BEGIN PAPER STARTED RISK REPORT
   'paper-started-risk': 8,
   // END PAPER STARTED RISK REPORT
+  // BEGIN PAPER STARTED PREVIEW REPORT
+  'paper-started-preview': 6,
+  // END PAPER STARTED PREVIEW REPORT
 });
 
 // Exact existing process limits in test-database.mjs, not a new allowance.
@@ -61,6 +64,9 @@ const ownerDeadlines = Object.freeze({
   // BEGIN PAPER STARTED RISK DEADLINE
   'paper-started-risk': 90000,
   // END PAPER STARTED RISK DEADLINE
+  // BEGIN PAPER STARTED PREVIEW DEADLINE
+  'paper-started-preview': 90000,
+  // END PAPER STARTED PREVIEW DEADLINE
 });
 
 export function requireNativeTestArtifacts(owners, native, cohorts, window) {
@@ -124,6 +130,25 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   // BEGIN PAPER STARTED RISK EVIDENCE
   if (native.numPassedTests < 1426 || !cohorts || cohorts.files < 45) fail();
   // END PAPER STARTED RISK EVIDENCE
+  // BEGIN PAPER STARTED PREVIEW EVIDENCE
+  if (native.numPassedTests < 1432 || cohorts.files < 46) fail();
+  const preview = cohorts.completed.filter((c) => c.id === 'execution-preview');
+  const started = cohorts.completed.find((c) => c.id === 'execution-start');
+  const roles = cohorts.completed.find((c) => c.id === 'roles');
+  if (
+    preview.length !== 1 ||
+    !roles ||
+    !Number.isFinite(preview[0].startMs) ||
+    !Number.isFinite(preview[0].settledMs) ||
+    !Number.isFinite(started.settledMs) ||
+    !Number.isFinite(roles.startMs) ||
+    preview[0].startMs < 0 ||
+    preview[0].settledMs < preview[0].startMs ||
+    preview[0].startMs < started.settledMs ||
+    roles.startMs < preview[0].settledMs
+  )
+    fail();
+  // END PAPER STARTED PREVIEW EVIDENCE
   if (
     !cohorts ||
     cohorts.status !== 'PASS' ||
@@ -136,6 +161,9 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
     cohorts.files < 42 ||
     !Array.isArray(cohorts.completed) ||
     cohorts.completed
+      // BEGIN PAPER STARTED PREVIEW LEGACY_PLAN
+      .filter((c) => c.id !== 'execution-preview')
+      // END PAPER STARTED PREVIEW LEGACY_PLAN
       // BEGIN PAPER EXECUTION START LEGACY_PLAN
       .filter((c) => c.id !== 'execution-start')
       // END PAPER EXECUTION START LEGACY_PLAN

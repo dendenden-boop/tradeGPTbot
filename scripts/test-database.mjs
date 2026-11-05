@@ -1,3 +1,6 @@
+// BEGIN PAPER STARTED PREVIEW IMPORT
+import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
+// END PAPER STARTED PREVIEW IMPORT
 import assert from 'node:assert/strict';
 // BEGIN PAPER STARTED RISK IMPORT
 import {
@@ -2546,6 +2549,34 @@ async function runDatabaseProof() {
     assert.equal(startedRiskOwner.numFailedTests, 0);
     assert.equal(startedRiskOwner.numPendingTests, 0);
     // END PAPER STARTED RISK OWNER
+    // BEGIN PAPER STARTED PREVIEW OWNER
+    const startedPreviewDb = connect(dbUrl(databases[2]));
+    await verifyPaperStartedRiskStorage(startedPreviewDb, { ownership: 'REQUIRE_NON_BYPASS' });
+    await startedPreviewDb.end();
+    pools.delete(startedPreviewDb);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-started-preview.integration.test.ts',
+        '--outputFile.json=test-results/paper-started-preview-owner-tests.json',
+      ],
+      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+    );
+    const startedPreviewOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-started-preview-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(startedPreviewOwner.success, true);
+    assert.equal(startedPreviewOwner.numPassedTests, 6);
+    assert.equal(startedPreviewOwner.numFailedTests, 0);
+    assert.equal(startedPreviewOwner.numPendingTests, 0);
+    // END PAPER STARTED PREVIEW OWNER
   }
   // END NATIVE PARTITION OWNER_WRAPPER
 
@@ -4605,6 +4636,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // BEGIN PAPER STARTED RISK OVERLAP
   await verifyStartedRiskParallelFiles();
   // END PAPER STARTED RISK OVERLAP
+  // BEGIN PAPER STARTED PREVIEW OVERLAP
+  await verifyStartedPreviewParallelFiles();
+  // END PAPER STARTED PREVIEW OVERLAP
   // BEGIN PAPER EXECUTION START PLAN
   const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
     executionStartOverlap: true,
@@ -4698,6 +4732,11 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
               ? admissionEnv
               : nativeEnv,
       // END PAPER EXECUTION START ENV
+      // BEGIN PAPER STARTED PREVIEW ENV
+      // This DB is reused only after START physically settles; the scheduler
+      // retains both mutator barriers, two children and final roles isolation.
+      ...(cohort.id === 'execution-preview' ? { env: executionStartEnv } : {}),
+      // END PAPER STARTED PREVIEW ENV
     })),
     {
       secrets,
@@ -4731,6 +4770,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
               ? databases[6]
               : databases[0],
       // END PAPER EXECUTION START DATABASE
+      // BEGIN PAPER STARTED PREVIEW DATABASE
+      ...(cohort.id === 'execution-preview' ? { database: databases[7] } : {}),
+      // END PAPER STARTED PREVIEW DATABASE
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
     })),
   });

@@ -36,26 +36,51 @@ function evidence() {
     owners: Object.fromEntries(
       Object.entries(ownerReports).map(([name, minimum]) => [name, report(minimum)]),
     ),
-    native: report(1426, 45),
+    native: report(1432, 46),
     cohorts: {
       status: 'PASS',
       timeoutMs: 480000,
       elapsedMs: 400000,
-      tests: 1426,
-      files: 45,
+      tests: 1432,
+      files: 46,
       completed: [
         'main',
         'registry',
         'admission',
         'native-admission',
         'execution-start',
+        'execution-preview',
         'roles',
-      ].map((id) => ({
+      ].map((id, index) => ({
         id,
+        startMs: index * 1000,
+        settledMs: (index + 1) * 1000,
       })),
     },
   };
 }
+it.each(['missing', 'early', 'roles', 'missing-time', 'nonfinite-time'])(
+  'rejects %s post-START preview completion evidence',
+  (kind) => {
+    const e = evidence();
+    e.cohorts.completed = e.cohorts.completed.map((entry, index) => ({
+      ...entry,
+      startMs: index * 1000,
+      settledMs: (index + 1) * 1000,
+    }));
+    if (kind === 'missing')
+      e.cohorts.completed = e.cohorts.completed.filter((c) => c.id !== 'execution-preview');
+    if (kind === 'early') e.cohorts.completed.find((c) => c.id === 'execution-preview').startMs = 0;
+    if (kind === 'roles') e.cohorts.completed.find((c) => c.id === 'roles').startMs = 0;
+    if (kind === 'missing-time')
+      delete e.cohorts.completed.find((c) => c.id === 'execution-preview').startMs;
+    if (kind === 'nonfinite-time')
+      e.cohorts.completed.find((c) => c.id === 'execution-preview').settledMs = NaN;
+    expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).toThrow(
+      'NATIVE_TEST_EVIDENCE_INCOMPLETE',
+    );
+  },
+);
 it('retains the original 120s admission owner allowance instead of imposing 90s', () => {
   const e = evidence(),
     owner = e.owners['risk-admission'];
@@ -195,7 +220,7 @@ it('actual gate accepts only complete artifacts from both isolated projects', as
         requiredAuthJob: 'Auth runtime and faults',
         ...(scope === 'owners'
           ? { requiredNativeJob: 'Native PostgreSQL and real services' }
-          : { requiredOwnerJob: 'Native migration owners', tests: 1426 }),
+          : { requiredOwnerJob: 'Native migration owners', tests: 1432 }),
       };
       await store(scope, 'integration', data);
       await store(scope, scope === 'owners' ? 'database-owners' : 'database', data);
