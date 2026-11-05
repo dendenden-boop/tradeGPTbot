@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import ts from 'typescript';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
+import { beforePreviewClock } from './preview-clock-legacy.mjs';
+import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 import { fixture, marketFixture } from '../packages/paper-engine/test/fixtures.js';
 import { preparePaperFrame, evaluatePaperOrder } from '../packages/paper-engine/src/model.js';
 
@@ -181,4 +186,51 @@ it.each([
     wait(target, io(deadline), { now: () => 100, pause, monotonic: () => 0 }),
   ).rejects.toThrow('PREVIEW_FIXTURE_' + reason);
   expect(pause).not.toHaveBeenCalled();
+});
+
+it.each([
+  [nativePath, '9c9345814b8566120678ea887743078c5f02416fa5a80d5a17082212efbc63d1'],
+  [
+    'scripts/database-cohorts.mjs',
+    'beaa58942b8edd05b95e50031c2a7dd153b8df157d80297fefb5d37a8e1d5317',
+  ],
+])(
+  'retains every prior assertion, public payload, scheduler statement and budget in %s',
+  (file, digest) => {
+    const current = fs
+      .readFileSync(new URL('../' + file, import.meta.url), 'utf8')
+      .replaceAll('\r\n', '\n');
+    const old = beforePreviewClock(file, current);
+    expect(createHash('sha256').update(old).digest('hex')).toBe(digest);
+    expect(beforePreviewClock(file, old)).toBe(old);
+    const blocks = [
+      ...current.matchAll(
+        /^[ \t]*\/\/ BEGIN PREVIEW CLOCK FIXTURE ([A-Z_]+)\n[\s\S]*?^[ \t]*\/\/ END PREVIEW CLOCK FIXTURE \1\n/gm,
+      ),
+    ];
+    for (const [block] of blocks) {
+      const at = current.indexOf(block) + block.indexOf('\n') + 1;
+      expect(() =>
+        beforePreviewClock(file, current.slice(0, at) + '// unreviewed\n' + current.slice(at)),
+      ).toThrow('PREVIEW_CLOCK_REVIEW_REQUIRED');
+    }
+  },
+);
+it('fingerprints every new executable helper before allowing unchanged native overlap', async () => {
+  const root = path.resolve('test-results/cohort-unit');
+  fs.mkdirSync(root, { recursive: true });
+  const directory = fs.mkdtempSync(path.join(root, 'preview-clock-'));
+  for (const file of [nativePath, 'packages/database/test/fixtures/preview-clock.ts']) {
+    const target = path.join(directory, file);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(new URL('../' + file, import.meta.url), target);
+  }
+  await verifyStartedPreviewParallelFiles(directory);
+  fs.appendFileSync(
+    path.join(directory, 'packages/database/test/fixtures/preview-clock.ts'),
+    '\n// unreviewed\n',
+  );
+  await expect(verifyStartedPreviewParallelFiles(directory)).rejects.toThrow(
+    'Started-preview overlap requires renewed cluster-role review',
+  );
 });

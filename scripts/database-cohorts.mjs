@@ -123,18 +123,28 @@ export async function verifyStartedRiskParallelFiles(root = workspace) {
   );
 }
 
+// BEGIN PREVIEW CLOCK FIXTURE FINGERPRINT
 export async function verifyStartedPreviewParallelFiles(root = workspace) {
-  const source = (await readFile(path.join(root, startedPreview), 'utf8')).replaceAll('\r\n', '\n');
-  assert.equal(
-    createHash('sha256').update(source).digest('hex'),
-    '9c9345814b8566120678ea887743078c5f02416fa5a80d5a17082212efbc63d1',
-    'Started-preview overlap requires renewed cluster-role review',
-  );
-  assert(
-    !/\b(?:CREATE|ALTER|DROP)\s+(?:ROLE|DATABASE)\b|\bGRANT\s|\bREVOKE\s/iu.test(source),
-    'Started-preview overlap cannot mutate cluster roles',
-  );
+  for (const [file, expected] of [
+    [startedPreview, 'bd1871927e18731cf80169f889a0b9ada01b25ea41a7d2a8ffe2eb347c499440'],
+    [
+      'packages/database/test/fixtures/preview-clock.ts',
+      'f3ba7c20d4faccc743f9f371c51d3b845b94b017fedb7e407c69431e0c5b084c',
+    ],
+  ]) {
+    const source = (await readFile(path.join(root, file), 'utf8')).replaceAll('\r\n', '\n');
+    assert.equal(
+      createHash('sha256').update(source).digest('hex'),
+      expected,
+      'Started-preview overlap requires renewed cluster-role review: ' + file,
+    );
+    assert(
+      !/\b(?:CREATE|ALTER|DROP)\s+(?:ROLE|DATABASE)\b|\bGRANT\s|\bREVOKE\s/iu.test(source),
+      'Started-preview overlap cannot mutate cluster roles',
+    );
+  }
 }
+// END PREVIEW CLOCK FIXTURE FINGERPRINT
 
 export function planDatabaseCohorts(files, { executionStartOverlap = false } = {}) {
   assert.equal(typeof executionStartOverlap, 'boolean');
