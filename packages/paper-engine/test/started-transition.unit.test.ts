@@ -3,6 +3,7 @@ import { Decimal } from 'decimal.js';
 import {
   canonical,
   reducePortfolio,
+  restorePortfolio,
   type HoldWatermark,
   type PortfolioEvent,
   type PortfolioState,
@@ -363,14 +364,14 @@ it('preserves release tombstone ordering when an old commitment is replayed afte
     r = calculate(x),
     h = r.holdChanges[0]!;
   const replay = reducePortfolio(
-    JSON.parse(canonical(r.state)),
+    restorePortfolio(JSON.parse(canonical(r.state))),
     {
       id: 'old-commitment',
       timestamp: wireNow,
       type: 'COMMITMENT',
       hold: x.portfolio.holds[0]!,
     },
-    { now: () => x.now, holdWatermark: JSON.parse(canonical(h.watermark)) },
+    { now: () => x.now, holdWatermark: JSON.parse(canonical(h.watermark)) as HoldWatermark },
   );
   expect(replay.ignored).toBe(true);
   expect(replay.state).toEqual(r.state);
@@ -393,6 +394,6 @@ it('rejects accessor and oversized collection inputs before visiting them', () =
   expect(() => calculate(x)).toThrow();
   expect(visited).toBe(false);
   const y = fixture();
-  y.reservation.debits = new Array(1001).fill(y.reservation.debits[0]);
+  y.reservation.debits = Array.from({ length: 1001 }, () => y.reservation.debits[0]!);
   expect(() => calculate(y)).toThrow();
 });

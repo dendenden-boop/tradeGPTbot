@@ -227,7 +227,12 @@ export function calculatePaperStartedTransition(raw: unknown) {
           type: 'COMMITMENT',
           hold: { ...old, amount: parseDecimal(remaining) },
         };
-    const { holdId: _holdId, ...previousWatermark } = wm;
+    const previousWatermark: HoldWatermark = {
+      timestamp: wm.timestamp,
+      fingerprint: wm.fingerprint,
+      released: wm.released,
+      unknown: wm.unknown,
+    };
     const applied = reducePortfolio(state, event, {
       now: () => x.now,
       holdWatermark: previousWatermark,
