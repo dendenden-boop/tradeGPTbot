@@ -17,9 +17,36 @@ const pins = {
   wrapperHash: '3e3a7506597330403df592327e60db593e562b005110a1e720e658a95f63e43b',
   migrationDigest: '4318d9c8724743039d74e9665133862c15540ca39e69737e1220accedd8c04f3',
 };
-const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+// The additive pure transition export is the only permitted extension to the
+// pinned root. Reconstruct the complete predecessor; retain its original hash.
+const pureAddition = `
+export {
+  calculatePaperStartedTransition,
+  type PaperStartedTransitionCalculation,
+} from './started-transition.js';
+`;
+const originalRoot = (text) =>
+  text.endsWith(pureAddition) ? text.slice(0, -pureAddition.length) : text;
+const read = (p) => {
+  const text = fs
+    .readFileSync(new URL('../' + p, import.meta.url), 'utf8')
+    .replaceAll('\r\n', '\n');
+  return p === 'packages/paper-engine/src/index.ts' ? originalRoot(text) : text;
+};
 const hash = (s) => createHash('sha256').update(s).digest('hex');
+it('retains the complete predecessor root and rejects alteration outside the additive pure export', () => {
+  const source = fs
+    .readFileSync(new URL('../packages/paper-engine/src/index.ts', import.meta.url), 'utf8')
+    .replaceAll('\r\n', '\n');
+  expect(source.endsWith(pureAddition)).toBe(true);
+  expect(hash(originalRoot(source))).toBe(pins.stable['packages/paper-engine/src/index.ts']);
+  expect(hash(originalRoot(source + '// unexpected trailing content\n'))).not.toBe(
+    pins.stable['packages/paper-engine/src/index.ts'],
+  );
+  expect(hash(originalRoot('// unexpected prefix\n' + source))).not.toBe(
+    pins.stable['packages/paper-engine/src/index.ts'],
+  );
+});
 it.each(Object.entries(pins.stable))(
   'keeps accepted calculation/transport/default Risk/pure boundary unchanged: %s',
   (file, expected) => {

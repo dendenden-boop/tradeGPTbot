@@ -199,6 +199,7 @@ it('market remainder expires rather than receiving a future release-and-retry gr
   const a = x.attempt.request.admission;
   a.command.type = 'MARKET';
   a.command.limitPrice = null;
+  a.command.timeInForce = null;
   rebind(x);
   const original = paper.calculatePaperRiskEnvelope({ ...x.original, order: a.command });
   const debit = x.reservation.debits[0]!,
