@@ -179,7 +179,6 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
               admission,
               ...(files.includes(startedSource) ? [startedSource] : []),
               ...(files.includes(startedRisk) ? [startedRisk] : []),
-              ...(files.includes(startedPreview) ? [startedPreview] : []),
             ],
             parallel: true,
             after: ['main', 'registry'],
@@ -206,6 +205,16 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
               ? ['main', 'registry']
               : ['main', 'registry', 'admission', 'native-admission'],
             ...(executionStartOverlap ? { afterAny: ['admission', 'native-admission'] } : {}),
+          },
+        ]
+      : []),
+    ...(files.includes(startedPreview)
+      ? [
+          {
+            id: 'execution-preview',
+            files: [startedPreview],
+            parallel: executionStartOverlap,
+            after: ['execution-start'],
           },
         ]
       : []),
@@ -302,7 +311,8 @@ export async function runDatabaseCohorts(
   jobs,
   { timeoutMs, signal, secrets = [], echo = false, cwd = workspace },
 ) {
-  const hasStart = jobs.length === 6;
+  const hasPreview = jobs.length === 7;
+  const hasStart = jobs.length === 6 || hasPreview;
   const hasStartOverlap = hasStart && jobs[4].parallel === true;
   const hasAdmission = jobs.length === 4 || jobs.length === 5 || hasStart;
   const hasOverlap = jobs.length === 5 || hasStart;
@@ -331,6 +341,9 @@ export async function runDatabaseCohorts(
               ...(hasStartOverlap ? { afterAny: ['admission', 'native-admission'] } : {}),
             },
           ]
+        : []),
+      ...(hasPreview
+        ? [{ id: 'execution-preview', parallel: hasStartOverlap, after: ['execution-start'] }]
         : []),
       { id: 'roles', parallel: false },
     ],
@@ -444,7 +457,13 @@ export async function runDatabaseCohorts(
       // Reuse the first physically settled slot. START owns an independent DB;
       // the still-running sibling remains under the same two-child/deadline cap.
       const children = [paper, native];
-      if (hasStartOverlap) children.push(Promise.race([paper, native]).then(() => run(jobs[4])));
+      if (hasStartOverlap) {
+        const start = Promise.race([paper, native]).then(() => run(jobs[4]));
+        children.push(start);
+        // Reuse only the physically closed START process's slot and DB. Its
+        // immutable original process remains first; the other child may live.
+        if (hasPreview) children.push(start.then(() => run(jobs[5])));
+      }
       const overlap = await Promise.allSettled(children);
       const failure = overlap.find((result) => result.status === 'rejected');
       if (failure) throw firstFailure ?? failure.reason;
@@ -453,6 +472,7 @@ export async function runDatabaseCohorts(
     // Reviewed overlap instead uses its own DB and the first settled slot.
     // The existing owner90s/aggregate480s/shared1020s budgets are unchanged.
     if (hasStart && !hasStartOverlap) await run(jobs[4]);
+    if (hasPreview && !hasStartOverlap) await run(jobs[5]);
     await run(jobs.at(-1));
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native cohort aggregate deadline/abort');

@@ -49,14 +49,17 @@ function evidence() {
         'admission',
         'native-admission',
         'execution-start',
+        'execution-preview',
         'roles',
-      ].map((id) => ({
+      ].map((id, index) => ({
         id,
+        startMs: index * 1000,
+        settledMs: (index + 1) * 1000,
       })),
     },
   };
 }
-it.each(['missing', 'early', 'roles'])(
+it.each(['missing', 'early', 'roles', 'missing-time', 'nonfinite-time'])(
   'rejects %s post-START preview completion evidence',
   (kind) => {
     const e = evidence();
@@ -65,10 +68,14 @@ it.each(['missing', 'early', 'roles'])(
       startMs: index * 1000,
       settledMs: (index + 1) * 1000,
     }));
-    if (kind !== 'missing') {
-      e.cohorts.completed.push({ id: 'execution-preview', startMs: 5000, settledMs: 6000 });
-      if (kind === 'early') e.cohorts.completed.at(-1).startMs = 0;
-    }
+    if (kind === 'missing')
+      e.cohorts.completed = e.cohorts.completed.filter((c) => c.id !== 'execution-preview');
+    if (kind === 'early') e.cohorts.completed.find((c) => c.id === 'execution-preview').startMs = 0;
+    if (kind === 'roles') e.cohorts.completed.find((c) => c.id === 'roles').startMs = 0;
+    if (kind === 'missing-time')
+      delete e.cohorts.completed.find((c) => c.id === 'execution-preview').startMs;
+    if (kind === 'nonfinite-time')
+      e.cohorts.completed.find((c) => c.id === 'execution-preview').settledMs = NaN;
     expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).toThrow(
       'NATIVE_TEST_EVIDENCE_INCOMPLETE',
     );

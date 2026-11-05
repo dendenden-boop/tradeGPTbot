@@ -4732,6 +4732,11 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
               ? admissionEnv
               : nativeEnv,
       // END PAPER EXECUTION START ENV
+      // BEGIN PAPER STARTED PREVIEW ENV
+      // This DB is reused only after START physically settles; the scheduler
+      // retains both mutator barriers, two children and final roles isolation.
+      ...(cohort.id === 'execution-preview' ? { env: executionStartEnv } : {}),
+      // END PAPER STARTED PREVIEW ENV
     })),
     {
       secrets,
@@ -4765,6 +4770,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
               ? databases[6]
               : databases[0],
       // END PAPER EXECUTION START DATABASE
+      // BEGIN PAPER STARTED PREVIEW DATABASE
+      ...(cohort.id === 'execution-preview' ? { database: databases[7] } : {}),
+      // END PAPER STARTED PREVIEW DATABASE
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
     })),
   });

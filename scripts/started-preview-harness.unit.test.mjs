@@ -11,18 +11,23 @@ it('preview owns a separate unfiltered six-case 90s restricted-owner process', (
   expect(runner).toContain('startedPreviewOwner.numPassedTests, 6');
   expect(read('scripts/native-proof-artifacts.mjs')).toContain("'paper-started-preview': 90000");
 });
-it('preview remains in the bounded PAPER tail with original START on its independent first-settled slot', async () => {
+it('preview runs in a separate post-START slot with original START retaining its independent first-settled process', async () => {
   const files = await cohorts.discoverDatabaseFiles(),
     plan = cohorts.planDatabaseCohorts(files, { executionStartOverlap: true });
   expect(plan.find((c) => c.id === 'admission').files).toEqual([
     'packages/database/test/paper-admission.integration.test.ts',
     'packages/database/test/paper-started-source.integration.test.ts',
     'packages/database/test/paper-started-risk.integration.test.ts',
-    native,
   ]);
   expect(plan.find((c) => c.id === 'execution-start').files).toEqual([
     'packages/database/test/paper-execution-start.integration.test.ts',
   ]);
+  expect(plan.find((c) => c.id === 'execution-preview')).toEqual({
+    id: 'execution-preview',
+    files: [native],
+    parallel: true,
+    after: ['execution-start'],
+  });
   expect(plan.find((c) => c.id === 'main').files).not.toContain(native);
   expect(plan.flatMap((c) => c.files).sort()).toEqual(files);
   expect(cohorts.verifyStartedPreviewParallelFiles).toBeTypeOf('function');

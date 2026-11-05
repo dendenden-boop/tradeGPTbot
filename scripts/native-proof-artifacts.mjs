@@ -132,6 +132,22 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   // END PAPER STARTED RISK EVIDENCE
   // BEGIN PAPER STARTED PREVIEW EVIDENCE
   if (native.numPassedTests < 1432 || cohorts.files < 46) fail();
+  const preview = cohorts.completed.filter((c) => c.id === 'execution-preview');
+  const started = cohorts.completed.find((c) => c.id === 'execution-start');
+  const roles = cohorts.completed.find((c) => c.id === 'roles');
+  if (
+    preview.length !== 1 ||
+    !roles ||
+    !Number.isFinite(preview[0].startMs) ||
+    !Number.isFinite(preview[0].settledMs) ||
+    !Number.isFinite(started.settledMs) ||
+    !Number.isFinite(roles.startMs) ||
+    preview[0].startMs < 0 ||
+    preview[0].settledMs < preview[0].startMs ||
+    preview[0].startMs < started.settledMs ||
+    roles.startMs < preview[0].settledMs
+  )
+    fail();
   // END PAPER STARTED PREVIEW EVIDENCE
   if (
     !cohorts ||
@@ -145,6 +161,9 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
     cohorts.files < 42 ||
     !Array.isArray(cohorts.completed) ||
     cohorts.completed
+      // BEGIN PAPER STARTED PREVIEW LEGACY_PLAN
+      .filter((c) => c.id !== 'execution-preview')
+      // END PAPER STARTED PREVIEW LEGACY_PLAN
       // BEGIN PAPER EXECUTION START LEGACY_PLAN
       .filter((c) => c.id !== 'execution-start')
       // END PAPER EXECUTION START LEGACY_PLAN
