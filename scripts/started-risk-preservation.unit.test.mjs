@@ -1,3 +1,4 @@
+import { beforeStartedPreview } from './started-preview-legacy.mjs';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
@@ -23,8 +24,9 @@ const pinned = {
   originalFixtureHash: '84994ab9f0b3b75d6227b3de67722ac88e1868b92582265baa5cee09783cbdb5',
   migrationDigest: 'e6a16c7f01442e28b0fc33c453cd79864f54e7b8511ad072099a052377893eb3',
 };
-const read = (p) =>
+const rawRead = (p) =>
   fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+const read = (p) => beforeStartedPreview(p, rawRead(p));
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 function oldRisk(source) {
   const first = source.indexOf('export function decodePaperExecutionRiskSource('),

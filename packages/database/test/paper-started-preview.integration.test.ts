@@ -69,15 +69,25 @@ it('paper-started-preview: fresh post-START public evidence yields repeatable ec
     const now = Date.now(),
       snapshot = structuredClone(f.f.s),
       trade = structuredClone(f.f.p);
+    const snapshotHead = await f.snapshots.read(snapshot.key, startIo()),
+      tradeHead = await f.trades.read(trade.key, startIo());
+    expect(snapshotHead).not.toBeNull();
+    expect(tradeHead).not.toBeNull();
     snapshot.id = randomUUID();
+    snapshot.expectedRevision = snapshotHead.revision;
     snapshot.timestamp = now;
+    if (snapshot.book.sourceSequence !== null)
+      snapshot.book.sourceSequence = (BigInt(snapshot.book.sourceSequence) + 1n).toString();
     for (const v of [snapshot.book, snapshot.ticker]) v.receivedAt = v.exchangeTime = now;
     trade.id = randomUUID();
+    trade.expectedRevision = tradeHead.revision;
     trade.timestamp = now;
     trade.trade.tradeId = 'preview-' + randomUUID();
+    if (trade.trade.sourceSequence !== null)
+      trade.trade.sourceSequence = (BigInt(trade.trade.sourceSequence) + 1n).toString();
     trade.trade.receivedAt = trade.trade.exchangeTime = now;
-    await f.snapshots.publish(snapshot, startIo());
-    await f.trades.publish(trade, startIo());
+    expect((await f.snapshots.publish(snapshot, startIo())).status).toBe('APPLIED');
+    expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
     const before = await startFixtureEffects(f.c.owner.tenantId),
       results = [];
     for (const port of ports) {

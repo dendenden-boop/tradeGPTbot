@@ -1,5 +1,13 @@
 # Crypto Trading Platform
 
+## Known-START current-Risk execution preview candidate — 5 November 2026
+
+Starting protected main **faff84f3d406b9f8ed16bfe3b9ef83ed7fcd5f23** is the accepted PR63 result, with its own [Platform 41798150077](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798150077) / [CodeQL 41798149979](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798149979). Published migrations 1–64 remain immutable. Earlier candidate and pending-main statements below retain their historical context.
+
+The [server-only execution preview](docs/phase-13/started-preview.md) composes the actual locked START/current-Risk source and existing pure Portfolio calculation before the same COMMIT. It accepts no caller calculation inputs, grants no financial authority and preserves original leases, complete FIFO/holds, bounded transport and UNKNOWN behavior. Tests-first 30 unit / six native RED and revised six native GREEN diagnostics are retained; 45 new targeted contracts pass. Full candidate regression/CI remains pending. No SQL, migration, role, workflow, lockfile or financial dispatch is added.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Final current atomic financial Risk, one-use shared allocation and durable monetary progression remain outstanding. Financial PAPER/LIVE dispatch and positive native collateral credit stay disabled; collateral remains conservative and native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.
+
 ## Verified known-START current Risk code checkpoint — 3 November 2026
 
 Starting protected main **c9cfca8422812ee48888c75465813727b4a90a17** is the accepted PR62 result, with its own [Platform 41676554143](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41676554143) / [CodeQL 41676554104](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41676554104). Published migrations 1–63 remain immutable; additive 64 introduces only private readonly source functions/RPC routing. Earlier candidate statements below remain historical checkpoints.

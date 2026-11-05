@@ -14,6 +14,7 @@ const nativeAdmission = 'packages/database/test/risk-admission.integration.test.
 const executionStart = 'packages/database/test/paper-execution-start.integration.test.ts';
 const startedSource = 'packages/database/test/paper-started-source.integration.test.ts';
 const startedRisk = 'packages/database/test/paper-started-risk.integration.test.ts';
+const startedPreview = 'packages/database/test/paper-started-preview.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 // Only reviewed files without cluster-role DDL may overlap after the mutator
@@ -122,6 +123,19 @@ export async function verifyStartedRiskParallelFiles(root = workspace) {
   );
 }
 
+export async function verifyStartedPreviewParallelFiles(root = workspace) {
+  const source = (await readFile(path.join(root, startedPreview), 'utf8')).replaceAll('\r\n', '\n');
+  assert.equal(
+    createHash('sha256').update(source).digest('hex'),
+    '9c9345814b8566120678ea887743078c5f02416fa5a80d5a17082212efbc63d1',
+    'Started-preview overlap requires renewed cluster-role review',
+  );
+  assert(
+    !/\b(?:CREATE|ALTER|DROP)\s+(?:ROLE|DATABASE)\b|\bGRANT\s|\bREVOKE\s/iu.test(source),
+    'Started-preview overlap cannot mutate cluster roles',
+  );
+}
+
 export function planDatabaseCohorts(files, { executionStartOverlap = false } = {}) {
   assert.equal(typeof executionStartOverlap, 'boolean');
   assert.ok(Array.isArray(files) && files.every((file) => nativeFile.test(file)));
@@ -134,6 +148,10 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
     !files.includes(startedRisk) || files.includes(startedSource),
     'Started Risk requires reviewed START source',
   );
+  assert.ok(
+    !files.includes(startedPreview) || files.includes(startedRisk),
+    'Started preview requires current START Risk',
+  );
   assert.ok(!executionStartOverlap || hasStart, 'Missing reviewed execution-start input');
   assert.ok(!hasStart || overlap, 'Execution-start requires both admission isolation contracts');
   const main = files
@@ -145,6 +163,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
         file !== executionStart &&
         file !== startedSource &&
         file !== startedRisk &&
+        file !== startedPreview &&
         (!overlap || file !== nativeAdmission),
     )
     .sort();
@@ -160,6 +179,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
               admission,
               ...(files.includes(startedSource) ? [startedSource] : []),
               ...(files.includes(startedRisk) ? [startedRisk] : []),
+              ...(files.includes(startedPreview) ? [startedPreview] : []),
             ],
             parallel: true,
             after: ['main', 'registry'],

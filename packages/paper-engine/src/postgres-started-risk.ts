@@ -153,6 +153,18 @@ function decode(raw: unknown, request: PaperStartedRiskRequest, now: number) {
     fail();
   }
 }
+/** Internal fixed-RPC helpers. Content alone is never source authority. */
+export function lookupPaperStartedRiskRequest(raw: unknown) {
+  return lookup(raw);
+}
+export function decodePaperStartedRiskWire(
+  raw: unknown,
+  request: PaperStartedRiskRequest,
+  now: number,
+) {
+  return decode(raw, lookup(request), now);
+}
+
 /** Current read/re-evaluation only. No grant, permit, reservation or financial
  * effect is created. The future fixed writer must revalidate atomically. */
 export async function createPostgresPaperStartedRiskSource(

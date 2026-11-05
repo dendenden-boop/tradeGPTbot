@@ -1,0 +1,37 @@
+# Current-Risk execution preview for a known START
+
+## Scope and status
+
+Starting protected main is `faff84f3d406b9f8ed16bfe3b9ef83ed7fcd5f23`, accepted through [PR63](https://github.com/dendenden-boop/tradeGPTbot/pull/63), [main Platform 41798150077](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798150077) and [CodeQL 41798149979](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798149979). Its 5,912 unit, 1,426 PostgreSQL, 22 owner suites and audit zero are accepted. Published migrations 1–64 remain immutable. This preview increment still requires full candidate regression and CI.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Financial PAPER/LIVE dispatch and positive native collateral credit stay disabled. Collateral remains conservative; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, database crash/backup restore and production soak are not claimed.
+
+The [known-START current Risk source](started-risk.md) and [started execution calculation](started-execution.md) exist independently. This server-only composition derives a bounded economic preview from the same locked current source, with calculation before COMMIT. It creates no grant, permit, allocation, reservation, execution journal, ledger entry, Portfolio mutation or hold transition. The original PREPARED reader and known-START reader retain their behavior.
+
+## Server contract
+
+`createPostgresPaperStartedExecutionPreview` is exported only by `@ctp/paper-engine/risk`. Its `preview(request, io)` accepts the existing strict `PaperStartedRiskRequest`: `PAPER_STARTED_RISK_CAPTURE`, original preparation/START keys, exact issued admission scope and current permission/session epochs. Deployment connection options are server-owned. No caller clock, frame, Portfolio, source, Risk object, replacement command, SQL, callback, credential or transport override is accepted.
+
+The port uses the existing four-slot physical admission transport and exactly one fixed `ctp_paper.reconcile_admission(jsonb)` call in one bounded transaction. It decodes the complete actual START/current-Risk packet with the accepted guards, then builds the frame and executes the accepted pure first-execution Portfolio calculation before COMMIT. Existing request/wire/component bounds, current policies, controls/circuits, health, metadata/rules, ownership/epochs, real loss provenance and retained-budget accounting remain mandatory. Missing, stale, UNKNOWN or conflicting evidence fails closed before calculation.
+
+The complete prepared FIFO remains in source/Risk accounting, up to 300 candidates. Only its authenticated earliest actual START is previewed; later contenders are neither skipped in retained exposure nor executed. This pristine Spot BUY base-quantity LIMIT/MARKET path still rejects economic history and unsupported state. Full holds remain unchanged in the source and calculated Portfolio. The projection can show fees, balanced postings and partial fills without committing any of them.
+
+The server clock supplies `evaluatedAt`; original START supplies latency origin and immutable command/identity. Public book/trade evidence must genuinely meet START-plus-latency before a fill can appear. A waiting result has no invented fill. At the same capture/clock the immutable projection is deterministic. A later recapture can have a different timestamp or source hash; its result is never a permanent execution identity or cached authority.
+
+`PAPER_STARTED_EXECUTION_PREVIEW` contains the current source, pure execution calculation, `evaluatedAt`, the original finite `validUntil` and a correlation hash. No lease is renewed. The port checks abort/deadline/expiry after calculation before COMMIT and again after known COMMIT. A calculation failure rolls back and returns a sanitized evidence error. An uncertain read COMMIT returns no preview and is never automatically retried; an explicit later readonly recapture is safe.
+
+Two internal wrappers expose the unchanged current-Risk request preflight/decoder to this fixed composition. They are absent from package entrypoints. Neither those helpers, plain hashes nor returned objects authenticate a later financial action. The future fixed writer must reconstruct current storage, re-evaluate final Risk/controls/health and atomically commit one-use shared liquidity, permanent execution replay, ledger, Portfolio, order and hold effects.
+
+## Tests and retained evidence
+
+Fresh baseline on the exact accepted main passes all 5,912 unit tests. The first restricted sandbox run failed 258 localhost/network-dependent cases; the isolated admission transport passed outside the restriction, followed by the complete unchanged suite. Both reports are retained. No source, test, limit or guard was relaxed to obtain the baseline.
+
+Tests-first `369abe87a02adee89f58779ebf9c0a3cfa6c8cb9` records 30 unit RED and six actual PostgreSQL RED/no skips for the missing factory. All 64 published migrations were applied and the owned cluster stopped. Initial typecheck caught an incorrect fixture trade field; it was corrected to the existing `tradeId` contract before implementation.
+
+The first implementation passes all 30 new unit contracts and all 27 old current-Risk contracts. Native diagnostics initially pass five of six: the positive fresh-evidence fixture incorrectly reused its old `expectedRevision`, so the existing market publisher correctly rejects it. The revised fixture reads actual snapshot/trade heads and advances native sequences with BigInt; no production ordering guard changes. All six revised native cases pass, including actual fresh-evidence calculation, factory reopen, policy/pause/UNKNOWN, ownership changes and physically lost readonly COMMIT. The cluster stops. These selected-owner Windows diagnostics are not the full native Linux/owner/CI acceptance or a crash/restore drill.
+
+The full harness adds an independent unfiltered six-case 90-second owner process and places the new native file after the existing PAPER tail. Original 69-case admission and nine-case START owner contracts, independent START database/first-settled slot, two-child maximum, 480-second aggregate and 1,020-second shared window remain. Historical plan fixtures project out only the newly added file; current tests check the complete plan. Strict pinned reconstruction retains every predecessor harness/proof statement outside reviewed additions. The full target is 1,432 PostgreSQL cases across 46 files and 23 owner suites.
+
+All 45 new targeted contracts pass: 30 composition, three harness, six exact-history and six runtime/migration preservation cases. The complete current-Risk reader is byte-equivalent after removing the reviewed wrappers; original admission transport, default Risk evaluator, started calculator and pure export remain unchanged. All 64 published migration bodies/order are pinned. No migration, role, SQL authority, workflow, lockfile or accepted financial/adapter runtime is added or changed.
+
+Full format/docs/lint/typecheck/unit/HTTP/build/db/runtime/clean/audit, native PostgreSQL, Ubuntu/Windows/real-services/Docker, CodeQL/security, exact artifact digests/windows and protected publication acceptance remain required. Final current atomic financial Risk, one-use shared allocation and durable ledger/Portfolio/hold progression remain outstanding PHASE 13 scope.

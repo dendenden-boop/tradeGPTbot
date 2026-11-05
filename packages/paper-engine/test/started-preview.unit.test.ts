@@ -4,19 +4,30 @@ import { decimalAdd, parseDecimal } from '@ctp/exchange-core';
 import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import type { PaperStartedRiskSource } from '../src/postgres-started-risk.js';
-import type { PaperStartedExecutionPortfolioCalculation } from '../src/started-execution.js';
+import type * as startedExecution from '../src/started-execution.js';
 import { startedPreviewFixture } from './started-preview-fixtures.js';
 
-const fake = vi.hoisted(() => ({
-  payload: null as unknown,
-  trace: [] as string[],
-  queries: [] as { text: string; values: readonly unknown[] }[],
+interface Fake {
+  payload: unknown;
+  trace: string[];
+  queries: { text: string; values: readonly unknown[] }[];
+  duplicate: boolean;
+  commitError: boolean;
+  afterCommit: null | (() => void);
+  afterCalculate: null | (() => void);
+  calculationError: boolean;
+  gate: null | Promise<void>;
+}
+const fake = vi.hoisted<Fake>(() => ({
+  payload: null,
+  trace: [],
+  queries: [],
   duplicate: false,
   commitError: false,
-  afterCommit: null as null | (() => void),
-  afterCalculate: null as null | (() => void),
+  afterCommit: null,
+  afterCalculate: null,
   calculationError: false,
-  gate: null as null | Promise<void>,
+  gate: null,
 }));
 vi.mock('pg', () => ({
   Client: class {
@@ -42,9 +53,7 @@ vi.mock('pg', () => ({
   },
 }));
 vi.mock('../src/started-execution.js', async () => {
-  const actual = await vi.importActual<typeof import('../src/started-execution.js')>(
-    '../src/started-execution.js',
-  );
+  const actual = await vi.importActual<typeof startedExecution>('../src/started-execution.js');
   return {
     ...actual,
     calculatePaperStartedExecutionPortfolio(raw: unknown) {
@@ -62,7 +71,7 @@ interface Preview {
   validUntil: number;
   hash: string;
   source: PaperStartedRiskSource;
-  execution: PaperStartedExecutionPortfolioCalculation;
+  execution: startedExecution.PaperStartedExecutionPortfolioCalculation;
 }
 interface Port {
   preview(request: unknown, io: { signal: AbortSignal; deadline: number }): Promise<Preview>;
@@ -206,7 +215,7 @@ it.each([
     f.publication.observation.health['executor'].status = 'FAILED';
     f.seal();
   }
-  if (kind === 'unknown') f.packet.risk.reservation.status = 'UNKNOWN' as never;
+  if (kind === 'unknown') f.packet.risk.reservation.status = 'UNKNOWN';
   if (kind === 'metadata') f.packet.risk.market.record.rules.version = 'replaced';
   if (kind === 'scope')
     f.packet.request.admission.binding.accountId = '00000000-0000-4000-8000-000000009999';

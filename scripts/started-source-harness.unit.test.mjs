@@ -17,6 +17,12 @@ it('started-source uses the PAPER tail while the original START retains the firs
   const files = (await cohorts.discoverDatabaseFiles()).filter(
     (file) => file !== 'packages/database/test/paper-started-risk.integration.test.ts',
   );
+  // BEGIN PAPER STARTED PREVIEW FIXTURE
+  const previewIndex = files.indexOf(
+    'packages/database/test/paper-started-preview.integration.test.ts',
+  );
+  if (previewIndex >= 0) files.splice(previewIndex, 1);
+  // END PAPER STARTED PREVIEW FIXTURE
   const plan = cohorts.planDatabaseCohorts(files, { executionStartOverlap: true });
   expect(plan.find((c) => c.id === 'execution-start')).toEqual({
     id: 'execution-start',

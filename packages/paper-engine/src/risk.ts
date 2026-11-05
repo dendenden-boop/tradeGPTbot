@@ -95,3 +95,8 @@ export type {
   PaperStartedRiskSource,
   PaperStartedRiskReader,
 } from './postgres-started-risk.js';
+export { createPostgresPaperStartedExecutionPreview } from './postgres-started-preview.js';
+export type {
+  PaperStartedExecutionPreview,
+  PaperStartedExecutionPreviewReader,
+} from './postgres-started-preview.js';
