@@ -1,10 +1,19 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { fixture, marketFixture } from '../packages/paper-engine/test/fixtures.js';
 import { preparePaperFrame, evaluatePaperOrder } from '../packages/paper-engine/src/model.js';
 
 const nativePath = 'packages/database/test/paper-started-preview.integration.test.ts';
+async function clockFactory() {
+  const file = new URL('../packages/database/test/fixtures/preview-clock.ts', import.meta.url);
+  if (!fs.existsSync(file)) throw Error('PREVIEW_FIXTURE_CLOCK_MISSING');
+  const { outputText } = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
+  });
+  return (await import('data:text/javascript;base64,' + Buffer.from(outputText).toString('base64')))
+    .waitForFixtureClock;
+}
 async function actualNativeSampler() {
   const text = fs.readFileSync(new URL('../' + nativePath, import.meta.url), 'utf8');
   const file = ts.createSourceFile(
@@ -34,7 +43,7 @@ async function actualNativeSampler() {
     .map((n) => n.getText(file))
     .join('\n');
   const { outputText } = ts.transpileModule(
-    'export function bind(Date,delay,waitForFixtureClock) { return async (receipt,f) => {' +
+    'export function bind(Date,delay,waitForFixtureClock,startIo) { return async (receipt,f) => {' +
       block +
       '\nreturn {eligible,now};};}',
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } },
@@ -54,10 +63,17 @@ async function earlyWakeSample() {
     now = Math.max(now + 1, Math.min(eligible, now + ms - 1));
   };
   const bind = await actualNativeSampler();
+  const available = fs.existsSync(
+    new URL('../packages/database/test/fixtures/preview-clock.ts', import.meta.url),
+  );
+  const wait = available ? await clockFactory() : undefined;
   const sample = await bind(
     clock,
     pause,
-    undefined,
+    wait &&
+      ((eligible, io) =>
+        wait(eligible, io, { now: clock.now, pause, monotonic: () => performance.now() })),
+    () => ({ signal: new AbortController().signal, deadline: eligible + 2500 }),
   )({ startedAt }, { c: { model: f.model }, f: { s: {}, p: {} } });
   return { ...sample, f };
 }
@@ -85,4 +101,84 @@ it('actual native early-wakeup path must produce genuine post-latency evidence f
       evaluationAt,
     }),
   ).toBeGreaterThan(0);
+});
+
+const io = (deadline = 1000, signal = new AbortController().signal) => ({ deadline, signal });
+it('returns the actually observed timestamp after overshoot rather than manufacturing the requested boundary', async () => {
+  const wait = await clockFactory();
+  let now = 100,
+    elapsed = 0;
+  const pause = vi.fn(async (ms) => {
+    elapsed += ms + 7;
+    now += ms + 7;
+  });
+  expect(await wait(150, io(), { now: () => now, pause, monotonic: () => elapsed })).toBe(157);
+  expect(pause).toHaveBeenCalledTimes(1);
+});
+it('bounds a stalled wall clock and never returns synthetic evidence or leaves an undrained wait', async () => {
+  const wait = await clockFactory(),
+    pause = vi.fn(async () => {});
+  await expect(wait(150, io(), { now: () => 100, pause, monotonic: () => 0 })).rejects.toThrow(
+    'PREVIEW_FIXTURE_BOUNDARY',
+  );
+  expect(pause).toHaveBeenCalledTimes(64);
+});
+it('does not return a timestamp after the original IO deadline even when the boundary was passed', async () => {
+  const wait = await clockFactory();
+  let now = 100,
+    elapsed = 0;
+  await expect(
+    wait(150, io(200), {
+      now: () => now,
+      pause: async () => {
+        now = 201;
+        elapsed = 101;
+      },
+      monotonic: () => elapsed,
+    }),
+  ).rejects.toThrow('PREVIEW_FIXTURE_DEADLINE');
+});
+it('fails closed on clock regression instead of using a previous or future timestamp', async () => {
+  const wait = await clockFactory();
+  let now = 100;
+  await expect(
+    wait(150, io(), {
+      now: () => now,
+      pause: async () => {
+        now = 99;
+      },
+      monotonic: () => 0,
+    }),
+  ).rejects.toThrow('PREVIEW_FIXTURE_CLOCK');
+});
+it('pre-abort starts no timer', async () => {
+  const wait = await clockFactory(),
+    controller = new AbortController(),
+    pause = vi.fn(async () => {});
+  controller.abort();
+  await expect(
+    wait(150, io(1000, controller.signal), { now: () => 100, pause, monotonic: () => 0 }),
+  ).rejects.toThrow('PREVIEW_FIXTURE_ABORTED');
+  expect(pause).not.toHaveBeenCalled();
+});
+it('abort during a real owned timer settles the wait and gives no publication timestamp', async () => {
+  const wait = await clockFactory(),
+    controller = new AbortController(),
+    now = Date.now();
+  const pending = wait(now + 500, io(now + 1000, controller.signal));
+  controller.abort();
+  await expect(pending).rejects.toThrow('PREVIEW_FIXTURE_ABORTED');
+});
+it.each([
+  ['invalid target', NaN, 1000, 'INPUT'],
+  ['invalid deadline', 150, NaN, 'INPUT'],
+  ['boundary at deadline', 200, 200, 'DEADLINE'],
+  ['boundary beyond bounded fixture budget', 3000, 10000, 'DEADLINE'],
+])('rejects %s before starting a timer', async (_name, target, deadline, reason) => {
+  const wait = await clockFactory(),
+    pause = vi.fn(async () => {});
+  await expect(
+    wait(target, io(deadline), { now: () => 100, pause, monotonic: () => 0 }),
+  ).rejects.toThrow('PREVIEW_FIXTURE_' + reason);
+  expect(pause).not.toHaveBeenCalled();
 });
