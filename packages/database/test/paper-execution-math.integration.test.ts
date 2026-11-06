@@ -89,7 +89,7 @@ it.each(['SELL', 'STOP_MARKET', 'reflected-history', 'executed-history', 'trigge
       x.order.timeInForce = null;
       x.order.trigger = { price: parseDecimal('10'), source: 'LAST' };
     } else if (field === 'executed-history') x.executedQuantity = '0.1';
-    else if (field === 'triggered-history') x.triggeredAt = x.submittedAt;
+    else if (field === 'triggered-history') Object.assign(x, { triggeredAt: x.submittedAt });
     else {
       x.frame.volumeUsed = parseDecimal('0.1');
       x.frame.asksUsed[0] = parseDecimal('0.1');
