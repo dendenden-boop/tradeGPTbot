@@ -109,6 +109,21 @@ const patches = {
         next: "    ...(files.includes(executionCommit)\n      ? [\n          {\n            id: 'execution-commit',\n            files: [executionCommit],\n            parallel: false,\n            after: [\n              'main',\n              'registry',\n              'admission',\n              'native-admission',\n              'execution-start',\n              'execution-preview',\n            ],\n          },\n        ]\n      : []),\n",
         hash: '3cb52583944258a5d8d054c46895de35aba09a5646647d40ce6240ceecf3309c',
       },
+      {
+        old: '  const hasPreview = jobs.length === 7;\n',
+        next: '  const hasCommit = jobs.length === 8;\n  const hasPreview = jobs.length === 7 || hasCommit;\n',
+        hash: '2931765805948e8ea9882f24a20fe3d5f6958c8a3c2e25bd0135c124c6dcb21a',
+      },
+      {
+        old: '',
+        next: "      ...(hasCommit\n        ? [\n            {\n              id: 'execution-commit',\n              parallel: false,\n              after: [\n                'main',\n                'registry',\n                'admission',\n                'native-admission',\n                'execution-start',\n                'execution-preview',\n              ],\n            },\n          ]\n        : []),\n",
+        hash: '68a214d454e4036f4c847549b28ce0751d0922ba408725b411a31a7db8eecade',
+      },
+      {
+        old: '',
+        next: '    if (hasCommit) await run(jobs[6]);\n',
+        hash: 'ac5962ee323de0299608f3307e57fa289eff4d6576fcb1704074d71091e169ca',
+      },
     ],
   },
   'scripts/started-source-harness.unit.test.mjs': {

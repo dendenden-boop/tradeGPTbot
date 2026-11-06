@@ -344,7 +344,8 @@ export async function runDatabaseCohorts(
   jobs,
   { timeoutMs, signal, secrets = [], echo = false, cwd = workspace },
 ) {
-  const hasPreview = jobs.length === 7;
+  const hasCommit = jobs.length === 8;
+  const hasPreview = jobs.length === 7 || hasCommit;
   const hasStart = jobs.length === 6 || hasPreview;
   const hasStartOverlap = hasStart && jobs[4].parallel === true;
   const hasAdmission = jobs.length === 4 || jobs.length === 5 || hasStart;
@@ -377,6 +378,22 @@ export async function runDatabaseCohorts(
         : []),
       ...(hasPreview
         ? [{ id: 'execution-preview', parallel: hasStartOverlap, after: ['execution-start'] }]
+        : []),
+      ...(hasCommit
+        ? [
+            {
+              id: 'execution-commit',
+              parallel: false,
+              after: [
+                'main',
+                'registry',
+                'admission',
+                'native-admission',
+                'execution-start',
+                'execution-preview',
+              ],
+            },
+          ]
         : []),
       { id: 'roles', parallel: false },
     ],
@@ -506,6 +523,7 @@ export async function runDatabaseCohorts(
     // The existing owner90s/aggregate480s/shared1020s budgets are unchanged.
     if (hasStart && !hasStartOverlap) await run(jobs[4]);
     if (hasPreview && !hasStartOverlap) await run(jobs[5]);
+    if (hasCommit) await run(jobs[6]);
     await run(jobs.at(-1));
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native cohort aggregate deadline/abort');
