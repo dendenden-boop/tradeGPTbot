@@ -1562,15 +1562,9 @@ async function tenantReady() {
     orders = await openOrders(),
     order = await orders.create(f.binding, f.draft, io());
   await (await openBook()).initialize(f.c.owner, io());
-  const snapshots = await createPostgresMarketSnapshots({
-      connectionString: required('DATABASE_MARKET_SNAPSHOT_URL'),
-      environment: 'test',
-    }),
-    trades = await createPostgresMarketTrades({
-      connectionString: required('DATABASE_MARKET_TRADE_URL'),
-      environment: 'test',
-    });
-  handles.push(snapshots, trades);
+  // BEGIN TENANT MARKET PRODUCER LIFETIME
+  const [snapshots, trades] = await marketPorts();
+  // END TENANT MARKET PRODUCER LIFETIME
   await ensurePolicies(f.c.owner.tenantId);
   const now = Date.now();
   f.f.s.timestamp = f.f.p.timestamp = now;

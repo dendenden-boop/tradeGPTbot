@@ -1,8 +1,27 @@
 import fs from 'node:fs';
 import ts from 'typescript';
 import { expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { beforeTenantMarketLifetime } from './tenant-market-lifetime-legacy.mjs';
 
 const file = 'packages/database/test/paper-risk-authority.integration.test.ts';
+it('retains the complete original 78 native tests, payloads, readers and cleanup under one exact producer replacement', () => {
+  const source = fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
+  const previous = beforeTenantMarketLifetime(file, source);
+  expect(createHash('sha256').update(previous).digest('hex')).toBe(
+    '76837b708ccaff5c725d228631179b0511234d2cc4e5f434e55e415e5f794667',
+  );
+  expect(beforeTenantMarketLifetime(file, previous)).toBe(previous);
+  expect(() =>
+    beforeTenantMarketLifetime(
+      file,
+      source.replace(
+        'await marketPorts();\n  // END TENANT',
+        'await marketPorts(); // unreviewed\n  // END TENANT',
+      ),
+    ),
+  ).toThrow('TENANT_MARKET_LIFETIME_REVIEW_REQUIRED');
+});
 async function bind() {
   const text = fs.readFileSync(file, 'utf8');
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
