@@ -123,6 +123,34 @@ it.each([
     await expect(derive(x)).rejects.toThrow('PAPER_EXECUTION_MATH_');
   },
 );
+it.each(['integer-overflow', 'fraction-overflow'])(
+  'paper-execution-math: rejects original LIMIT notional %s before a WAITING result',
+  async (field) => {
+    const x = input();
+    x.submittedAt = x.now - 99;
+    x.frame.record.rules.minNotional = parseDecimal('0');
+    x.frame.record.rules.maxNotional = null;
+    if (field === 'integer-overflow') {
+      const large = parseDecimal('99999999999999999999');
+      x.order.limitPrice = large;
+      x.order.size.value = large;
+      x.frame.record.rules.maxPrice = large;
+      x.frame.record.rules.maxQuantity = large;
+    } else {
+      const atom = parseDecimal('0.000000000000000001');
+      x.order.limitPrice = atom;
+      x.order.size.value = atom;
+      x.frame.record.rules.tickSize = atom;
+      x.frame.record.rules.stepSize = atom;
+      x.frame.record.rules.minPrice = atom;
+      x.frame.record.rules.minQuantity = atom;
+      x.frame.record.rules.pricePrecision = 18;
+      x.frame.record.rules.quantityPrecision = 18;
+    }
+    expect(() => evaluatePaperOrder(x)).toThrow();
+    await expect(derive(x)).rejects.toThrow('PAPER_EXECUTION_MATH_');
+  },
+);
 it('paper-execution-math: private immutable helper grants no runtime role or monetary permission', async () => {
   const result = await admin.query<{
     immutable: boolean;
