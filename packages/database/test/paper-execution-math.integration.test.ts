@@ -7,8 +7,10 @@ import { fixture } from '../../paper-engine/test/fixtures.js';
 
 if (!/^ctp-integration-\d+-[a-f0-9]{12}$/u.test(process.env['CTP_TEST_PROJECT'] ?? ''))
   throw Error('ISOLATED_EXECUTION_MATH_RUNNER_REQUIRED');
+const migrationUrl = process.env['DATABASE_MIGRATION_URL'];
+if (!migrationUrl) throw Error('EXECUTION_MATH_MIGRATION_URL_REQUIRED');
 const admin = new Pool({
-  connectionString: process.env['DATABASE_MIGRATION_URL'],
+  connectionString: migrationUrl,
   max: 2,
   query_timeout: 5000,
 });
@@ -133,3 +135,34 @@ it('paper-execution-math: private immutable helper grants no runtime role or mon
     FROM pg_proc p WHERE p.oid='ctp_paper.derive_pristine_buy(jsonb)'::regprocedure`);
   expect(result.rows).toEqual([{ immutable: true, definer: false, runtime: false, public: false }]);
 });
+it.each([
+  'order-type',
+  'limit-time-in-force',
+  'trade-side',
+  'base-and-size-asset',
+  'opaque-client-id',
+  'orderType-entry',
+  'timeInForce-entry',
+])(
+  'paper-execution-math: rejects nullable required field %s without SQL three-valued admission',
+  async (field) => {
+    const x = input();
+    if (field === 'order-type') Object.assign(x.order, { type: null });
+    else if (field === 'limit-time-in-force') Object.assign(x.order, { timeInForce: null });
+    else if (field === 'trade-side') Object.assign(x.frame.trade, { side: null });
+    else if (field === 'base-and-size-asset') {
+      Object.assign(x.frame.record.instrument, { baseAsset: null });
+      Object.assign(x.order.size, { asset: null });
+    } else if (field === 'opaque-client-id') Object.assign(x.order, { clientOrderId: null });
+    else if (field === 'orderType-entry')
+      Object.assign(x.frame.record.rules, {
+        orderTypes: [...x.frame.record.rules.orderTypes, null],
+      });
+    else
+      Object.assign(x.frame.record.rules, {
+        timeInForce: [...x.frame.record.rules.timeInForce, null],
+      });
+    expect(() => evaluatePaperOrder(x)).toThrow();
+    await expect(derive(x)).rejects.toThrow('PAPER_EXECUTION_MATH_');
+  },
+);
