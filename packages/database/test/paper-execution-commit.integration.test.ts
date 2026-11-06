@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
@@ -9,6 +10,7 @@ import {
   startFixtureConnection,
   startFixtureEffects,
   startFixturePause,
+  startFixturePolicy,
   startFixtureSql,
   startIo,
 } from './fixtures/paper-execution-start.js';
@@ -115,12 +117,113 @@ it('paper-execution-commit: commits one genuine START fill, balanced ledger, Por
     filledQuantity: '0.5',
     executedQuantity: '0.5',
     reconciliation: 'CONSISTENT',
+    averageFillPrice: '10.05',
   });
   const conservation = await startFixtureSql<{ balanced: boolean }>(
     `SELECT NOT EXISTS(SELECT 1 FROM public.ledger_entry WHERE "tenantId"=$1 AND "transactionId"=ANY($2::uuid[]) GROUP BY "transactionId",asset HAVING sum(amount)<>0) balanced`,
     [f.c.owner.tenantId, receipt.ledgerTransactionIds],
   );
   expect(conservation.rows).toEqual([{ balanced: true }]);
+});
+it('paper-execution-commit: exact durable replay survives metadata retirement, changed policy and a current pause', async () => {
+  const port = await open(),
+    f = await ready(),
+    receipt = await port.execute(f.request, startIo()),
+    after = await startFixtureEffects(f.c.owner.tenantId);
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  await startFixturePause(f.c.owner.tenantId, 'PAUSED');
+  expect(await port.execute(f.request, startIo())).toEqual(receipt);
+  expect(await port.read(f.request, startIo())).toEqual({ kind: 'COMMITTED', receipt });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(after);
+});
+it('paper-execution-commit: a new key rechecks current policy and cannot create a false UNKNOWN', async () => {
+  const port = await open(),
+    f = await ready(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  await expect(port.execute(f.request, startIo())).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+  expect(await port.read(f.request, startIo())).toEqual({ kind: 'MISSING' });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-execution-commit: authoritative UNKNOWN retains every debit and hold and prevents financial execution', async () => {
+  const port = await open(),
+    f = await ready();
+  await f.lifecycle.markUnknown(
+    {
+      kind: 'PAPER_RESERVATION_UNKNOWN',
+      admission: f.admission,
+      reservationId: f.approval.reservationId,
+      eventId: randomUUID(),
+      expectedRevision: '1',
+    },
+    startIo(),
+  );
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(port.execute(f.request, startIo())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect(await port.read(f.request, startIo())).toEqual({ kind: 'MISSING' });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-execution-commit: private storage and derivation stay inaccessible and committed effects cannot be rewritten', async () => {
+  const port = await open(),
+    f = await ready(),
+    receipt = await port.execute(f.request, startIo());
+  const runtime = new Pool({
+    connectionString: startFixtureConnection(),
+    max: 1,
+    query_timeout: 5000,
+  });
+  try {
+    const p = await runtime.query<{ safe: boolean }>(`SELECT
+      NOT has_table_privilege(current_user,'ctp_paper.execution_commit','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+      AND NOT has_table_privilege(current_user,'ctp_paper.execution_liquidity','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+      AND NOT has_function_privilege(current_user,'ctp_paper.execution_commit(jsonb,boolean)','EXECUTE')
+      AND NOT has_function_privilege(current_user,'ctp_paper.derive_pristine_effects(jsonb)','EXECUTE') safe`);
+    expect(p.rows).toEqual([{ safe: true }]);
+  } finally {
+    await runtime.end();
+  }
+  for (const sql of [
+    'UPDATE ctp_paper.execution_commit SET effects=effects WHERE tenant_id=$1',
+    'DELETE FROM ctp_paper.execution_commit WHERE tenant_id=$1',
+    'UPDATE ctp_paper.execution_liquidity SET frame_after=frame_before WHERE tenant_id=$1',
+    'DELETE FROM ctp_paper.execution_liquidity WHERE tenant_id=$1',
+  ])
+    await expect(startFixtureSql(sql, [f.c.owner.tenantId])).rejects.toThrow();
+  expect(await port.read(f.request, startIo())).toEqual({ kind: 'COMMITTED', receipt });
+});
+it('paper-execution-commit: exact replay still authenticates current permission epochs', async () => {
+  const port = await open(),
+    f = await ready(),
+    receipt = await port.execute(f.request, startIo());
+  await startFixtureSql(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  await expect(port.read(f.request, startIo())).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  const current = {
+    ...f.request,
+    authorization: {
+      ...f.request.authorization,
+      permissionEpoch: String(BigInt(f.request.authorization.permissionEpoch) + 1n),
+    },
+  };
+  expect(await port.execute(current, startIo())).toEqual(receipt);
+  expect(await port.read(current, startIo())).toEqual({ kind: 'COMMITTED', receipt });
+});
+it('paper-execution-commit: pre-aborted execution publishes neither journal nor monetary changes', async () => {
+  const port = await open(),
+    f = await ready(),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    c = new AbortController();
+  c.abort();
+  await expect(port.execute(f.request, startIo(c.signal))).rejects.toThrow(
+    'PAPER_ADMISSION_ABORTED',
+  );
+  expect(await port.read(f.request, startIo())).toEqual({ kind: 'MISSING' });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });
 it('paper-execution-commit: permanent exact replay survives factory restart without another ledger effect', async () => {
   const first = await open(),
