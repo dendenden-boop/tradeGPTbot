@@ -1,0 +1,39 @@
+# Pristine execution and collateral transition calculation
+
+## Starting point and scope
+
+Starting protected main is `eeaa24553d9eb0ae957e3309eac371921a201663`, accepted through [PR66](https://github.com/dendenden-boop/tradeGPTbot/pull/66), [main Platform 42080424302](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42080424302) and [main CodeQL 42080424703](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42080424703). Its own evidence verifies 6,001 unit / 2,272 Paper / 41 HTTP per OS, 1,432 PostgreSQL cases, 23 owner suites, 39 raw native reports, 64 immutable migrations, six own-main ZIP digests, twelve clean deployments and audit zero. Earlier failed main/source runs remain historical failures. All thirteen baseline commands passed again on 977 unchanged starting-main files before this increment.
+
+`calculatePaperStartedTransition` on the pure package root composes the accepted [first-execution Portfolio calculation](started-execution.md) with [original reservation arithmetic](reservation-progress.md) and the existing Portfolio hold reducer. This is a calculation prerequisite for the atomic financial writer. It performs no SQL, I/O, clock sampling, account mutation, Risk certification, release authorization or dispatch. No migration, role, dependency, workflow or CI budget changes.
+
+## Input and consistency
+
+The strict input is `{ now, attempt, frame, portfolio, original, reservation }`. `original` contains the original admission time, model, instrument record, book and trade. Its time must equal the immutable admission time; model and metadata/rules must match the execution frame exactly. The original command is derived from the validated pristine START, never supplied separately. A replacement model/rule or an expired original admission fails closed.
+
+Only the already supported pristine Spot BUY LIMIT/MARKET START is accepted. The reservation must be ACTIVE revision 1, with exact order/intent/decision/reservation identity from START. Its single positive quote debit must equal the independently recomputed original envelope. The same hold ID must have exactly that asset/amount, RESERVED status and `reflected: false` in Portfolio. Its supplied historical watermark must match the full commitment fingerprint, remain neither released nor UNKNOWN, and fall between original admission and evaluation. These are content consistency checks, not proof that caller objects came from storage.
+
+Inputs are bounded before schema traversal: depth, nodes, strings, bytes, complete own properties and collections. Accessors, cycles, sparse collections, unexpected fields, missing collateral, duplicate debits/watermarks, changed scope, progressed history and UNKNOWN content reject. The function does not resolve UNKNOWN, invent a new lease or accept caller fills/postings/grants.
+
+## Proposed state transition
+
+The result kind is `PAPER_STARTED_TRANSITION_CALCULATION`, version `paper-pristine-transition-v1`. It contains the unchanged first-execution calculation, order quantities/status, proposed reservation revision/status/debit decomposition, hold events with predecessor/new watermarks, and calculated final Portfolio state. Input stays unchanged and output is deeply immutable. Identical complete input produces identical content; JSON replay does not establish durable idempotency or authenticate restart state.
+
+- WAITING maps to OPEN with zero executed quantity. It keeps the full original reservation, revision 1 and every hold; no hold event is proposed.
+- A GTC partial fill advances the proposed reservation to revision 2 and keeps ACTIVE collateral for the exact remaining quantity, original maximum price and per-minimum-lot fee ceilings. Its COMMITMENT reduces only the matching hold. Unrelated holds remain unchanged.
+- FILLED or definitive EXPIRED advances the proposed reservation to revision 2 / RELEASED. The RELEASE event removes only the known matching hold, with `resolved: false`; it cannot resolve UNKNOWN. IOC/MARKET preserve actual fills and expire the unfilled remainder. Failed FOK has no fill/spend and releases the original unspent vector in calculation content.
+
+For each asset, `original = spent + remaining + released`, exactly in decimal arithmetic. `spent` includes only principal and original per-fill quote fees already posted by the accepted calculation. Hold events must produce zero postings, never a second cash or PnL effect. Proposed final cash/positions therefore remain exactly those of the original fill calculation. Terminal `remainingQuantity` describes unfilled quantity, not executable liability; its remaining collateral is zero.
+
+A changed hold event must have actual supplied evaluation time strictly greater than the prior watermark. Equal/conflicting or future watermarks reject; no future timestamp is manufactured. The existing reducer supplies the new fingerprint/release tombstone. The future writer must persist that watermark atomically with its event. The calculation does not itself provide durable ordering, persistence or trusted resolution.
+
+## Required durable boundary
+
+A fixed private financial writer must reconstruct the entire input from authenticated, current locked storage and repeat current Risk, policy/permission/control/health/deadline checks. Permanent exact replay/conflict detection, one-use execution authority, shared source/event liquidity, order and reservation progress, all balanced fill postings, Portfolio state and hold watermarks/tombstones must commit in one bounded transaction. An uncertain COMMIT returns no success and requires readonly reconciliation; no blind retry or standalone liquidity/release grant is permitted. This function cannot replace that boundary.
+
+## Verification checkpoint
+
+Tests-first `8e8358c` records 42 RED / zero PASS contracts, all missing-entrypoint failures. Initial implementation passed 48 of 49 targeted cases; the failing MARKET fixture supplied a non-null time-in-force, contrary to the unchanged generic MARKET wire contract. Correcting that fixture to canonical null preserves runtime validation. All 165 current targeted cases pass, including all 42 new monetary/lifecycle contracts, prior started-execution/reservation-progress cases and the original preservation cases. One additional preservation contract checks complete predecessor-root reconstruction and rejects prefix/trailing modifications. All original root bytes and their pinned hash remain after removing only the exact appended pure export; original transport, Risk, calculator and all 64 migration pins remain unchanged.
+
+New cases cover partial/terminal/IOC/FOK/MARKET outcomes, original debit conservation, fee atoms, remaining shared volume, unrelated holds, expired leases, UNKNOWN, scope/metadata/model mismatch, nonpristine replay, accessors/collection bounds, and tombstone replay through the existing reducer after JSON roundtrip. The latter proves calculation compatibility only, not native database restart/persistence. Full new-head format/docs/lint/typecheck/unit/HTTP/build/db/runtime/clean/audit and independent Ubuntu/Windows/native PostgreSQL/owner/real-services/Docker/CodeQL CI remain mandatory and pending at this checkpoint. Actual final evidence belongs to the implementation PR and phase verification checkpoint.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The final current atomic financial Risk, one-use shared allocation, durable execution/ledger/Portfolio/hold progression, continued partial execution, conditional exits and operational composition remain outstanding. Financial PAPER/LIVE dispatch and positive native collateral credit remain disabled. Collateral stays conservative; native AMEND remains Binance Spot TESTNET only. No real private exchange, crash/backup restore or production soak acceptance is claimed.
