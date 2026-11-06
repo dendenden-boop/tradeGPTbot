@@ -147,7 +147,8 @@ it.each([
   'paper-execution-math: rejects nullable required field %s without SQL three-valued admission',
   async (field) => {
     const x = input();
-    if (field === 'order-type') Object.assign(x.order, { type: null });
+    if (field === 'order-type')
+      Object.assign(x.order, { type: null, limitPrice: null, timeInForce: null });
     else if (field === 'limit-time-in-force') Object.assign(x.order, { timeInForce: null });
     else if (field === 'trade-side') Object.assign(x.frame.trade, { side: null });
     else if (field === 'base-and-size-asset') {
@@ -156,11 +157,11 @@ it.each([
     } else if (field === 'opaque-client-id') Object.assign(x.order, { clientOrderId: null });
     else if (field === 'orderType-entry')
       Object.assign(x.frame.record.rules, {
-        orderTypes: [...x.frame.record.rules.orderTypes, null],
+        orderTypes: ['LIMIT', null],
       });
     else
       Object.assign(x.frame.record.rules, {
-        timeInForce: [...x.frame.record.rules.timeInForce, null],
+        timeInForce: ['GTC', null],
       });
     expect(() => evaluatePaperOrder(x)).toThrow();
     await expect(derive(x)).rejects.toThrow('PAPER_EXECUTION_MATH_');
