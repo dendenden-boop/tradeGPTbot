@@ -13,6 +13,12 @@ it('known-START Risk owns a separate eight-case 90s restricted-owner process', (
 });
 it('known-START Risk joins the reviewed PAPER tail and retains the original START physical slot', async () => {
   const files = await cohorts.discoverDatabaseFiles();
+  // BEGIN PAPER EXECUTION COMMIT FIXTURE
+  const writerIndex = files.indexOf(
+    'packages/database/test/paper-execution-commit.integration.test.ts',
+  );
+  if (writerIndex >= 0) files.splice(writerIndex, 1);
+  // END PAPER EXECUTION COMMIT FIXTURE
   // BEGIN PAPER STARTED PREVIEW FIXTURE
   const previewIndex = files.indexOf(
     'packages/database/test/paper-started-preview.integration.test.ts',

@@ -31,6 +31,7 @@ export const ownerReports = Object.freeze({
   // BEGIN PAPER STARTED PREVIEW REPORT
   'paper-started-preview': 6,
   // END PAPER STARTED PREVIEW REPORT
+  'paper-execution-commit': 13,
 });
 
 // Exact existing process limits in test-database.mjs, not a new allowance.
@@ -67,6 +68,7 @@ const ownerDeadlines = Object.freeze({
   // BEGIN PAPER STARTED PREVIEW DEADLINE
   'paper-started-preview': 90000,
   // END PAPER STARTED PREVIEW DEADLINE
+  'paper-execution-commit': 90000,
 });
 
 export function requireNativeTestArtifacts(owners, native, cohorts, window) {
@@ -149,6 +151,36 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   )
     fail();
   // END PAPER STARTED PREVIEW EVIDENCE
+  const commit = cohorts.completed.filter((c) => c.id === 'execution-commit');
+  if (
+    native.numPassedTests < 1492 ||
+    cohorts.files < 49 ||
+    commit.length !== 1 ||
+    !roles ||
+    !preview[0] ||
+    !Number.isFinite(commit[0].startMs) ||
+    !Number.isFinite(commit[0].settledMs) ||
+    commit[0].startMs < preview[0].settledMs ||
+    commit[0].settledMs < commit[0].startMs ||
+    roles.startMs < commit[0].settledMs
+  )
+    fail();
+  for (const id of [
+    'main',
+    'registry',
+    'admission',
+    'native-admission',
+    'execution-start',
+    'execution-preview',
+  ]) {
+    const predecessors = cohorts.completed.filter((c) => c.id === id);
+    if (
+      predecessors.length !== 1 ||
+      !Number.isFinite(predecessors[0].settledMs) ||
+      commit[0].startMs < predecessors[0].settledMs
+    )
+      fail();
+  }
   if (
     !cohorts ||
     cohorts.status !== 'PASS' ||
@@ -164,6 +196,7 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
       // BEGIN PAPER STARTED PREVIEW LEGACY_PLAN
       .filter((c) => c.id !== 'execution-preview')
       // END PAPER STARTED PREVIEW LEGACY_PLAN
+      .filter((c) => c.id !== 'execution-commit')
       // BEGIN PAPER EXECUTION START LEGACY_PLAN
       .filter((c) => c.id !== 'execution-start')
       // END PAPER EXECUTION START LEGACY_PLAN

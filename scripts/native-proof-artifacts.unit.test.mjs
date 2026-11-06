@@ -36,13 +36,13 @@ function evidence() {
     owners: Object.fromEntries(
       Object.entries(ownerReports).map(([name, minimum]) => [name, report(minimum)]),
     ),
-    native: report(1432, 46),
+    native: report(1492, 49),
     cohorts: {
       status: 'PASS',
       timeoutMs: 480000,
       elapsedMs: 400000,
-      tests: 1432,
-      files: 46,
+      tests: 1492,
+      files: 49,
       completed: [
         'main',
         'registry',
@@ -50,6 +50,7 @@ function evidence() {
         'native-admission',
         'execution-start',
         'execution-preview',
+        'execution-commit',
         'roles',
       ].map((id, index) => ({
         id,
@@ -86,6 +87,21 @@ it('retains the original 120s admission owner allowance instead of imposing 90s'
     owner = e.owners['risk-admission'];
   owner.testResults[0].endTime = owner.startTime + 110000;
   expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).not.toThrow();
+});
+it.each([
+  'main',
+  'registry',
+  'admission',
+  'native-admission',
+  'execution-start',
+  'execution-preview',
+])('rejects writer overlap with the still-live %s mutation scope', (id) => {
+  const e = evidence(),
+    writer = e.cohorts.completed.find((c) => c.id === 'execution-commit');
+  e.cohorts.completed.find((c) => c.id === id).settledMs = writer.startMs + 1;
+  expect(() => requireNativeTestArtifacts(e.owners, e.native, e.cohorts, window)).toThrow(
+    'NATIVE_TEST_EVIDENCE_INCOMPLETE',
+  );
 });
 it('accepts real Vitest fractional millisecond endTime without rounding it away', () => {
   const e = evidence();

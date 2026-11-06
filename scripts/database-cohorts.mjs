@@ -15,6 +15,7 @@ const executionStart = 'packages/database/test/paper-execution-start.integration
 const startedSource = 'packages/database/test/paper-started-source.integration.test.ts';
 const startedRisk = 'packages/database/test/paper-started-risk.integration.test.ts';
 const startedPreview = 'packages/database/test/paper-started-preview.integration.test.ts';
+const executionCommit = 'packages/database/test/paper-execution-commit.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 // Only reviewed files without cluster-role DDL may overlap after the mutator
@@ -163,6 +164,10 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
     'Started preview requires current START Risk',
   );
   assert.ok(!executionStartOverlap || hasStart, 'Missing reviewed execution-start input');
+  assert.ok(
+    !files.includes(executionCommit) || files.includes(startedPreview),
+    'Financial writer requires reviewed current START Risk',
+  );
   assert.ok(!hasStart || overlap, 'Execution-start requires both admission isolation contracts');
   const main = files
     .filter(
@@ -174,6 +179,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
         file !== startedSource &&
         file !== startedRisk &&
         file !== startedPreview &&
+        file !== executionCommit &&
         (!overlap || file !== nativeAdmission),
     )
     .sort();
@@ -225,6 +231,23 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
             files: [startedPreview],
             parallel: executionStartOverlap,
             after: ['execution-start'],
+          },
+        ]
+      : []),
+    ...(files.includes(executionCommit)
+      ? [
+          {
+            id: 'execution-commit',
+            files: [executionCommit],
+            parallel: false,
+            after: [
+              'main',
+              'registry',
+              'admission',
+              'native-admission',
+              'execution-start',
+              'execution-preview',
+            ],
           },
         ]
       : []),

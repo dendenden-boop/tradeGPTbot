@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { beforeExecutionCommit } from './execution-commit-legacy.mjs';
 // Only exact reviewed additions peel before the accepted predecessor checks.
 const pins = {
   'scripts/test-database.mjs': {
@@ -22,6 +23,7 @@ const pins = {
   },
 };
 export function beforeStartedPreview(file, source) {
+  source = beforeExecutionCommit(file, source);
   const expected = pins[file];
   if (!expected || !source.includes('PAPER STARTED PREVIEW')) return source;
   const blocks = [

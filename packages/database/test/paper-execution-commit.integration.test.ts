@@ -4,6 +4,7 @@ import { afterAll, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
+import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
 import {
   closeStartFixture,
   readyExecutionStart,
@@ -124,6 +125,33 @@ it('paper-execution-commit: commits one genuine START fill, balanced ledger, Por
     [f.c.owner.tenantId, receipt.ledgerTransactionIds],
   );
   expect(conservation.rows).toEqual([{ balanced: true }]);
+  const causes = await startFixtureSql<{
+    commits: number;
+    allocations: number;
+    fills: number;
+    fees: number;
+    orderEvents: number;
+    notifications: number;
+  }>(
+    `SELECT
+    (SELECT count(*)::int FROM ctp_paper.execution_commit WHERE tenant_id=$1) commits,
+    (SELECT count(*)::int FROM ctp_paper.execution_liquidity WHERE tenant_id=$1) allocations,
+    (SELECT count(*)::int FROM public.fill WHERE "tenantId"=$1 AND "orderId"=$2) fills,
+    (SELECT count(*)::int FROM public.fee WHERE "tenantId"=$1 AND "fillId"=ANY($3::uuid[]) AND "ledgerTransactionId"=ANY($4::uuid[])) fees,
+    (SELECT count(*)::int FROM public.order_event WHERE "tenantId"=$1 AND "orderId"=$2 AND source='PAPER_EXECUTION') "orderEvents",
+    (SELECT count(*)::int FROM public.outbox_event WHERE "tenantId"=$1 AND "aggregateId"=$2 AND "eventType"='PaperOrderExecuted') notifications`,
+    [f.c.owner.tenantId, f.admission.orderId, receipt.fillIds, receipt.ledgerTransactionIds],
+  );
+  expect(causes.rows).toEqual([
+    {
+      commits: 1,
+      allocations: 1,
+      fills: receipt.fillIds.length,
+      fees: receipt.fillIds.length,
+      orderEvents: 1,
+      notifications: 1,
+    },
+  ]);
 });
 it('paper-execution-commit: exact durable replay survives metadata retirement, changed policy and a current pause', async () => {
   const port = await open(),
@@ -167,6 +195,10 @@ it('paper-execution-commit: authoritative UNKNOWN retains every debit and hold a
   expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });
 it('paper-execution-commit: private storage and derivation stay inaccessible and committed effects cannot be rewritten', async () => {
+  await verifyPaperExecutionCommitStorage(
+    { query: startFixtureSql },
+    { ownership: 'STORAGE_ONLY' },
+  );
   const port = await open(),
     f = await ready(),
     receipt = await port.execute(f.request, startIo());

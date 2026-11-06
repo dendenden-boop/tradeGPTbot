@@ -1,0 +1,39 @@
+# Pristine PAPER execution transaction
+
+## Candidate scope and starting point
+
+This increment starts from protected main `b50a9f718c0c3e3a2ad28d23373135d3a75fffa4`, the accepted [PR67](https://github.com/dendenden-boop/tradeGPTbot/pull/67) result. Its own [Platform 42178568680](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568680) and [CodeQL 42178568563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568563) pass. That acceptance covers 6,044 unit / 41 HTTP per OS, 1,432 PostgreSQL cases / 46 files / 23 owner suites, all 64 migrations, twelve clean deployments and audit zero. The new source requires its own acceptance. All thirteen unchanged-main baseline commands pass again on 980 frozen files before this work.
+
+The candidate adds private SQL arithmetic in additive migration 65 and a first financial transaction in additive migration 66. Published migrations 1–64, accepted native exchange mutation paths and dependencies stay unchanged. `createPostgresPaperExecutionCommitter` is exported only from the server `@ctp/paper-engine/risk` entrypoint. No public route, worker composition, exchange transport, PAPER/LIVE dispatch or PHASE 14 is enabled.
+
+## Authority and atomic writes
+
+The only request is `{ kind: 'PAPER_EXECUTION_COMMIT', executionKey, preparationKey, startKey, admission, authorization }`. It contains selectors and current permission/session epochs, never a supplied clock, amount, calculation, callback, SQL client, role or projection. Server composition owns database credentials and the endpoint. Descriptors, prototypes, unknown fields, bounds and the complete nested PAPER binding are checked before I/O.
+
+The fixed existing admission RPC authenticates current ownership and epochs using the retained GLOBAL → tenant → sorted account/order/book/catalog protocol. A new key must refer to an actual durable START, complete pristine inventory and current Risk. Original model, metadata/rules, capabilities and reservation envelope must still match. Current policies, exposure/available balances, controls/circuits, nine health facts, UTC cash-loss provenance, market freshness/liquidity and original deadlines are re-evaluated under the same locks. The SQL deadline includes the shortest capability, health and evidence lease and is checked again after writing effects. The application independently decodes current Risk and recalculates the complete SQL result before COMMIT.
+
+Private immutable SQL functions use NUMERIC arithmetic, full SHA-256 seed bytes, integer `div`/`mod`, tick/lot floors and fee ceilings. They accept only the pristine Spot BUY LIMIT/MARKET arithmetic contract. They receive no runtime EXECUTE grant. Required primitive fields reject SQL NULL/JSON null rather than allowing three-valued predicates to admit them. Original LIMIT notional must fit the existing aggregate envelope even for WAITING. Arithmetic is compared to the unchanged accepted TypeScript model and Portfolio/hold reducer; the new writer accepts no caller-proposed result.
+
+One bounded transaction owns the immutable execution journal, permanent key, one-use START, native-event liquidity record, public PAPER fills and quote-fee metadata, balanced ledger entries, Portfolio evidence/book revision/outbox, monotonic hold watermark/tombstone, private reservation progress and public order projection/event/outbox. Each fill has one FILL ledger transaction including its fee postings. The fee row references that same transaction; hold progress and the compound notification have no second ledger effect. Native exchange IDs/status/ACKs are never manufactured. The original PLACE command, intent, client ID counter, Risk decision and original debit vector remain immutable.
+
+`PAPER_EXECUTION` in the common Portfolio outbox is a PAPER-only compound notification, not a reducer input or another financial event. Individual PAPER_FILL and hold evidence remain retained. Order averages are an exact 18-place HALF_EVEN projection; stored NUMERIC values are canonicalized without changing monetary amounts.
+
+## Permanent replay and uncertainty
+
+After current ownership/epoch authentication, authoritative exact-key lookup precedes new metadata/policy admission. An exact semantic replay returns the original execution ID, fill/ledger IDs and receipt, including after rules retirement, policy/pause changes or factory restart. Stored evidence is rechecked at its original evaluation time. Ephemeral authorization epochs do not change semantic identity, but old epochs cannot read or replay after an epoch change. Changed semantics for an existing key, or another key for the same START, reject with `PAPER_ADMISSION_CONFLICT`.
+
+The private journal and liquidity records are append-only with forced tenant RLS and causal triggers. Existing Portfolio guards retain all previous checks; the additional branch requires the complete authenticated execution history. The reservation's original public vector parent stays immutable; its terminal/current authority is the private revision-2 event plus proven execution/hold history, not the parent's historical ACTIVE label. UNKNOWN cannot enter this writer or release its hold.
+
+Pre-dispatch pause, invalid evidence, UNKNOWN, abort or WAITING produces no accepted execution key or financial effect. A failed/aborted COMMIT acknowledgement returns `PAPER_ADMISSION_UNCERTAIN`, never a grant or success. There is no automatic mutation retry. Explicit `read()` uses only the readonly reconciliation RPC to find MISSING or the only complete committed transaction.
+
+Native trade identity includes exact market scope, instrument, identity scope and trade ID within the account/configuration scenario. A different book or publication revision cannot mint a second allowance. The actual START and order are each consumed once. The journal is not evicted to make replay or source reuse possible.
+
+## Explicit remaining limitations and gate
+
+This is the **first pristine transaction**, restricted to one issuance on the target book and one candidate. Existing economic history, multiple contenders, continued partial execution, SELL/exit handling and general historical Risk/Portfolio capture are not admitted by this writer. After a financial transition the old pristine captures continue to fail closed. Public worker composition stays disabled until those PHASE 13 requirements and full phase acceptance are complete.
+
+Local diagnostics prove 32 SQL model cases, 15 SQL accounting/hold comparisons and 13 actual PostgreSQL writer cases, with the temporary servers stopped. The writer tests include restart/replay, concurrency, conflicting keys, metadata retirement, changed policy/pause, UNKNOWN, epochs, closed storage/derivation privileges, canonical shared OrderStore reads, pre-abort and physically lost COMMIT. Twenty-three writer unit contracts pass. These Windows diagnostics use selected function owners and startup normalization; they are not the full Linux migration-owner, populated-upgrade, aggregate native, Docker or independent source/PR CI acceptance.
+
+The mandatory runner adds a serial writer cohort before final role probes, a non-BYPASSRLS owner repeat, populated 64→65→66 deploy/redeploy and fresh/populated reset checks. Existing 90/480/1,020-second limits remain. Exact predecessor reconstruction retains every accepted harness statement outside the reviewed additions. Full current-source regression and CI are pending: **candidate HOLD; PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**.
+
+LIVE and financial PAPER dispatch remain disabled; collateral stays conservative without positive native credit; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance, process/database crash recovery, backup restore and production soak are not claimed.

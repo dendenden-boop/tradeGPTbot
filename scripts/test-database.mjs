@@ -2,6 +2,10 @@
 import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 // END PAPER STARTED PREVIEW IMPORT
 import assert from 'node:assert/strict';
+import {
+  verifyPaperExecutionCommitStorage,
+  verifyPaperExecutionCommitUpgrade,
+} from './paper-execution-commit-upgrade.mjs';
 // BEGIN PAPER STARTED RISK IMPORT
 import {
   verifyPaperStartedRiskUpgrade,
@@ -171,6 +175,8 @@ const expectedMigrations = [
   // BEGIN PAPER STARTED RISK MIGRATION
   '202611030002_paper_started_risk_source',
   // END PAPER STARTED RISK MIGRATION
+  '202611060001_paper_execution_math',
+  '202611060002_paper_execution_commit',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2577,6 +2583,34 @@ async function runDatabaseProof() {
     assert.equal(startedPreviewOwner.numFailedTests, 0);
     assert.equal(startedPreviewOwner.numPendingTests, 0);
     // END PAPER STARTED PREVIEW OWNER
+    // BEGIN PAPER EXECUTION COMMIT OWNER
+    const executionCommitDb = connect(dbUrl(databases[2]));
+    await verifyPaperExecutionCommitStorage(executionCommitDb, { ownership: 'REQUIRE_NON_BYPASS' });
+    await executionCommitDb.end();
+    pools.delete(executionCommitDb);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-execution-commit.integration.test.ts',
+        '--outputFile.json=test-results/paper-execution-commit-owner-tests.json',
+      ],
+      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+    );
+    const executionCommitOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-execution-commit-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(executionCommitOwner.success, true);
+    assert.equal(executionCommitOwner.numPassedTests, 13);
+    assert.equal(executionCommitOwner.numFailedTests, 0);
+    assert.equal(executionCommitOwner.numPendingTests, 0);
+    // END PAPER EXECUTION COMMIT OWNER
   }
   // END NATIVE PARTITION OWNER_WRAPPER
 
@@ -4525,6 +4559,19 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperStartedRiskUpgrade(paperUpgrade, beforeStartedRisk);
   // END PAPER STARTED RISK UPGRADE
+  // BEGIN PAPER EXECUTION COMMIT UPGRADE
+  const beforeExecutionCommit = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  for (const index of [64, 65])
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[index]),
+      path.join(paperMigrations, expectedMigrations[index]),
+      { recursive: true },
+    );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionCommitUpgrade(paperUpgrade, beforeExecutionCommit);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionCommitUpgrade(paperUpgrade, beforeExecutionCommit);
+  // END PAPER EXECUTION COMMIT UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4737,6 +4784,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // retains both mutator barriers, two children and final roles isolation.
       ...(cohort.id === 'execution-preview' ? { env: executionStartEnv } : {}),
       // END PAPER STARTED PREVIEW ENV
+      ...(cohort.id === 'execution-commit' ? { env: executionStartEnv } : {}),
     })),
     {
       secrets,
@@ -4773,6 +4821,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // BEGIN PAPER STARTED PREVIEW DATABASE
       ...(cohort.id === 'execution-preview' ? { database: databases[7] } : {}),
       // END PAPER STARTED PREVIEW DATABASE
+      ...(cohort.id === 'execution-commit' ? { database: databases[7] } : {}),
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
     })),
   });
@@ -4934,11 +4983,16 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER STARTED SOURCE RESET_AFTER
   // BEGIN PAPER STARTED RISK RESET_AFTER
   await verifyPaperStartedRiskStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutionCommitStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
   // END PAPER STARTED RISK RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
   // BEGIN PAPER EXECUTION START POPULATED_RESET
   const startedBeforeReset = connect(dbUrl(databases[7]));
+  assert.ok(
+    (await startedBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.execution_commit'))
+      .rows[0].n > 0,
+  );
   assert.ok(
     (await startedBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0]
       .n > 0,
@@ -4963,6 +5017,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER STARTED SOURCE POPULATED_RESET
   // BEGIN PAPER STARTED RISK POPULATED_RESET
   await verifyPaperStartedRiskStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutionCommitStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  for (const table of ['execution_commit', 'execution_liquidity'])
+    assert.equal(
+      (await startedAfterReset.query('SELECT count(*)::int n FROM ctp_paper.' + table)).rows[0].n,
+      0,
+    );
   // END PAPER STARTED RISK POPULATED_RESET
   await startedAfterReset.end();
   pools.delete(startedAfterReset);
@@ -5093,6 +5153,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     // BEGIN PAPER STARTED RISK FLAGS
     paperStartedRiskUpgradePreserved: true,
     paperStartedRiskResetValidated: true,
+    paperExecutionCommitUpgradePreserved: true,
+    paperExecutionCommitResetValidated: true,
     // END PAPER STARTED RISK FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
@@ -5147,6 +5209,7 @@ async function resetDatabaseProof(fresh) {
   // END PAPER STARTED SOURCE RESET_FRESH
   // BEGIN PAPER STARTED RISK RESET_FRESH
   await verifyPaperStartedRiskStorage(reset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutionCommitStorage(reset, { ownership: 'STORAGE_ONLY' });
   // END PAPER STARTED RISK RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
   for (const table of [
