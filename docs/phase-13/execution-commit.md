@@ -1,5 +1,11 @@
 # Pristine PAPER execution transaction
 
+## Verified code checkpoint — 8 November 2026
+
+Code `e36947f34b4c6ae9a64b75379266b5013bca5871` passes all thirteen frozen local commands (1,012 unchanged inputs, 6,139 unit / 2,337 Paper / 41 HTTP, twelve clean deployments, audit zero), independent [source Platform 42412274008](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42412274008) / [CodeQL 42412274026](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42412274026) and [PR Platform 42412278931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42412278931) / [CodeQL 42412278938](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42412278938). Both events verify 1,492 native cases / 49 files / 24 owners, populated 64→65→66 upgrade, redeploy/reset and all twelve artifact digests/windows. Source/PR native aggregate times are 398.441 / 365.739 seconds under the retained 480-second cap. All old unit/native identities, published migration bytes and required protection checks remain; default/branch/PR open CodeQL alerts are zero. Full details and historical RED→GREEN evidence are in [verification](verification.md).
+
+This checkpoint covers the first pristine transaction described below. It does not enable public financial dispatch or complete PHASE 13. Final documentation HEAD CI, protected PR68 publication and own-main verification remain separate requirements; unmerged migration65/66 candidates are not published main migrations. Earlier local/pending statements retain their checkpoint context. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; remaining limitations below continue to apply.
+
 ## Candidate scope and starting point
 
 This increment starts from protected main `b50a9f718c0c3e3a2ad28d23373135d3a75fffa4`, the accepted [PR67](https://github.com/dendenden-boop/tradeGPTbot/pull/67) result. Its own [Platform 42178568680](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568680) and [CodeQL 42178568563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568563) pass. That acceptance covers 6,044 unit / 41 HTTP per OS, 1,432 PostgreSQL cases / 46 files / 23 owner suites, all 64 migrations, twelve clean deployments and audit zero. The new source requires its own acceptance. All thirteen unchanged-main baseline commands pass again on 980 frozen files before this work.
