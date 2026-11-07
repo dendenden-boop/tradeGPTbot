@@ -28,11 +28,14 @@ function fixture() {
       cohorts,
       roleScopedManifest: scopedMainManifestHash,
       elapsedMs: 10000,
-      completed: cohorts.map((c, i) => ({
-        id: c.id,
-        startMs: i * 1000,
-        settledMs: (i + 1) * 1000,
-      })),
+      completed: cohorts.map((c, index) => {
+        const i = c.id === 'registry' ? 0 : c.id === 'main' ? 1 : index;
+        return {
+          id: c.id,
+          startMs: i * 1000,
+          settledMs: (i + 1) * 1000,
+        };
+      }),
     },
     native: { testResults: cohorts.flatMap((c) => c.files).map((name) => ({ name })) },
   };
@@ -52,6 +55,7 @@ it.each([
   'dropped-file',
   'third-child',
   'early-start',
+  'early-main',
 ])(
   'rejects %s role-scoped proof instead of crediting an incomplete or unsafe native run',
   (kind) => {
@@ -71,6 +75,7 @@ it.each([
       timing('native-admission').startMs = 2000;
     }
     if (kind === 'early-start') timing('execution-start').startMs = 3500;
+    if (kind === 'early-main') timing('main').startMs = 0;
     expect(() => requireRoleScopedEvidence(e.cohorts, e.native)).toThrow();
   },
 );

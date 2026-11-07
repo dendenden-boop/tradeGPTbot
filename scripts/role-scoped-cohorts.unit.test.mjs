@@ -52,6 +52,35 @@ it('partitions all original native files exactly once, retaining the full serial
   expect(plan.find((c) => c.id === 'main-scoped').after).toEqual(['main', 'registry']);
   expect(plan.find((c) => c.id === 'execution-commit').after).toContain('main-scoped');
 });
+it('isolates the 300-instrument publication cohort before starting main database workload', async () => {
+  const { plan } = await fixture();
+  expect(plan.find((c) => c.id === 'main').after).toEqual(['registry']);
+});
+
+it('waits for physical registry close before launching main without resetting the shared deadline', async () => {
+  const { dir, jobs } = await fixture();
+  for (const job of jobs) job.args[3] = job.id === 'registry' ? 'controlled' : 'normal';
+  const controller = new AbortController();
+  const pending = runRoleScopedCohorts(jobs, { timeoutMs: 5000, signal: controller.signal }).then(
+    (value) => ({ value }),
+    (error) => ({ error }),
+  );
+  try {
+    await waitFile(dir, 'registry.started', pending);
+    await writeFile(path.join(dir, 'registry.release'), 'release');
+    const result = await pending;
+    expect(result.error).toBeUndefined();
+    const main = result.value.completed.find((c) => c.id === 'main');
+    const registry = result.value.completed.find((c) => c.id === 'registry');
+    expect(main.startMs).toBeGreaterThanOrEqual(registry.settledMs);
+    expect(result.value.timeoutMs).toBe(5000);
+    expect(result.value.completed).toHaveLength(9);
+  } finally {
+    controller.abort();
+    await pending;
+  }
+});
+
 it('reuses only a closed scoped slot while preserving the cluster barrier, two-process cap and serial financial writer', async () => {
   const { dir, jobs } = await fixture(),
     controller = new AbortController();
