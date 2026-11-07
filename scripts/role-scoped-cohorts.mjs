@@ -24,7 +24,10 @@ export async function planRoleScopedCohorts(plan) {
   const scope = new Set(scopedMainFiles),
     original = plan[0].files;
   assert(scopedMainFiles.every((f) => original.includes(f)));
-  const first = { ...plan[0], files: original.filter((f) => !scope.has(f)) };
+  // Exercise the unchanged 300-instrument publisher without competing native
+  // workload on this PostgreSQL server. This strengthens the original barrier;
+  // its bounded SQL operations and the aggregate deadline stay unchanged.
+  const first = { ...plan[0], after: ['registry'], files: original.filter((f) => !scope.has(f)) };
   assert(first.files.length > 0);
   const late = {
     id: 'main-scoped',
@@ -47,7 +50,7 @@ export async function planRoleScopedCohorts(plan) {
 }
 
 export const roleScopedShape = [
-  { id: 'main', parallel: true },
+  { id: 'main', parallel: true, after: ['registry'] },
   { id: 'registry', parallel: true },
   { id: 'main-scoped', parallel: true, after: ['main', 'registry'] },
   { id: 'admission', parallel: true, after: ['main', 'registry'] },

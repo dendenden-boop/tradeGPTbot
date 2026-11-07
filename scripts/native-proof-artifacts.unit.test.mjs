@@ -68,11 +68,14 @@ function evidence() {
                   ? 'ctp_p2_start_aabbcc112233'
                   : 'ctp_p2_fresh_aabbcc112233',
       })),
-      completed: scopedPlan.map(({ id }, index) => ({
-        id,
-        startMs: index * 1000,
-        settledMs: (index + 1) * 1000,
-      })),
+      completed: scopedPlan.map(({ id }, index) => {
+        const order = id === 'registry' ? 0 : id === 'main' ? 1 : index;
+        return {
+          id,
+          startMs: order * 1000,
+          settledMs: (order + 1) * 1000,
+        };
+      }),
     },
   };
 }
