@@ -3,6 +3,13 @@ import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { beforeRoleScopedNative, roleScopedReview } from './role-scoped-legacy.mjs';
 
+function insertUnreviewedLine(source) {
+  const newline = source.indexOf('\n');
+  if (newline < 0) throw new Error('MUTATION_LINE_BOUNDARY_REQUIRED');
+  const boundary = newline + 1;
+  return source.slice(0, boundary) + '// unreviewed\n' + source.slice(boundary);
+}
+
 it.each([
   ['first\nsecond\nthird\n', 'first\n// unreviewed\nsecond\nthird\n'],
   ['\nnext\n', '\n// unreviewed\nnext\n'],
@@ -25,7 +32,7 @@ it.each(Object.entries(roleScopedReview))(
     expect(createHash('sha256').update(old).digest('hex')).toBe(review.predecessor);
     expect(beforeRoleScopedNative(file, old)).toBe(old);
     for (const patch of review.patches) {
-      const changed = current.replace(patch.next, patch.next.replace('\n', '\n// unreviewed\n'));
+      const changed = current.replace(patch.next, insertUnreviewedLine(patch.next));
       expect(() => beforeRoleScopedNative(file, changed)).toThrow('ROLE_SCOPED_REVIEW_REQUIRED');
     }
   },

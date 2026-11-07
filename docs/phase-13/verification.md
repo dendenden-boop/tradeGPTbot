@@ -1,5 +1,15 @@
 # PHASE 13 verification
 
+## CodeQL history-fixture repair — 7 November 2026
+
+Frozen `987abe644ce193020c1cd1cfb5336797aa804001` passes all thirteen local commands on 1,008 unchanged inputs: 6,118 unit / 2,337 Paper / 41 HTTP, twelve clean deployments and audit zero. All preceding 6,044 unit cases remain passed. Its [source Platform 42352737872](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42352737872), [PR Platform 42352742882](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42352742882), [source CodeQL 42352737842](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42352737842) and [PR CodeQL 42352742879](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42352742879) finish GREEN. Native merged reports contain 1,492 passed cases / 49 files; both 24-suite owner jobs, populated migration66 upgrade and reset pass. Source/PR native aggregate durations are 307.117 / 384.983 seconds under the unchanged 480-second cap. Twelve ZIP digests and producer windows are retained. These GREEN workflow conclusions alone do not grant acceptance.
+
+Independent API review finds **open CodeQL alert13** at the exact branch HEAD and tested PR merge SHA. Global default-branch alerts are empty, but branch/PR alerts are not; that distinction remains mandatory. The alert points to deliberate first-newline replacement in `role-scoped-history.unit.test.mjs`, not a production sanitizer. Tests-first `a88d459` records three RED contracts for the intended single-boundary insertion and missing-boundary rejection. The repair explicitly finds the first newline and inserts the mutation by slicing, preserving subsequent lines and all original history assertions. All 36 targeted new/retained contracts pass. No alert dismissal, query suppression, source exclusion, native assertion, budget, workflow, published migration or financial runtime change is used.
+
+Full repaired-HEAD frozen regression, independent source/PR CI and zero current branch/PR alerts remain required. Metadata/log export retries are evidence-download operations, not CI reruns: decoded raw native job logs are retained separately; any labelled two-job view is not represented as complete workflow stdout.
+
+**HOLD — PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Protected main stays `b50a9f718c0c3e3a2ad28d23373135d3a75fffa4`; PR68 remains unmerged. Financial PAPER/LIVE dispatch and positive native collateral credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange tests, crash/backup restore and production soak are not claimed.
+
 ## Native database-name contract repair — 7 November 2026
 
 Frozen `94c498c960178d4a7415140f95b299bf6600a132` passes all thirteen local checks on 1,007 unchanged files: 6,109 unit / 2,337 Paper / 41 HTTP, twelve clean deployments and audit zero. Every preceding 6,044 unit case remains passed. Both operating systems, both CodeQL workflows, Auth, Docker smoke and all 24 migration-owner suites pass in its independent source and PR events. All 64 published migration byte hashes and all runtime/package sources remain unchanged by the scheduling repair.
