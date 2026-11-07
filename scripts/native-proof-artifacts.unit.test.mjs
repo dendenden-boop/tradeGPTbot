@@ -8,6 +8,14 @@ import { expect, it } from 'vitest';
 import { ownerReports, requireNativeTestArtifacts } from './native-proof-artifacts.mjs';
 import { createNativeWindow, remainingNativeBudget } from './native-proof-window.mjs';
 import { run } from './docker-test-utils.mjs';
+import { discoverDatabaseFiles, planDatabaseCohorts } from './database-cohorts.mjs';
+import { planRoleScopedCohorts } from './role-scoped-cohorts.mjs';
+import { scopedMainManifestHash } from './native-main-scopes.mjs';
+
+const scopedPlan = await planRoleScopedCohorts(
+  planDatabaseCohorts(await discoverDatabaseFiles(), { executionStartOverlap: true }),
+);
+const scopedNativeFiles = scopedPlan.flatMap((c) => c.files);
 
 const identity = { runId: '123', attempt: '1', sha: 'a'.repeat(40) };
 const window = createNativeWindow(identity, 1800000000000);
@@ -21,7 +29,7 @@ function report(total, files = 1) {
     startTime: window.startedAtMs + 1000,
     testResults: Array.from({ length: files }, (_, index) => ({
       status: 'passed',
-      name: `file-${index}`,
+      name: files === 49 ? scopedNativeFiles[index] : `file-${index}`,
       startTime: window.startedAtMs + 1000,
       endTime: window.startedAtMs + 2000.25,
       assertionResults: Array.from(
@@ -43,16 +51,24 @@ function evidence() {
       elapsedMs: 400000,
       tests: 1492,
       files: 49,
-      completed: [
-        'main',
-        'registry',
-        'admission',
-        'native-admission',
-        'execution-start',
-        'execution-preview',
-        'execution-commit',
-        'roles',
-      ].map((id, index) => ({
+      roleScopedManifest: scopedMainManifestHash,
+      cohorts: scopedPlan.map((c) => ({
+        ...c,
+        files: [...c.files],
+        ...(c.after ? { after: [...c.after] } : {}),
+        ...(c.afterAny ? { afterAny: [...c.afterAny] } : {}),
+        database:
+          c.id === 'main-scoped'
+            ? 'ctp_p2_fresh_aabbcc11223300'
+            : c.id === 'registry'
+              ? 'ctp_p2_registry_aabbcc112233'
+              : c.id === 'admission'
+                ? 'ctp_p2_admission_aabbcc112233'
+                : ['execution-start', 'execution-preview', 'execution-commit'].includes(c.id)
+                  ? 'ctp_p2_start_aabbcc112233'
+                  : 'ctp_p2_fresh_aabbcc112233',
+      })),
+      completed: scopedPlan.map(({ id }, index) => ({
         id,
         startMs: index * 1000,
         settledMs: (index + 1) * 1000,

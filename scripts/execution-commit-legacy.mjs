@@ -1,4 +1,7 @@
 // Test-only exact reconstruction of accepted main b50a9f718c0c3e3a2ad28d23373135d3a75fffa4. No runtime use.
+// BEGIN ROLE SCOPED NATIVE IMPORT
+import { beforeRoleScopedNative } from './role-scoped-legacy.mjs';
+// END ROLE SCOPED NATIVE IMPORT
 import { createHash } from 'node:crypto';
 const patches = {
   'scripts/test-database.mjs': {
@@ -149,6 +152,14 @@ const patches = {
 };
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 export function beforeExecutionCommit(file, source) {
+  // BEGIN ROLE SCOPED NATIVE RESTORE
+  try {
+    source = beforeRoleScopedNative(file, source);
+  } catch {
+    // Preserve this existing review boundary's fail-closed error contract.
+    throw Error('PAPER_EXECUTION_COMMIT_REVIEW_REQUIRED');
+  }
+  // END ROLE SCOPED NATIVE RESTORE
   const entry = patches[file];
   if (!entry) return source;
   const present = entry.patches.filter((p) => source.includes(p.next));

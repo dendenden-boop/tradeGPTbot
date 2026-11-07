@@ -1,6 +1,10 @@
 // BEGIN PAPER STARTED PREVIEW IMPORT
 import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 // END PAPER STARTED PREVIEW IMPORT
+// BEGIN ROLE SCOPED NATIVE IMPORT
+import { planRoleScopedCohorts, runRoleScopedCohorts } from './role-scoped-cohorts.mjs';
+import { verifyScopedMainFiles } from './native-main-scopes.mjs';
+// END ROLE SCOPED NATIVE IMPORT
 import assert from 'node:assert/strict';
 import {
   verifyPaperExecutionCommitStorage,
@@ -44,7 +48,8 @@ import { run, report, workspace } from './docker-test-utils.mjs';
 import {
   discoverDatabaseFiles,
   planDatabaseCohorts,
-  runDatabaseCohorts,
+  // BEGIN ROLE SCOPED NATIVE RUNNER_IMPORT
+  // END ROLE SCOPED NATIVE RUNNER_IMPORT
   mergeDatabaseReports,
   verifyAdmissionParallelFiles,
   // BEGIN PAPER EXECUTION START OVERLAP_IMPORT
@@ -294,6 +299,9 @@ const databases = [
   // BEGIN PAPER EXECUTION START DB_NAME
   `ctp_p2_execution_start_cohort_${suffix}`,
   // END PAPER EXECUTION START DB_NAME
+  // BEGIN ROLE SCOPED NATIVE DB_NAME
+  `ctp_p2_fresh_${suffix}00`,
+  // END ROLE SCOPED NATIVE DB_NAME
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
@@ -4673,6 +4681,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // legacy cohort. Cluster-wide role mutation tests run only after both settle.
   await migrate(databases[5]);
   await migrate(databases[6]);
+  // BEGIN ROLE SCOPED NATIVE MIGRATE
+  await migrate(databases[8]);
+  // END ROLE SCOPED NATIVE MIGRATE
   // BEGIN PAPER EXECUTION START OVERLAP_SETUP
   await migrate(databases[7]);
   await verifyExecutionStartParallelFiles();
@@ -4687,9 +4698,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await verifyStartedPreviewParallelFiles();
   // END PAPER STARTED PREVIEW OVERLAP
   // BEGIN PAPER EXECUTION START PLAN
-  const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
+  // BEGIN ROLE SCOPED NATIVE PLAN
+  const originalCohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
     executionStartOverlap: true,
   });
+  const cohortPlan = await planRoleScopedCohorts(originalCohortPlan);
+  // END ROLE SCOPED NATIVE PLAN
   // END PAPER EXECUTION START PLAN
   if (cohortPlan.some(({ id }) => id === 'native-admission')) await verifyAdmissionParallelFiles();
   const nativeEnv = {
@@ -4739,7 +4753,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   for (const [key, value] of Object.entries(admissionEnv))
     if (key.startsWith('DATABASE_')) assert.equal(new URL(value).pathname, '/' + databases[6]);
   const cohortReports = cohortPlan.map(
-    ({ id }) => new URL('../test-results/database-' + id + '-tests.json', import.meta.url),
+    // BEGIN ROLE SCOPED NATIVE RAW_REPORTS
+    ({ id }) =>
+      new URL(
+        '../test-results/database-' + (id === 'main' ? 'main-mutators' : id) + '-tests.json',
+        import.meta.url,
+      ),
+    // END ROLE SCOPED NATIVE RAW_REPORTS
   );
   // BEGIN PAPER EXECUTION START COHORT_ENV
   const executionStartEnv = paperAdmissionEnvironment(databases[7]);
@@ -4747,9 +4767,22 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     if (key.startsWith('DATABASE_')) assert.equal(new URL(value).pathname, '/' + databases[7]);
   assert.notEqual(databases[7], databases[6]);
   // END PAPER EXECUTION START COHORT_ENV
+  // BEGIN ROLE SCOPED NATIVE ENV
+  const scopedEnv = { ...nativeEnv };
+  for (const [key, value] of Object.entries(scopedEnv))
+    if (key.startsWith('DATABASE_')) {
+      const url = new URL(value);
+      assert.equal(url.pathname, '/' + databases[0]);
+      url.pathname = '/' + databases[8];
+      scopedEnv[key] = url.href;
+    }
+  // END ROLE SCOPED NATIVE ENV
   // Remove only known output files; a prior invocation cannot supply acceptance.
   for (const output of [
     ...cohortReports,
+    // BEGIN ROLE SCOPED NATIVE REMOVE_COMPAT
+    new URL('../test-results/database-main-tests.json', import.meta.url),
+    // END ROLE SCOPED NATIVE REMOVE_COMPAT
     new URL('../test-results/database-tests.json', import.meta.url),
     new URL('../test-results/database-cohorts.json', import.meta.url),
   ]) {
@@ -4757,7 +4790,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       if (error.code !== 'ENOENT') throw error;
     });
   }
-  const cohortRun = await runDatabaseCohorts(
+  // BEGIN ROLE SCOPED NATIVE RUN
+  const cohortRun = await runRoleScopedCohorts(
+    // END ROLE SCOPED NATIVE RUN
     cohortPlan.map((cohort, index) => ({
       ...cohort,
       binary: process.execPath,
@@ -4784,6 +4819,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // retains both mutator barriers, two children and final roles isolation.
       ...(cohort.id === 'execution-preview' ? { env: executionStartEnv } : {}),
       // END PAPER STARTED PREVIEW ENV
+      // BEGIN ROLE SCOPED NATIVE COHORT_ENV
+      ...(cohort.id === 'main-scoped' ? { env: scopedEnv } : {}),
+      // END ROLE SCOPED NATIVE COHORT_ENV
       ...(cohort.id === 'execution-commit' ? { env: executionStartEnv } : {}),
     })),
     {
@@ -4800,9 +4838,28 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       cohortReports.map(async (output) => JSON.parse(await readFile(output, 'utf8'))),
     ),
   );
+  // BEGIN ROLE SCOPED NATIVE ORIGINAL_MAIN_REPORT
+  // Retain both actual Vitest split reports and an explicitly derived original-main view.
+  const originalMainPlan = cohortPlan.filter((c) => ['main', 'main-scoped'].includes(c.id));
+  const originalMainReports = await Promise.all(
+    originalMainPlan.map(async (c) =>
+      JSON.parse(await readFile(cohortReports[cohortPlan.indexOf(c)], 'utf8')),
+    ),
+  );
+  await report('database-main-tests', {
+    ...mergeDatabaseReports(originalMainPlan, originalMainReports),
+    provenance: {
+      kind: 'MERGED_ORIGINAL_MAIN_COVERAGE',
+      rawReports: ['database-main-mutators-tests.json', 'database-main-scoped-tests.json'],
+    },
+  });
+  // END ROLE SCOPED NATIVE ORIGINAL_MAIN_REPORT
   await report('database-tests', tests);
   await report('database-cohorts', {
     status: 'PASS',
+    // BEGIN ROLE SCOPED NATIVE MANIFEST
+    roleScopedManifest: (await verifyScopedMainFiles()).manifest,
+    // END ROLE SCOPED NATIVE MANIFEST
     ...cohortRun,
     files: cohortPlan.flatMap((cohort) => cohort.files).length,
     tests: tests.numPassedTests,
@@ -4821,6 +4878,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // BEGIN PAPER STARTED PREVIEW DATABASE
       ...(cohort.id === 'execution-preview' ? { database: databases[7] } : {}),
       // END PAPER STARTED PREVIEW DATABASE
+      // BEGIN ROLE SCOPED NATIVE COHORT_DATABASE
+      ...(cohort.id === 'main-scoped' ? { database: databases[8] } : {}),
+      // END ROLE SCOPED NATIVE COHORT_DATABASE
       ...(cohort.id === 'execution-commit' ? { database: databases[7] } : {}),
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
     })),

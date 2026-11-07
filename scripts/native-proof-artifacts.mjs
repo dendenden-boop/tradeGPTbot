@@ -1,4 +1,7 @@
 // Private CI evidence validation; never a runtime authority or financial grant.
+// BEGIN ROLE SCOPED NATIVE IMPORT
+import { requireRoleScopedEvidence } from './role-scoped-evidence.mjs';
+// END ROLE SCOPED NATIVE IMPORT
 export const ownerReports = Object.freeze({
   'risk-certification': 14,
   'risk-admission': 95,
@@ -116,6 +119,13 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   for (const [name, minimum] of Object.entries(ownerReports))
     passed(owners[name], minimum, ownerDeadlines[name]);
   passed(native, 1400, 480000);
+  // BEGIN ROLE SCOPED NATIVE EVIDENCE
+  try {
+    requireRoleScopedEvidence(cohorts, native);
+  } catch {
+    fail();
+  }
+  // END ROLE SCOPED NATIVE EVIDENCE
   // BEGIN PAPER EXECUTION START EVIDENCE
   if (
     native.numPassedTests < 1409 ||
@@ -196,6 +206,9 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
       // BEGIN PAPER STARTED PREVIEW LEGACY_PLAN
       .filter((c) => c.id !== 'execution-preview')
       // END PAPER STARTED PREVIEW LEGACY_PLAN
+      // BEGIN ROLE SCOPED NATIVE LEGACY_PLAN
+      .filter((c) => c.id !== 'main-scoped')
+      // END ROLE SCOPED NATIVE LEGACY_PLAN
       .filter((c) => c.id !== 'execution-commit')
       // BEGIN PAPER EXECUTION START LEGACY_PLAN
       .filter((c) => c.id !== 'execution-start')
