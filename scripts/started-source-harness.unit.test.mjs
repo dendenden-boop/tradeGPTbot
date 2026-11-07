@@ -17,6 +17,12 @@ it('started-source uses the PAPER tail while the original START retains the firs
   const files = (await cohorts.discoverDatabaseFiles()).filter(
     (file) => file !== 'packages/database/test/paper-started-risk.integration.test.ts',
   );
+  // BEGIN PAPER EXECUTION COMMIT FIXTURE
+  const writerIndex = files.indexOf(
+    'packages/database/test/paper-execution-commit.integration.test.ts',
+  );
+  if (writerIndex >= 0) files.splice(writerIndex, 1);
+  // END PAPER EXECUTION COMMIT FIXTURE
   // BEGIN PAPER STARTED PREVIEW FIXTURE
   const previewIndex = files.indexOf(
     'packages/database/test/paper-started-preview.integration.test.ts',

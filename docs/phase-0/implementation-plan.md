@@ -1,5 +1,15 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Pristine execution transaction candidate — 6 November 2026
+
+Starting protected main **b50a9f718c0c3e3a2ad28d23373135d3a75fffa4** is accepted through [PR67](https://github.com/dendenden-boop/tradeGPTbot/pull/67), own [Platform 42178568680](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568680) and [CodeQL 42178568563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568563). All eight Platform jobs, 6,044 unit / 41 HTTP per OS, 1,432 PostgreSQL / 46 files / 23 owners, 64 migrations, twelve clean deployments, audit zero and strict five-context protection pass. Main native elapsed time is 377.528 seconds under the unchanged 480-second cap. The prior candidate checkpoints below retain their history. All thirteen baseline commands pass again on 980 unchanged starting-main files.
+
+The [first pristine financial writer](../phase-13/execution-commit.md) adds private independent SQL arithmetic and one bounded actual-START transaction for execution, one-use liquidity, fills/fees/ledger, Portfolio, order and collateral progress. The request is selector-only; current Risk and final evidence leases remain mandatory. Exact replay precedes new admission, UNKNOWN retains collateral, and uncertain COMMIT requires explicit readonly reconciliation. Published migrations 1–64 stay immutable; 65–66 are additive candidates. Financial PAPER/LIVE dispatch stays disabled.
+
+Tests-first **ca69349** records seven missing-writer native RED cases. Current local diagnostics pass 32 model / 15 accounting / 13 writer PostgreSQL contracts and 23 writer unit contracts. The initial writer diagnostics expose and correct SQL precedence/alias errors and noncanonical average-price persistence; all assertions remain. These diagnostics do not replace the full non-BYPASSRLS owner, populated upgrade/reset, Linux native, Ubuntu/Windows/Docker/CodeQL CI. New mandatory harness proofs and full current-source acceptance remain pending.
+
+**Candidate HOLD; PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The writer admits only the first pristine BUY transition with one issuance/candidate; continued/history/multiple-order/SELL/exit execution and public composition remain outstanding. LIVE and financial PAPER dispatch and positive native collateral credit remain disabled; collateral is conservative; native AMEND remains Binance Spot TESTNET only. Real private exchange tests, crash/backup restore and production soak are not claimed.
+
 ## Verified known-START execution preview code checkpoint — 5 November 2026
 
 Starting protected main **faff84f3d406b9f8ed16bfe3b9ef83ed7fcd5f23** is the accepted PR63 result, with its own [Platform 41798150077](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798150077) / [CodeQL 41798149979](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/41798149979). All published migrations 1–64 remain immutable; this increment adds no SQL, migration or role. Earlier candidate statements below retain their historical context.

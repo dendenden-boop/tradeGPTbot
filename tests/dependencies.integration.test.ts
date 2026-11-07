@@ -6,6 +6,7 @@ import { loadConfig } from '@ctp/config';
 import { createLogger } from '@ctp/logger';
 import { buildApp } from '../apps/api/src/app.js';
 import { createHealthService } from '../apps/api/src/health.js';
+import { createDependencyLifecycle } from '../scripts/dependency-lifecycle.mjs';
 
 const execute = promisify(execFile);
 const project = process.env['CTP_TEST_PROJECT'];
@@ -92,7 +93,16 @@ describe('real PostgreSQL and Redis lifecycle', () => {
 
   for (const dependency of ['postgres', 'redis']) {
     it(`fails closed while ${dependency} is stopped and recovers after restart`, async () => {
-      await compose(['stop', '--timeout', '1', dependency]);
+      const lifecycle = createDependencyLifecycle({
+        project: testProject,
+        service: dependency,
+        compose,
+        async docker(args) {
+          const { stdout } = await execute('docker', args, { timeout: 60_000, windowsHide: true });
+          return stdout.trim();
+        },
+      });
+      await lifecycle.stop();
       try {
         await waitForStatus(503);
         const live = await app.inject({ method: 'GET', url: '/health/live' });
@@ -104,7 +114,7 @@ describe('real PostgreSQL and Redis lifecycle', () => {
         }
       } finally {
         // Poll API readiness below, including service startup in the recovery window.
-        await compose(['start', dependency]);
+        await lifecycle.start();
       }
       const publishedPort = await execute(
         'docker',
