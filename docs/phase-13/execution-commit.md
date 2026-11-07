@@ -30,6 +30,8 @@ Native trade identity includes exact market scope, instrument, identity scope an
 
 ## Explicit remaining limitations and gate
 
+Native risk fixture preparation also keeps ready-source authority after three fully drained parts: registry publication, Portfolio→DRAFT and policies. Loss/market/observation remain after that barrier. This is test-only preparation against current provisioned public metadata, with no grant or dispatch before completion, no removed operation, no cached evidence and no changed deadline. The exact prior helper and every original native case remain covered; independent Linux CI still decides acceptance.
+
 The admission fixture follow-up changes test setup dependencies only: one shared funding operation precedes both draft creation and market timestamping/publication, while independent policy setup may overlap it. All three original lanes drain before bootstrap or rejection, with no removed native call, cached result or changed IO deadline. Exact predecessor reconstruction and all 69 original local PostgreSQL cases pass; the Windows diagnostic does not replace the Linux owner or full CI gate.
 
 The registry publication isolation follow-up is a test-only scheduling candidate: the unchanged 300-instrument / 180-refresh registry cohort must physically settle before the main workload starts on the same PostgreSQL server. All later cluster barriers, maximum two actual children, serial financial writer/final roles, SQL timeouts and aggregate/owner budgets remain. It addresses competing test workload after a retained publication statement-timeout failure; the exact cause of that latency spike is not established. Full independent CI must verify the repaired schedule before acceptance.

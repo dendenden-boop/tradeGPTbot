@@ -26,7 +26,7 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
     [nativeAdmission, '55a9b37c8da4565bc08d9c64aff7aaadc77e4d7a46e2ad48b6a988e7dd0b8c7c'],
     [
       'packages/database/test/fixtures/risk-certification.ts',
-      '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c',
+      '7f6f2037b5afc4e5e8e74a8390091fc04511ae2777fbda417f9b84d0268942f9',
     ],
     [admission, '9e27194b1d8bf053090f6621098a663d03aa06c55b074133d15618a3ea566c87'],
     [

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { expect, it, vi } from 'vitest';
@@ -9,6 +9,7 @@ import { bindingSchema as orderBindingSchema } from '@ctp/order-engine';
 import { parseDecimal } from '@ctp/exchange-core';
 import { riskLimitsSchema, riskNativeObservationSchema } from '@ctp/risk-engine';
 import { marketSnapshotPublicationSchema } from '@ctp/market-data';
+import { beforeRiskSeedSetup } from './risk-seed-setup-legacy.mjs';
 
 const file = 'packages/database/test/fixtures/risk-certification.ts';
 const source = readFileSync(file, 'utf8');
@@ -23,6 +24,36 @@ if (!text.startsWith('export async function seedRiskCertification('))
 const body = ts.transpileModule(text.slice('export '.length), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
+
+it('retains the complete prior native seed and scheduler/review source bytes beneath reviewed preparation changes', () => {
+  for (const [path, expected] of [
+    [file, '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c'],
+    [
+      'scripts/database-cohorts.mjs',
+      'eb202513d8d4f50ca9484bffa71e0ef6f9415914342616fc617ed646e4ac9b02',
+    ],
+    [
+      'scripts/native-main-scopes.mjs',
+      'de2c7a134a6bd29d3c3e7f5fd539462ece16ae976f7af37be05af9a7a5307193',
+    ],
+  ]) {
+    const current = readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
+    const previous = beforeRiskSeedSetup(path, current);
+    expect(createHash('sha256').update(previous).digest('hex')).toBe(expected);
+    expect(beforeRiskSeedSetup(path, previous)).toBe(previous);
+  }
+});
+
+it('rejects changed or duplicated native seed review blocks without hiding SQL or assertion changes', () => {
+  const current = source.replaceAll('\r\n', '\n');
+  const block = current.match(
+    /^ {2}\/\/ BEGIN NATIVE RISK SEED LANES\n[\s\S]*?^ {2}\/\/ END NATIVE RISK SEED LANES\n/mu,
+  )[0];
+  const boundary = block.indexOf('\n') + 1;
+  const changed = block.slice(0, boundary) + '  // unreviewed\n' + block.slice(boundary);
+  for (const candidate of [current + block, current.replace(block, changed)])
+    expect(() => beforeRiskSeedSetup(file, candidate)).toThrow('RISK_SEED_REVIEW_REQUIRED');
+});
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 function gate() {
   let resolve, reject;

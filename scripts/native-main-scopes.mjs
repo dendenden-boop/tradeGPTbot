@@ -43,7 +43,7 @@ export const scopedMainSources = Object.freeze({
   'packages/database/test/fixtures/registry-commit-proxy.ts':
     'a64aefc8526cea37cc6f218c407ee730d82e58f504d8a111888d03ca0a915af4',
   'packages/database/test/fixtures/risk-certification.ts':
-    '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c',
+    '7f6f2037b5afc4e5e8e74a8390091fc04511ae2777fbda417f9b84d0268942f9',
   'packages/database/test/ledger.integration.test.ts':
     'bab8183ce7bc359fcde2a692ff809e572b21753b42e3802df589f0dbeb52a2eb',
   'packages/database/test/market-data.integration.test.ts':

@@ -129,70 +129,90 @@ export async function seedRiskCertification(ports: FixturePorts, missing?: 'OBSE
       Buffer.alloc(32, 1),
     ],
   );
-  const registry = await createPostgresInstrumentRegistry({
-    ...ports.registryOptions,
-    scope: i.scope,
-    instrumentIds: [i.id],
-  });
-  try {
-    if (ports.nativeProfile) {
-      // Native public transport has already durably published this exact immutable version.
-      expect(registry.get(i.scope, i.id, Date.now())).toEqual({ ok: true, value: f.risk.record });
-    } else expect((await registry.putBatch([f.risk.record], Date.now(), io())).ok).toBe(true);
-  } finally {
-    await registry.close();
-  }
-  await portfolio.apply(
-    { ...binding(), ...identities },
-    snapshot({ id: randomUUID(), timestamp: f.now }),
-    0,
-    io(),
-  );
-  const { clientOrderId: omitted, ...order } = f.risk.order;
-  void omitted;
-  const created = await orders.create(
-    orderBindingSchema.parse(b),
-    {
-      key: randomUUID(),
-      dbInstrumentId: f.key.dbInstrumentId,
-      dbRuleId: f.key.dbRuleId,
-      positionSide: 'NET',
-      bucket: 'CROSS',
-      order,
-    },
-    io(),
-  );
+  // BEGIN NATIVE RISK SEED LANES
+  // All public metadata rows already exist. These prepare independent authorities;
+  // no fixture source or later evidence is returned until all three physically settle.
+  const setup = await Promise.allSettled([
+    (async () => {
+      const registry = await createPostgresInstrumentRegistry({
+        ...ports.registryOptions,
+        scope: i.scope,
+        instrumentIds: [i.id],
+      });
+      try {
+        if (ports.nativeProfile) {
+          // Native public transport has already durably published this exact immutable version.
+          expect(registry.get(i.scope, i.id, Date.now())).toEqual({
+            ok: true,
+            value: f.risk.record,
+          });
+        } else expect((await registry.putBatch([f.risk.record], Date.now(), io())).ok).toBe(true);
+      } finally {
+        await registry.close();
+      }
+    })(),
+    (async () => {
+      await portfolio.apply(
+        { ...binding(), ...identities },
+        snapshot({ id: randomUUID(), timestamp: f.now }),
+        0,
+        io(),
+      );
+      const { clientOrderId: omitted, ...order } = f.risk.order;
+      void omitted;
+      const created = await orders.create(
+        orderBindingSchema.parse(b),
+        {
+          key: randomUUID(),
+          dbInstrumentId: f.key.dbInstrumentId,
+          dbRuleId: f.key.dbRuleId,
+          positionSide: 'NET',
+          bucket: 'CROSS',
+          order,
+        },
+        io(),
+      );
+      return created;
+    })(),
+    (async () => {
+      const p =
+        (
+          await admin.query<{ version: string }>(
+            "SELECT version::text FROM ctp_risk.policy_head WHERE scope='PLATFORM' AND mode='TESTNET'",
+          )
+        ).rows[0]?.version ?? '0';
+      await platform.update(
+        {
+          scope: { kind: 'PLATFORM' },
+          mode: 'TESTNET',
+          eventId: randomUUID(),
+          expectedVersion: p,
+          reason: 'ISOLATED_CERTIFICATION_FIXTURE',
+          limits: riskLimitsSchema.parse(f.risk.platform),
+        },
+        io(),
+      );
+      await user.update(
+        {
+          scope: { kind: 'USER', tenantId: b.tenantId },
+          mode: 'TESTNET',
+          eventId: randomUUID(),
+          expectedVersion: '0',
+          reason: 'ISOLATED_CERTIFICATION_FIXTURE',
+          limits: riskLimitsSchema.parse(f.risk.user),
+        },
+        io(),
+      );
+    })(),
+  ] as const);
+  if (setup[0].status === 'rejected') throw setup[0].reason;
+  if (setup[1].status === 'rejected') throw setup[1].reason;
+  if (setup[2].status === 'rejected') throw setup[2].reason;
+  const created = setup[1].value;
   f.key.intentId = created.intentId;
   f.raw.intent.id = created.intentId;
   f.raw.intent.command = created.command;
-  const p =
-    (
-      await admin.query<{ version: string }>(
-        "SELECT version::text FROM ctp_risk.policy_head WHERE scope='PLATFORM' AND mode='TESTNET'",
-      )
-    ).rows[0]?.version ?? '0';
-  await platform.update(
-    {
-      scope: { kind: 'PLATFORM' },
-      mode: 'TESTNET',
-      eventId: randomUUID(),
-      expectedVersion: p,
-      reason: 'ISOLATED_CERTIFICATION_FIXTURE',
-      limits: riskLimitsSchema.parse(f.risk.platform),
-    },
-    io(),
-  );
-  await user.update(
-    {
-      scope: { kind: 'USER', tenantId: b.tenantId },
-      mode: 'TESTNET',
-      eventId: randomUUID(),
-      expectedVersion: '0',
-      reason: 'ISOLATED_CERTIFICATION_FIXTURE',
-      limits: riskLimitsSchema.parse(f.risk.user),
-    },
-    io(),
-  );
+  // END NATIVE RISK SEED LANES
   const day = Math.floor(f.now / 86400000) * 86400000;
   if (missing !== 'LOSS')
     await loss.append(
