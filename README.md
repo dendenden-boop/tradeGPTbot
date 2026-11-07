@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## Current scoped-database contract repair
+
+PHASE 13 remains **IN_PROGRESS / NOT READY FOR PHASE 14**. Frozen `94c498c` passes all thirteen local checks (6,109 unit / 41 HTTP, twelve clean deployments, audit zero) and both OS/CodeQL/Auth/Docker/24-owner checks. Its [source](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42350553771) and [PR](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42350559023) native jobs correctly reject the new scratch database name against two existing twelve-digit namespace guards. A tests-first runner fix preserves those guards and derives another owned twelve-digit name; all 63 targeted contracts pass. Full current-source acceptance is still pending. [Reproduction and evidence](docs/phase-13/verification.md). Main and financial PAPER/LIVE dispatch remain unchanged.
+
 ## Current native acceptance repair
 
 PHASE 13 remains **IN_PROGRESS / NOT READY FOR PHASE 14**. Candidate `09d13d6` passes the complete local regression and [PR CI 42236417461](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42236417461): 6,090 unit / 41 HTTP per OS, 1,492 PostgreSQL / 24 owner suites, twelve clean deployments and audit zero. [Source CI 42236405759](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42236405759) still reaches the 480-second final-role deadline, so acceptance is HOLD. A tests-first scheduler repair isolates reviewed database-scoped tests while preserving two actual processes, the cluster-role barrier, serial writer/role ordering, all assertions and existing budgets. Final frozen regression and independent CI remain required. [Evidence and limitations](docs/phase-13/verification.md). Protected main stays `b50a9f7`; financial PAPER/LIVE dispatch and positive native credit stay disabled.

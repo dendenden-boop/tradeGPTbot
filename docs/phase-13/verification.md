@@ -1,5 +1,15 @@
 # PHASE 13 verification
 
+## Native database-name contract repair — 7 November 2026
+
+Frozen `94c498c960178d4a7415140f95b299bf6600a132` passes all thirteen local checks on 1,007 unchanged files: 6,109 unit / 2,337 Paper / 41 HTTP, twelve clean deployments and audit zero. Every preceding 6,044 unit case remains passed. Both operating systems, both CodeQL workflows, Auth, Docker smoke and all 24 migration-owner suites pass in its independent source and PR events. All 64 published migration byte hashes and all runtime/package sources remain unchanged by the scheduling repair.
+
+However, [source Platform 42350553771](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42350553771) and [PR Platform 42350559023](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42350559023) both fail the new scoped group. Two reservation suites correctly reject the runner's fourteen-digit `fresh` suffix: their retained native isolation guards require exactly twelve hexadecimal digits. This is a test-runner naming defect, not a reason to relax those guards. Completed job logs and diagnostic source/PR artifacts retain the actual errors; cancelled sibling work is not credited as acceptance.
+
+Tests-first `abccf0c` records nine RED contracts. Two execute the actual runner database declaration against the unchanged native guard prefixes before any PostgreSQL I/O and reproduce the exact native errors. The fix derives a distinct, reversible twelve-digit sibling with lossless BigInt XOR of the suffix's final bit. Table/function privilege isolation, a separately migrated database, all nine process barriers and the original namespace guards remain mandatory. The naming policy is included in the reviewed manifest hash. Boundary/round-trip and foreign-name rejection contracts pass; all 63 targeted new and retained harness checks pass. Current frozen regression and full independent CI remain required. No published migration, financial runtime, native test body, owner/aggregate deadline, workflow or dispatch flag changes.
+
+**HOLD — PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Protected main remains `b50a9f718c0c3e3a2ad28d23373135d3a75fffa4`. LIVE/PAPER financial dispatch and positive native collateral credit remain disabled.
+
 ## Role-isolated native candidate — 7 November 2026
 
 Frozen `09d13d6f40839245fa24cfa0ccf8c097c26c0efa` passes all thirteen local checks on 999 unchanged files: 6,090 unit / 2,337 Paper / 41 HTTP, twelve clean deployments and audit zero. All 6,044 preceding unit cases and all 64 published migration byte hashes are retained. Its [PR Platform 42236417461](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42236417461), [source CodeQL 42236405677](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42236405677), [PR CodeQL 42236417799](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42236417799), both OS checks and both 24-suite migration-owner jobs pass. PR native completes all 1,492 cases / 49 files in 402.051 seconds, including thirteen actual writer cases, populated upgrades and reset. Twelve source/PR ZIP digests and producer windows are retained.

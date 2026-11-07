@@ -7,8 +7,8 @@ export const roleScopedReview = {
       {
         tag: 'IMPORT',
         old: '',
-        next: "// BEGIN ROLE SCOPED NATIVE IMPORT\nimport { planRoleScopedCohorts, runRoleScopedCohorts } from './role-scoped-cohorts.mjs';\nimport { verifyScopedMainFiles } from './native-main-scopes.mjs';\n// END ROLE SCOPED NATIVE IMPORT\n",
-        hash: '50fe9cce34e8a24fdaf87648e9591a97d81139b553c096b569f9fe3ad2b2773b',
+        next: "// BEGIN ROLE SCOPED NATIVE IMPORT\nimport { planRoleScopedCohorts, runRoleScopedCohorts } from './role-scoped-cohorts.mjs';\nimport { scopedMainDatabaseName, verifyScopedMainFiles } from './native-main-scopes.mjs';\n// END ROLE SCOPED NATIVE IMPORT\n",
+        hash: 'e17ece18ef04c0cbce3c16b35d1dfffd161734d32d755484a1a3b6332285c790',
       },
       {
         tag: 'RUNNER_IMPORT',
@@ -19,8 +19,8 @@ export const roleScopedReview = {
       {
         tag: 'DB_NAME',
         old: '',
-        next: '  // BEGIN ROLE SCOPED NATIVE DB_NAME\n  `ctp_p2_fresh_${suffix}00`,\n  // END ROLE SCOPED NATIVE DB_NAME\n',
-        hash: 'a40118208abc0760e2aa24def29193ba5d25379fac0a8cecf1ccda1a9c63abe2',
+        next: '  // BEGIN ROLE SCOPED NATIVE DB_NAME\n  scopedMainDatabaseName(`ctp_p2_fresh_${suffix}`),\n  // END ROLE SCOPED NATIVE DB_NAME\n',
+        hash: 'a1a928f4c47f31f2943302c1979cb942bc8562fd5f2b06489c7e6663ea70cea4',
       },
       {
         tag: 'MIGRATE',

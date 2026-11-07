@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { discoverDatabaseFiles, planDatabaseCohorts } from './database-cohorts.mjs';
 import { planRoleScopedCohorts } from './role-scoped-cohorts.mjs';
-import { scopedMainManifestHash } from './native-main-scopes.mjs';
+import { scopedMainManifestHash, scopedMainDatabaseName } from './native-main-scopes.mjs';
 import { requireRoleScopedEvidence } from './role-scoped-evidence.mjs';
 const original = await planRoleScopedCohorts(
   planDatabaseCohorts(await discoverDatabaseFiles(), { executionStartOverlap: true }),
@@ -14,7 +14,7 @@ function fixture() {
     ...(c.afterAny ? { afterAny: [...c.afterAny] } : {}),
     database:
       c.id === 'main-scoped'
-        ? 'ctp_p2_fresh_aabbcc11223300'
+        ? scopedMainDatabaseName('ctp_p2_fresh_aabbcc112233')
         : c.id === 'registry'
           ? 'ctp_p2_registry_aabbcc112233'
           : c.id === 'admission'

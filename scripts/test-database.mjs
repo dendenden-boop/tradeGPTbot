@@ -3,7 +3,7 @@ import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 // END PAPER STARTED PREVIEW IMPORT
 // BEGIN ROLE SCOPED NATIVE IMPORT
 import { planRoleScopedCohorts, runRoleScopedCohorts } from './role-scoped-cohorts.mjs';
-import { verifyScopedMainFiles } from './native-main-scopes.mjs';
+import { scopedMainDatabaseName, verifyScopedMainFiles } from './native-main-scopes.mjs';
 // END ROLE SCOPED NATIVE IMPORT
 import assert from 'node:assert/strict';
 import {
@@ -300,7 +300,7 @@ const databases = [
   `ctp_p2_execution_start_cohort_${suffix}`,
   // END PAPER EXECUTION START DB_NAME
   // BEGIN ROLE SCOPED NATIVE DB_NAME
-  `ctp_p2_fresh_${suffix}00`,
+  scopedMainDatabaseName(`ctp_p2_fresh_${suffix}`),
   // END ROLE SCOPED NATIVE DB_NAME
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;

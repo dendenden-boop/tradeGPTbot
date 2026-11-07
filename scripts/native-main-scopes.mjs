@@ -114,8 +114,20 @@ export const scopedMainSources = Object.freeze({
     '2ea934e6f348527ba680537e8d60cb4c85fff245fb5c0cb029ec309fd0c9a632',
 });
 export const scopedMainManifestHash = createHash('sha256')
-  .update(JSON.stringify({ roots: scopedMainFiles, sources: scopedMainSources }))
+  .update(
+    JSON.stringify({
+      nameScheme: 'fresh-hex12-xor-one-v1',
+      roots: scopedMainFiles,
+      sources: scopedMainSources,
+    }),
+  )
   .digest('hex');
+export function scopedMainDatabaseName(main) {
+  if (typeof main !== 'string' || !/^ctp_p2_fresh_[a-f0-9]{12}$/.test(main))
+    throw Error('NATIVE_SCOPED_DATABASE_NAME');
+  const suffix = (BigInt('0x' + main.slice(-12)) ^ 1n).toString(16).padStart(12, '0');
+  return 'ctp_p2_fresh_' + suffix;
+}
 export async function verifyScopedMainFiles(root = workspace) {
   for (const [file, expected] of Object.entries(scopedMainSources)) {
     const target = path.resolve(root, file);

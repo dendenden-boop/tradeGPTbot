@@ -1,6 +1,10 @@
 // Additional acceptance proof for the reviewed, independently migrated DB scope.
 import assert from 'node:assert/strict';
-import { scopedMainFiles, scopedMainManifestHash } from './native-main-scopes.mjs';
+import {
+  scopedMainFiles,
+  scopedMainManifestHash,
+  scopedMainDatabaseName,
+} from './native-main-scopes.mjs';
 import { roleScopedShape } from './role-scoped-cohorts.mjs';
 
 export function requireRoleScopedEvidence(cohorts, native) {
@@ -20,7 +24,10 @@ export function requireRoleScopedEvidence(cohorts, native) {
   assert.deepEqual([...timings.keys()].sort(), roleScopedShape.map((c) => c.id).sort());
   assert.deepEqual(plans.get('main-scoped').files, [...scopedMainFiles]);
   assert.match(plans.get('main').database, /^ctp_p2_fresh_[a-f0-9]+$/);
-  assert.equal(plans.get('main-scoped').database, plans.get('main').database + '00');
+  assert.equal(
+    plans.get('main-scoped').database,
+    scopedMainDatabaseName(plans.get('main').database),
+  );
   for (const id of [
     'registry',
     'admission',
