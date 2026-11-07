@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import vm from 'node:vm';
 import ts from 'typescript';
 import { expect, it, vi } from 'vitest';
 import { runIndependentFixtureSetup } from '../packages/database/test/fixtures/native-default-port.js';
+import { beforeAdmissionFundingLane } from './admission-funding-lane-legacy.mjs';
 
 const file = 'packages/database/test/paper-admission.integration.test.ts';
 const source = readFileSync(file, 'utf8');
@@ -13,6 +16,36 @@ if (!declaration) throw Error('ACTUAL_ADMISSION_FIXTURE_REQUIRED');
 const body = ts.transpileModule(declaration.getText(parsed), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
+
+it('retains every accepted native source byte beneath the exact reviewed funding-lane block', () => {
+  const current = source.replaceAll('\r\n', '\n');
+  const predecessor = beforeAdmissionFundingLane(file, current);
+  expect(createHash('sha256').update(predecessor).digest('hex')).toBe(
+    'c9fe097d55c5e8d2e61d0311a99b5d44595a53e01f8ec1b17c364bd1030ed374',
+  );
+  expect(beforeAdmissionFundingLane(file, predecessor)).toBe(predecessor);
+});
+
+it('retains every preceding scheduler byte beneath its renewed exact fixture fingerprint', () => {
+  const path = 'scripts/database-cohorts.mjs';
+  const current = readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
+  expect(createHash('sha256').update(beforeAdmissionFundingLane(path, current)).digest('hex')).toBe(
+    '6843c437099f6bab1273898b31d7b8f3d4e360db6f761c78fa224154ad4c865b',
+  );
+});
+
+it('rejects altered or duplicated funding-lane review blocks without concealing native changes', () => {
+  const current = source.replaceAll('\r\n', '\n');
+  const block = current.match(
+    /^\/\/ BEGIN ADMISSION FUNDING LANE\n[\s\S]*?^\/\/ END ADMISSION FUNDING LANE\n/mu,
+  )[0];
+  const boundary = block.indexOf('\n') + 1;
+  const changed = block.slice(0, boundary) + '// unreviewed\n' + block.slice(boundary);
+  for (const candidate of [current + block, current.replace(block, changed)])
+    expect(() => beforeAdmissionFundingLane(file, candidate)).toThrow(
+      'ADMISSION_FUNDING_REVIEW_REQUIRED',
+    );
+});
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 function gate() {
   let resolve, reject;
@@ -86,9 +119,10 @@ function fixture({ failPolicy = false } = {}) {
     parseDecimal: (value) => value,
     draftSchema: { parse: (value) => value },
   };
-  const actual = new Function(...Object.keys(bindings), body + '\nreturn tenantReady;')(
-    ...Object.values(bindings),
-  );
+  const actual = vm.runInNewContext(body + '\ntenantReady;', bindings, {
+    filename: 'actual-native-admission-setup-fixture',
+    timeout: 1000,
+  });
   const pending = actual().then(
     (value) => ({ value }),
     (error) => ({ error }),

@@ -2,8 +2,12 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { it, expect } from 'vitest';
 import { beforeExecutionStart } from './execution-start-legacy.mjs';
+import { beforeAdmissionFundingLane } from './admission-funding-lane-legacy.mjs';
 const read = (p) =>
-  fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+  beforeAdmissionFundingLane(
+    p,
+    fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n'),
+  );
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 it.each([
   ['scripts/test-database.mjs', '28d7fa9fb66b73cad691eaf643664e608085625469dc2c561cf2400db4c8c8c1'],

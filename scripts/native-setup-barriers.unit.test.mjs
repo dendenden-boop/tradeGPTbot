@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { beforeNativeDefaultPort } from './native-default-port-legacy.mjs';
 import { beforeNativeSetupBarriers } from './native-setup-barriers-legacy.mjs';
+import { beforeAdmissionFundingLane } from './admission-funding-lane-legacy.mjs';
 
 function scheduler() {
   const run = fixtures['runIndependentFixtureSetup'];
@@ -147,7 +148,13 @@ it('the real native fixture explicitly composes funding/book, draft order and ma
 });
 
 it('real funding completes before concurrent draft creation can enter the native fixture', () => {
-  const source = readFileSync('packages/database/test/paper-admission.integration.test.ts', 'utf8');
+  // Retain the original layout assertion on the exact reviewed predecessor.
+  // Actual current funding/draft/publication barriers have physical contracts.
+  const file = 'packages/database/test/paper-admission.integration.test.ts';
+  const source = beforeAdmissionFundingLane(
+    file,
+    readFileSync(file, 'utf8').replaceAll('\r\n', '\n'),
+  );
   const block = source.slice(source.indexOf('// BEGIN NATIVE SETUP BARRIERS'));
   const funding = block.indexOf('fundingId = await fundCash(f.c)');
   expect(funding).toBeGreaterThanOrEqual(0);
@@ -167,7 +174,10 @@ it('reconstructs every original native statement and assertion with the accepted
 
 it('rejects mutations hidden in the reviewed setup block and duplicate review markers', () => {
   const file = 'packages/database/test/paper-admission.integration.test.ts';
-  const source = readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
+  const source = beforeAdmissionFundingLane(
+    file,
+    readFileSync(file, 'utf8').replaceAll('\r\n', '\n'),
+  );
   for (const changed of [
     source.replace('fundingId = await fundCash(f.c)', 'fundingId = null'),
     source.replace('return { snapshots, trades };', 'return { snapshots: null, trades };'),

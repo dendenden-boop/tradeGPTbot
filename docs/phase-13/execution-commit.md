@@ -30,6 +30,8 @@ Native trade identity includes exact market scope, instrument, identity scope an
 
 ## Explicit remaining limitations and gate
 
+The admission fixture follow-up changes test setup dependencies only: one shared funding operation precedes both draft creation and market timestamping/publication, while independent policy setup may overlap it. All three original lanes drain before bootstrap or rejection, with no removed native call, cached result or changed IO deadline. Exact predecessor reconstruction and all 69 original local PostgreSQL cases pass; the Windows diagnostic does not replace the Linux owner or full CI gate.
+
 The registry publication isolation follow-up is a test-only scheduling candidate: the unchanged 300-instrument / 180-refresh registry cohort must physically settle before the main workload starts on the same PostgreSQL server. All later cluster barriers, maximum two actual children, serial financial writer/final roles, SQL timeouts and aggregate/owner budgets remain. It addresses competing test workload after a retained publication statement-timeout failure; the exact cause of that latency spike is not established. Full independent CI must verify the repaired schedule before acceptance.
 
 This is the **first pristine transaction**, restricted to one issuance on the target book and one candidate. Existing economic history, multiple contenders, continued partial execution, SELL/exit handling and general historical Risk/Portfolio capture are not admitted by this writer. After a financial transition the old pristine captures continue to fail closed. Public worker composition stays disabled until those PHASE 13 requirements and full phase acceptance are complete.

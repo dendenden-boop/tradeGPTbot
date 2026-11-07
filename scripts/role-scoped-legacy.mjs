@@ -1,5 +1,6 @@
 // Exact test-only reconstruction of the preceding 09d13d6 candidate harness beneath the new scope.
 import { createHash } from 'node:crypto';
+import { beforeAdmissionFundingLane } from './admission-funding-lane-legacy.mjs';
 export const roleScopedReview = {
   'scripts/test-database.mjs': {
     predecessor: 'c4727a5d69fa7bd4d81a2387fd9e488cd19b738f661dabe72dd0c0c34d350867',
@@ -126,6 +127,7 @@ export const roleScopedReview = {
   },
 };
 export function beforeRoleScopedNative(file, source) {
+  source = beforeAdmissionFundingLane(file, source);
   const entry = roleScopedReview[file];
   if (!entry || !source.includes('ROLE SCOPED NATIVE')) return source;
   if ((source.match(/ROLE SCOPED NATIVE/g) ?? []).length !== entry.patches.length * 2)
