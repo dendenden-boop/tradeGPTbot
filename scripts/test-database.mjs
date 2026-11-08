@@ -5,6 +5,14 @@ import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 import { planRoleScopedCohorts, runRoleScopedCohorts } from './role-scoped-cohorts.mjs';
 import { scopedMainDatabaseName, verifyScopedMainFiles } from './native-main-scopes.mjs';
 // END ROLE SCOPED NATIVE IMPORT
+// BEGIN CERTIFIED CLUSTER DATABASE_IMPORT
+import { bootstrapNativeCluster } from './native-cluster-bootstrap.mjs';
+import {
+  planClusterIsolatedCohorts,
+  runClusterIsolatedCohorts,
+} from './cluster-isolated-cohorts.mjs';
+const retainedRoleScopedRunner = runRoleScopedCohorts;
+// END CERTIFIED CLUSTER DATABASE_IMPORT
 import assert from 'node:assert/strict';
 import {
   verifyPaperExecutionCommitStorage,
@@ -361,6 +369,9 @@ const connect = (url, maintenance = false) => {
   return pool;
 };
 const admin = connect(adminUrl.href, true);
+// BEGIN CERTIFIED CLUSTER DATABASE_STATE
+let nativeSecondary;
+// END CERTIFIED CLUSTER DATABASE_STATE
 const dbUrl = (
   name,
   runtime = false,
@@ -371,6 +382,10 @@ const dbUrl = (
   execution = false,
 ) => {
   const url = new URL(adminUrl);
+  // BEGIN CERTIFIED CLUSTER DATABASE_URL
+  if (nativeSecondary && [databases[6], databases[7], databases[8]].includes(name))
+    url.port = String(nativeSecondary.port);
+  // END CERTIFIED CLUSTER DATABASE_URL
   url.pathname = '/' + name;
   if (runtime) {
     url.username = runtimeRole;
@@ -4743,6 +4758,67 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[0]),
     DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
   };
+  // BEGIN CERTIFIED CLUSTER DATABASE_SETUP
+  nativeSecondary = await bootstrapNativeCluster({
+    project,
+    env: process.env,
+    nativeEnv,
+    databases,
+    primaryAdmin: admin,
+    connect,
+    run,
+    prisma,
+    config,
+    secrets,
+    remainingMs: () =>
+      nativeWindow
+        ? remainingNativeBudget(nativeWindow)
+        : Math.max(0, proof.timeoutMs - (Date.now() - Date.parse(startedAt))),
+  });
+  const certifiedPlan = await planClusterIsolatedCohorts(
+    originalCohortPlan,
+    nativeSecondary.certificate,
+  );
+  // Upgrade the in-memory plan only after actual separate server/role proof.
+  // No child has started and the original discovery/partition remains intact.
+  cohortPlan.splice(0, cohortPlan.length, ...certifiedPlan);
+  const certifiedRoutes = new Map();
+  function runRoleScopedCohorts(jobs, options) {
+    if (!nativeSecondary) return retainedRoleScopedRunner(jobs, options);
+    if (nativeWindow)
+      assert(
+        remainingNativeBudget(nativeWindow) >= options.timeoutMs,
+        'NATIVE_WINDOW_INSUFFICIENT',
+      );
+    const certified = jobs.map((job) => {
+      const primary = ['main', 'registry', 'roles'].includes(job.id),
+        env = { ...job.env };
+      if (!primary)
+        for (const [key, value] of Object.entries(env))
+          if (key.startsWith('DATABASE_')) {
+            const url = new URL(value);
+            url.port = String(nativeSecondary.port);
+            env[key] = url.href;
+          }
+      const identity = primary
+        ? nativeSecondary.certificate.primary
+        : nativeSecondary.certificate.secondary;
+      const descriptor = {
+        cluster: primary ? 'PRIMARY' : 'SECONDARY',
+        database: new URL(env.DATABASE_MIGRATION_URL).pathname.slice(1),
+        port: identity.port,
+        systemIdentifier: identity.systemIdentifier,
+        containerId: identity.containerId,
+      };
+      certifiedRoutes.set(job.id, descriptor);
+      return { ...job, ...descriptor, env: Object.freeze(env) };
+    });
+    return runClusterIsolatedCohorts(certified, {
+      ...options,
+      isolation: nativeSecondary.certificate,
+    });
+  }
+  // END CERTIFIED CLUSTER DATABASE_SETUP
   const registryEnv = {
     ...process.env,
     NODE_ENV: 'test',
@@ -4855,8 +4931,14 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   });
   // END ROLE SCOPED NATIVE ORIGINAL_MAIN_REPORT
   await report('database-tests', tests);
+  // BEGIN CERTIFIED CLUSTER COHORT_VERIFY
+  const clusterEvidence = await nativeSecondary.verify();
+  // END CERTIFIED CLUSTER COHORT_VERIFY
   await report('database-cohorts', {
     status: 'PASS',
+    // BEGIN CERTIFIED CLUSTER COHORT_REPORT
+    nativeClusterIsolation: clusterEvidence,
+    // END CERTIFIED CLUSTER COHORT_REPORT
     // BEGIN ROLE SCOPED NATIVE MANIFEST
     roleScopedManifest: (await verifyScopedMainFiles()).manifest,
     // END ROLE SCOPED NATIVE MANIFEST
@@ -4883,6 +4965,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // END ROLE SCOPED NATIVE COHORT_DATABASE
       ...(cohort.id === 'execution-commit' ? { database: databases[7] } : {}),
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
+      // BEGIN CERTIFIED CLUSTER COHORT_ROUTE
+      ...certifiedRoutes.get(cohort.id),
+      // END CERTIFIED CLUSTER COHORT_ROUTE
     })),
   });
 
@@ -4957,10 +5042,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   pools.delete(attemptJournalBeforeReset);
   // END PAPER ATTEMPT JOURNAL RESET_BEFORE
   pools.delete(admissionBeforeReset);
-  await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${identifier(databases[6])}`);
-  await migrate(databases[6]);
-  await migrate(databases[6]);
+  // BEGIN CERTIFIED CLUSTER RESET_ADMISSION
+  const admissionMaintenance = nativeSecondary.maintenanceFor(databases[6]);
+  await admissionMaintenance.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
+  await admissionMaintenance.query(`CREATE DATABASE ${identifier(databases[6])}`);
+  await nativeSecondary.migrate(databases[6]);
+  await nativeSecondary.migrate(databases[6]);
+  // END CERTIFIED CLUSTER RESET_ADMISSION
   const admissionReset = connect(dbUrl(databases[6]));
   for (const table of [
     'admission_issuance',
@@ -5061,10 +5149,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   pools.delete(startedBeforeReset);
   // Only the explicitly created isolated fixture DB is destroyed; this is not
   // an application Paper reset or authority to discard retained live history.
-  await admin.query(`DROP DATABASE ${identifier(databases[7])} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${identifier(databases[7])}`);
-  await migrate(databases[7]);
-  await migrate(databases[7]);
+  // BEGIN CERTIFIED CLUSTER RESET_STARTED
+  const startedMaintenance = nativeSecondary.maintenanceFor(databases[7]);
+  await startedMaintenance.query(`DROP DATABASE ${identifier(databases[7])} WITH (FORCE)`);
+  await startedMaintenance.query(`CREATE DATABASE ${identifier(databases[7])}`);
+  await nativeSecondary.migrate(databases[7]);
+  await nativeSecondary.migrate(databases[7]);
+  // END CERTIFIED CLUSTER RESET_STARTED
   const startedAfterReset = connect(dbUrl(databases[7]));
   assert.equal(
     (await startedAfterReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0]
@@ -5092,10 +5183,16 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // mandatory Auth job. Default/legacy runs retain their inline execution.
   if (proof.mode === 'full') await runAuthenticationAcceptance();
 
+  // BEGIN CERTIFIED CLUSTER RESET_NATIVE
+  await nativeSecondary.resetNativeAdmission();
+  // END CERTIFIED CLUSTER RESET_NATIVE
   const resetStorageMs = await resetDatabaseProof(fresh);
   outcome = {
     ...outcome,
     status: 'PASS',
+    // BEGIN CERTIFIED CLUSTER DATABASE_FINAL_REPORT
+    nativeClusterIsolation: await nativeSecondary.verify(),
+    // END CERTIFIED CLUSTER DATABASE_FINAL_REPORT
     fresh: 'PASS',
     upgradePreservesData: 'PASS',
     upgradeSealsExistingLedger: 'PASS',

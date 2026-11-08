@@ -5,6 +5,17 @@ import { performance } from 'node:perf_hooks';
 import { sanitize, workspace } from './docker-test-utils.mjs';
 import { scopedMainFiles, verifyScopedMainFiles } from './native-main-scopes.mjs';
 
+// BEGIN CERTIFIED NATIVE CLUSTER EXPORT
+export {
+  createNativeClusterIsolation,
+  assertNativeClusterIsolation,
+} from './native-cluster-isolation.mjs';
+export {
+  planClusterIsolatedCohorts,
+  runClusterIsolatedCohorts,
+} from './cluster-isolated-cohorts.mjs';
+// END CERTIFIED NATIVE CLUSTER EXPORT
+
 export async function planRoleScopedCohorts(plan) {
   await verifyScopedMainFiles();
   assert.deepEqual(

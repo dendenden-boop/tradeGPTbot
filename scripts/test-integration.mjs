@@ -2,6 +2,9 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { integrationProof, requireDatabaseProofReport } from './integration-proof.mjs';
+// BEGIN CERTIFIED CLUSTER PARENT_IMPORT
+import { createOwnedSecondaryPostgres } from './owned-native-secondary.mjs';
+// END CERTIFIED CLUSTER PARENT_IMPORT
 import {
   nativeWindowIdentity,
   readNativeWindow,
@@ -26,6 +29,10 @@ const file = 'infra/compose.test.yml';
 const options = { env: test.env, secrets: test.secrets };
 const startedAt = new Date().toISOString();
 let resourcesMayExist = false;
+// BEGIN CERTIFIED CLUSTER PARENT_STATE
+let secondaryPostgres, secondaryIdentity;
+const needsSecondary = ['full', 'database', 'cohorts'].includes(proof.mode);
+// END CERTIFIED CLUSTER PARENT_STATE
 let outcome = {
   status: 'FAIL',
   startedAt,
@@ -77,6 +84,16 @@ try {
   const redisPort = localPort(
     await run('docker', composeArgs(file, test.project, ['port', 'redis', '6379']), options),
   );
+  // BEGIN CERTIFIED CLUSTER PARENT_START
+  if (needsSecondary) {
+    secondaryPostgres = createOwnedSecondaryPostgres({
+      project: test.project,
+      env: test.env,
+      secrets: test.secrets,
+    });
+    secondaryIdentity = await secondaryPostgres.start();
+  }
+  // END CERTIFIED CLUSTER PARENT_START
   if (proof.dependencies)
     await run(
       process.execPath,
@@ -111,6 +128,15 @@ try {
       CTP_TEST_PROJECT: test.project,
       DATABASE_MIGRATION_URL: `postgresql://ctp_test:${test.env.POSTGRES_PASSWORD}@127.0.0.1:${postgresPort}/ctp_test`,
       REDIS_URL: `redis://:${test.env.REDIS_PASSWORD}@127.0.0.1:${redisPort}/0`,
+      // BEGIN CERTIFIED CLUSTER PARENT_ENV
+      ...(secondaryIdentity
+        ? {
+            CTP_TEST_SECONDARY_PROJECT: secondaryIdentity.project,
+            CTP_TEST_SECONDARY_POSTGRES_PORT: String(secondaryIdentity.port),
+            CTP_TEST_SECONDARY_IDENTITY: JSON.stringify(secondaryIdentity),
+          }
+        : {}),
+      // END CERTIFIED CLUSTER PARENT_ENV
     },
   });
   const databaseReport = JSON.parse(
@@ -125,6 +151,25 @@ try {
   requireDatabaseProofReport(databaseReport, proof.mode);
   for (const field of ['ownerSuites', 'nativeCohorts', 'isolatedReset'])
     outcome[field] = databaseReport[field];
+  // BEGIN CERTIFIED CLUSTER PARENT_REPORT
+  if (needsSecondary) {
+    if (
+      databaseReport.nativeClusterIsolation?.status !== 'PASS' ||
+      databaseReport.nativeClusterIsolation?.actors !== 32 ||
+      databaseReport.nativeClusterIsolation?.migrations !== 66 ||
+      ['admission', 'startedExecution', 'nativeAdmission'].some(
+        (key) => databaseReport.nativeClusterIsolation?.secondaryResets?.[key] !== 'PASS',
+      ) ||
+      databaseReport.nativeClusterIsolation?.primary?.project !== test.project ||
+      databaseReport.nativeClusterIsolation?.secondary?.project !== secondaryIdentity.project ||
+      databaseReport.nativeClusterIsolation?.secondary?.containerId !==
+        secondaryIdentity.containerId
+    )
+      throw Error('NATIVE_CLUSTER_ISOLATION_REPORT');
+    outcome.nativeClusterIsolation = databaseReport.nativeClusterIsolation;
+    await secondaryPostgres.identity();
+  }
+  // END CERTIFIED CLUSTER PARENT_REPORT
   outcome.status = nativeWindow ? 'PARTIAL' : 'PASS';
 } catch (error) {
   const message = error instanceof Error ? error.message : 'Integration runner failed';
@@ -152,6 +197,17 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  // BEGIN CERTIFIED CLUSTER PARENT_CLEANUP
+  if (secondaryPostgres) {
+    try {
+      await secondaryPostgres.close();
+      outcome.secondaryCleanup = 'PASS';
+    } catch {
+      outcome = { ...outcome, status: 'FAIL', secondaryCleanup: 'FAIL' };
+      process.exitCode = 1;
+    }
+  }
+  // END CERTIFIED CLUSTER PARENT_CLEANUP
   if (resourcesMayExist) {
     try {
       await run(

@@ -2,6 +2,10 @@
 // BEGIN ROLE SCOPED NATIVE IMPORT
 import { requireRoleScopedEvidence } from './role-scoped-evidence.mjs';
 // END ROLE SCOPED NATIVE IMPORT
+// BEGIN CERTIFIED CLUSTER EVIDENCE_IMPORT
+import { requireClusterIsolatedEvidence } from './cluster-isolated-evidence.mjs';
+const retainedRoleScopedEvidence = requireRoleScopedEvidence;
+// END CERTIFIED CLUSTER EVIDENCE_IMPORT
 export const ownerReports = Object.freeze({
   'risk-certification': 14,
   'risk-admission': 95,
@@ -119,6 +123,11 @@ export function requireNativeTestArtifacts(owners, native, cohorts, window) {
   for (const [name, minimum] of Object.entries(ownerReports))
     passed(owners[name], minimum, ownerDeadlines[name]);
   passed(native, 1400, 480000);
+  // BEGIN CERTIFIED CLUSTER EVIDENCE_SELECT
+  const requireRoleScopedEvidence = cohorts?.nativeClusterIsolation
+    ? requireClusterIsolatedEvidence
+    : retainedRoleScopedEvidence;
+  // END CERTIFIED CLUSTER EVIDENCE_SELECT
   // BEGIN ROLE SCOPED NATIVE EVIDENCE
   try {
     requireRoleScopedEvidence(cohorts, native);
