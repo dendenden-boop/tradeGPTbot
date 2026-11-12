@@ -55,7 +55,9 @@ async function until(test, pending) {
 }
 const release = (dir, id) => writeFile(path.join(dir, id + '.release'), 'release');
 it('moves only preview out of the critical PAPER tail into an explicit post-START slot; legacy serial execution stays serial', async () => {
-  const files = await cohorts.discoverDatabaseFiles(),
+  const files = (await cohorts.discoverDatabaseFiles()).filter(
+      (file) => file !== 'packages/database/test/paper-execution-commit.integration.test.ts',
+    ),
     plan = cohorts.planDatabaseCohorts(files, { executionStartOverlap: true });
   expect(plan.map((c) => c.id)).toEqual(ids);
   expect(plan.find((c) => c.id === 'admission').files).toEqual([

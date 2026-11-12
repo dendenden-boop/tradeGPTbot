@@ -15,6 +15,7 @@ const executionStart = 'packages/database/test/paper-execution-start.integration
 const startedSource = 'packages/database/test/paper-started-source.integration.test.ts';
 const startedRisk = 'packages/database/test/paper-started-risk.integration.test.ts';
 const startedPreview = 'packages/database/test/paper-started-preview.integration.test.ts';
+const executionCommit = 'packages/database/test/paper-execution-commit.integration.test.ts';
 const nativeFile = /^packages\/(database|auth)\/test\/[^/]+\.integration\.test\.ts$/u;
 
 // Only reviewed files without cluster-role DDL may overlap after the mutator
@@ -25,9 +26,9 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
     [nativeAdmission, '55a9b37c8da4565bc08d9c64aff7aaadc77e4d7a46e2ad48b6a988e7dd0b8c7c'],
     [
       'packages/database/test/fixtures/risk-certification.ts',
-      '6b73c812085a6e1230fa0bc01a34c1525b0ed42c5832c5908056d35e5922f54c',
+      '7f6f2037b5afc4e5e8e74a8390091fc04511ae2777fbda417f9b84d0268942f9',
     ],
-    [admission, 'c9fe097d55c5e8d2e61d0311a99b5d44595a53e01f8ec1b17c364bd1030ed374'],
+    [admission, '9e27194b1d8bf053090f6621098a663d03aa06c55b074133d15618a3ea566c87'],
     [
       'packages/database/test/fixtures/registry-commit-proxy.ts',
       'a64aefc8526cea37cc6f218c407ee730d82e58f504d8a111888d03ca0a915af4',
@@ -163,6 +164,10 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
     'Started preview requires current START Risk',
   );
   assert.ok(!executionStartOverlap || hasStart, 'Missing reviewed execution-start input');
+  assert.ok(
+    !files.includes(executionCommit) || files.includes(startedPreview),
+    'Financial writer requires reviewed current START Risk',
+  );
   assert.ok(!hasStart || overlap, 'Execution-start requires both admission isolation contracts');
   const main = files
     .filter(
@@ -174,6 +179,7 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
         file !== startedSource &&
         file !== startedRisk &&
         file !== startedPreview &&
+        file !== executionCommit &&
         (!overlap || file !== nativeAdmission),
     )
     .sort();
@@ -225,6 +231,23 @@ export function planDatabaseCohorts(files, { executionStartOverlap = false } = {
             files: [startedPreview],
             parallel: executionStartOverlap,
             after: ['execution-start'],
+          },
+        ]
+      : []),
+    ...(files.includes(executionCommit)
+      ? [
+          {
+            id: 'execution-commit',
+            files: [executionCommit],
+            parallel: false,
+            after: [
+              'main',
+              'registry',
+              'admission',
+              'native-admission',
+              'execution-start',
+              'execution-preview',
+            ],
           },
         ]
       : []),
@@ -321,7 +344,8 @@ export async function runDatabaseCohorts(
   jobs,
   { timeoutMs, signal, secrets = [], echo = false, cwd = workspace },
 ) {
-  const hasPreview = jobs.length === 7;
+  const hasCommit = jobs.length === 8;
+  const hasPreview = jobs.length === 7 || hasCommit;
   const hasStart = jobs.length === 6 || hasPreview;
   const hasStartOverlap = hasStart && jobs[4].parallel === true;
   const hasAdmission = jobs.length === 4 || jobs.length === 5 || hasStart;
@@ -354,6 +378,22 @@ export async function runDatabaseCohorts(
         : []),
       ...(hasPreview
         ? [{ id: 'execution-preview', parallel: hasStartOverlap, after: ['execution-start'] }]
+        : []),
+      ...(hasCommit
+        ? [
+            {
+              id: 'execution-commit',
+              parallel: false,
+              after: [
+                'main',
+                'registry',
+                'admission',
+                'native-admission',
+                'execution-start',
+                'execution-preview',
+              ],
+            },
+          ]
         : []),
       { id: 'roles', parallel: false },
     ],
@@ -483,6 +523,7 @@ export async function runDatabaseCohorts(
     // The existing owner90s/aggregate480s/shared1020s budgets are unchanged.
     if (hasStart && !hasStartOverlap) await run(jobs[4]);
     if (hasPreview && !hasStartOverlap) await run(jobs[5]);
+    if (hasCommit) await run(jobs[6]);
     await run(jobs.at(-1));
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native cohort aggregate deadline/abort');

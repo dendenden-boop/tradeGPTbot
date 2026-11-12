@@ -412,12 +412,16 @@ async function fundCash(c: PaperConfiguration, noncash = false) {
   return fundingId;
 }
 
+// BEGIN ADMISSION FUNDING LANE
 // BEGIN NATIVE SETUP BARRIERS
 async function tenantReady(liquid = false) {
-  const f = await fixture(),
-    fundingId = await fundCash(f.c);
-  const [{ orders, order }, { snapshots, trades }] = await runIndependentFixtureSetup([
+  const f = await fixture();
+  // Own one actual funding operation. Independent policies may run while it
+  // settles; neither drafts nor newly timestamped public evidence may precede it.
+  const fundingPromise = fundCash(f.c);
+  const [{ fundingId, orders, order }, { snapshots, trades }] = await runIndependentFixtureSetup([
     async () => {
+      const fundingId = await fundingPromise;
       const orders = await openOrders();
       const order = await orders.create(
         f.binding,
@@ -429,13 +433,14 @@ async function tenantReady(liquid = false) {
           : f.draft,
         io(),
       );
-      return { orders, order };
+      return { fundingId, orders, order };
     },
     async () => {
       // BEGIN PUBLIC MARKET FIXTURE USE
       const snapshots = await publicMarketFixturePorts.snapshots(),
         trades = await publicMarketFixturePorts.trades();
       // END PUBLIC MARKET FIXTURE USE
+      await fundingPromise;
       const now = Date.now();
       f.f.s.timestamp = f.f.p.timestamp = now;
       for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;
@@ -464,6 +469,7 @@ async function tenantReady(liquid = false) {
   };
 }
 // END NATIVE SETUP BARRIERS
+// END ADMISSION FUNDING LANE
 
 import {
   createPostgresPaperOrderRiskPort,

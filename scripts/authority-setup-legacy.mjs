@@ -1,6 +1,7 @@
 // Test-only reconstruction of the complete pre-fix native fixture at 61e5af6a74884f35652012c7d92cc2f6f5035fcb.
 // Pin every reviewed block, then run all earlier assertion/payload/read probes unchanged.
 import { createHash } from 'node:crypto';
+import { beforeTenantMarketLifetime } from './tenant-market-lifetime-legacy.mjs';
 const path = 'packages/database/test/paper-risk-authority.integration.test.ts';
 const expected = [
   ['IMPORT', '694a848525e1ad4e081c7a939629a78566c5e0be6a851dd7ab08e0a28ef56ab5', ''],
@@ -21,6 +22,7 @@ const expected = [
   ],
 ];
 export function beforeAuthoritySetup(file, source) {
+  source = beforeTenantMarketLifetime(file, source);
   if (file !== path || !source.includes('AUTHORITY FIXTURE SETUP')) return source;
   const blocks = [
     ...source.matchAll(

@@ -1,7 +1,23 @@
 // BEGIN PAPER STARTED PREVIEW IMPORT
 import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 // END PAPER STARTED PREVIEW IMPORT
+// BEGIN ROLE SCOPED NATIVE IMPORT
+import { planRoleScopedCohorts, runRoleScopedCohorts } from './role-scoped-cohorts.mjs';
+import { scopedMainDatabaseName, verifyScopedMainFiles } from './native-main-scopes.mjs';
+// END ROLE SCOPED NATIVE IMPORT
+// BEGIN CERTIFIED CLUSTER DATABASE_IMPORT
+import { bootstrapNativeCluster } from './native-cluster-bootstrap.mjs';
+import {
+  planClusterIsolatedCohorts,
+  runClusterIsolatedCohorts,
+} from './cluster-isolated-cohorts.mjs';
+const retainedRoleScopedRunner = runRoleScopedCohorts;
+// END CERTIFIED CLUSTER DATABASE_IMPORT
 import assert from 'node:assert/strict';
+import {
+  verifyPaperExecutionCommitStorage,
+  verifyPaperExecutionCommitUpgrade,
+} from './paper-execution-commit-upgrade.mjs';
 // BEGIN PAPER STARTED RISK IMPORT
 import {
   verifyPaperStartedRiskUpgrade,
@@ -40,7 +56,8 @@ import { run, report, workspace } from './docker-test-utils.mjs';
 import {
   discoverDatabaseFiles,
   planDatabaseCohorts,
-  runDatabaseCohorts,
+  // BEGIN ROLE SCOPED NATIVE RUNNER_IMPORT
+  // END ROLE SCOPED NATIVE RUNNER_IMPORT
   mergeDatabaseReports,
   verifyAdmissionParallelFiles,
   // BEGIN PAPER EXECUTION START OVERLAP_IMPORT
@@ -171,6 +188,8 @@ const expectedMigrations = [
   // BEGIN PAPER STARTED RISK MIGRATION
   '202611030002_paper_started_risk_source',
   // END PAPER STARTED RISK MIGRATION
+  '202611060001_paper_execution_math',
+  '202611060002_paper_execution_commit',
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -288,6 +307,9 @@ const databases = [
   // BEGIN PAPER EXECUTION START DB_NAME
   `ctp_p2_execution_start_cohort_${suffix}`,
   // END PAPER EXECUTION START DB_NAME
+  // BEGIN ROLE SCOPED NATIVE DB_NAME
+  scopedMainDatabaseName(`ctp_p2_fresh_${suffix}`),
+  // END ROLE SCOPED NATIVE DB_NAME
 ];
 const runtimeRole = `ctp_p2_runtime_${suffix}`;
 const ownerRole = `ctp_p2_owner_${suffix}`;
@@ -347,6 +369,9 @@ const connect = (url, maintenance = false) => {
   return pool;
 };
 const admin = connect(adminUrl.href, true);
+// BEGIN CERTIFIED CLUSTER DATABASE_STATE
+let nativeSecondary;
+// END CERTIFIED CLUSTER DATABASE_STATE
 const dbUrl = (
   name,
   runtime = false,
@@ -357,6 +382,10 @@ const dbUrl = (
   execution = false,
 ) => {
   const url = new URL(adminUrl);
+  // BEGIN CERTIFIED CLUSTER DATABASE_URL
+  if (nativeSecondary && [databases[6], databases[7], databases[8]].includes(name))
+    url.port = String(nativeSecondary.port);
+  // END CERTIFIED CLUSTER DATABASE_URL
   url.pathname = '/' + name;
   if (runtime) {
     url.username = runtimeRole;
@@ -2577,6 +2606,34 @@ async function runDatabaseProof() {
     assert.equal(startedPreviewOwner.numFailedTests, 0);
     assert.equal(startedPreviewOwner.numPendingTests, 0);
     // END PAPER STARTED PREVIEW OWNER
+    // BEGIN PAPER EXECUTION COMMIT OWNER
+    const executionCommitDb = connect(dbUrl(databases[2]));
+    await verifyPaperExecutionCommitStorage(executionCommitDb, { ownership: 'REQUIRE_NON_BYPASS' });
+    await executionCommitDb.end();
+    pools.delete(executionCommitDb);
+    await run(
+      process.execPath,
+      [
+        fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+        'run',
+        '--config',
+        'vitest.database.config.ts',
+        'packages/database/test/paper-execution-commit.integration.test.ts',
+        '--outputFile.json=test-results/paper-execution-commit-owner-tests.json',
+      ],
+      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+    );
+    const executionCommitOwner = JSON.parse(
+      await readFile(
+        new URL('../test-results/paper-execution-commit-owner-tests.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    assert.equal(executionCommitOwner.success, true);
+    assert.equal(executionCommitOwner.numPassedTests, 13);
+    assert.equal(executionCommitOwner.numFailedTests, 0);
+    assert.equal(executionCommitOwner.numPendingTests, 0);
+    // END PAPER EXECUTION COMMIT OWNER
   }
   // END NATIVE PARTITION OWNER_WRAPPER
 
@@ -4525,6 +4582,19 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await migrate(databases[4], paperConfig, true);
   await verifyPaperStartedRiskUpgrade(paperUpgrade, beforeStartedRisk);
   // END PAPER STARTED RISK UPGRADE
+  // BEGIN PAPER EXECUTION COMMIT UPGRADE
+  const beforeExecutionCommit = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  for (const index of [64, 65])
+    await cp(
+      path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[index]),
+      path.join(paperMigrations, expectedMigrations[index]),
+      { recursive: true },
+    );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionCommitUpgrade(paperUpgrade, beforeExecutionCommit);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutionCommitUpgrade(paperUpgrade, beforeExecutionCommit);
+  // END PAPER EXECUTION COMMIT UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4626,6 +4696,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // legacy cohort. Cluster-wide role mutation tests run only after both settle.
   await migrate(databases[5]);
   await migrate(databases[6]);
+  // BEGIN ROLE SCOPED NATIVE MIGRATE
+  await migrate(databases[8]);
+  // END ROLE SCOPED NATIVE MIGRATE
   // BEGIN PAPER EXECUTION START OVERLAP_SETUP
   await migrate(databases[7]);
   await verifyExecutionStartParallelFiles();
@@ -4640,9 +4713,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await verifyStartedPreviewParallelFiles();
   // END PAPER STARTED PREVIEW OVERLAP
   // BEGIN PAPER EXECUTION START PLAN
-  const cohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
+  // BEGIN ROLE SCOPED NATIVE PLAN
+  const originalCohortPlan = planDatabaseCohorts(await discoverDatabaseFiles(), {
     executionStartOverlap: true,
   });
+  const cohortPlan = await planRoleScopedCohorts(originalCohortPlan);
+  // END ROLE SCOPED NATIVE PLAN
   // END PAPER EXECUTION START PLAN
   if (cohortPlan.some(({ id }) => id === 'native-admission')) await verifyAdmissionParallelFiles();
   const nativeEnv = {
@@ -4682,6 +4758,67 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     DATABASE_PAPER_TENANT_RISK_CONTEXT_URL: paperTenantRiskContextUrl(databases[0]),
     DATABASE_MARKET_TRADE_URL: marketTradeUrl(databases[0]),
   };
+  // BEGIN CERTIFIED CLUSTER DATABASE_SETUP
+  nativeSecondary = await bootstrapNativeCluster({
+    project,
+    env: process.env,
+    nativeEnv,
+    databases,
+    primaryAdmin: admin,
+    connect,
+    run,
+    prisma,
+    config,
+    secrets,
+    remainingMs: () =>
+      nativeWindow
+        ? remainingNativeBudget(nativeWindow)
+        : Math.max(0, proof.timeoutMs - (Date.now() - Date.parse(startedAt))),
+  });
+  const certifiedPlan = await planClusterIsolatedCohorts(
+    originalCohortPlan,
+    nativeSecondary.certificate,
+  );
+  // Upgrade the in-memory plan only after actual separate server/role proof.
+  // No child has started and the original discovery/partition remains intact.
+  cohortPlan.splice(0, cohortPlan.length, ...certifiedPlan);
+  const certifiedRoutes = new Map();
+  function runRoleScopedCohorts(jobs, options) {
+    if (!nativeSecondary) return retainedRoleScopedRunner(jobs, options);
+    if (nativeWindow)
+      assert(
+        remainingNativeBudget(nativeWindow) >= options.timeoutMs,
+        'NATIVE_WINDOW_INSUFFICIENT',
+      );
+    const certified = jobs.map((job) => {
+      const primary = ['main', 'registry', 'roles'].includes(job.id),
+        env = { ...job.env };
+      if (!primary)
+        for (const [key, value] of Object.entries(env))
+          if (key.startsWith('DATABASE_')) {
+            const url = new URL(value);
+            url.port = String(nativeSecondary.port);
+            env[key] = url.href;
+          }
+      const identity = primary
+        ? nativeSecondary.certificate.primary
+        : nativeSecondary.certificate.secondary;
+      const descriptor = {
+        cluster: primary ? 'PRIMARY' : 'SECONDARY',
+        database: new URL(env.DATABASE_MIGRATION_URL).pathname.slice(1),
+        port: identity.port,
+        systemIdentifier: identity.systemIdentifier,
+        containerId: identity.containerId,
+      };
+      certifiedRoutes.set(job.id, descriptor);
+      return { ...job, ...descriptor, env: Object.freeze(env) };
+    });
+    return runClusterIsolatedCohorts(certified, {
+      ...options,
+      isolation: nativeSecondary.certificate,
+    });
+  }
+  // END CERTIFIED CLUSTER DATABASE_SETUP
   const registryEnv = {
     ...process.env,
     NODE_ENV: 'test',
@@ -4692,7 +4829,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   for (const [key, value] of Object.entries(admissionEnv))
     if (key.startsWith('DATABASE_')) assert.equal(new URL(value).pathname, '/' + databases[6]);
   const cohortReports = cohortPlan.map(
-    ({ id }) => new URL('../test-results/database-' + id + '-tests.json', import.meta.url),
+    // BEGIN ROLE SCOPED NATIVE RAW_REPORTS
+    ({ id }) =>
+      new URL(
+        '../test-results/database-' + (id === 'main' ? 'main-mutators' : id) + '-tests.json',
+        import.meta.url,
+      ),
+    // END ROLE SCOPED NATIVE RAW_REPORTS
   );
   // BEGIN PAPER EXECUTION START COHORT_ENV
   const executionStartEnv = paperAdmissionEnvironment(databases[7]);
@@ -4700,9 +4843,22 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     if (key.startsWith('DATABASE_')) assert.equal(new URL(value).pathname, '/' + databases[7]);
   assert.notEqual(databases[7], databases[6]);
   // END PAPER EXECUTION START COHORT_ENV
+  // BEGIN ROLE SCOPED NATIVE ENV
+  const scopedEnv = { ...nativeEnv };
+  for (const [key, value] of Object.entries(scopedEnv))
+    if (key.startsWith('DATABASE_')) {
+      const url = new URL(value);
+      assert.equal(url.pathname, '/' + databases[0]);
+      url.pathname = '/' + databases[8];
+      scopedEnv[key] = url.href;
+    }
+  // END ROLE SCOPED NATIVE ENV
   // Remove only known output files; a prior invocation cannot supply acceptance.
   for (const output of [
     ...cohortReports,
+    // BEGIN ROLE SCOPED NATIVE REMOVE_COMPAT
+    new URL('../test-results/database-main-tests.json', import.meta.url),
+    // END ROLE SCOPED NATIVE REMOVE_COMPAT
     new URL('../test-results/database-tests.json', import.meta.url),
     new URL('../test-results/database-cohorts.json', import.meta.url),
   ]) {
@@ -4710,7 +4866,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       if (error.code !== 'ENOENT') throw error;
     });
   }
-  const cohortRun = await runDatabaseCohorts(
+  // BEGIN ROLE SCOPED NATIVE RUN
+  const cohortRun = await runRoleScopedCohorts(
+    // END ROLE SCOPED NATIVE RUN
     cohortPlan.map((cohort, index) => ({
       ...cohort,
       binary: process.execPath,
@@ -4737,6 +4895,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // retains both mutator barriers, two children and final roles isolation.
       ...(cohort.id === 'execution-preview' ? { env: executionStartEnv } : {}),
       // END PAPER STARTED PREVIEW ENV
+      // BEGIN ROLE SCOPED NATIVE COHORT_ENV
+      ...(cohort.id === 'main-scoped' ? { env: scopedEnv } : {}),
+      // END ROLE SCOPED NATIVE COHORT_ENV
+      ...(cohort.id === 'execution-commit' ? { env: executionStartEnv } : {}),
     })),
     {
       secrets,
@@ -4752,9 +4914,34 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       cohortReports.map(async (output) => JSON.parse(await readFile(output, 'utf8'))),
     ),
   );
+  // BEGIN ROLE SCOPED NATIVE ORIGINAL_MAIN_REPORT
+  // Retain both actual Vitest split reports and an explicitly derived original-main view.
+  const originalMainPlan = cohortPlan.filter((c) => ['main', 'main-scoped'].includes(c.id));
+  const originalMainReports = await Promise.all(
+    originalMainPlan.map(async (c) =>
+      JSON.parse(await readFile(cohortReports[cohortPlan.indexOf(c)], 'utf8')),
+    ),
+  );
+  await report('database-main-tests', {
+    ...mergeDatabaseReports(originalMainPlan, originalMainReports),
+    provenance: {
+      kind: 'MERGED_ORIGINAL_MAIN_COVERAGE',
+      rawReports: ['database-main-mutators-tests.json', 'database-main-scoped-tests.json'],
+    },
+  });
+  // END ROLE SCOPED NATIVE ORIGINAL_MAIN_REPORT
   await report('database-tests', tests);
+  // BEGIN CERTIFIED CLUSTER COHORT_VERIFY
+  const clusterEvidence = await nativeSecondary.verify();
+  // END CERTIFIED CLUSTER COHORT_VERIFY
   await report('database-cohorts', {
     status: 'PASS',
+    // BEGIN CERTIFIED CLUSTER COHORT_REPORT
+    nativeClusterIsolation: clusterEvidence,
+    // END CERTIFIED CLUSTER COHORT_REPORT
+    // BEGIN ROLE SCOPED NATIVE MANIFEST
+    roleScopedManifest: (await verifyScopedMainFiles()).manifest,
+    // END ROLE SCOPED NATIVE MANIFEST
     ...cohortRun,
     files: cohortPlan.flatMap((cohort) => cohort.files).length,
     tests: tests.numPassedTests,
@@ -4773,7 +4960,14 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       // BEGIN PAPER STARTED PREVIEW DATABASE
       ...(cohort.id === 'execution-preview' ? { database: databases[7] } : {}),
       // END PAPER STARTED PREVIEW DATABASE
+      // BEGIN ROLE SCOPED NATIVE COHORT_DATABASE
+      ...(cohort.id === 'main-scoped' ? { database: databases[8] } : {}),
+      // END ROLE SCOPED NATIVE COHORT_DATABASE
+      ...(cohort.id === 'execution-commit' ? { database: databases[7] } : {}),
       registryLogin: cohort.id === 'registry' ? registryCohortRole : registryRole,
+      // BEGIN CERTIFIED CLUSTER COHORT_ROUTE
+      ...certifiedRoutes.get(cohort.id),
+      // END CERTIFIED CLUSTER COHORT_ROUTE
     })),
   });
 
@@ -4848,10 +5042,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   pools.delete(attemptJournalBeforeReset);
   // END PAPER ATTEMPT JOURNAL RESET_BEFORE
   pools.delete(admissionBeforeReset);
-  await admin.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${identifier(databases[6])}`);
-  await migrate(databases[6]);
-  await migrate(databases[6]);
+  // BEGIN CERTIFIED CLUSTER RESET_ADMISSION
+  const admissionMaintenance = nativeSecondary.maintenanceFor(databases[6]);
+  await admissionMaintenance.query(`DROP DATABASE ${identifier(databases[6])} WITH (FORCE)`);
+  await admissionMaintenance.query(`CREATE DATABASE ${identifier(databases[6])}`);
+  await nativeSecondary.migrate(databases[6]);
+  await nativeSecondary.migrate(databases[6]);
+  // END CERTIFIED CLUSTER RESET_ADMISSION
   const admissionReset = connect(dbUrl(databases[6]));
   for (const table of [
     'admission_issuance',
@@ -4934,11 +5131,16 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER STARTED SOURCE RESET_AFTER
   // BEGIN PAPER STARTED RISK RESET_AFTER
   await verifyPaperStartedRiskStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutionCommitStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
   // END PAPER STARTED RISK RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
   // BEGIN PAPER EXECUTION START POPULATED_RESET
   const startedBeforeReset = connect(dbUrl(databases[7]));
+  assert.ok(
+    (await startedBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.execution_commit'))
+      .rows[0].n > 0,
+  );
   assert.ok(
     (await startedBeforeReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0]
       .n > 0,
@@ -4947,10 +5149,13 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   pools.delete(startedBeforeReset);
   // Only the explicitly created isolated fixture DB is destroyed; this is not
   // an application Paper reset or authority to discard retained live history.
-  await admin.query(`DROP DATABASE ${identifier(databases[7])} WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE ${identifier(databases[7])}`);
-  await migrate(databases[7]);
-  await migrate(databases[7]);
+  // BEGIN CERTIFIED CLUSTER RESET_STARTED
+  const startedMaintenance = nativeSecondary.maintenanceFor(databases[7]);
+  await startedMaintenance.query(`DROP DATABASE ${identifier(databases[7])} WITH (FORCE)`);
+  await startedMaintenance.query(`CREATE DATABASE ${identifier(databases[7])}`);
+  await nativeSecondary.migrate(databases[7]);
+  await nativeSecondary.migrate(databases[7]);
+  // END CERTIFIED CLUSTER RESET_STARTED
   const startedAfterReset = connect(dbUrl(databases[7]));
   assert.equal(
     (await startedAfterReset.query('SELECT count(*)::int n FROM ctp_paper.attempt_start')).rows[0]
@@ -4963,6 +5168,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER STARTED SOURCE POPULATED_RESET
   // BEGIN PAPER STARTED RISK POPULATED_RESET
   await verifyPaperStartedRiskStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutionCommitStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  for (const table of ['execution_commit', 'execution_liquidity'])
+    assert.equal(
+      (await startedAfterReset.query('SELECT count(*)::int n FROM ctp_paper.' + table)).rows[0].n,
+      0,
+    );
   // END PAPER STARTED RISK POPULATED_RESET
   await startedAfterReset.end();
   pools.delete(startedAfterReset);
@@ -4972,10 +5183,16 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // mandatory Auth job. Default/legacy runs retain their inline execution.
   if (proof.mode === 'full') await runAuthenticationAcceptance();
 
+  // BEGIN CERTIFIED CLUSTER RESET_NATIVE
+  await nativeSecondary.resetNativeAdmission();
+  // END CERTIFIED CLUSTER RESET_NATIVE
   const resetStorageMs = await resetDatabaseProof(fresh);
   outcome = {
     ...outcome,
     status: 'PASS',
+    // BEGIN CERTIFIED CLUSTER DATABASE_FINAL_REPORT
+    nativeClusterIsolation: await nativeSecondary.verify(),
+    // END CERTIFIED CLUSTER DATABASE_FINAL_REPORT
     fresh: 'PASS',
     upgradePreservesData: 'PASS',
     upgradeSealsExistingLedger: 'PASS',
@@ -5093,6 +5310,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     // BEGIN PAPER STARTED RISK FLAGS
     paperStartedRiskUpgradePreserved: true,
     paperStartedRiskResetValidated: true,
+    paperExecutionCommitUpgradePreserved: true,
+    paperExecutionCommitResetValidated: true,
     // END PAPER STARTED RISK FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
@@ -5147,6 +5366,7 @@ async function resetDatabaseProof(fresh) {
   // END PAPER STARTED SOURCE RESET_FRESH
   // BEGIN PAPER STARTED RISK RESET_FRESH
   await verifyPaperStartedRiskStorage(reset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutionCommitStorage(reset, { ownership: 'STORAGE_ONLY' });
   // END PAPER STARTED RISK RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
   for (const table of [

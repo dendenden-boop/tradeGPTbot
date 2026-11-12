@@ -1,5 +1,6 @@
 // Exact test-only reconstruction of the b4e200a native fixture and scheduling guard.
 import { createHash } from 'node:crypto';
+import { beforeExecutionCommit } from './execution-commit-legacy.mjs';
 const pins = {
   'packages/database/test/paper-started-preview.integration.test.ts': [
     [
@@ -27,6 +28,7 @@ const pins = {
   ],
 };
 export function beforePreviewClock(file, source) {
+  source = beforeExecutionCommit(file, source);
   const expected = pins[file];
   if (!expected || !source.includes('PREVIEW CLOCK FIXTURE')) return source;
   const blocks = [
