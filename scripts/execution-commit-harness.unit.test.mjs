@@ -25,7 +25,7 @@ it('isolates the financial writer after every mutating cohort and before final r
 });
 it('requires native non-bypass owner, populated upgrade/redeploy and reset writer proofs', async () => {
   const runner = await readFile(new URL('./test-database.mjs', import.meta.url), 'utf8');
-  expect(runner).toContain('executionCommitOwner.numPassedTests, 13');
+  expect(runner).toContain('executionCommitOwner.numPassedTests, 20');
   expect(runner).toContain(
     "'--outputFile.json=test-results/paper-execution-commit-owner-tests.json'",
   );

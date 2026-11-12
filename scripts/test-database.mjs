@@ -2630,7 +2630,9 @@ async function runDatabaseProof() {
       ),
     );
     assert.equal(executionCommitOwner.success, true);
-    assert.equal(executionCommitOwner.numPassedTests, 13);
+    // BEGIN PAPER EXECUTED BOOK OWNER_COUNT
+    assert.equal(executionCommitOwner.numPassedTests, 20);
+    // END PAPER EXECUTED BOOK OWNER_COUNT
     assert.equal(executionCommitOwner.numFailedTests, 0);
     assert.equal(executionCommitOwner.numPendingTests, 0);
     // END PAPER EXECUTION COMMIT OWNER

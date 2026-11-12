@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Committed pristine book capture — 12 November 2026
+
+Starting accepted main is `b15e6864cbdc2136553970b1e72b74d113776bf7` (PR68, own Platform43189290024/CodeQL43189290185). All 66 migrations are published and immutable. The [new server-only readonly capture](executed-book.md) uses the existing exact reconciliation/ownership/causal storage boundary and independently checked effects. It adds no grant, reservation, monetary posting, allocation or SQL permission. Original writer receipt outputs remain unchanged; current capture time is separate from retained execution, snapshot and market times. Missing execution yields no inferred Portfolio or released hold. Full exact-head acceptance remains pending; earlier checkpoint contracts are historical.
+
+**PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Continued/history/multiple-order/SELL/exit execution and public composition remain outstanding; financial PAPER/LIVE dispatch and positive native collateral credit stay disabled. Native AMEND remains Binance Spot TESTNET only.
+
 ## Pristine execution transaction candidate — 6 November 2026
 
 Starting protected main **b50a9f718c0c3e3a2ad28d23373135d3a75fffa4** is accepted through [PR67](https://github.com/dendenden-boop/tradeGPTbot/pull/67), own [Platform 42178568680](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568680) and [CodeQL 42178568563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568563). All eight Platform jobs, 6,044 unit / 41 HTTP per OS, 1,432 PostgreSQL / 46 files / 23 owners, 64 migrations, twelve clean deployments, audit zero and strict five-context protection pass. Main native elapsed time is 377.528 seconds under the unchanged 480-second cap. The prior candidate checkpoints below retain their history. All thirteen baseline commands pass again on 980 unchanged starting-main files.

@@ -97,6 +97,12 @@ export type {
 } from './postgres-started-risk.js';
 export { createPostgresPaperStartedExecutionPreview } from './postgres-started-preview.js';
 export { createPostgresPaperExecutionCommitter } from './postgres-execution-commit.js';
+export { createPostgresPaperExecutedBookSource } from './postgres-execution-commit.js';
+export type {
+  PaperExecutedBookRequest,
+  PaperExecutedBookSource,
+  PaperExecutedBookReader,
+} from './postgres-execution-commit.js';
 export type {
   PaperExecutionCommitRequest,
   PaperExecutionCommitReceipt,
