@@ -515,7 +515,7 @@ it('paper-executed-book: lost read COMMIT and abort return no capture and restar
   await expect(direct.read(executedRequest(f), startIo(controller.signal))).rejects.toThrow(
     'PAPER_ADMISSION_ABORTED',
   );
-  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_ADMISSION'),
+  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE'),
     reader = await openExecutedBook(proxy.connectionString);
   try {
     proxy.arm();

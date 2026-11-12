@@ -1,4 +1,7 @@
 // Exact predecessor restoration for reviewed test-only cluster isolation.
+// BEGIN PAPER EXECUTED BOOK LEGACY_IMPORT
+import { beforeExecutedBookCapture } from './executed-book-legacy.mjs';
+// END PAPER EXECUTED BOOK LEGACY_IMPORT
 import { createHash } from 'node:crypto';
 export const certifiedClusterReview = {
   'scripts/test-integration.mjs': {
@@ -160,6 +163,13 @@ export const certifiedClusterReview = {
   },
 };
 export function beforeCertifiedCluster(file, source) {
+  // BEGIN PAPER EXECUTED BOOK LEGACY_RESTORE
+  try {
+    source = beforeExecutedBookCapture(file, source);
+  } catch {
+    throw Error('ROLE_SCOPED_REVIEW_REQUIRED');
+  }
+  // END PAPER EXECUTED BOOK LEGACY_RESTORE
   const review = certifiedClusterReview[file];
   if (!review || !/BEGIN CERTIFIED (?:NATIVE )?CLUSTER /u.test(source)) return source;
   const begins = (source.match(/BEGIN CERTIFIED (?:NATIVE )?CLUSTER /gu) ?? []).length;

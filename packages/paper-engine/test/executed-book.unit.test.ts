@@ -5,15 +5,24 @@ import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import { executedBookFixture } from './executed-book-fixtures.js';
 
-const fake = vi.hoisted(() => ({
-  payload: null as unknown,
+const fake = vi.hoisted<{
+  payload: unknown;
+  capturedMs: string;
+  trace: string[];
+  queries: { text: string; values: readonly unknown[] }[];
+  duplicate: boolean;
+  duplicateClock: boolean;
+  commitError: boolean;
+  afterCommit: null | (() => void);
+}>(() => ({
+  payload: null,
   capturedMs: '0',
-  trace: [] as string[],
-  queries: [] as { text: string; values: readonly unknown[] }[],
+  trace: [],
+  queries: [],
   duplicate: false,
   duplicateClock: false,
   commitError: false,
-  afterCommit: null as null | (() => void),
+  afterCommit: null,
 }));
 vi.mock('pg', () => ({
   Client: class {
@@ -190,15 +199,76 @@ it('returns no capture after an uncertain read COMMIT and never retries', async 
 });
 it('rejects capture that becomes stale after COMMIT without renewing historical timestamps', async () => {
   const f = executedBookFixture();
-  vi.spyOn(Date, 'now').mockReturnValue(f.now + 10);
+  // Begin with a 4.9-second-old capture, then cross its freshness boundary
+  // within the transport's stricter three-second operation deadline.
+  vi.spyOn(Date, 'now').mockReturnValue(f.now + 4910);
   const reader = await open();
   fake.payload = f.packet;
   fake.capturedMs = String(f.now + 10);
-  fake.afterCommit = () => vi.mocked(Date.now).mockReturnValue(f.now + 6010);
+  fake.afterCommit = () => vi.mocked(Date.now).mockReturnValue(f.now + 5210);
   try {
     await expect(
       reader.read(requestOf(f), { signal: new AbortController().signal, deadline: f.now + 20000 }),
     ).rejects.toThrow('PAPER_ADMISSION_EXPIRED');
+  } finally {
+    await reader.close();
+  }
+});
+it('retains historical economic content after the original source lease expires without issuing fresh Risk authority', async () => {
+  const f = executedBookFixture(),
+    now = f.now + 86400000;
+  vi.spyOn(Date, 'now').mockReturnValue(now);
+  const reader = await open();
+  fake.payload = f.packet;
+  fake.capturedMs = String(now);
+  try {
+    const result = (await reader.read(requestOf(f), io())) as {
+      source: {
+        asOf: number;
+        content: { evaluatedAt: number; portfolio: unknown; frame: unknown };
+      };
+    };
+    expect(result.source.asOf).toBe(now);
+    expect(result.source.content).toMatchObject({
+      evaluatedAt: f.now,
+      portfolio: f.packet.effects.state,
+      frame: f.packet.effects.execution.frame,
+    });
+    expect('validUntil' in result.source || 'grant' in result.source).toBe(false);
+  } finally {
+    await reader.close();
+  }
+});
+it('pre-aborted capture performs no SQL and returns no source', async () => {
+  const f = executedBookFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now + 10);
+  const reader = await open(),
+    controller = new AbortController();
+  controller.abort();
+  fake.trace = [];
+  try {
+    await expect(
+      reader.read(requestOf(f), { signal: controller.signal, deadline: f.now + 2000 }),
+    ).rejects.toThrow('PAPER_ADMISSION_ABORTED');
+    expect(fake.trace).toEqual([]);
+  } finally {
+    await reader.close();
+  }
+});
+it('abort during read COMMIT returns UNCERTAIN without a capture or retry', async () => {
+  const f = executedBookFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now + 10);
+  const reader = await open(),
+    controller = new AbortController();
+  fake.payload = f.packet;
+  fake.capturedMs = String(f.now + 10);
+  fake.trace = [];
+  fake.afterCommit = () => controller.abort();
+  try {
+    await expect(
+      reader.read(requestOf(f), { signal: controller.signal, deadline: f.now + 2000 }),
+    ).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(fake.trace.filter((t) => t.includes(' AS result'))).toHaveLength(1);
   } finally {
     await reader.close();
   }

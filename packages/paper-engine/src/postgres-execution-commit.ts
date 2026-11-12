@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { immutable, timestampSchema } from '@ctp/exchange-core';
 import { canonical } from '@ctp/portfolio';
@@ -63,7 +64,10 @@ function fail(code = 'PAPER_ADMISSION_EVIDENCE'): never {
   throw Error(code);
 }
 const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
-function lookup(raw: unknown): PaperExecutionCommitRequest {
+function lookup(
+  raw: unknown,
+  expectedKind = 'PAPER_EXECUTION_COMMIT',
+): PaperExecutionCommitRequest {
   try {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail();
     const proto = Object.getPrototypeOf(raw) as unknown;
@@ -88,7 +92,7 @@ function lookup(raw: unknown): PaperExecutionCommitRequest {
       if (!descriptor?.enumerable || !('value' in descriptor)) fail();
       copy[field] = descriptor.value;
     }
-    if (copy.kind !== 'PAPER_EXECUTION_COMMIT') fail();
+    if (copy.kind !== expectedKind) fail();
     const executionKey = key.parse(copy.executionKey);
     delete copy.executionKey;
     copy.kind = 'PAPER_STARTED_RISK_CAPTURE';
@@ -98,7 +102,7 @@ function lookup(raw: unknown): PaperExecutionCommitRequest {
     fail('PAPER_ADMISSION_INPUT');
   }
 }
-function decode(raw: unknown, request: PaperExecutionCommitRequest) {
+function decodeContents(raw: unknown, request: PaperExecutionCommitRequest) {
   try {
     const w = packet.parse(raw);
     if (!same(w.request, request) || w.evaluatedAt > Date.now()) fail();
@@ -178,10 +182,119 @@ function decode(raw: unknown, request: PaperExecutionCommitRequest) {
         r.fillIds.length * 2 + 1
     )
       fail();
-    return immutable(r);
+    return { receipt: immutable(r), source, value, evaluatedAt: w.evaluatedAt };
   } catch {
     fail();
   }
+}
+function decode(raw: unknown, request: PaperExecutionCommitRequest) {
+  return decodeContents(raw, request).receipt;
+}
+
+export type PaperExecutedBookRequest = Omit<PaperExecutionCommitRequest, 'kind'> & {
+  kind: 'PAPER_EXECUTED_BOOK_CAPTURE';
+};
+const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('hex');
+function executedBookSource(
+  request: PaperExecutionCommitRequest,
+  decoded: ReturnType<typeof decodeContents>,
+  asOf: number,
+) {
+  const previous = decoded.source.started.source;
+  const revision = BigInt(previous.book.revision) + 1n;
+  if (revision > 9223372036854775807n) fail();
+  const content = immutable({
+    configurationId: previous.configurationId,
+    fundingId: previous.fundingId,
+    evaluatedAt: decoded.evaluatedAt,
+    receipt: decoded.receipt,
+    book: {
+      bookId: previous.book.bookId,
+      revision: revision.toString(),
+      hash: hash(decoded.value.state),
+    },
+    portfolio: decoded.value.state,
+    order: decoded.value.order,
+    reservation: decoded.value.reservation,
+    holdChanges: decoded.value.holdChanges,
+    frame: decoded.value.execution.calculation.ledger.execution.frame,
+  });
+  return immutable({
+    kind: 'PAPER_EXECUTED_BOOK_SOURCE' as const,
+    version: 'paper-pristine-executed-book-v1' as const,
+    request: { ...request, kind: 'PAPER_EXECUTED_BOOK_CAPTURE' as const },
+    asOf,
+    content,
+    hash: hash(content),
+  });
+}
+export type PaperExecutedBookSource = ReturnType<typeof executedBookSource>;
+export interface PaperExecutedBookReader {
+  read(
+    request: PaperExecutedBookRequest,
+    io: PaperFundingIo,
+  ): Promise<Readonly<{ kind: 'MISSING' } | { kind: 'CAPTURED'; source: PaperExecutedBookSource }>>;
+  close(): Promise<void>;
+}
+function freshCapture(asOf: number, evaluatedAt: number) {
+  const now = Date.now();
+  if (asOf > now || asOf < evaluatedAt) fail();
+  if (now - asOf > 5000) fail('PAPER_ADMISSION_EXPIRED');
+}
+
+/** Server-only read of the one committed pristine execution and its actual
+ * current economic book. Reconciliation authenticates the causal SQL history;
+ * historical source leases are evaluated at their original execution time.
+ * Capture time renews no market evidence or financial authority. */
+export async function createPostgresPaperExecutedBookSource(
+  options: unknown,
+): Promise<PaperExecutedBookReader> {
+  const database = await openPaperAdmissionDatabase(options);
+  return Object.freeze({
+    async read(raw: PaperExecutedBookRequest, io: PaperFundingIo) {
+      const request = lookup(raw, 'PAPER_EXECUTED_BOOK_CAPTURE');
+      const result = await database.transaction(
+        request.admission.binding.tenantId,
+        io,
+        async (sql) => {
+          const rows = await sql.query<{ result: unknown }>(
+            'SELECT ctp_paper.reconcile_admission($1::jsonb) AS result',
+            [canonical(request)],
+          );
+          if (rows.rows.length !== 1) fail();
+          const missing = z
+            .strictObject({ kind: z.literal('MISSING'), request: z.unknown() })
+            .safeParse(rows.rows[0]!.result);
+          if (missing.success) {
+            if (!same(missing.data.request, request)) fail();
+            return immutable({ kind: 'MISSING' as const });
+          }
+          const decoded = decodeContents(rows.rows[0]!.result, request);
+          const clock = await sql.query<{ captured_ms: unknown }>(
+            'SELECT floor(extract(epoch FROM clock_timestamp())*1000)::text AS captured_ms',
+          );
+          if (clock.rows.length !== 1) fail();
+          const wireTime = z
+            .string()
+            .regex(/^(0|[1-9][0-9]{0,15})$/u)
+            .safeParse(clock.rows[0]!.captured_ms);
+          if (!wireTime.success) fail();
+          const time = timestampSchema.safeParse(Number(wireTime.data));
+          if (!time.success) fail();
+          freshCapture(time.data, decoded.evaluatedAt);
+          return immutable({
+            kind: 'CAPTURED' as const,
+            source: executedBookSource(request, decoded, time.data),
+          });
+        },
+      );
+      if (io.signal.aborted || Date.now() >= io.deadline) fail('PAPER_ADMISSION_ABORTED');
+      if (result.kind === 'CAPTURED')
+        freshCapture(result.source.asOf, result.source.content.evaluatedAt);
+      return result;
+    },
+    close: database.close,
+  });
 }
 
 /** Server-only pristine native-START financial writer. One fixed bounded

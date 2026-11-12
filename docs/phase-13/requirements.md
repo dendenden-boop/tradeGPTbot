@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Committed pristine book capture candidate — 12 November 2026
+
+Protected main `b15e6864cbdc2136553970b1e72b74d113776bf7` accepts PR68's first pristine execution through its own [Platform 43189290024](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290024) and [CodeQL 43189290185](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290185): 6,192 unit / 41 HTTP per OS, 1,492 PostgreSQL / 49 files / 24 owners, all 66 migrations, upgrade/reset, six artifact digests/windows, twelve deployments and audit zero. All thirteen unchanged-main baseline commands pass again on 1,025 frozen inputs. Earlier pending PR68 paragraphs remain historical checkpoints.
+
+The next [committed-book source](executed-book.md) must return actual postexecution Portfolio/order/private reservation/hold/liquidity content through fixed readonly reconciliation, preserve original economic/market times and current ownership checks, reject missing/conflicting/UNKNOWN authority and return nothing after ambiguous COMMIT. Fresh capture time cannot renew old Risk or market leases. All 66 migrations and original writer receipts remain unchanged. Full current-source regression and CI are pending. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; continued/history/multiple-order/SELL/exits/public composition remain required. Financial PAPER/LIVE dispatch and positive native credit remain disabled.
+
 ## Pristine execution transaction candidate — 6 November 2026
 
 Starting protected main **b50a9f718c0c3e3a2ad28d23373135d3a75fffa4** is accepted through [PR67](https://github.com/dendenden-boop/tradeGPTbot/pull/67), own [Platform 42178568680](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568680) and [CodeQL 42178568563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568563). All eight Platform jobs, 6,044 unit / 41 HTTP per OS, 1,432 PostgreSQL / 46 files / 23 owners, 64 migrations, twelve clean deployments, audit zero and strict five-context protection pass. Main native elapsed time is 377.528 seconds under the unchanged 480-second cap. The prior candidate checkpoints below retain their history. All thirteen baseline commands pass again on 980 unchanged starting-main files.
