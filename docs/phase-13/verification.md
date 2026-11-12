@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Current typed proof bridge checkpoint — 12 November 2026
+
+Repaired `83fc9ab` passes 6,275 local unit / 41 HTTP, db/build/runtime, twelve clean deployments and all audits, but lint/typecheck reject two new direct `.mjs` imports without declarations. Both [source Platform 43251851116](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43251851116) and [PR Platform 43251864481](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43251864481) stop on lint; native/owner jobs are SKIPPED and do not constitute acceptance. Both CodeQL runs pass; the four actual OS artifact ZIPs retain checked digests/windows. The complete frozen83 run is 11/13, not relabelled GREEN.
+
+The test now imports the existing typed new valuation storage proof. That new proof invokes both unchanged legacy guards as well as the original commit guard and exact new RPC settings. This adds no declaration bypass, `any`/lint suppression, runtime feature, migration change or deadline allowance. Full typecheck and targeted lint pass before publication; an actual fresh PostgreSQL cross-contract case passes (1 selected / 27 filtered) with the server stopped and PID absent. New frozen full regression and independent source/PR CI remain required. All earlier RED/partial checkpoints below remain historical. **HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**, financial PAPER/LIVE dispatch disabled.
+
 ## Current CI repair — 12 November 2026
 
 PR70 at `78263c1` is **HOLD**. [Source Platform 43247606839](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43247606839) and [PR Platform 43247739931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43247739931) are RED despite both OS jobs, Docker smoke and both CodeQL analyses succeeding. Auth/owner storage guards reject the added public RPC `TimeZone=UTC` setting; native secondary bootstrap independently retains the old strict migration count66. Actual failure logs and all twelve artifact ZIP digests/producer windows are retained as diagnostic evidence, not acceptance.

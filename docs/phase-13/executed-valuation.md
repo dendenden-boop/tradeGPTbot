@@ -1,5 +1,23 @@
 # PHASE 13 — executed-book valuation increment
 
+## Current typed proof bridge checkpoint
+
+The next complete83fc9ab local run passes11 of13 commands: all6,275 unit,
+41 HTTP, db/build/runtime, twelve clean deployments and audit0 pass. Lint and
+typecheck reject the new regression's two untyped direct `.mjs` imports. Its
+source/PR Platform43251851116/43251864481 fail on lint, so native/owner jobs are
+SKIPPED. Both CodeQL analyses pass. Four actual OS ZIPs are retained with
+digest/producer-window verification. This is RED, not native acceptance.
+
+The changed test now imports the existing typed new storage proof; the proof
+itself calls both original started-source/Risk guards without changing them.
+Full typecheck, targeted lint and the changed real PostgreSQL security case
+pass before the next push. That diagnostic selects one case, filters27, and
+stops its server with PID absent. No runtime code, SQL, published migration,
+deadline, scanning rule or suppression changes in this repair. Fresh full
+regression and independent CI are still required; all older results retain
+their original scope. **HOLD / NOT READY FOR PHASE 14**.
+
 ## Current CI HOLD — RPC security settings reproduction
 
 Source Platform `43247606839` at `78263c1` is RED in Auth bootstrap.

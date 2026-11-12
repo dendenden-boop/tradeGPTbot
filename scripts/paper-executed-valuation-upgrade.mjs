@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { capturePaperExecutionStartUpgrade } from './paper-execution-start-upgrade.mjs';
 import { verifyPaperExecutionCommitStorage } from './paper-execution-commit-upgrade.mjs';
+import { verifyPaperStartedSourceStorage } from './paper-started-source-upgrade.mjs';
+import { verifyPaperStartedRiskStorage } from './paper-started-risk-upgrade.mjs';
 
 export async function verifyPaperExecutedValuationStorage(db, options) {
   await verifyPaperExecutionCommitStorage(db, options);
+  await verifyPaperStartedSourceStorage(db, options);
+  await verifyPaperStartedRiskStorage(db, options);
   const functions = (
     await db.query(`SELECT p.proname,p.prosecdef,p.proconfig,r.rolsuper,r.rolbypassrls,
     has_function_privilege('ctp_paper_risk_admission',p.oid,'EXECUTE') allowed,

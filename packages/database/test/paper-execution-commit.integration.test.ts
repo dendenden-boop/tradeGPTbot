@@ -8,8 +8,7 @@ import * as paper from '@ctp/paper-engine/risk';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
-import { verifyPaperStartedSourceStorage } from '../../../scripts/paper-started-source-upgrade.mjs';
-import { verifyPaperStartedRiskStorage } from '../../../scripts/paper-started-risk-upgrade.mjs';
+import { verifyPaperExecutedValuationStorage } from '../../../scripts/paper-executed-valuation-upgrade.mjs';
 import {
   closeStartFixture,
   readyExecutionStart,
@@ -789,6 +788,8 @@ it('paper-executed-valuation: genuine current rule replacement marks the histori
   expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });
 it('paper-executed-valuation: preserves accepted started-source and Risk RPC security settings', async () => {
-  await verifyPaperStartedSourceStorage({ query: startFixtureSql }, { ownership: 'STORAGE_ONLY' });
-  await verifyPaperStartedRiskStorage({ query: startFixtureSql }, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutedValuationStorage(
+    { query: startFixtureSql },
+    { ownership: 'STORAGE_ONLY' },
+  );
 });
