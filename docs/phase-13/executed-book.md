@@ -1,5 +1,9 @@
 # Committed pristine PAPER book capture
 
+## Frozen local code checkpoint
+
+Code `115fe49d562728b1a1783bef467e2dfd2f64f505` passes all thirteen local commands on 1,030 unchanged tracked inputs: 6,228 unit / 2,368 Paper / 41 HTTP, twelve isolated clean deployments and audit zero. All 6,192 preceding unit case/status identities and all 66 published migration bytes remain. A further probe imports the new API from its actual isolated compiled production package, rejects ancestor resolution fallback and verifies server-only export plus source/testing/invalid-URL rejection without a database connection. Twenty unfiltered native writer/capture cases pass in the explicitly limited Windows diagnostic described below. This documentation HEAD still requires complete independent source/PR Platform/CodeQL, actual Linux owner deadlines and protected publication; no future CI result is claimed. Earlier pending descriptions retain their checkpoint context.
+
 ## Starting acceptance and scope
 
 This increment starts from protected main `b15e6864cbdc2136553970b1e72b74d113776bf7`, the normally merged PR68 result. Its own [Platform 43189290024](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290024) and [CodeQL 43189290185](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290185) pass: 6,192 unit / 2,337 Paper / 41 HTTP per OS, 1,492 PostgreSQL / 49 files / 24 owner suites, 66 migrations with populated upgrade/redeploy/reset, six artifact digests/windows, twelve clean deployments and audit zero. Native aggregate is 401.822 seconds within the unchanged 480-second limit. All nine actual main workflow checks, its own CodeQL analysis and zero open alerts verify; PR68's separate security-app check passed before merge. All five required protection contexts remain strict and administrator-enforced.
