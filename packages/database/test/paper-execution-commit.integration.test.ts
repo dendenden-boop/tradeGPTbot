@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { valuePortfolio } from '@ctp/portfolio';
+import type { PortfolioState } from '@ctp/portfolio';
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
@@ -529,4 +531,105 @@ it('paper-executed-book: lost read COMMIT and abort return no capture and restar
     await reader.close();
     await proxy.close();
   }
+});
+
+interface ExecutedValuationReader {
+  read(
+    request: unknown,
+    io: ReturnType<typeof startIo>,
+  ): Promise<
+    | { kind: 'MISSING' }
+    | {
+        kind: 'CAPTURED';
+        source: {
+          asOf: number;
+          validUntil: number;
+          hash: string;
+          book: { content: { portfolio: PortfolioState; evaluatedAt: number }; hash: string };
+          valuation: {
+            equity: string;
+            positions: { unrealizedGross: string; netRealized: string }[];
+          };
+        };
+      }
+  >;
+  close(): Promise<void>;
+}
+const valuationReaders: ExecutedValuationReader[] = [];
+afterAll(async () => {
+  for (const reader of valuationReaders) await reader.close();
+});
+async function openExecutedValuation(connectionString = startFixtureConnection()) {
+  const fn = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperExecutedValuationSource'
+  ];
+  if (typeof fn !== 'function') throw Error('PAPER_EXECUTED_VALUATION_SOURCE_MISSING');
+  const reader = await (fn as (options: unknown) => Promise<ExecutedValuationReader>)({
+    connectionString,
+    environment: 'test',
+  });
+  valuationReaders.push(reader);
+  return reader;
+}
+const valuationRequest = (f: Awaited<ReturnType<typeof ready>>) => ({
+  ...f.request,
+  kind: 'PAPER_EXECUTED_VALUATION_CAPTURE',
+});
+async function refreshValuationMark(f: Awaited<ReturnType<typeof ready>>) {
+  const p = structuredClone(f.f.s),
+    head = await f.snapshots.read(p.key, startIo());
+  if (!head) throw Error('VALUATION_MARK_HEAD_MISSING');
+  const now = Date.now();
+  p.id = randomUUID();
+  p.expectedRevision = head.revision;
+  p.timestamp = now;
+  p.ticker.last = { state: 'AVAILABLE', value: '12.05' };
+  for (const v of [p.book, p.ticker]) v.receivedAt = v.exchangeTime = now;
+  if (p.book.sourceSequence !== null)
+    p.book.sourceSequence = (BigInt(p.book.sourceSequence) + BigInt(head.revision) + 1n).toString();
+  expect((await f.snapshots.publish(p, startIo())).status).toBe('APPLIED');
+  return p;
+}
+it('paper-executed-valuation: current public marks value the genuine committed Spot book once without new financial effects', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const p = await refreshValuationMark(f),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    reader = await openExecutedValuation();
+  const result = await reader.read(valuationRequest(f), startIo());
+  if (result.kind !== 'CAPTURED') throw Error('EXECUTED_VALUATION_CAPTURE_REQUIRED');
+  const s = result.source,
+    oracle = valuePortfolio(
+      [s.book.content.portfolio],
+      [
+        {
+          asset: p.record.instrument.baseAsset,
+          quote: p.record.instrument.quoteAsset,
+          price: '12.05',
+          kind: 'LAST',
+          fresh: true,
+          asOf: p.timestamp,
+          sourceId: p.id,
+        },
+      ],
+      { quote: p.record.instrument.quoteAsset, now: s.asOf, reconciledAfterRestart: true },
+    );
+  expect(s.valuation.equity).toBe(oracle.estimate);
+  expect(s.valuation.positions[0]).toMatchObject({
+    unrealizedGross: oracle.accounts[0]!.positions[0]!.unrealizedGross,
+    netRealized: oracle.accounts[0]!.positions[0]!.netRealized,
+  });
+  expect(s.valuation.positions[0]!.unrealizedGross).not.toBe('0');
+  expect(s.validUntil).toBeGreaterThan(Date.now());
+  expect(s.asOf).toBeGreaterThanOrEqual(s.book.content.evaluatedAt);
+  expect('grant' in s || 'permit' in s).toBe(false);
+  await reader.close();
+  const restarted = await openExecutedValuation(),
+    again = await restarted.read(valuationRequest(f), startIo());
+  if (again.kind !== 'CAPTURED') throw Error('EXECUTED_VALUATION_CAPTURE_REQUIRED');
+  expect(again.source.hash).toBe(s.hash);
+  expect(again.source.book).toEqual(s.book);
+  expect(again.source.validUntil).toBe(s.validUntil);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });
