@@ -17,13 +17,17 @@ it.each(Object.keys(executedValuationReview))(
     expect(() => beforeExecutedValuation(file, text + text)).toThrow(
       'PAPER_EXECUTED_VALUATION_REVIEW_REQUIRED',
     );
-    for (const p of review.patches)
+    for (const p of review.patches) {
+      const boundary = p.next.indexOf('\n') + 1;
+      expect(boundary).toBeGreaterThan(0);
+      const changed = p.next.slice(0, boundary) + '// unreviewed\n' + p.next.slice(boundary);
       expect(() =>
         beforeExecutedValuation(
           file,
-          text.replace(p.next, () => p.next.replace('\n', '\n// unreviewed\n')),
+          text.replace(p.next, () => changed),
         ),
       ).toThrow('PAPER_EXECUTED_VALUATION_REVIEW_REQUIRED');
+    }
     expect(hash(beforeExecutedValuation(file, text + '// outside\n'))).not.toBe(review.predecessor);
   },
 );

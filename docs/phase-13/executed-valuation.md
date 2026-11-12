@@ -80,3 +80,22 @@ deletion disabled. No settings are changed.
 Full frozen regression, original owners, populated upgrade/redeploy/reset,
 independent CI and artifact/protection checks remain required. No new CI
 success, soak or final gate is claimed.
+
+## Frozen local code verification
+
+`e875163ebca2ae5b23e43246bab4fdeda56e7ab5` completes all thirteen local
+format/docs/lint/typecheck/unit/HTTP/db/build/runtime/clean/dependency/secret/
+supply-chain commands on 1,038 unchanged SHA-256 inputs. All 6,272 unit tests
+pass, including all previous 6,228 identities/statuses plus exactly 32 valuation
+and 12 harness cases; Paper totals 2,400, HTTP 41, clean deployments 12, audit 0.
+Published SQL1–66 and the lockfile remain unchanged. Ignored proof:
+`test-results/phase13-executed-valuation/frozen-verified.json`.
+
+A following test-only review replaces deliberate first-newline `replace()`
+construction with explicit index/slices, preserving every tamper assertion.
+This avoids the same string-transform pattern as historical CodeQL alert13;
+no scanning query, suppression, source exclusion or alert status is changed.
+Runtime and migration hashes stay exactly those of the frozen code. Follow-up
+format/docs/lint/typecheck/unit and independent full CI are still required.
+The Windows native27 / populated66 upgrade / compiled-source evidence above
+does not replace the unchanged Linux owner/native deadlines or full CI.
