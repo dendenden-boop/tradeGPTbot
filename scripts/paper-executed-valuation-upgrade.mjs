@@ -20,8 +20,12 @@ export async function verifyPaperExecutedValuationStorage(db, options) {
     assert.equal(f.public, false);
     assert.equal(f.prosecdef, true);
     assert.equal(f.allowed, f.proname === 'reconcile_admission');
-    assert(f.proconfig.includes('search_path=pg_catalog'));
-    if (f.proname !== 'reconcile_admission_v66') assert(f.proconfig.includes('TimeZone=UTC'));
+    assert.deepEqual(
+      f.proconfig,
+      f.proname === 'capture_executed_valuation'
+        ? ['search_path=pg_catalog', 'TimeZone=UTC']
+        : ['search_path=pg_catalog'],
+    );
     if (options.ownership === 'REQUIRE_NON_BYPASS') {
       assert.equal(f.rolsuper, false);
       assert.equal(f.rolbypassrls, false);

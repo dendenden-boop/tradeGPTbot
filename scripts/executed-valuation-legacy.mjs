@@ -25,14 +25,14 @@ export const executedValuationReview = {
       {
         tag: 'OWNER_COUNT',
         old: '    // BEGIN PAPER EXECUTED BOOK OWNER_COUNT\n    assert.equal(executionCommitOwner.numPassedTests, 20);\n    // END PAPER EXECUTED BOOK OWNER_COUNT\n',
-        next: '    // BEGIN PAPER EXECUTED VALUATION OWNER_COUNT\n    // BEGIN PAPER EXECUTED BOOK OWNER_COUNT\n    assert.equal(executionCommitOwner.numPassedTests, 27);\n    // END PAPER EXECUTED BOOK OWNER_COUNT\n    // END PAPER EXECUTED VALUATION OWNER_COUNT\n',
-        hash: '39a70ecc1a90a136178e4b2eb81fd32c48fe7a41e566f21a55d74bbf0468811b',
+        next: '    // BEGIN PAPER EXECUTED VALUATION OWNER_COUNT\n    // BEGIN PAPER EXECUTED BOOK OWNER_COUNT\n    assert.equal(executionCommitOwner.numPassedTests, 28);\n    // END PAPER EXECUTED BOOK OWNER_COUNT\n    // END PAPER EXECUTED VALUATION OWNER_COUNT\n',
+        hash: 'c87c44827c09fdddfe421ab829074b41e75d75937cc6399099de6719fbeeb95b',
       },
       {
         tag: 'UPGRADE',
         old: '  // END PAPER EXECUTION COMMIT UPGRADE\n',
-        next: "  // BEGIN PAPER EXECUTED VALUATION UPGRADE\n  // END PAPER EXECUTION COMMIT UPGRADE\n  // Seed a real published66 financial execution through the accepted writer.\n  await run(\n    process.execPath,\n    [\n      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),\n      'run',\n      '--config',\n      'vitest.database.config.ts',\n      'packages/database/test/paper-execution-commit.integration.test.ts',\n      '-t',\n      '^paper-executed-book: captures the real committed book and conserved ledger without another monetary effect$',\n      '--outputFile.json=test-results/paper-executed-valuation-pre67-tests.json',\n    ],\n    { env: paperAdmissionEnvironment(databases[4]), secrets, echo: true, timeoutMs: 90000 },\n  );\n  const executedValuationSeed = JSON.parse(\n    await readFile(\n      new URL('../test-results/paper-executed-valuation-pre67-tests.json', import.meta.url),\n      'utf8',\n    ),\n  );\n  assert.equal(executedValuationSeed.success, true);\n  assert.equal(executedValuationSeed.numPassedTests, 1);\n  assert.equal(executedValuationSeed.numFailedTests, 0);\n  assert.equal(executedValuationSeed.numPendingTests, 26);\n  const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);\n  await cp(\n    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[66]),\n    path.join(paperMigrations, expectedMigrations[66]),\n    { recursive: true },\n  );\n  await migrate(databases[4], paperConfig, true);\n  await verifyPaperExecutedValuationUpgrade(paperUpgrade, beforeExecutedValuation);\n  await migrate(databases[4], paperConfig, true);\n  await verifyPaperExecutedValuationUpgrade(paperUpgrade, beforeExecutedValuation);\n  const executedValuationCompiled = await verifyCompiledExecutedValuation(\n    paperUpgrade,\n    paperAdmissionEnvironment(databases[4]),\n  );\n  assert.equal(executedValuationCompiled.status, 'PASS');\n  // END PAPER EXECUTED VALUATION UPGRADE\n",
-        hash: '0de773109a9ddc9fc421aaff3ff53e94772679602f2dded02c45ac7431177a38',
+        next: "  // BEGIN PAPER EXECUTED VALUATION UPGRADE\n  // END PAPER EXECUTION COMMIT UPGRADE\n  // Seed a real published66 financial execution through the accepted writer.\n  await run(\n    process.execPath,\n    [\n      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),\n      'run',\n      '--config',\n      'vitest.database.config.ts',\n      'packages/database/test/paper-execution-commit.integration.test.ts',\n      '-t',\n      '^paper-executed-book: captures the real committed book and conserved ledger without another monetary effect$',\n      '--outputFile.json=test-results/paper-executed-valuation-pre67-tests.json',\n    ],\n    { env: paperAdmissionEnvironment(databases[4]), secrets, echo: true, timeoutMs: 90000 },\n  );\n  const executedValuationSeed = JSON.parse(\n    await readFile(\n      new URL('../test-results/paper-executed-valuation-pre67-tests.json', import.meta.url),\n      'utf8',\n    ),\n  );\n  assert.equal(executedValuationSeed.success, true);\n  assert.equal(executedValuationSeed.numPassedTests, 1);\n  assert.equal(executedValuationSeed.numFailedTests, 0);\n  assert.equal(executedValuationSeed.numPendingTests, 27);\n  const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);\n  await cp(\n    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[66]),\n    path.join(paperMigrations, expectedMigrations[66]),\n    { recursive: true },\n  );\n  await migrate(databases[4], paperConfig, true);\n  await verifyPaperExecutedValuationUpgrade(paperUpgrade, beforeExecutedValuation);\n  await migrate(databases[4], paperConfig, true);\n  await verifyPaperExecutedValuationUpgrade(paperUpgrade, beforeExecutedValuation);\n  const executedValuationCompiled = await verifyCompiledExecutedValuation(\n    paperUpgrade,\n    paperAdmissionEnvironment(databases[4]),\n  );\n  assert.equal(executedValuationCompiled.status, 'PASS');\n  // END PAPER EXECUTED VALUATION UPGRADE\n",
+        hash: '9c261aa856bbc5fc7bc5ad758f6c1899daff0c512538154690c54dfa584e9e4f',
       },
       {
         tag: 'RESET_ADMISSIONRESET',
@@ -66,8 +66,8 @@ export const executedValuationReview = {
       {
         tag: 'REPORT_COUNT',
         old: "  // BEGIN PAPER EXECUTED BOOK REPORT_COUNT\n  'paper-execution-commit': 20,\n  // END PAPER EXECUTED BOOK REPORT_COUNT\n",
-        next: "  // BEGIN PAPER EXECUTED VALUATION REPORT_COUNT\n  // BEGIN PAPER EXECUTED BOOK REPORT_COUNT\n  'paper-execution-commit': 27,\n  // END PAPER EXECUTED BOOK REPORT_COUNT\n  // END PAPER EXECUTED VALUATION REPORT_COUNT\n",
-        hash: '626c8b4b88f045a64e4e8cde3494757bc7f947200f57d9ec8101224e78c6a131',
+        next: "  // BEGIN PAPER EXECUTED VALUATION REPORT_COUNT\n  // BEGIN PAPER EXECUTED BOOK REPORT_COUNT\n  'paper-execution-commit': 28,\n  // END PAPER EXECUTED BOOK REPORT_COUNT\n  // END PAPER EXECUTED VALUATION REPORT_COUNT\n",
+        hash: '1cc2ab4103484dc285d21fc5feac4b1f612ed697d400ac5ea2ce4f8ec3f93fb9',
       },
     ],
   },
@@ -90,6 +90,12 @@ export const executedValuationReview = {
         old: '      migrations: 66,\n',
         next: '      // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT\n      migrations: 67,\n      // END PAPER EXECUTED VALUATION MIGRATION_COUNT\n',
         hash: '4c66a165c4146c77bd5aa8f63a62a9a1d728d19de5b0bc0c934840995cdbcd15',
+      },
+      {
+        tag: 'SECONDARY_APPLIED_COUNT',
+        old: '        66,\n',
+        next: '        // BEGIN PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT\n        67,\n        // END PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT\n',
+        hash: '752f31ada785a83deb7ef08063a4e90a57c95346823da4537841de6cd37f73d0',
       },
     ],
   },

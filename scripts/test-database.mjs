@@ -2647,7 +2647,7 @@ async function runDatabaseProof() {
     assert.equal(executionCommitOwner.success, true);
     // BEGIN PAPER EXECUTED VALUATION OWNER_COUNT
     // BEGIN PAPER EXECUTED BOOK OWNER_COUNT
-    assert.equal(executionCommitOwner.numPassedTests, 27);
+    assert.equal(executionCommitOwner.numPassedTests, 28);
     // END PAPER EXECUTED BOOK OWNER_COUNT
     // END PAPER EXECUTED VALUATION OWNER_COUNT
     assert.equal(executionCommitOwner.numFailedTests, 0);
@@ -4639,7 +4639,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(executedValuationSeed.success, true);
   assert.equal(executedValuationSeed.numPassedTests, 1);
   assert.equal(executedValuationSeed.numFailedTests, 0);
-  assert.equal(executedValuationSeed.numPendingTests, 26);
+  assert.equal(executedValuationSeed.numPendingTests, 27);
   const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);
   await cp(
     path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[66]),

@@ -26,6 +26,23 @@ is still unpublished; published1–66 remain immutable. Full fresh regression an
 new independent CI are required. **HOLD / NOT READY FOR PHASE 14**; no merge,
 financial PAPER/LIVE dispatch, positive native credit or private exchange tests.
 
+The repaired specialized-helper proof now requires exact settings: helper
+`search_path=pg_catalog` plus UTC, current/retained public RPC wrappers only
+`search_path=pg_catalog`. All eight selected native valuation contracts pass,
+including the accepted started-source/Risk checks that reproduced RED. The
+secondary bootstrap contracts now pass all three cases and reject ledger66;
+their exact predecessor reconstruction and all original assertions remain.
+These results do not yet establish full CI acceptance for the repaired HEAD.
+
+The repaired populated-upgrade diagnostic passes the actual pre67 execution
+retention and compiled-source/restart proof. Its subsequent unfiltered28-case
+Windows run passes27 and fails the preceding storage test with
+`PAPER_ADMISSION_EXPIRED` during execution. All eight valuation cases, including
+the exact settings guard, pass. This result remains RED; it is not relabelled a
+complete suite pass or retried unchanged. Freshness guards and operation/CI
+deadlines remain unchanged. The owned server stops with PID absent. Full new
+Linux CI and frozen regression are required before any acceptance decision.
+
 Status: implementation in progress, not acceptance. Starting protected main:
 `daa67eefef780915df8480690e573adebb3ebcd4` (accepted PR69).
 PHASE 14 and financial PAPER/LIVE dispatch remain disabled.

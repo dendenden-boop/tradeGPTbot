@@ -72,7 +72,9 @@ export async function bootstrapNativeCluster({
             'SELECT count(*)::int n FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL',
           )
         ).rows[0].n,
-        66,
+        // BEGIN PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT
+        67,
+        // END PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT
       );
     } finally {
       await db.end();

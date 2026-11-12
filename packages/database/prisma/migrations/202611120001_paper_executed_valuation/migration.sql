@@ -70,7 +70,7 @@ END $$;
 
 ALTER FUNCTION ctp_paper.reconcile_admission(jsonb) RENAME TO reconcile_admission_v66;
 CREATE FUNCTION ctp_paper.reconcile_admission(p jsonb) RETURNS jsonb
- LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET timezone='UTC' AS $$ BEGIN
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN
  IF p->>'kind'='PAPER_EXECUTED_VALUATION_CAPTURE' THEN RETURN ctp_paper.capture_executed_valuation(p); END IF;
  RETURN ctp_paper.reconcile_admission_v66(p);
 END $$;

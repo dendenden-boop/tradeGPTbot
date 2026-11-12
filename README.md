@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## Current PR70 repair — CI HOLD
+
+The [executed valuation candidate](docs/phase-13/executed-valuation.md) remains on a separate draft branch. Source/PR Platform `43247606839` / `43247739931` are RED: an unnecessary public RPC timezone setting conflicts with accepted storage guards, and the secondary test harness still requires66 after applying67. Both defects have separate RED reproductions and scoped corrections under verification. Main stays protected `daa67ee`; all66 published migrations, financial/Auth/adapter runtime and original CI deadlines remain unchanged. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; financial PAPER/LIVE dispatch and positive native credit remain disabled. Earlier local GREEN checkpoints below retain their historical scope and do not override this HOLD.
+
 ## Current PHASE 13 increment — executed valuation
 
 Protected main `daa67eefef780915df8480690e573adebb3ebcd4` accepts PR69's executed-book source through its own [Platform 43232788902](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43232788902) and [CodeQL 43232789023](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43232789023). The next [readonly executed valuation increment](docs/phase-13/executed-valuation.md) passes all thirteen frozen local commands at `e875163` (6,272 unit / 41 HTTP, twelve clean deployments, audit zero). Its real Windows PostgreSQL27 and populated66→67 compiled/restart diagnostics remain limited local evidence; full independent CI is pending. Historical candidate/HOLD checkpoints below retain their original meaning. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; financial PAPER/LIVE dispatch and positive native collateral credit remain disabled. Native AMEND stays limited to Binance Spot TESTNET. Real private-exchange tests and production soak are not claimed.
