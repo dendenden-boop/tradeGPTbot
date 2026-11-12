@@ -331,3 +331,202 @@ it('paper-execution-commit: lost COMMIT returns no success and readonly reconcil
     await proxy.close();
   }
 });
+
+interface ExecutedBookView {
+  kind: 'PAPER_EXECUTED_BOOK_SOURCE';
+  asOf: number;
+  hash: string;
+  content: {
+    evaluatedAt: number;
+    receipt: Receipt;
+    portfolio: unknown;
+    book: { bookId: string; revision: string; hash: string };
+    frame: unknown;
+    reservation: { status: string; revision: string };
+  };
+}
+interface ExecutedBookReader {
+  read(
+    request: unknown,
+    io: ReturnType<typeof startIo>,
+  ): Promise<{ kind: 'MISSING' } | { kind: 'CAPTURED'; source: ExecutedBookView }>;
+  close(): Promise<void>;
+}
+const executedReaders: ExecutedBookReader[] = [];
+afterAll(async () => {
+  for (const reader of executedReaders) await reader.close();
+});
+async function openExecutedBook(connectionString = startFixtureConnection()) {
+  const fn = (paper as unknown as Record<string, unknown>)['createPostgresPaperExecutedBookSource'];
+  if (typeof fn !== 'function') throw Error('PAPER_EXECUTED_BOOK_SOURCE_MISSING');
+  const reader = await (fn as (o: unknown) => Promise<ExecutedBookReader>)({
+    connectionString,
+    environment: 'test',
+  });
+  executedReaders.push(reader);
+  return reader;
+}
+const executedRequest = (f: Awaited<ReturnType<typeof ready>>) => ({
+  ...f.request,
+  kind: 'PAPER_EXECUTED_BOOK_CAPTURE',
+});
+async function captureExecuted(reader: ExecutedBookReader, request: unknown) {
+  const result = await reader.read(request, startIo());
+  if (result.kind !== 'CAPTURED') throw Error('EXECUTED_BOOK_CAPTURE_REQUIRED');
+  return result.source;
+}
+it('paper-executed-book: captures the real committed book and conserved ledger without another monetary effect', async () => {
+  const writer = await open(),
+    f = await ready(),
+    receipt = await writer.execute(f.request, startIo());
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    reader = await openExecutedBook();
+  const source = await captureExecuted(reader, executedRequest(f));
+  const actual = await startFixtureSql<{
+    bookId: string;
+    revision: string;
+    hash: string;
+    state: string;
+    evaluatedAt: string;
+  }>(
+    `SELECT b.id::text "bookId", b.revision::text revision, encode(b.state_hash,'hex') hash,
+      b.state, x.evaluated_ms::text "evaluatedAt" FROM ctp_paper.execution_commit x
+      JOIN ctp_portfolio.book b ON b."tenantId"=x.tenant_id AND b.id=x.book_id
+      WHERE x.tenant_id=$1 AND x.execution_key=$2`,
+    [f.c.owner.tenantId, f.request.executionKey],
+  );
+  const row = actual.rows[0]!;
+  expect(actual.rows).toHaveLength(1);
+  expect(source.content.book).toEqual({
+    bookId: row.bookId,
+    revision: row.revision,
+    hash: row.hash,
+  });
+  expect(source.content.portfolio).toEqual(JSON.parse(row.state));
+  expect(source.content.evaluatedAt).toBe(Number(row.evaluatedAt));
+  expect(source.content.receipt).toEqual(receipt);
+  expect(source.content.reservation).toMatchObject({ revision: '2', status: 'RELEASED' });
+  expect(source.asOf).toBeGreaterThanOrEqual(source.content.evaluatedAt);
+  expect(source.asOf).toBeLessThanOrEqual(Date.now());
+  expect(Object.isFrozen(source.content.portfolio)).toBe(true);
+  expect('grant' in source || 'permit' in source || 'validUntil' in source).toBe(false);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-book: restart and repeated fresh captures preserve content and all historical timestamps', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const first = await openExecutedBook(),
+    a = await captureExecuted(first, executedRequest(f));
+  await first.close();
+  const next = await openExecutedBook(),
+    b = await captureExecuted(next, executedRequest(f));
+  expect(b.content).toEqual(a.content);
+  expect(b.hash).toBe(a.hash);
+  expect(b.asOf).toBeGreaterThanOrEqual(a.asOf);
+});
+it('paper-executed-book: retired rules changed policy and pause do not erase proven historical economic state', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const reader = await openExecutedBook(),
+    before = await captureExecuted(reader, executedRequest(f));
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  await startFixturePause(f.c.owner.tenantId, 'PAUSED');
+  const after = await captureExecuted(reader, executedRequest(f));
+  expect(after.content).toEqual(before.content);
+  expect(after.hash).toBe(before.hash);
+});
+it('paper-executed-book: missing UNKNOWN execution never produces a book or releases retained holds', async () => {
+  const f = await ready();
+  await f.lifecycle.markUnknown(
+    {
+      kind: 'PAPER_RESERVATION_UNKNOWN',
+      admission: f.admission,
+      reservationId: f.approval.reservationId,
+      eventId: randomUUID(),
+      expectedRevision: '1',
+    },
+    startIo(),
+  );
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    reader = await openExecutedBook();
+  expect(await reader.read(executedRequest(f), startIo())).toEqual({ kind: 'MISSING' });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-book: current permission epoch remains mandatory despite permanent historical content', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const reader = await openExecutedBook(),
+    original = await captureExecuted(reader, executedRequest(f));
+  await startFixtureSql(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  await expect(reader.read(executedRequest(f), startIo())).rejects.toThrow('PAPER_ADMISSION_SCOPE');
+  const current = {
+    ...executedRequest(f),
+    authorization: {
+      ...f.request.authorization,
+      permissionEpoch: String(BigInt(f.request.authorization.permissionEpoch) + 1n),
+    },
+  };
+  const recovered = await captureExecuted(reader, current);
+  expect(recovered.content).toEqual(original.content);
+  expect(recovered.hash).toBe(original.hash);
+});
+it('paper-executed-book: semantic conflicts and wrong account scope cannot read another execution', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const reader = await openExecutedBook(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(
+    reader.read({ ...executedRequest(f), startKey: 'conflicting-start' }, startIo()),
+  ).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+  const request = executedRequest(f);
+  await expect(
+    reader.read(
+      {
+        ...request,
+        admission: {
+          ...request.admission,
+          binding: { ...request.admission.binding, accountId: randomUUID() },
+        },
+      },
+      startIo(),
+    ),
+  ).rejects.toThrow(/PAPER_ADMISSION_(SCOPE|EVIDENCE)/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-book: lost read COMMIT and abort return no capture and restart recovers without another effect', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    direct = await openExecutedBook();
+  const expected = await captureExecuted(direct, executedRequest(f));
+  const controller = new AbortController();
+  controller.abort();
+  await expect(direct.read(executedRequest(f), startIo(controller.signal))).rejects.toThrow(
+    'PAPER_ADMISSION_ABORTED',
+  );
+  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_ADMISSION'),
+    reader = await openExecutedBook(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(reader.read(executedRequest(f), startIo())).rejects.toThrow(
+      'PAPER_ADMISSION_UNCERTAIN',
+    );
+    expect(proxy.dropped()).toBe(1);
+    expect((await captureExecuted(direct, executedRequest(f))).content).toEqual(expected.content);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await reader.close();
+    await proxy.close();
+  }
+});
