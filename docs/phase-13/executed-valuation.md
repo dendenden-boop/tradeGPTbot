@@ -1,5 +1,23 @@
 # PHASE 13 — executed-book valuation increment
 
+## Current CI HOLD — RPC security settings reproduction
+
+Source Platform `43247606839` at `78263c1` is RED in Auth bootstrap.
+Both OS checks and both CodeQL analyses pass; no open branch/PR alerts are
+present, but they cannot override this failure. The new migration adds
+`TimeZone=UTC` to shared `reconcile_admission`. Accepted started-source/Risk
+storage guards require that public wrapper's exact pre-existing
+`['search_path=pg_catalog']` settings. A fresh PostgreSQL regression reproduces
+the same mismatch before any fix: one failed case, 27 explicitly filtered out,
+with the owned server stopped and its PID absent. Raw CI and reproduction
+reports are retained under `test-results/phase13-executed-valuation/`.
+
+The correction must preserve the shared wrapper settings and keep UTC on the
+specialized valuation helper. Existing guards must not be relaxed. Migration67
+is still unpublished; published1–66 remain immutable. Full fresh regression and
+new independent CI are required. **HOLD / NOT READY FOR PHASE 14**; no merge,
+financial PAPER/LIVE dispatch, positive native credit or private exchange tests.
+
 Status: implementation in progress, not acceptance. Starting protected main:
 `daa67eefef780915df8480690e573adebb3ebcd4` (accepted PR69).
 PHASE 14 and financial PAPER/LIVE dispatch remain disabled.
