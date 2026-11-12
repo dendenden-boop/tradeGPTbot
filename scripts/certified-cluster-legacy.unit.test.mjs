@@ -17,10 +17,13 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 it.each(Object.entries(pins))(
   'retains every exact 28839b6 statement beneath independently reviewed cluster changes: %s',
   async (file, pin) => {
-    const source = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(
-      '\r\n',
-      '\n',
+    // BEGIN PAPER EXECUTED VALUATION RETAINED_CLUSTER_FIXTURE
+    const { beforeExecutedValuation } = await import('./executed-valuation-legacy.mjs');
+    const source = beforeExecutedValuation(
+      file,
+      (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
     );
+    // END PAPER EXECUTED VALUATION RETAINED_CLUSTER_FIXTURE
     expect(certifiedClusterReview[file].predecessor).toBe(pin);
     const previous = beforeCertifiedCluster(file, source);
     expect(hash(previous)).toBe(pin);

@@ -37,4 +37,46 @@ cost-basis fallback, caller prices or caller timestamps are accepted.
 - RED reports: `test-results/phase13-executed-valuation/unit-red.json` and
   `native-red/local-native-tests.json` under the same ignored root.
 
-No GREEN, migration, populated upgrade, CI, soak or final gate is claimed here.
+## Implementation checkpoint
+
+The new server-only source uses a fixed reconciliation kind and additive
+`202611120001_paper_executed_valuation`. It authenticates through published66
+causal reconciliation under GLOBAL → tenant → account/book locks, then holds
+stable instrument/rule/public-head catalogs. Original configuration defines
+valuation asset and public source scope. The traded base pins its original
+database and logical instrument identities; other funded currencies require
+unambiguous direct public prices. At most 64 heads and 16 MiB are admitted.
+No role, table, financial writer, generic Risk/Portfolio contract or dispatch
+capability is added. Only current readonly reconciliation is wrapped; all old
+kinds delegate to the exact retained function.
+
+Targeted unit implementation passes the original 24 valuation contracts and
+all 31 accepted executed-book contracts. A real PostgreSQL diagnostic passes
+the first six valuation cases. The additional v1→v2 case exposed a fixture
+attempting to read a retired head with the new key; the fixture now obtains
+the actual revision before retiring v1 and publishes legitimate v2 metadata.
+The runtime freshness/order guards remain intact.
+
+A separate fresh diagnostic first commits a genuine execution on published66,
+then applies67. All populated rows and prior function definitions/OIDs/owners
+are retained except the explicitly renamed private reconciliation wrapper and
+its narrowed ACL. The compiled production source reads the same book, survives
+factory restart, preserves finite price expiry and changes no row. Selected
+financial-kernel owners are non-BYPASSRLS; this remains a Windows startup-GUC
+diagnostic, not proof of the complete Linux CI topology, redeploy or reset.
+
+The CI harness extends the same existing owner suite to 27 cases. Its new
+reconstruction layer proves exact accepted Daa bytes beneath reviewed migration,
+count and proof additions; preceding assertions and original deadlines remain.
+The corrected fresh PostgreSQL diagnostic passes all 27 writer/book/valuation
+cases unfiltered, including legitimate current v2 metadata and all original20
+cases. Its 103.89-second Windows wall time is not acceptance of the unchanged
+90-second Linux owner gate. The server stops with `postmaster.pid` absent.
+Thirty-two valuation units and twelve new exact-predecessor harness contracts
+also pass targeted verification. GitHub API still reports Daa as protected main:
+strict five app-bound contexts, enforced admins, mandatory PR, force push and
+deletion disabled. No settings are changed.
+
+Full frozen regression, original owners, populated upgrade/redeploy/reset,
+independent CI and artifact/protection checks remain required. No new CI
+success, soak or final gate is claimed.

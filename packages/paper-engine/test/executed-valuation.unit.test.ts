@@ -7,13 +7,20 @@ import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import { executedBookFixture } from './executed-book-fixtures.js';
 
-const fake = vi.hoisted(() => ({
-  payload: null as unknown,
-  trace: [] as string[],
-  values: [] as readonly unknown[][],
+const fake = vi.hoisted<{
+  payload: unknown;
+  trace: string[];
+  values: unknown[][];
+  duplicate: boolean;
+  commitError: boolean;
+  afterCommit: null | (() => void);
+}>(() => ({
+  payload: null,
+  trace: [],
+  values: [],
   duplicate: false,
   commitError: false,
-  afterCommit: null as null | (() => void),
+  afterCommit: null,
 }));
 vi.mock('pg', () => ({
   Client: class {
@@ -25,7 +32,7 @@ vi.mock('pg', () => ({
       fake.trace.push(text);
       if (text === 'COMMIT') {
         fake.afterCommit?.();
-        if (fake.commitError) throw Error('private lost read COMMIT');
+        if (fake.commitError && fake.values.length > 0) throw Error('private lost read COMMIT');
       }
       if (text.includes(' AS result')) fake.values = [...fake.values, [...values]];
       return {
@@ -93,6 +100,7 @@ function fixture() {
     },
     book: { ...c.market.book, receivedAt: now, exchangeTime: now },
   });
+  if (publication.kind !== 'SNAPSHOT') throw Error('VALUATION_FIXTURE');
   const request = { ...f.request, kind: 'PAPER_EXECUTED_VALUATION_CAPTURE' };
   const market = {
     id: publication.id,
@@ -204,7 +212,7 @@ it.each([
     f.publication.key.dbInstrumentId = randomUUID();
     reseal(f);
   } else if (fault === 'scope') {
-    f.publication.key.scope.environment = 'LIVE';
+    f.publication.key.scope = { ...f.publication.key.scope, environment: 'LIVE' };
     reseal(f);
   } else if (fault === 'future-price' || fault === 'stale-price') {
     f.publication.timestamp = f.now + (fault === 'future-price' ? 1 : -5001);
@@ -212,8 +220,10 @@ it.each([
   } else if (fault === 'retired-rule') {
     f.publication.record.rules.expiresAt = f.now;
     reseal(f);
-  } else if (fault === 'execution') f.packet.effects.state.balances[0]!.total = '123';
-  else if (fault === 'echo') f.wire.request = { ...f.request, executionKey: 'other' };
+  } else if (fault === 'execution') {
+    f.packet.effects.state = structuredClone(f.packet.effects.state);
+    f.packet.effects.state.balances[0]!.total = '123';
+  } else if (fault === 'echo') f.wire.request = { ...f.request, executionKey: 'other' };
   else f.wire.asOf = f.now + (fault === 'future-capture' ? 1 : -5001);
   await expect(read(f)).rejects.toThrow(/PAPER_ADMISSION_(EVIDENCE|EXPIRED)/u);
   expect(fake.trace).not.toContain('COMMIT');
@@ -249,4 +259,74 @@ it('rejects prices that expire during read COMMIT', async () => {
 });
 it('keeps the server source absent from the public calculator entrypoint', () => {
   expect('createPostgresPaperExecutedValuationSource' in pure).toBe(false);
+});
+it('accepts current v2 marking metadata while preserving the original v1 execution and timestamps', async () => {
+  const f = fixture();
+  f.publication.key.dbRuleId = randomUUID();
+  f.publication.record.rules.version = 'marking-v2';
+  f.publication.record.rules.effectiveAt = f.now - 1;
+  reseal(f);
+  const result = await read(f);
+  expect(result.source.book.content.portfolio).toEqual(f.packet.effects.state);
+  expect(result.source.book.content.evaluatedAt).toBe(f.packet.evaluatedAt);
+});
+it('rejects source accessors without invoking them', async () => {
+  const f = fixture(),
+    getter = vi.fn(() => f.packet);
+  Object.defineProperty(f.wire, 'execution', { enumerable: true, get: getter });
+  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect(getter).not.toHaveBeenCalled();
+});
+it('rejects cyclic source packets before parsing or hashing', async () => {
+  const f = fixture();
+  fake.payload = { kind: f.request.kind, cycle: null };
+  (fake.payload as { cycle: unknown }).cycle = fake.payload;
+  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+});
+it('bounds the public head array before decoding its entries', async () => {
+  const f = fixture();
+  f.wire.markets = Array.from({ length: 65 }, () => f.market);
+  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_LIMIT');
+});
+it('rejects ambiguous RPC cardinality', async () => {
+  const f = fixture();
+  fake.duplicate = true;
+  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+});
+it('rejects a conflicting MISSING echo', async () => {
+  const f = fixture();
+  fake.payload = { kind: 'MISSING', request: { ...f.request, executionKey: 'other' } };
+  await expect(read(f)).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+});
+it('pre-aborted capture performs no read SQL', async () => {
+  const f = fixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  const reader = await open(),
+    controller = new AbortController();
+  controller.abort();
+  fake.trace = [];
+  try {
+    await expect(
+      reader.read(f.request, { signal: controller.signal, deadline: f.now + 2000 }),
+    ).rejects.toThrow('PAPER_ADMISSION_ABORTED');
+    expect(fake.trace).toEqual([]);
+  } finally {
+    await reader.close();
+  }
+});
+it('abort during COMMIT returns no valuation or retry', async () => {
+  const f = fixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  const reader = await open(),
+    controller = new AbortController();
+  fake.payload = f.wire;
+  fake.afterCommit = () => controller.abort();
+  try {
+    await expect(
+      reader.read(f.request, { signal: controller.signal, deadline: f.now + 2000 }),
+    ).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(fake.values).toHaveLength(1);
+  } finally {
+    await reader.close();
+  }
 });

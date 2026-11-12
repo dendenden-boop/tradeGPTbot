@@ -1,3 +1,6 @@
+// BEGIN PAPER EXECUTED VALUATION LEGACY_IMPORT
+import { beforeExecutedValuation } from './executed-valuation-legacy.mjs';
+// END PAPER EXECUTED VALUATION LEGACY_IMPORT
 // Test-only exact B15 reconstruction beneath reviewed capture owner counts.
 import { createHash } from 'node:crypto';
 export const executedBookReview = {
@@ -41,7 +44,14 @@ export const executedBookReview = {
     ],
   },
 };
+// BEGIN PAPER EXECUTED VALUATION LEGACY_RESTORE
 export function beforeExecutedBookCapture(file, source) {
+  try {
+    source = beforeExecutedValuation(file, source);
+  } catch {
+    throw Error('PAPER_EXECUTED_BOOK_REVIEW_REQUIRED');
+  }
+  // END PAPER EXECUTED VALUATION LEGACY_RESTORE
   const review = executedBookReview[file];
   if (!review || !source.includes('PAPER EXECUTED BOOK')) return source;
   if (

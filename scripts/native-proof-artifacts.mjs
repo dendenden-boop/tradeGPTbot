@@ -38,9 +38,11 @@ export const ownerReports = Object.freeze({
   // BEGIN PAPER STARTED PREVIEW REPORT
   'paper-started-preview': 6,
   // END PAPER STARTED PREVIEW REPORT
+  // BEGIN PAPER EXECUTED VALUATION REPORT_COUNT
   // BEGIN PAPER EXECUTED BOOK REPORT_COUNT
-  'paper-execution-commit': 20,
+  'paper-execution-commit': 27,
   // END PAPER EXECUTED BOOK REPORT_COUNT
+  // END PAPER EXECUTED VALUATION REPORT_COUNT
 });
 
 // Exact existing process limits in test-database.mjs, not a new allowance.

@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## Current PHASE 13 increment — executed valuation
+
+Protected main `daa67eefef780915df8480690e573adebb3ebcd4` accepts PR69's executed-book source through its own [Platform 43232788902](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43232788902) and [CodeQL 43232789023](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43232789023). The next [readonly executed valuation increment](docs/phase-13/executed-valuation.md) is under verification on a separate branch. Historical candidate/HOLD checkpoints below retain their original meaning. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**; financial PAPER/LIVE dispatch and positive native collateral credit remain disabled. Native AMEND stays limited to Binance Spot TESTNET. Real private-exchange tests and production soak are not claimed.
+
 ## Accepted pristine execution; committed-book capture candidate — 12 November 2026
 
 Protected main `b15e6864cbdc2136553970b1e72b74d113776bf7` accepts PR68 through its own [Platform 43189290024](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290024) and [CodeQL 43189290185](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290185): 6,192 unit / 41 HTTP per OS, 1,492 PostgreSQL / 49 files / 24 owners, all 66 migrations, populated upgrade/reset, six verified ZIPs, twelve deployments and audit zero. Strict five-context protection remains; original source/PR evidence and earlier RED checkpoints below retain their historical context.

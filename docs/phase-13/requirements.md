@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Current executed valuation increment
+
+The accepted PR69 baseline is protected main `daa67eefef780915df8480690e573adebb3ebcd4`. The separate [executed valuation source](executed-valuation.md) must read the proven single pristine Spot BUY book with coherent current direct public prices. Spot balances contribute to equity exactly once; PnL is disclosed separately. Historical timestamps, published migrations 1–66, existing pristine readers and financial writers remain unchanged. Additive 67 introduces readonly functions only. Missing, stale, ambiguous, conflicting or wrong-scope evidence fails closed. Full regression, populated66 upgrade/redeploy/reset, restricted owners and independent protected CI are required. This is not complete tenant inventory, another-order admission, public execution, or PHASE 14 acceptance.
+
 ## Committed pristine book capture candidate — 12 November 2026
 
 Protected main `b15e6864cbdc2136553970b1e72b74d113776bf7` accepts PR68's first pristine execution through its own [Platform 43189290024](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290024) and [CodeQL 43189290185](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43189290185): 6,192 unit / 41 HTTP per OS, 1,492 PostgreSQL / 49 files / 24 owners, all 66 migrations, upgrade/reset, six artifact digests/windows, twelve deployments and audit zero. All thirteen unchanged-main baseline commands pass again on 1,025 frozen inputs. Earlier pending PR68 paragraphs remain historical checkpoints.

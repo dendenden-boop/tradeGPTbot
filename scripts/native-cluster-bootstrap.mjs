@@ -194,7 +194,9 @@ export async function bootstrapNativeCluster({
       actors: actors.actors,
       fixedRoleGraphHash: actors.fixedRoleGraphHash,
       independentlyMigratedDatabases: [...allowed],
-      migrations: 66,
+      // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
+      migrations: 67,
+      // END PAPER EXECUTED VALUATION MIGRATION_COUNT
       secondaryResets: {
         nativeAdmission: nativeReset ? 'PASS' : 'PENDING',
         admission: (reset.get(databases[6]) ?? 0) >= 2 ? 'PASS' : 'PENDING',

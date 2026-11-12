@@ -156,7 +156,9 @@ try {
     if (
       databaseReport.nativeClusterIsolation?.status !== 'PASS' ||
       databaseReport.nativeClusterIsolation?.actors !== 32 ||
-      databaseReport.nativeClusterIsolation?.migrations !== 66 ||
+      // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
+      databaseReport.nativeClusterIsolation?.migrations !== 67 ||
+      // END PAPER EXECUTED VALUATION MIGRATION_COUNT
       ['admission', 'startedExecution', 'nativeAdmission'].some(
         (key) => databaseReport.nativeClusterIsolation?.secondaryResets?.[key] !== 'PASS',
       ) ||

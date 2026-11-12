@@ -40,7 +40,9 @@ function fixture() {
     roleCatalogBefore: { primary: '1'.repeat(64), secondary: '2'.repeat(64) },
     roleCatalogAfter: { primary: '1'.repeat(64), secondary: '2'.repeat(64) },
     actors: 32,
-    migrations: 66,
+    // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
+    migrations: 67,
+    // END PAPER EXECUTED VALUATION MIGRATION_COUNT
     fixedRoleGraphHash: '3'.repeat(64),
     independentlyMigratedDatabases: [
       base,

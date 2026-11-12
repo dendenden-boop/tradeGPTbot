@@ -1,5 +1,11 @@
 # PHASE 13 verification
 
+## Current executed valuation checkpoint — 12 November 2026
+
+Starting protected main `daa67eefef780915df8480690e573adebb3ebcd4` accepts PR69 through own [Platform 43232788902](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43232788902) and [CodeQL 43232789023](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43232789023): 6,228 unit / 41 HTTP per OS, 1,499 PostgreSQL / 49 files / 24 owner suites, 66 migrations, upgrade/reset, audit zero and verified strict protection. This supersedes earlier candidate wording for that increment without changing historical RED/HOLD results.
+
+The [executed valuation increment](executed-valuation.md) starts from that baseline. Tests-first `49b585c` records missing-source RED after genuine PostgreSQL execution. Targeted implementation and populated66→67 compiled/restart diagnostics are local evidence only; complete current-source regression and independent CI remain outstanding. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Financial PAPER/LIVE dispatch and positive native credit stay disabled. No private exchange or production soak acceptance is claimed.
+
 ## Frozen committed-book code checkpoint — 12 November 2026
 
 Code `115fe49d562728b1a1783bef467e2dfd2f64f505` passes all thirteen local commands on 1,030 unchanged SHA-256 inputs: format/docs/lint/typecheck, 6,228 unit / 2,368 Paper / 41 HTTP, db:validate, build/runtime, twelve isolated clean deployments and all dependency/secret/supply-chain audits, with zero dependency vulnerabilities. Every previous 6,192 unit case/status remains, plus exactly 31 capture and five harness reconstruction contracts. All 66 published migration bytes and the lockfile remain unchanged from accepted B15. The frozen code's compiled server-only export passes a further probe inside its actual isolated production deployment, rejecting ancestor dependency fallback, public-root access, source/testing subpaths and an invalid database URL without connecting.
