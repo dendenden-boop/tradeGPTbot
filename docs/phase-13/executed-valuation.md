@@ -12,6 +12,14 @@ the same mismatch before any fix: one failed case, 27 explicitly filtered out,
 with the owned server stopped and its PID absent. Raw CI and reproduction
 reports are retained under `test-results/phase13-executed-valuation/`.
 
+The completed source/PR native logs also expose an independent harness error:
+the secondary cluster bootstrap still asserts66 finished migrations even after
+actual migration67 succeeds (`67 !== 66`). Two new RED unit contracts exercise
+the actual bootstrap control flow and its observable migration-count boundary;
+one existing-deadline contract passes. The mock actor-clone boundary is not
+native migration or role-certificate acceptance. This strict count must advance
+to67, and published66 must continue to be rejected for the new candidate.
+
 The correction must preserve the shared wrapper settings and keep UTC on the
 specialized valuation helper. Existing guards must not be relaxed. Migration67
 is still unpublished; published1–66 remain immutable. Full fresh regression and
