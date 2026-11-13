@@ -1,9 +1,11 @@
+import { beforeHistoricalInventory } from './historical-inventory-legacy.mjs';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { beforeStartedSource } from './started-source-legacy.mjs';
-const read = (p) =>
+const rawRead = (p) =>
   fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+const read = (p) => beforeHistoricalInventory(p, rawRead(p));
 it.each([
   ['scripts/test-database.mjs', 'e5868f72d54c3d437de1f6bf19ae04f7164c520acd65618d7f6d5ccb82f5fbe7'],
   [

@@ -1,3 +1,4 @@
+import { beforeHistoricalInventory } from './historical-inventory-legacy.mjs';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
@@ -11,8 +12,9 @@ const pins = {
   'scripts/started-risk-harness.unit.test.mjs':
     'ddae50ebf79e0196f4704282b977b2735c0dc3716c31b2d480da205283533428',
 };
-const read = (p) =>
+const rawRead = (p) =>
   fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+const read = (p) => beforeHistoricalInventory(p, rawRead(p));
 it.each(Object.entries(pins))(
   'preserves every accepted faff84f harness statement outside exact preview additions in %s',
   (file, expected) => {

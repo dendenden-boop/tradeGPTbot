@@ -122,6 +122,29 @@ populated upgrade/redeploy/reset, original owner suites and independent full
 source/PR CI remain required. Published migrations1–67 are immutable; any
 database addition must be a new migration, with no financial writer/grant change.
 
+## Complete first-candidate regression — retained RED
+
+Frozen candidate `ff069a0` completes all thirteen local commands without source
+changes: twelve pass, including41HTTP, build/runtime, twelve clean deployments
+and all three audits with zero dependency vulnerabilities. Unit results are
+6,373pass/6fail of6,379. The same six historical guard-fixture failures reproduce
+in [source Platform43423632559](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43423632559)
+and [PR Platform43423992665](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43423992665);
+both CodeQL workflows pass, native/Docker jobs are skipped, so neither Platform
+run is acceptance. Their actual matrix artifacts/logs are retained separately.
+
+The new full-predecessor review layer correctly rejects modified source before
+older tamper tests reach their own guard. The repair peels that exact reviewed
+layer from each test fixture before its original mutations. All original
+assertions, expected error strings, pins and budgets remain; three new complete
+file-hash contracts prove their original bodies reconstruct byte for byte.
+All21 targeted fixture/history contracts pass after repair. A fresh full local
+regression and full exact-head source/PR CI are still required. Runtime and
+candidate migration68 are unchanged by this fixture correction. A separate
+local populated-upgrade diagnostic stops in existing START evidence setup
+before the upgrade and is not counted as upgrade/compiled acceptance; its server
+is stopped. Real populated upgrade/redeploy/reset remains mandatory in CI.
+
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Financial PAPER/LIVE dispatch
 and positive native collateral credit remain disabled. Native AMEND remains
 Binance Spot TESTNET only. No real private-exchange, production-soak or complete
