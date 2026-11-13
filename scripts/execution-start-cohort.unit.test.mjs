@@ -9,6 +9,9 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const worker = fileURLToPath(
   new URL('./fixtures/execution-start-cohort-worker.mjs', import.meta.url),
 );
+const prefixWorker = fileURLToPath(
+  new URL('./fixtures/execution-start-cohort-prefix.cjs', import.meta.url),
+);
 const start = 'packages/database/test/paper-execution-start.integration.test.ts';
 const files = [
   'packages/auth/test/rate-limit.integration.test.ts',
@@ -85,26 +88,31 @@ it('execution-start failure cannot start the final role scope', async () => {
   expect(await exists(path.join(dir, 'execution-start.started'))).toBe(true);
   expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
 });
-it('isolates the live interruption target while ordinary fixtures retain the complete dependency prefix', async () => {
+it('retains all dependency processes while interruption prefixes load only their required file IO', async () => {
   const normal = await setup(),
     failed = await setup('fail'),
     interrupted = await setup('tree');
-  for (const fixture of [normal, failed]) {
+  for (const fixture of [normal, failed, interrupted]) {
     expect(fixture.jobs.map(({ id }) => id)).toEqual([...before, 'execution-start', 'roles']);
     expect(fixture.jobs.find(({ id }) => id === 'execution-start').after).toEqual(before);
   }
-  expect(interrupted.jobs.map(({ id }) => id)).toEqual(['execution-start', 'roles']);
-  expect(interrupted.jobs[0].after).toEqual([]);
-  expect(interrupted.jobs[0].args).toEqual([
+  for (const fixture of [normal, failed])
+    expect(fixture.jobs.every((j) => j.args[0] === worker)).toBe(true);
+  for (const job of interrupted.jobs.filter(({ id }) => before.includes(id)))
+    expect(job.args).toEqual([prefixWorker, interrupted.dir, job.id]);
+  expect(interrupted.jobs.find(({ id }) => id === 'execution-start').args).toEqual([
     worker,
     interrupted.dir,
     'execution-start',
-    'isolated-tree',
+    'tree',
   ]);
-  expect(interrupted.jobs[1].args).toEqual([worker, interrupted.dir, 'roles', 'normal']);
-  expect(
-    interrupted.jobs.every(({ binary, parallel }) => binary === process.execPath && !parallel),
-  ).toBe(true);
+  expect(interrupted.jobs.find(({ id }) => id === 'roles').args).toEqual([
+    worker,
+    interrupted.dir,
+    'roles',
+    'normal',
+  ]);
+  expect(interrupted.jobs.every(({ binary }) => binary === process.execPath)).toBe(true);
 });
 it.each(['abort', 'deadline'])(
   'execution-start %s physically terminates its descendant before returning',
