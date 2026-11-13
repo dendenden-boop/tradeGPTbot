@@ -1063,3 +1063,54 @@ it('paper-executed-valuation: preserves accepted started-source and Risk RPC sec
     { ownership: 'STORAGE_ONLY' },
   );
 });
+
+it('paper-current-risk: certifies an actual executed inventory with durable current loss evidence without another financial effect', async () => {
+  const writer = await open(),
+    f = await ready();
+  const execution = await writer.execute(f.request, startIo());
+  expect(execution.order.executedQuantity).not.toBe('0');
+  await refreshValuationMark(f);
+  const inventory = await historicalCapture(await openHistorical(), f),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  expect(inventory.complete).toBe(true);
+  expect(inventory.valuation.accounts[0]!.positions).toHaveLength(1);
+  const factory = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperCurrentRiskCoordinator'
+  ];
+  expect(factory).toBeTypeOf('function');
+  type Certificate = {
+    kind: string;
+    id: string;
+    revision: string;
+    inventory: paper.PaperHistoricalInventorySource;
+    loss: { complete: boolean; actualEquity: string };
+    snapshot: { lossBaselineComplete: boolean; userExposure: string };
+  };
+  const coordinator = await (
+    factory as (options: unknown) => Promise<{
+      certify(request: unknown, io: ReturnType<typeof startIo>): Promise<Certificate>;
+      readCurrent(request: unknown, io: ReturnType<typeof startIo>): Promise<Certificate>;
+      close(): Promise<void>;
+    }>
+  )({ connectionString: startFixtureConnection(), environment: 'test' });
+  try {
+    const request = { ...f.request, kind: 'PAPER_CURRENT_RISK_CERTIFY' },
+      certificate = await coordinator.certify(request, startIo());
+    expect(certificate.kind).toBe('PAPER_CURRENT_RISK_CERTIFICATE');
+    expect(certificate.inventory.accountIds).toEqual(inventory.accountIds);
+    expect(certificate.inventory.accounts.map((a) => [a.bookId, a.revision, a.state])).toEqual(
+      inventory.accounts.map((a) => [a.bookId, a.revision, a.state]),
+    );
+    expect(certificate.loss.complete).toBe(true);
+    expect(certificate.loss.actualEquity).toBe(inventory.valuation.equity);
+    expect(certificate.snapshot.lossBaselineComplete).toBe(true);
+    expect(certificate.snapshot.userExposure).toBe(inventory.exposure.userExposure);
+    expect(certificate).not.toHaveProperty('grant');
+    expect(certificate).not.toHaveProperty('permit');
+    const current = await coordinator.readCurrent(request, startIo());
+    expect([current.id, current.revision]).toEqual([certificate.id, certificate.revision]);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await coordinator.close();
+  }
+});
