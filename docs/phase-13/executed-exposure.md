@@ -72,7 +72,20 @@ removed only through an exact full-predecessor SHA-256 check; all older root
 assertions/hashes stay intact. Six additional export tamper contracts reject
 prefix/trailing/body changes, duplication and missing additions. All218 targeted
 cases pass, including the original47 and prior transition/progress contracts.
-Complete frozen regression and independent exact-head CI are pending.
+Frozen code `d77e2cbe0a1ae4ffde969862808fe7f86aaff1ef` passes all thirteen
+format/docs/lint/typecheck/unit/HTTP/db/build/runtime/clean/dependency/secret/
+supply-chain commands on1,045 unchanged SHA-256 inputs. All6,329 unit pass,
+including every preceding6,276 identity/status and exactly47 exposure plus6
+root-review cases; Paper totals2,447, HTTP41, clean deployments12, audit0.
+All67 published migrations and1,032 other unchanged baseline files match.
+The isolated compiled production root resolves the new export, rejects invalid
+input and source/testing paths, and has no financial server authority; resolver
+hooks reject ancestor-module fallback. This is an export/boundary probe, not
+compiled valid-input or database execution/restart acceptance. Ignored evidence:
+`test-results/phase13-executed-risk/frozen-verified.json`,
+`runtime-preservation.json` and `compiled-export.json` under the same root.
+Independent exact-final-head source/PR Platform/CodeQL and protected publication
+remain required. No future CI success or final phase acceptance is claimed.
 Published migrations1–67 and financial/Auth/adapter runtime must stay unchanged.
 No new migration or database grant belongs to this calculation increment.
 
