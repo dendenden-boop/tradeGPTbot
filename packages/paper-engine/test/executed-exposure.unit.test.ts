@@ -301,7 +301,7 @@ it.each([
   if (kind === 'scope')
     f.currentMarket.key.scope = { ...f.currentMarket.key.scope, environment: 'DEMO' };
   if (kind === 'metadata')
-    f.currentMarket.record.rules.unsupportedFilters = ['NEW_NATIVE_CONSTRAINT'];
+    Object.assign(f.currentMarket.record.rules, { unsupportedFilters: ['NEW_NATIVE_CONSTRAINT'] });
   if (kind === 'future-rules') f.currentMarket.record.rules.effectiveAt = f.now + 1;
   if (kind === 'missing-price')
     Object.assign(f.currentMarket.ticker.last, { state: 'UNAVAILABLE', value: null });
@@ -360,12 +360,12 @@ it('rejects cyclic and oversized collections before historical traversal', () =>
   Object.assign(f, { self: f });
   expect(() => calculate(f)).toThrow(/PAPER_EXECUTED_EXPOSURE_/u);
   const huge = fixture();
-  huge.executionInput.portfolio.pending = new Array(3201);
+  huge.executionInput.portfolio.pending = new Array<string>(3201);
   expect(() => calculate(huge)).toThrow(/PAPER_EXECUTED_EXPOSURE_/u);
 });
 it('rejects sparse or custom prototype inputs', () => {
   const f = fixture();
-  delete f.executionInput.reservation.watermarks[0];
+  Reflect.deleteProperty(f.executionInput.reservation.watermarks, '0');
   expect(() => calculate(f)).toThrow(/PAPER_EXECUTED_EXPOSURE_/u);
   expect(() => calculate(Object.create(fixture()))).toThrow(/PAPER_EXECUTED_EXPOSURE_/u);
 });

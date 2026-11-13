@@ -1,5 +1,11 @@
 # PHASE 13 — executed-book valuation increment
 
+## Accepted protected main — 13 November 2026
+
+PR70 source `9bbabfc8ca91d114738a2e21c7337af3ca11114e` is accepted at ordinary protected squash main `e078554bd5b56b556f36af4db8ec333a45f01834`. Own-main Platform43382582643 / CodeQL43382582572 pass: 6,276 unit per OS, 1,507 PostgreSQL / 49 files / 24 owners, all28 writer/book/valuation cases, migration67 populated upgrade/compiled restart/reset, twelve deployments and audit0. Six own-main ZIP digests/windows, original test/report retention, no open CodeQL alerts and strict protection verify; native436.218433seconds stays below480. The separate CodeQL security-app result remains the successful protected PR check, not an invented tenth own-main check. Full acceptance evidence is recorded in [verification](verification.md) and PR70.
+
+Earlier “current” sections below are historical checkpoints, including actual REDs and the local Windows27/28 expiry. Their results are preserved. This accepts only the readonly valuation increment: PHASE13 IN_PROGRESS / NOT READY FOR PHASE14. Financial PAPER/LIVE dispatch and positive native credit remain disabled. The next pure prerequisite is [executed-order exposure](executed-exposure.md), not complete tenant Risk authority.
+
 ## Current verified-code and fixture checkpoint — 13 November 2026
 
 Code `b25b1db` passes full source/PR Platform43254497122/43254520669 and both

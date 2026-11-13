@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
+import { beforeExecutedExposureRoot } from './executed-exposure-legacy.mjs';
 const pins = {
   stable: {
     'packages/paper-engine/src/started-execution.ts':
@@ -31,13 +32,17 @@ const read = (p) => {
   const text = fs
     .readFileSync(new URL('../' + p, import.meta.url), 'utf8')
     .replaceAll('\r\n', '\n');
-  return p === 'packages/paper-engine/src/index.ts' ? originalRoot(text) : text;
+  return p === 'packages/paper-engine/src/index.ts'
+    ? originalRoot(beforeExecutedExposureRoot(text))
+    : text;
 };
 const hash = (s) => createHash('sha256').update(s).digest('hex');
 it('retains the complete predecessor root and rejects alteration outside the additive pure export', () => {
-  const source = fs
-    .readFileSync(new URL('../packages/paper-engine/src/index.ts', import.meta.url), 'utf8')
-    .replaceAll('\r\n', '\n');
+  const source = beforeExecutedExposureRoot(
+    fs
+      .readFileSync(new URL('../packages/paper-engine/src/index.ts', import.meta.url), 'utf8')
+      .replaceAll('\r\n', '\n'),
+  );
   expect(source.endsWith(pureAddition)).toBe(true);
   expect(hash(originalRoot(source))).toBe(pins.stable['packages/paper-engine/src/index.ts']);
   expect(hash(originalRoot(source + '// unexpected trailing content\n'))).not.toBe(

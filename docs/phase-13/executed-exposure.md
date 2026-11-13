@@ -64,7 +64,15 @@ freshness, scope, UNKNOWN, immutable deterministic content and hostile bounds.
 Ignored reports: `test-results/phase13-executed-risk/red.json` and `red.log`.
 These are missing-feature contracts, not defects in the accepted runtime.
 
-Implementation, complete regression and independent exact-head CI are pending.
+Initial implementation passed35/47 new contracts and5/7 predecessor-root
+guards. The new calculation incorrectly assumed applied fill IDs could not
+remain in Portfolio.pending. It now requires exactly the IDs of its recomputed
+fills, preserving the existing Portfolio reducer. The appended pure export is
+removed only through an exact full-predecessor SHA-256 check; all older root
+assertions/hashes stay intact. Six additional export tamper contracts reject
+prefix/trailing/body changes, duplication and missing additions. All218 targeted
+cases pass, including the original47 and prior transition/progress contracts.
+Complete frozen regression and independent exact-head CI are pending.
 Published migrations1–67 and financial/Auth/adapter runtime must stay unchanged.
 No new migration or database grant belongs to this calculation increment.
 
