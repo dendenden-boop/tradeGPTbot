@@ -1,5 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-const fixture = vi.hoisted(() => ({ count: 67, cloned: 0, inspections: [] }));
+// BEGIN PAPER HISTORICAL INVENTORY FIXTURE
+const fixture = vi.hoisted(() => ({ count: 68, cloned: 0, inspections: [] }));
+// END PAPER HISTORICAL INVENTORY FIXTURE
 vi.mock('./owned-native-secondary.mjs', () => ({
   inspectOwnedPostgres: async (project, port) => {
     fixture.inspections.push([project, port]);
@@ -20,7 +22,9 @@ vi.mock('./native-cluster-isolation.mjs', () => ({
 }));
 import { bootstrapNativeCluster } from './native-cluster-bootstrap.mjs';
 
-beforeEach(() => Object.assign(fixture, { count: 67, cloned: 0, inspections: [] }));
+// BEGIN PAPER HISTORICAL INVENTORY RESET
+beforeEach(() => Object.assign(fixture, { count: 68, cloned: 0, inspections: [] }));
+// END PAPER HISTORICAL INVENTORY RESET
 function run(budget = 10000) {
   const project = 'ctp-integration-900-aabbcc112233',
     secondary = { project: project + '-secondary', port: 34002, containerId: 'b'.repeat(64) },
@@ -62,7 +66,9 @@ function run(budget = 10000) {
   });
   return { promise, migrated, observed, closed };
 }
-it('checks migration67 in all four secondary ledgers before starting actor cloning', async () => {
+// BEGIN PAPER HISTORICAL INVENTORY TITLE
+it('checks migration68 in all four secondary ledgers before starting actor cloning', async () => {
+  // END PAPER HISTORICAL INVENTORY TITLE
   const f = run();
   await expect(f.promise).rejects.toThrow('TEST_ONLY_ACTOR_CLONE_BOUNDARY');
   expect(f.migrated).toHaveLength(4);
@@ -70,8 +76,10 @@ it('checks migration67 in all four secondary ledgers before starting actor cloni
   expect(f.closed).toEqual(f.migrated);
   expect(fixture.cloned).toBe(1);
 });
-it('rejects a secondary ledger still at published66 before cloning any actor', async () => {
-  fixture.count = 66;
+// BEGIN PAPER HISTORICAL INVENTORY STALE
+it('rejects a secondary ledger still at published67 before cloning any actor', async () => {
+  fixture.count = 67;
+  // END PAPER HISTORICAL INVENTORY STALE
   const f = run();
   await expect(f.promise).rejects.toThrow();
   expect(f.migrated).toHaveLength(1);

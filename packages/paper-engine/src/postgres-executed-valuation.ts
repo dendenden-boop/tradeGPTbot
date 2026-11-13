@@ -227,6 +227,8 @@ function decode(raw: unknown, request: PaperExecutionCommitRequest, now: number)
   }
 }
 export type PaperExecutedValuationSource = ReturnType<typeof decode>;
+// Internal content validation only; absent from every package entrypoint.
+export { decode as decodePaperExecutedValuationContents };
 export interface PaperExecutedValuationReader {
   read(
     request: PaperExecutedValuationRequest,

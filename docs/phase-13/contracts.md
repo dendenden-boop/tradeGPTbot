@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Current bounded historical inventory prerequisite
+
+After accepted PR71, the server-only [historical inventory contract](historical-inventory.md) binds the immutable execution selector and current authorization to a sorted complete tenant account catalog under GLOBAL → tenant → user → account/book → metadata/head locks. The only supported history is one proven first Spot BUY execution plus pristine siblings. Every account/book, position, residual order/reservation and hold is counted once; all wallet values contribute to equity once. No unknown availability, history or missing price is inferred. Fresh reads never renew economic/price timestamps. The fixed RPC is readonly and retains bounded transport/deadline/uncertain-COMMIT behavior. Candidate migration68 preserves published1–67 and delegates all existing RPC kinds unchanged. This is inventory content, not policy/loss certification or financial authority. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; PAPER/LIVE financial dispatch and positive native credit remain disabled. Earlier checkpoint contracts retain their stated historical scope.
+
 ## Current single-order exposure prerequisite
 
 Protected main `e078554bd5b56b556f36af4db8ec333a45f01834` accepts PR70 and its coherent readonly valuation; earlier pending statements below retain their checkpoint scope. The next [pure executed-order exposure contract](executed-exposure.md) recomputes the accepted first transition at original time, prices its actual position at current fresh LAST evidence and retains one residual order/reservation identity. Fee collateral is neither another notional nor PnL. Strict bounds, immutable output, unchanged old root beneath one appended export and fail-closed scope/clock/history validation are required.

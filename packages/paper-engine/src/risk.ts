@@ -99,6 +99,12 @@ export { createPostgresPaperStartedExecutionPreview } from './postgres-started-p
 export { createPostgresPaperExecutionCommitter } from './postgres-execution-commit.js';
 export { createPostgresPaperExecutedBookSource } from './postgres-execution-commit.js';
 export { createPostgresPaperExecutedValuationSource } from './postgres-executed-valuation.js';
+export { createPostgresPaperHistoricalInventorySource } from './postgres-historical-inventory.js';
+export type {
+  PaperHistoricalInventoryRequest,
+  PaperHistoricalInventorySource,
+  PaperHistoricalInventoryReader,
+} from './postgres-historical-inventory.js';
 export type {
   PaperExecutedValuationRequest,
   PaperExecutedValuationSource,

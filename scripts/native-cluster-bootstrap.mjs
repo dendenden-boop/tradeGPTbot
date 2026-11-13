@@ -1,4 +1,6 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: extra issued role-domain proof, no financial authority.
 // Owned acceptance infrastructure only; never a production runtime authority.
+import { proveRegistryIndependence } from './registry-domain-independence.mjs';
 import assert from 'node:assert/strict';
 import { inspectOwnedPostgres } from './owned-native-secondary.mjs';
 import {
@@ -73,7 +75,9 @@ export async function bootstrapNativeCluster({
           )
         ).rows[0].n,
         // BEGIN PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT
-        67,
+        // BEGIN PAPER HISTORICAL INVENTORY SECONDARY_COUNT
+        68,
+        // END PAPER HISTORICAL INVENTORY SECONDARY_COUNT
         // END PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT
       );
     } finally {
@@ -95,6 +99,11 @@ export async function bootstrapNativeCluster({
     secondary: secondaryAdmin,
     primaryEndpoint: primaryIdentity,
     secondaryEndpoint: secondaryIdentity,
+  });
+  const registryProof = await proveRegistryIndependence({
+    primary: primaryAdmin,
+    secondary: secondaryAdmin,
+    isolation: certificate,
   });
   const before = {
     primary: await nativeRoleCatalogHash(primaryAdmin),
@@ -191,13 +200,16 @@ export async function bootstrapNativeCluster({
       primaryIdentity,
       secondaryIdentity,
       roleIsolation: certificate.roleIsolation,
+      registryIndependence: registryProof.evidence,
       roleCatalogBefore: before,
       roleCatalogAfter: after,
       actors: actors.actors,
       fixedRoleGraphHash: actors.fixedRoleGraphHash,
       independentlyMigratedDatabases: [...allowed],
       // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
-      migrations: 67,
+      // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
+      migrations: 68,
+      // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT
       // END PAPER EXECUTED VALUATION MIGRATION_COUNT
       secondaryResets: {
         nativeAdmission: nativeReset ? 'PASS' : 'PENDING',
@@ -208,6 +220,7 @@ export async function bootstrapNativeCluster({
   }
   return Object.freeze({
     certificate,
+    registryProof,
     port,
     project: secondaryIdentity.project,
     migrate,

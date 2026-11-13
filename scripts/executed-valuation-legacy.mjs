@@ -1,5 +1,6 @@
 // Test-only exact accepted Daa reconstruction. Runtime never imports this file.
 import { createHash } from 'node:crypto';
+import { beforeHistoricalInventory } from './historical-inventory-legacy.mjs';
 export const executedValuationReview = {
   'scripts/test-database.mjs': {
     predecessor: 'ff99263de715f18e0bf2589a5e2dc69a3789cb17fc73936a309eb7c9d6093e46',
@@ -173,6 +174,7 @@ export const executedValuationReview = {
   },
 };
 export function beforeExecutedValuation(file, source) {
+  source = beforeHistoricalInventory(file, source);
   const review = executedValuationReview[file];
   if (!review || !source.includes('PAPER EXECUTED VALUATION')) return source;
   if (

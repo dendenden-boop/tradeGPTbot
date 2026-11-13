@@ -157,7 +157,9 @@ try {
       databaseReport.nativeClusterIsolation?.status !== 'PASS' ||
       databaseReport.nativeClusterIsolation?.actors !== 32 ||
       // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
-      databaseReport.nativeClusterIsolation?.migrations !== 67 ||
+      // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
+      databaseReport.nativeClusterIsolation?.migrations !== 68 ||
+      // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT
       // END PAPER EXECUTED VALUATION MIGRATION_COUNT
       ['admission', 'startedExecution', 'nativeAdmission'].some(
         (key) => databaseReport.nativeClusterIsolation?.secondaryResets?.[key] !== 'PASS',
