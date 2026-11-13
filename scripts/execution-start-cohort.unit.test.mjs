@@ -85,6 +85,27 @@ it('execution-start failure cannot start the final role scope', async () => {
   expect(await exists(path.join(dir, 'execution-start.started'))).toBe(true);
   expect(await exists(path.join(dir, 'roles.started'))).toBe(false);
 });
+it('isolates the live interruption target while ordinary fixtures retain the complete dependency prefix', async () => {
+  const normal = await setup(),
+    failed = await setup('fail'),
+    interrupted = await setup('tree');
+  for (const fixture of [normal, failed]) {
+    expect(fixture.jobs.map(({ id }) => id)).toEqual([...before, 'execution-start', 'roles']);
+    expect(fixture.jobs.find(({ id }) => id === 'execution-start').after).toEqual(before);
+  }
+  expect(interrupted.jobs.map(({ id }) => id)).toEqual(['execution-start', 'roles']);
+  expect(interrupted.jobs[0].after).toEqual([]);
+  expect(interrupted.jobs[0].args).toEqual([
+    worker,
+    interrupted.dir,
+    'execution-start',
+    'isolated-tree',
+  ]);
+  expect(interrupted.jobs[1].args).toEqual([worker, interrupted.dir, 'roles', 'normal']);
+  expect(
+    interrupted.jobs.every(({ binary, parallel }) => binary === process.execPath && !parallel),
+  ).toBe(true);
+});
 it.each(['abort', 'deadline'])(
   'execution-start %s physically terminates its descendant before returning',
   async (kind) => {
