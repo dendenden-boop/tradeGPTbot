@@ -1,5 +1,11 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Accepted PR70 and next PHASE 13 prerequisite — 13 November 2026
+
+Protected main `e078554bd5b56b556f36af4db8ec333a45f01834` accepts readonly executed valuation via PR70 and complete own-main Platform43382582643 / CodeQL43382582572: 6,276 unit per OS, 1,507 PostgreSQL /24owners,67migrations with populated upgrade/reset/restart, twelve deployments and audit0. Earlier pending/HOLD descriptions below retain their historical scope.
+
+The next [executed-order exposure calculation](../phase-13/executed-exposure.md) must count the marked first-execution position and remaining bounded order liability once while retaining separate fee collateral. It is calculation content, not complete tenant inventory, a financial grant or another-order admission. Published migrations1–67 and accepted financial/native runtime remain unchanged. Current targeted tests pass; full new regression/CI is pending. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. Financial PAPER/LIVE dispatch and positive native collateral credit stay disabled; native AMEND remains Binance Spot TESTNET only. General continued/history/multiple-order/SELL/exits and public composition remain outstanding; real private-exchange tests and production soak are not claimed.
+
 ## Pristine execution transaction candidate — 6 November 2026
 
 Starting protected main **b50a9f718c0c3e3a2ad28d23373135d3a75fffa4** is accepted through [PR67](https://github.com/dendenden-boop/tradeGPTbot/pull/67), own [Platform 42178568680](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568680) and [CodeQL 42178568563](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/42178568563). All eight Platform jobs, 6,044 unit / 41 HTTP per OS, 1,432 PostgreSQL / 46 files / 23 owners, 64 migrations, twelve clean deployments, audit zero and strict five-context protection pass. Main native elapsed time is 377.528 seconds under the unchanged 480-second cap. The prior candidate checkpoints below retain their history. All thirteen baseline commands pass again on 980 unchanged starting-main files.

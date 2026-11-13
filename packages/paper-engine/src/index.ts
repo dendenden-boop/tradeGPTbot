@@ -38,3 +38,8 @@ export {
   calculatePaperStartedTransition,
   type PaperStartedTransitionCalculation,
 } from './started-transition.js';
+
+export {
+  calculatePaperExecutedExposure,
+  type PaperExecutedExposureCalculation,
+} from './executed-exposure.js';

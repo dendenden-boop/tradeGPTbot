@@ -1,5 +1,11 @@
 # PHASE 13 requirements
 
+## Current prerequisite after accepted PR70
+
+Starting protected main is `e078554bd5b56b556f36af4db8ec333a45f01834`, accepted by complete Platform43382582643 / CodeQL43382582572. All thirteen unchanged-main baseline commands pass again: 6,276 unit / 41 HTTP, twelve clean deployments and audit zero on 1,040 frozen files. Earlier candidate/pending descriptions below are historical.
+
+The [executed-order exposure calculation](executed-exposure.md) must derive current position notional plus the remaining original bounded order liability once, keeping its reservation/hold and fees separate. It must retain historical economic time, refuse stale/conflicting/UNKNOWN content and report single-order coverage with tenant completeness false. This prerequisite grants no financial authority and adds no migration. Full regression and independent CI are required before publication. Published1–67 and accepted native/financial runtime remain unchanged; PHASE13 stays IN_PROGRESS / NOT READY FOR PHASE14.
+
 ## Current executed valuation increment
 
 The accepted PR69 baseline is protected main `daa67eefef780915df8480690e573adebb3ebcd4`. The separate [executed valuation source](executed-valuation.md) must read the proven single pristine Spot BUY book with coherent current direct public prices. Spot balances contribute to equity exactly once; PnL is disclosed separately. Historical timestamps, published migrations 1–66, existing pristine readers and financial writers remain unchanged. Additive 67 introduces readonly functions only. Missing, stale, ambiguous, conflicting or wrong-scope evidence fails closed. Full regression, populated66 upgrade/redeploy/reset, restricted owners and independent protected CI are required. This is not complete tenant inventory, another-order admission, public execution, or PHASE 14 acceptance.

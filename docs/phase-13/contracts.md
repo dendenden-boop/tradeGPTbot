@@ -1,5 +1,11 @@
 # PHASE 13 contracts
 
+## Current single-order exposure prerequisite
+
+Protected main `e078554bd5b56b556f36af4db8ec333a45f01834` accepts PR70 and its coherent readonly valuation; earlier pending statements below retain their checkpoint scope. The next [pure executed-order exposure contract](executed-exposure.md) recomputes the accepted first transition at original time, prices its actual position at current fresh LAST evidence and retains one residual order/reservation identity. Fee collateral is neither another notional nor PnL. Strict bounds, immutable output, unchanged old root beneath one appended export and fail-closed scope/clock/history validation are required.
+
+This value is explicitly incomplete tenant inventory and authenticates no database, current policy, permission, loss baseline, reservation or permit. No current reader/writer or published migration1–67 is relaxed. General historical inventory, continued/multiple-order execution, SELL/exits and public composition remain outstanding. PHASE13 IN_PROGRESS / NOT READY FOR PHASE14; financial PAPER/LIVE dispatch and positive native credit stay disabled.
+
 ## Current executed valuation contract
 
 The server-only `@ctp/paper-engine/risk` source selects a committed execution with exact `PAPER_EXECUTED_VALUATION_CAPTURE` keys: `executionKey`, `preparationKey`, `startKey`, immutable `admission`, and current `authorization` epochs. No caller prices, projections, timestamps, SQL, roles or connection/profile overrides enter this request. The fixed bounded admission transaction delegates old reconciliation kinds unchanged and authenticates the current causal book before reading locked metadata/public-head catalogs. The result is exact `MISSING` or immutable `CAPTURED` with book, current balances/Spot PnL valuation, price references, finite `validUntil` and content hash. Original execution and economic timestamps are retained. A new `asOf` renews neither old prices nor financial authority. Uncertain read COMMIT returns no source and never retries. [Scope, RED and verification](executed-valuation.md). Financial PAPER/LIVE dispatch remains disabled; PHASE 14 is not started.
