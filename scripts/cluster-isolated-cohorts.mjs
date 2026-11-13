@@ -1,3 +1,4 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: explicit additional profile; legacy barriers remain.
 // Certified test-only two-cluster schedule. No production export.
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -10,6 +11,14 @@ import {
 } from './native-main-scopes.mjs';
 import { planRoleScopedCohorts } from './role-scoped-cohorts.mjs';
 import { assertNativeClusterIsolation } from './native-cluster-isolation.mjs';
+import {
+  assertRegistryIndependence,
+  verifyRegistryDomainInputs,
+} from './registry-domain-independence.mjs';
+export {
+  proveRegistryIndependence,
+  assertRegistryIndependence,
+} from './registry-domain-independence.mjs';
 
 function requireClusterRoutes(jobs, isolation) {
   try {
@@ -108,9 +117,13 @@ export async function planClusterIsolatedCohorts(original, isolation) {
 
 export async function runClusterIsolatedCohorts(
   jobs,
-  { timeoutMs, signal, secrets = [], echo = false, cwd = workspace, isolation },
+  { timeoutMs, signal, secrets = [], echo = false, cwd = workspace, isolation, registryProof },
 ) {
   assertNativeClusterIsolation(isolation);
+  if (registryProof !== undefined) {
+    assertRegistryIndependence(registryProof, isolation);
+    await verifyRegistryDomainInputs(cwd);
+  }
   await verifyScopedMainFiles(cwd);
   assert.deepEqual(
     jobs.map(({ id, parallel, after, afterAny }) => ({
@@ -119,7 +132,7 @@ export async function runClusterIsolatedCohorts(
       ...(after === undefined ? {} : { after }),
       ...(afterAny === undefined ? {} : { afterAny }),
     })),
-    clusterIsolatedShape,
+    registryProof === undefined ? clusterIsolatedShape : registryIsolatedShape,
   );
   assert.deepEqual(jobs[2].files, [...scopedMainFiles]);
   requireClusterRoutes(jobs, isolation);
@@ -251,11 +264,32 @@ export async function runClusterIsolatedCohorts(
     }
     if (controller.signal.aborted || performance.now() - started >= timeoutMs)
       throw new Error('Native scoped aggregate deadline/abort');
-    return { timeoutMs, elapsedMs: performance.now() - started, completed };
+    return {
+      timeoutMs,
+      elapsedMs: performance.now() - started,
+      completed,
+      ...(registryProof === undefined ? {} : { registryIndependence: registryProof.evidence }),
+    };
   } finally {
     stop();
     await Promise.all(active.values());
     clearTimeout(timer);
     signal?.removeEventListener('abort', stop);
   }
+}
+
+// An explicit extra profile; the original conservative API/shape is unchanged.
+export const registryIsolatedShape = clusterIsolatedShape.map((job) =>
+  job.id === 'native-admission' ? { ...job, after: [] } : job,
+);
+export async function planRegistryIsolatedCohorts(original, isolation, registryProof) {
+  assertRegistryIndependence(registryProof, isolation);
+  await verifyRegistryDomainInputs();
+  return (await planClusterIsolatedCohorts(original, isolation)).map((job) =>
+    job.id === 'native-admission' ? { ...job, after: [] } : job,
+  );
+}
+export async function runRegistryIsolatedCohorts(jobs, options) {
+  assertRegistryIndependence(options.registryProof, options.isolation);
+  return runClusterIsolatedCohorts(jobs, options);
 }

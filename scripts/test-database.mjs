@@ -1,3 +1,4 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: new profile requires actual owned registry role proof.
 // BEGIN PAPER HISTORICAL INVENTORY IMPORT
 import {
   verifyPaperHistoricalInventoryStorage,
@@ -22,8 +23,8 @@ import { scopedMainDatabaseName, verifyScopedMainFiles } from './native-main-sco
 // BEGIN CERTIFIED CLUSTER DATABASE_IMPORT
 import { bootstrapNativeCluster } from './native-cluster-bootstrap.mjs';
 import {
-  planClusterIsolatedCohorts,
-  runClusterIsolatedCohorts,
+  planRegistryIsolatedCohorts,
+  runRegistryIsolatedCohorts,
 } from './cluster-isolated-cohorts.mjs';
 const retainedRoleScopedRunner = runRoleScopedCohorts;
 // END CERTIFIED CLUSTER DATABASE_IMPORT
@@ -4872,9 +4873,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
         ? remainingNativeBudget(nativeWindow)
         : Math.max(0, proof.timeoutMs - (Date.now() - Date.parse(startedAt))),
   });
-  const certifiedPlan = await planClusterIsolatedCohorts(
+  const certifiedPlan = await planRegistryIsolatedCohorts(
     originalCohortPlan,
     nativeSecondary.certificate,
+    nativeSecondary.registryProof,
   );
   // Upgrade the in-memory plan only after actual separate server/role proof.
   // No child has started and the original discovery/partition remains intact.
@@ -4910,9 +4912,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       certifiedRoutes.set(job.id, descriptor);
       return { ...job, ...descriptor, env: Object.freeze(env) };
     });
-    return runClusterIsolatedCohorts(certified, {
+    return runRegistryIsolatedCohorts(certified, {
       ...options,
       isolation: nativeSecondary.certificate,
+      registryProof: nativeSecondary.registryProof,
     });
   }
   // END CERTIFIED CLUSTER DATABASE_SETUP

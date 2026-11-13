@@ -1,6 +1,8 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: verify actual registry separation for early admission.
 // Read-only acceptance evidence; cannot mint a scheduler certificate or grant.
 import assert from 'node:assert/strict';
-import { clusterIsolatedShape } from './cluster-isolated-cohorts.mjs';
+import { clusterIsolatedShape, registryIsolatedShape } from './cluster-isolated-cohorts.mjs';
+import { requireRegistryIndependenceEvidence } from './registry-domain-independence.mjs';
 import {
   scopedMainFiles,
   scopedMainManifestHash,
@@ -14,6 +16,11 @@ const system = (value) => {
 };
 export function requireClusterIsolatedEvidence(cohorts, native) {
   const proof = cohorts.nativeClusterIsolation;
+  const registryOverlap = Object.hasOwn(cohorts, 'registryIndependence');
+  if (registryOverlap) {
+    requireRegistryIndependenceEvidence(cohorts.registryIndependence);
+    assert.deepEqual(cohorts.registryIndependence, proof.registryIndependence);
+  }
   assert.equal(proof.status, 'PASS');
   assert.equal(proof.version, 'native-cluster-isolation-v1');
   const a = proof.primary,
@@ -61,7 +68,7 @@ export function requireClusterIsolatedEvidence(cohorts, native) {
       ...(after === undefined ? {} : { after }),
       ...(afterAny === undefined ? {} : { afterAny }),
     })),
-    clusterIsolatedShape,
+    registryOverlap ? registryIsolatedShape : clusterIsolatedShape,
   );
   const plans = new Map(cohorts.cohorts.map((c) => [c.id, c])),
     times = new Map(cohorts.completed.map((c) => [c.id, c]));
@@ -124,6 +131,9 @@ export function requireClusterIsolatedEvidence(cohorts, native) {
     assert(active >= 0 && active <= 2);
   }
   assert.equal(active, 0);
+  if (registryOverlap) {
+    assert(times.get('native-admission').startMs < times.get('registry').settledMs);
+  }
   for (const id of ['main', 'main-scoped'])
     assert(times.get(id).startMs >= times.get('registry').settledMs);
   for (const [id, t] of times)

@@ -1,3 +1,5 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: isolate the historical fixture before its tamper checks.
+import { beforeRegistryDomain } from './registry-domain-legacy.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
@@ -6,7 +8,10 @@ import {
   historicalInventoryReview,
 } from './historical-inventory-legacy.mjs';
 const sourceOf = async (file) =>
-  (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  beforeRegistryDomain(
+    file,
+    (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
+  );
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 it.each(Object.keys(historicalInventoryReview))(
   'retains the complete accepted main harness below exact inventory additions: %s',
@@ -28,10 +33,14 @@ it.each(Object.keys(historicalInventoryReview))(
       expect(() =>
         beforeHistoricalInventory(file, source.replace(patch.next, patch.next + patch.next)),
       ).toThrow('PAPER_HISTORICAL_INVENTORY_REVIEW_REQUIRED');
+      const boundary = patch.next.indexOf('\n') + 1;
+      expect(boundary).toBeGreaterThan(0);
+      const changed =
+        patch.next.slice(0, boundary) + '// unreviewed\n' + patch.next.slice(boundary);
       expect(() =>
         beforeHistoricalInventory(
           file,
-          source.replace(patch.next, patch.next.replace('\n', '\n// unreviewed\n')),
+          source.replace(patch.next, () => changed),
         ),
       ).toThrow('PAPER_HISTORICAL_INVENTORY_REVIEW_REQUIRED');
     }

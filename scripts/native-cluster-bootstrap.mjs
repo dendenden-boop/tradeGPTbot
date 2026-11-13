@@ -1,4 +1,6 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: extra issued role-domain proof, no financial authority.
 // Owned acceptance infrastructure only; never a production runtime authority.
+import { proveRegistryIndependence } from './registry-domain-independence.mjs';
 import assert from 'node:assert/strict';
 import { inspectOwnedPostgres } from './owned-native-secondary.mjs';
 import {
@@ -98,6 +100,11 @@ export async function bootstrapNativeCluster({
     primaryEndpoint: primaryIdentity,
     secondaryEndpoint: secondaryIdentity,
   });
+  const registryProof = await proveRegistryIndependence({
+    primary: primaryAdmin,
+    secondary: secondaryAdmin,
+    isolation: certificate,
+  });
   const before = {
     primary: await nativeRoleCatalogHash(primaryAdmin),
     secondary: await nativeRoleCatalogHash(secondaryAdmin),
@@ -193,6 +200,7 @@ export async function bootstrapNativeCluster({
       primaryIdentity,
       secondaryIdentity,
       roleIsolation: certificate.roleIsolation,
+      registryIndependence: registryProof.evidence,
       roleCatalogBefore: before,
       roleCatalogAfter: after,
       actors: actors.actors,
@@ -212,6 +220,7 @@ export async function bootstrapNativeCluster({
   }
   return Object.freeze({
     certificate,
+    registryProof,
     port,
     project: secondaryIdentity.project,
     migrate,

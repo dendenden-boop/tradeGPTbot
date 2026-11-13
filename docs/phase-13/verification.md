@@ -1,5 +1,32 @@
 # PHASE 13 verification
 
+## Historical inventory candidate remains HOLD — 13 November 2026
+
+Repair `307c291` passes all thirteen frozen local commands on 1,055 unchanged
+inputs: 6,382 unit / 2,486 Paper / 41 HTTP, twelve clean deployments and audit
+zero. All 6,329 prior unit occurrences and 67 published migration blobs/working
+bytes verify, with two reviewed migration-count display-title changes. Source
+[Platform 43425574301](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43425574301)
+passes all jobs, including 1,514 native cases / 49 files / 24 owners, all 35
+writer/capture cases and populated migration68/compiled restart/reset. Its
+473.322-second native result leaves only 6.678 seconds under the original cap.
+All six source artifact digests/windows verify. PR
+[Platform 43425581623](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43425581623)
+is **RED** at the final native roles deadline; both OS, Auth, Docker and owners
+pass. All six actual PR ZIPs and the failed raw log are retained. Neither a rerun
+nor the source result substitutes for this failed acceptance gate.
+
+The [detailed contract](historical-inventory.md) records the separate CodeQL14
+test-only insertion repair and the tests-first independent registry profile
+candidate, with issued real-server proof, fail-closed routing and unchanged
+physical cleanup/barriers/budgets. No alert is dismissed or source excluded.
+Final-head full local regression, Ubuntu/Windows/native/owners/Docker CI,
+zero open CodeQL findings and artifact/protection verification remain required.
+**HOLD — PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Financial PAPER/LIVE
+dispatch and positive native collateral credit remain disabled; native AMEND
+stays Binance Spot TESTNET only. Real private-exchange tests and soak are not
+claimed. Older checkpoints below retain their original scope and results.
+
 ## Accepted PR71; next inventory RED→GREEN checkpoint — 13 November 2026
 
 Protected main `514f68240bb9f5890138af51a766c0173e08b4d4` passes its own [Platform 43392269284](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43392269284) and [CodeQL 43392269265](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43392269265): 6,329 unit /2,447Paper /41HTTP per OS, 1,507PostgreSQL /49files /24owners, all67migrations, populated upgrade/reset/restart, twelve clean deployments and audit0. Main ZIP digests/windows, raw native reports, retained test identities and strict protection are verified. All thirteen unchanged-main baseline commands pass again. Prior pending paragraphs below retain their historical meaning.

@@ -1,3 +1,5 @@
+// REGISTRY_DOMAIN_EARLY_NATIVE: exact registry-profile changes peel before prior reviews.
+import { beforeRegistryDomain } from './registry-domain-legacy.mjs';
 // Test-only exact accepted514 harness reconstruction; never runtime authority.
 import { createHash } from 'node:crypto';
 export const historicalInventoryReview = {
@@ -118,6 +120,7 @@ export const historicalInventoryReview = {
   },
 };
 export function beforeHistoricalInventory(file, source) {
+  source = beforeRegistryDomain(file, source);
   const r = historicalInventoryReview[file];
   if (!r || !source.includes('PAPER HISTORICAL INVENTORY')) return source;
   const hash = (s) => createHash('sha256').update(s).digest('hex');

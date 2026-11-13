@@ -145,6 +145,59 @@ local populated-upgrade diagnostic stops in existing START evidence setup
 before the upgrade and is not counted as upgrade/compiled acceptance; its server
 is stopped. Real populated upgrade/redeploy/reset remains mandatory in CI.
 
+## Repaired local candidate; separate CodeQL finding
+
+Frozen repair `307c291` passes all thirteen local commands on1,055 unchanged
+inputs:6,382unit /2,486Paper /41HTTP, twelve clean deployments and audit0.
+All6,329 prior unit occurrences/statuses remain, with only two explicitly
+reviewed migration-count display-title updates;53 unit cases are added. All67
+published migration Git blobs and their baseline working bytes remain exact.
+Source/PR Ubuntu and Windows pass. Native/owners/upgrade/reset and final-head
+acceptance remain pending at this checkpoint.
+
+Both CodeQL workflows pass, but a separate review finds open alert14 in the new
+test's intentional first-newline marker insertion. This is not an escaping or
+runtime path. The insertion is rewritten as an explicit boundary and slices,
+retaining every tamper assertion and adding a positive-boundary assertion. No
+alert is dismissed, no query/source suppression is added, and security scanning
+remains mandatory. Exact-head CodeQL rerun must establish whether alert14 is
+fixed before any merge request. The candidate stays HOLD until the complete
+new-head regression and independent CI are GREEN.
+
+## Native deadline reproduction and independent registry profile
+
+Source Platform `43425574301` completes all eight jobs: 1,514 PostgreSQL cases,
+49 files, 24 owner suites, all 35 writer/capture cases, populated 67→68 upgrade,
+redeploy/reset and compiled restart. All six ZIP digests/windows verify. Its
+native aggregate is 473.322 seconds under the original 480-second cap, an
+observed result with only 6.678 seconds remaining, not a timing guarantee.
+PR Platform `43425581623` passes both OS checks, Auth, Docker and all owner
+suites, but the aggregate reaches its unchanged deadline in the final `roles`
+cohort. Its failed log and all six actual ZIPs are retained. Together with alert
+14 this remains HOLD; a GREEN source run cannot replace the failed PR gate.
+
+The new test-only profile requires an additional process-local registry role
+proof on the already owned, independent PostgreSQL servers. Before any child
+starts it observes `ctp_instrument_registry` as NOLOGIN on both servers, changes
+only the owned PRIMARY group to LOGIN, verifies SECONDARY stays NOLOGIN, restores
+PRIMARY and rechecks both identities/state. Failure, incomplete cleanup, a
+serialized/transplanted token or changed reviewed inputs cannot authorize early
+launch. A RED peer-read drain contract additionally exposes early restoration
+with `Promise.all`; paired reads now physically settle with `allSettled` before
+restoration/failure returns. No application or financial capability is issued.
+
+Only the independently routed SECONDARY `native-admission` cohort may start
+beside PRIMARY registry. All PRIMARY work still waits for registry. The old
+conservative profile remains unchanged without the additional issued proof.
+The full existing child/descendant launcher and cleanup bytes, two-child limit,
+financial-writer/final-role barriers and 90/480/1020-second budgets remain exact.
+All original test files/assertions remain; no timing sleep, result cache, retry,
+test skip, source exclusion or scanning suppression is added. Current role
+catalogs, actual routes, probe evidence and complete test coverage must also
+verify in emitted native evidence. This profile is candidate acceptance
+infrastructure, not a production feature; real source/PR Docker evidence is
+still required before it can be accepted.
+
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Financial PAPER/LIVE dispatch
 and positive native collateral credit remain disabled. Native AMEND remains
 Binance Spot TESTNET only. No real private-exchange, production-soak or complete
