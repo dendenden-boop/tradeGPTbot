@@ -577,6 +577,43 @@ const valuationRequest = (f: Awaited<ReturnType<typeof ready>>) => ({
   ...f.request,
   kind: 'PAPER_EXECUTED_VALUATION_CAPTURE',
 });
+
+it('paper-historical-inventory: captures an actual executed book as complete supported tenant inventory without new monetary effects', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  const fn = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperHistoricalInventorySource'
+  ];
+  if (typeof fn !== 'function') throw Error('PAPER_HISTORICAL_INVENTORY_SOURCE_MISSING');
+  const reader = await (
+    fn as (o: unknown) => Promise<{
+      read(
+        r: unknown,
+        io: ReturnType<typeof startIo>,
+      ): Promise<{
+        kind: string;
+        source: { complete: boolean; accountIds: string[]; exposure: { openOrders: number } };
+      }>;
+      close(): Promise<void>;
+    }>
+  )({ connectionString: startFixtureConnection(), environment: 'test' });
+  try {
+    const result = await reader.read(
+      { ...f.request, kind: 'PAPER_HISTORICAL_INVENTORY_CAPTURE' },
+      startIo(),
+    );
+    expect(result.kind).toBe('CAPTURED');
+    expect(result.source.complete).toBe(true);
+    expect(result.source.accountIds).toEqual([f.c.owner.accountId]);
+    expect(result.source.exposure.openOrders).toBe(0);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await reader.close();
+  }
+});
 async function refreshValuationMark(
   f: Awaited<ReturnType<typeof ready>>,
   publication = f.f.s,
