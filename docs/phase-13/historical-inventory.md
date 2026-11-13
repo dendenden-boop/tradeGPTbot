@@ -1,5 +1,25 @@
 # Post-execution PAPER tenant inventory
 
+## Verified code evidence; documentation/publication pending
+
+Code `0fef296` passes complete source/PR Platform `43468160346` / `43468173080`,
+CodeQL `43468160130` / `43468173113` and the separate security check. Both runs
+verify 6,427 unit / 1,514 PostgreSQL / 24 owners / 35 writer cases, all current
+and retained contracts, real populated67→68 upgrade/redeploy/reset/compiled
+restart, twelve clean deployments and audit zero. All twelve Platform artifact
+digests/windows and four raw native logs verify. The actual independent-domain
+registry probe and early secondary admission are present; role catalogs restore,
+all 32 actors remain, and all secondary resets/cleanup pass. Source/PR native
+aggregates are 412.024 / 440.862 seconds with the original cap. Alert14's instance
+is automatically fixed, with zero open branch/PR/default findings and no manual
+dismissal or scanning change. All original 67 migrations and accepted financial
+runtime remain preserved. Detailed evidence is in [verification](verification.md).
+
+The current documentation HEAD still requires complete independent CI and
+protected PR72 publication/own-main verification. No main merge, complete Paper
+engine, general history/continuation/SELL/exits or financial dispatch is claimed.
+Earlier failed/pending checkpoints below retain their historical scope.
+
 ## Starting point and scope
 
 Protected main `514f68240bb9f5890138af51a766c0173e08b4d4` accepts PR71 through

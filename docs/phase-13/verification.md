@@ -1,5 +1,42 @@
 # PHASE 13 verification
 
+## Verified historical inventory code checkpoint — 13 November 2026
+
+Code `0fef296749ce12167ccb1047cfc98f8f763b2bec` passes full
+[source Platform 43468160346](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43468160346),
+[source CodeQL 43468160130](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43468160130),
+[PR Platform 43468173080](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43468173080)
+and [PR CodeQL 43468173113](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43468173113).
+Both events verify 6,427 unit / 2,486 Paper / 41 HTTP per OS, 1,514 PostgreSQL /
+49 files / 24 owner suites, all 35 writer/capture cases, populated67→68 upgrade,
+redeploy/reset and compiled restart, twelve clean deployments and audit zero.
+All twelve Platform ZIP digests/producer windows, four exact raw native logs
+and all 45 report copies per run verify. All 1,507 preceding native cases remain
+with seven inventory additions; all 6,329 previous unit occurrences remain with
+98 additions and two reviewed migration-count display-title updates. All 67
+published migration Git blobs and baseline working bytes remain exact. A further
+221 original runtime source files are unchanged; two files reconstruct exactly
+after removing only the explicit readonly factory/types/private decoder exports.
+
+The actual additional role probe, fixed routing, restored role catalogs, 32
+restricted actors, two independent PostgreSQL identities, three populated
+secondary resets and secondary cleanup verify in each run. Source/PR native
+aggregates are 412.024 / 440.862 seconds, below the unchanged 480-second cap;
+the remaining 67.976 / 39.138 seconds are observations, not timing guarantees.
+The strict five app-bound protection contexts remain configured. Separate
+`CodeQL` security check passes; branch/PR/default open findings are zero and
+alert14's instance is fixed automatically without dismissal or suppression.
+
+This accepts code-checkpoint evidence for the
+[supported readonly inventory](historical-inventory.md), not complete PHASE 13.
+This final documentation HEAD still needs its own full source/PR CI and protected
+PR72 publication/own-main acceptance. Main remains accepted PR71 `514f682`;
+no new merge is claimed. Earlier HOLD/RED checkpoints retain their original
+scope and are superseded only by this code evidence. **PHASE 13 IN_PROGRESS /
+NOT READY FOR PHASE 14.** Financial PAPER/LIVE dispatch and positive native
+collateral credit stay disabled; native AMEND stays Binance Spot TESTNET only.
+No real private-exchange or production-soak acceptance is claimed.
+
 ## Historical inventory candidate remains HOLD — 13 November 2026
 
 Repair `307c291` passes all thirteen frozen local commands on 1,055 unchanged
