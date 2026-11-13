@@ -31,7 +31,10 @@ async function setup(mode = 'normal') {
     ...(['admission', 'native-admission'].includes(id) ? { after: ['main', 'registry'] } : {}),
     ...(id === 'execution-start' ? { after: before } : {}),
     binary: process.execPath,
-    args: [worker, dir, id, id === 'execution-start' ? mode : 'normal'],
+    args:
+      mode === 'tree' && before.includes(id)
+        ? [prefixWorker, dir, id]
+        : [worker, dir, id, id === 'execution-start' ? mode : 'normal'],
   }));
   return { dir, jobs };
 }

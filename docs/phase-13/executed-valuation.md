@@ -1,5 +1,30 @@
 # PHASE 13 — executed-book valuation increment
 
+## Current verified-code and fixture checkpoint — 13 November 2026
+
+Code `b25b1db` passes full source/PR Platform43254497122/43254520669 and both
+CodeQL43254497027/43254519308. Actual ZIPs, raw reports, check contexts and
+producer windows verify6275unit/2400Paper/41HTTP on each OS,1507native across
+49files,24owner suites, all28 writer/book/valuation cases, migration67 populated
+upgrade/compiled restart/reset and audit0. All43 prior report copies and their
+1499native/6228unit identities/statuses remain; each run has45raw native/owner
+copies. Source/PR native399.658/468.346seconds stay below480. All19checks pass,
+strict protection remains and no open CodeQL alerts are present. This is remote
+evidence for that exact code, not permission to merge a different HEAD.
+
+The resumed local run still fails one old deadline fixture (6274/6275 unit;
+other12commands pass). Its real descendant starts after the original1800ms
+window while the prefix has already spent most of that window on Node startup.
+This result stays RED. A new contract records the fixture precondition before
+the fix. The strict planner is retained: all6actual processes and dependency
+checks remain; only interruption-prefix file IO uses a small CJS worker with
+the original30mswork. No fake completions or clock/deadline renewal are used.
+Target/descendant code, heartbeat/physical-close assertions, ordinary full-chain
+cases and production scheduler remain unchanged. Explicit ESLint rules cover
+the new fixture without relaxing existing files. All17targeted checks pass;
+full new-source regression/CI are pending. All earlier checkpoints below retain
+their historical scope. **HOLD / NOT READY FOR PHASE 14**.
+
 ## Current typed proof bridge checkpoint
 
 The next complete83fc9ab local run passes11 of13 commands: all6,275 unit,
