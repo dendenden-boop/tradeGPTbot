@@ -23,7 +23,7 @@ execution or permission for another order.
 
 ## Contract
 
-Proposed server export: `createPostgresPaperHistoricalInventorySource` from
+Candidate server export: `createPostgresPaperHistoricalInventorySource` from
 `@ctp/paper-engine/risk`. Input uses the existing strict selector keys with
 `kind: PAPER_HISTORICAL_INVENTORY_CAPTURE`, `executionKey`, `preparationKey`,
 `startKey`, immutable `admission` identity and current `authorization` epochs.
@@ -49,6 +49,12 @@ legacy public parent row is not independently counted as another live hold.
 Actual position plus remaining original bounded order is counted once, while
 fee collateral remains separate. All balances contribute to equity once;
 unrealized/realized PnL is disclosed separately, never posted or added again.
+The accepted Portfolio reducer can retain null free/available for a newly
+acquired asset. This source must preserve those nulls and expose null spendable
+plus `availabilityComplete: false`; total is not evidence of available funds.
+Inventory completeness is distinct from spendability. A future coordinator
+must reject any monetary debit whose required availability is unknown. No
+availability, liquidity or financial authority is inferred from this capture.
 
 All funded assets and the executed instrument require exact current direct
 LAST evidence in their configured public scope, even if the closed target has
@@ -81,7 +87,37 @@ source. The local Windows PostgreSQL67 diagnostic stops earlier with
 reach the new API and is not counted as its native RED. Its actual log is
 retained and the server is stopped with PID absent. A separate native-only
 tests-first Linux CI checkpoint is published before runtime implementation.
-No native result is claimed yet. Source/migration implementation, complete regression,
+Linux tests-first source `df5dc5c` then reaches the new contract under the real
+non-BYPASS owner:1new failure with `PAPER_HISTORICAL_INVENTORY_SOURCE_MISSING`
+after genuine START/financial commit, all28 preceding writer/book/valuation
+cases pass. Platform43417492406 is intentionally RED, not acceptance; its other
+native job also records the newly exposed pre67 selected-case count mismatch
+(28pending versus the previous27). Three new exact-count unit contracts are
+RED before updating metadata to29total/28pending. Actual job logs and all six
+digest/window-verified diagnostic ZIPs are retained. The local Windows setup
+failure remains distinct and is not relabelled as the feature RED.
+
+The initial39 source unit contracts now pass, including100account completeness,
+nullable availability, component provenance, uncertainty/deadline/price expiry
+and forbidden input/authority boundaries. No new SQL source is accepted yet.
+Candidate additive68 implements readonly catalog locking and capture. Six real
+native cases pass in one fresh Windows PostgreSQL68 diagnostic; a separate
+seventh case proves actual publisher/capture/user-FK blocking, account insertion
+after capture settles and whole-catalog rejection on the next read. The sibling
+case first exposed a JSON string extraction error in the new migration, then
+passed after the extraction fix; this RED is retained. The concurrency fixture
+first used ACCESS EXCLUSIVE, which can block cold function planning before the
+intended user lock. Its corrected publisher ROW EXCLUSIVE lock retains both real
+blocking assertions and all deadlines. Exact owner/pre67 metadata is now35total/
+34pending; full accepted514 harness bytes and earlier guard/assertion bodies
+reconstruct under new review contracts.
+
+These local diagnostics use5ms network response latency, preserve SQL/response
+bytes, clocks, assertions and budgets, and do not establish Linux owner or
+aggregate acceptance. Zero-delay bootstrap/runtime-context failures and the
+initial diagnostic pg-module load failure remain separate failed runs. Every
+owned diagnostic server is stopped with postmaster PID absent. No published
+migration is edited. Full regression,
 populated upgrade/redeploy/reset, original owner suites and independent full
 source/PR CI remain required. Published migrations1–67 are immutable; any
 database addition must be a new migration, with no financial writer/grant change.

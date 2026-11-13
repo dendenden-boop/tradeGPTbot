@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { parseDecimal } from '@ctp/exchange-core';
 import { valuePortfolio } from '@ctp/portfolio';
 import type { PortfolioState } from '@ctp/portfolio';
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
+import { createPostgresPaperConfiguration } from '@ctp/paper-engine/configuration';
+import { createPostgresPaperFunding } from '@ctp/paper-engine/funding';
+import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfolio';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
@@ -613,6 +617,235 @@ it('paper-historical-inventory: captures an actual executed book as complete sup
   } finally {
     await reader.close();
   }
+});
+type HistoricalReader = {
+  read(
+    request: unknown,
+    io: ReturnType<typeof startIo>,
+  ): Promise<
+    { kind: 'MISSING' } | { kind: 'CAPTURED'; source: paper.PaperHistoricalInventorySource }
+  >;
+  close(): Promise<void>;
+};
+const historicalReaders: HistoricalReader[] = [];
+afterAll(async () => {
+  for (const reader of historicalReaders) await reader.close();
+});
+async function openHistorical(connectionString = startFixtureConnection()) {
+  const reader: HistoricalReader = await paper.createPostgresPaperHistoricalInventorySource({
+    connectionString,
+    environment: 'test',
+  });
+  historicalReaders.push(reader);
+  return reader;
+}
+const historicalRequest = (f: Awaited<ReturnType<typeof ready>>) => ({
+  ...f.request,
+  kind: 'PAPER_HISTORICAL_INVENTORY_CAPTURE',
+});
+async function historicalCapture(reader: HistoricalReader, f: Awaited<ReturnType<typeof ready>>) {
+  const result = await reader.read(historicalRequest(f), startIo());
+  if (result.kind !== 'CAPTURED') throw Error('HISTORICAL_INVENTORY_CAPTURE_REQUIRED');
+  return result.source;
+}
+async function historicalAccount(f: Awaited<ReturnType<typeof ready>>, id = randomUUID()) {
+  await startFixtureSql(
+    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt")
+    VALUES($1,$2,$3,'PAPER',$4,$5,'SIMULATED','ACTIVE','paper-historical-epoch',now())`,
+    [id, f.c.owner.tenantId, f.c.source.exchange, 'paper:' + id, f.c.source.region],
+  );
+  return id;
+}
+it('paper-historical-inventory: includes a genuinely bootstrapped pristine sibling once and preserves unknown acquired-asset availability', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const id = await historicalAccount(f),
+    configuration = {
+      ...f.c,
+      id: randomUUID(),
+      owner: { ...f.c.owner, accountId: id },
+    };
+  const option = (key: string) => {
+    const connectionString = process.env[key];
+    if (!connectionString) throw Error('HISTORICAL_FIXTURE_CONNECTION_REQUIRED');
+    return { connectionString, environment: 'test' as const };
+  };
+  const config = await createPostgresPaperConfiguration(option('DATABASE_PAPER_CONFIGURATION_URL'));
+  const funding = await createPostgresPaperFunding(option('DATABASE_PAPER_FUNDING_URL'));
+  const bootstrap = await createPostgresPaperPortfolioBootstrap(option('DATABASE_PAPER_BOOK_URL'));
+  try {
+    await config.register(configuration, startIo());
+    await funding.initialize(
+      {
+        id: randomUUID(),
+        owner: configuration.owner,
+        configurationId: configuration.id,
+        balances: [{ asset: configuration.valuationAsset, amount: parseDecimal('250') }],
+      },
+      startIo(),
+    );
+    await bootstrap.initialize(configuration.owner, startIo());
+    await refreshValuationMark(f);
+    const before = await startFixtureEffects(f.c.owner.tenantId),
+      reader = await openHistorical();
+    const source = await historicalCapture(reader, f);
+    expect(source.accountIds).toEqual([f.c.owner.accountId, id].sort());
+    expect(source.accounts).toHaveLength(2);
+    expect(source.valuation.accounts.find((a) => a.accountId === id)?.equity).toBe('250');
+    expect(source.availabilityComplete).toBe(false);
+    expect(
+      source.valuation.accounts
+        .find((a) => a.accountId === f.c.owner.accountId)
+        ?.balances.find((b) => b.asset === 'BTC')?.spendable,
+    ).toBeNull();
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await bootstrap.close();
+    await funding.close();
+    await config.close();
+  }
+});
+it('paper-historical-inventory: an UNKNOWN missing execution never becomes empty complete inventory or releases its hold', async () => {
+  const f = await ready(),
+    reader = await openHistorical();
+  await f.lifecycle.markUnknown(
+    {
+      kind: 'PAPER_RESERVATION_UNKNOWN',
+      admission: f.admission,
+      reservationId: f.approval.reservationId,
+      eventId: randomUUID(),
+      expectedRevision: '1',
+    },
+    startIo(),
+  );
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  expect(await reader.read(historicalRequest(f), startIo())).toEqual({ kind: 'MISSING' });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-historical-inventory: current permission epoch and exact immutable execution selection remain mandatory', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const reader = await openHistorical(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(
+    reader.read({ ...historicalRequest(f), startKey: 'wrong-start' }, startIo()),
+  ).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+  await startFixtureSql(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE id=$1',
+    [f.c.owner.accountId],
+  );
+  await expect(reader.read(historicalRequest(f), startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_SCOPE',
+  );
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-historical-inventory: lost readonly COMMIT and abort grant no source; restart recovers exactly one historical effect', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    direct = await openHistorical();
+  const original = await historicalCapture(direct, f),
+    controller = new AbortController();
+  controller.abort();
+  await expect(direct.read(historicalRequest(f), startIo(controller.signal))).rejects.toThrow(
+    'PAPER_ADMISSION_ABORTED',
+  );
+  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE');
+  const lost = await openHistorical(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(lost.read(historicalRequest(f), startIo())).rejects.toThrow(
+      'PAPER_ADMISSION_UNCERTAIN',
+    );
+    expect(proxy.dropped()).toBe(1);
+    const restarted = await openHistorical();
+    expect((await historicalCapture(restarted, f)).hash).toBe(original.hash);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await lost.close();
+    await proxy.close();
+  }
+});
+it('paper-historical-inventory: user FK locks close concurrent account insertion phantoms until the complete capture settles', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const reader = await openHistorical();
+  const blocker = new Pool({
+    connectionString: process.env['DATABASE_MIGRATION_URL'],
+    max: 1,
+    query_timeout: 2000,
+  });
+  const connection = await blocker.connect();
+  let capture: ReturnType<HistoricalReader['read']> | undefined;
+  let insertion: ReturnType<typeof historicalAccount> | undefined;
+  const observed: Promise<unknown>[] = [];
+  async function waitingOn(pid: number, sqlPrefix: string) {
+    const until = Date.now() + 700;
+    while (Date.now() < until) {
+      const rows = await startFixtureSql<{ pid: number }>(
+        `SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()
+        AND query LIKE $1 AND $2=ANY(pg_blocking_pids(pid))`,
+        [sqlPrefix + '%', pid],
+      );
+      if (rows.rows.length === 1) return rows.rows[0]!.pid;
+      await delay(5);
+    }
+    throw Error('HISTORICAL_CATALOG_FK_LOCK_NOT_OBSERVED:' + sqlPrefix);
+  }
+  try {
+    await connection.query('BEGIN');
+    // A publisher's table lock conflicts with capture SHARE, while permitting
+    // cold function/rowtype planning before the earlier user FK lock is taken.
+    await connection.query('LOCK TABLE ctp_market.snapshot_head IN ROW EXCLUSIVE MODE');
+    const { pid } = (await connection.query<{ pid: number }>('SELECT pg_backend_pid() pid'))
+      .rows[0]!;
+    capture = reader.read(historicalRequest(f), startIo());
+    observed.push(capture.catch(() => undefined));
+    const capturePid = await waitingOn(pid, 'SELECT ctp_paper.reconcile_admission(');
+    insertion = historicalAccount(f);
+    observed.push(insertion.catch(() => undefined));
+    await waitingOn(capturePid, 'INSERT INTO public.exchange_account(');
+    await connection.query('COMMIT');
+    const result = await capture;
+    expect(result.kind).toBe('CAPTURED');
+    if (result.kind !== 'CAPTURED') throw Error('HISTORICAL_INVENTORY_CAPTURE_REQUIRED');
+    expect(result.source.accountIds).toEqual([f.c.owner.accountId]);
+    await insertion;
+    await expect(reader.read(historicalRequest(f), startIo())).rejects.toThrow(/PAPER_ADMISSION_/u);
+  } finally {
+    await connection.query('ROLLBACK');
+    await Promise.all(observed);
+    connection.release();
+    await blocker.end();
+  }
+});
+it('paper-historical-inventory: uninitialized disabled or over-capacity siblings reject the entire catalog instead of omission', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const reader = await openHistorical(),
+    id = await historicalAccount(f);
+  await expect(reader.read(historicalRequest(f), startIo())).rejects.toThrow(/PAPER_ADMISSION_/u);
+  await startFixtureSql("UPDATE public.exchange_account SET status='DISABLED' WHERE id=$1", [id]);
+  await expect(reader.read(historicalRequest(f), startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  await startFixtureSql(
+    `INSERT INTO public.exchange_account(id,"tenantId",exchange,mode,"externalAccountId",region,"accountMode",status,"clientIdEpoch","updatedAt")
+   SELECT gen_random_uuid(),$1,$2,'PAPER','paper-extra-'||n,$3,'SIMULATED','ACTIVE','paper-historical-epoch',now() FROM generate_series(1,99) n`,
+    [f.c.owner.tenantId, f.c.source.exchange, f.c.source.region],
+  );
+  await expect(reader.read(historicalRequest(f), startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_LIMIT',
+  );
 });
 async function refreshValuationMark(
   f: Awaited<ReturnType<typeof ready>>,

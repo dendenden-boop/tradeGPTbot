@@ -1,4 +1,11 @@
+// BEGIN PAPER HISTORICAL INVENTORY IMPORT
+import {
+  verifyPaperHistoricalInventoryStorage,
+  verifyPaperHistoricalInventoryUpgrade,
+  verifyCompiledHistoricalInventory,
+} from './paper-historical-inventory-upgrade.mjs';
 // BEGIN PAPER EXECUTED VALUATION IMPORT
+// END PAPER HISTORICAL INVENTORY IMPORT
 import {
   verifyPaperExecutedValuationStorage,
   verifyPaperExecutedValuationUpgrade,
@@ -198,7 +205,10 @@ const expectedMigrations = [
   '202611060001_paper_execution_math',
   // BEGIN PAPER EXECUTED VALUATION MIGRATION
   '202611060002_paper_execution_commit',
+  // BEGIN PAPER HISTORICAL INVENTORY MIGRATION
   '202611120001_paper_executed_valuation',
+  '202611130001_paper_historical_inventory',
+  // END PAPER HISTORICAL INVENTORY MIGRATION
   // END PAPER EXECUTED VALUATION MIGRATION
 ];
 
@@ -2624,7 +2634,12 @@ async function runDatabaseProof() {
       ownership: 'REQUIRE_NON_BYPASS',
     });
     // END PAPER EXECUTED VALUATION OWNER_PROOF
+    // BEGIN PAPER HISTORICAL INVENTORY OWNER_PROOF
+    await verifyPaperHistoricalInventoryStorage(executionCommitDb, {
+      ownership: 'REQUIRE_NON_BYPASS',
+    });
     await executionCommitDb.end();
+    // END PAPER HISTORICAL INVENTORY OWNER_PROOF
     pools.delete(executionCommitDb);
     await run(
       process.execPath,
@@ -2647,7 +2662,9 @@ async function runDatabaseProof() {
     assert.equal(executionCommitOwner.success, true);
     // BEGIN PAPER EXECUTED VALUATION OWNER_COUNT
     // BEGIN PAPER EXECUTED BOOK OWNER_COUNT
-    assert.equal(executionCommitOwner.numPassedTests, 28);
+    // BEGIN PAPER HISTORICAL INVENTORY OWNER_COUNT
+    assert.equal(executionCommitOwner.numPassedTests, 35);
+    // END PAPER HISTORICAL INVENTORY OWNER_COUNT
     // END PAPER EXECUTED BOOK OWNER_COUNT
     // END PAPER EXECUTED VALUATION OWNER_COUNT
     assert.equal(executionCommitOwner.numFailedTests, 0);
@@ -4639,7 +4656,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(executedValuationSeed.success, true);
   assert.equal(executedValuationSeed.numPassedTests, 1);
   assert.equal(executedValuationSeed.numFailedTests, 0);
-  assert.equal(executedValuationSeed.numPendingTests, 27);
+  // BEGIN PAPER HISTORICAL INVENTORY PRE67_PENDING
+  assert.equal(executedValuationSeed.numPendingTests, 34);
+  // END PAPER HISTORICAL INVENTORY PRE67_PENDING
   const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);
   await cp(
     path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[66]),
@@ -4655,7 +4674,24 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperAdmissionEnvironment(databases[4]),
   );
   assert.equal(executedValuationCompiled.status, 'PASS');
+  // BEGIN PAPER HISTORICAL INVENTORY UPGRADE
   // END PAPER EXECUTED VALUATION UPGRADE
+  const beforeHistoricalInventory = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[67]),
+    path.join(paperMigrations, expectedMigrations[67]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperHistoricalInventoryUpgrade(paperUpgrade, beforeHistoricalInventory);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperHistoricalInventoryUpgrade(paperUpgrade, beforeHistoricalInventory);
+  const historicalInventoryCompiled = await verifyCompiledHistoricalInventory(
+    paperUpgrade,
+    paperAdmissionEnvironment(databases[4]),
+  );
+  assert.equal(historicalInventoryCompiled.status, 'PASS');
+  // END PAPER HISTORICAL INVENTORY UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -5194,7 +5230,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await verifyPaperStartedRiskStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
   // BEGIN PAPER EXECUTED VALUATION RESET_ADMISSIONRESET
   await verifyPaperExecutionCommitStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER HISTORICAL INVENTORY RESET_UPGRADE
   await verifyPaperExecutedValuationStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperHistoricalInventoryStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER HISTORICAL INVENTORY RESET_UPGRADE
   // END PAPER EXECUTED VALUATION RESET_ADMISSIONRESET
   // END PAPER STARTED RISK RESET_AFTER
   await admissionReset.end();
@@ -5234,7 +5273,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await verifyPaperStartedRiskStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
   // BEGIN PAPER EXECUTED VALUATION RESET_STARTEDAFTERRESET
   await verifyPaperExecutionCommitStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER HISTORICAL INVENTORY RESET_POPULATED
   await verifyPaperExecutedValuationStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperHistoricalInventoryStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER HISTORICAL INVENTORY RESET_POPULATED
   // END PAPER EXECUTED VALUATION RESET_STARTEDAFTERRESET
   for (const table of ['execution_commit', 'execution_liquidity'])
     assert.equal(
@@ -5382,7 +5424,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperExecutionCommitResetValidated: true,
     paperExecutedValuationUpgradePreserved: true,
     paperExecutedValuationResetValidated: true,
+    // BEGIN PAPER HISTORICAL INVENTORY FLAGS
     paperExecutedValuationCompiled: executedValuationCompiled,
+    paperHistoricalInventoryUpgradePreserved: true,
+    paperHistoricalInventoryResetValidated: true,
+    paperHistoricalInventoryCompiled: historicalInventoryCompiled,
+    // END PAPER HISTORICAL INVENTORY FLAGS
     // END PAPER EXECUTED VALUATION REPORT
     // END PAPER STARTED RISK FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
@@ -5440,7 +5487,10 @@ async function resetDatabaseProof(fresh) {
   await verifyPaperStartedRiskStorage(reset, { ownership: 'STORAGE_ONLY' });
   // BEGIN PAPER EXECUTED VALUATION RESET_RESET
   await verifyPaperExecutionCommitStorage(reset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER HISTORICAL INVENTORY RESET_FRESH
   await verifyPaperExecutedValuationStorage(reset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperHistoricalInventoryStorage(reset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER HISTORICAL INVENTORY RESET_FRESH
   // END PAPER EXECUTED VALUATION RESET_RESET
   // END PAPER STARTED RISK RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);

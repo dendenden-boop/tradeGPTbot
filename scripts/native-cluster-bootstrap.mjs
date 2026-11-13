@@ -73,7 +73,9 @@ export async function bootstrapNativeCluster({
           )
         ).rows[0].n,
         // BEGIN PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT
-        67,
+        // BEGIN PAPER HISTORICAL INVENTORY SECONDARY_COUNT
+        68,
+        // END PAPER HISTORICAL INVENTORY SECONDARY_COUNT
         // END PAPER EXECUTED VALUATION SECONDARY_APPLIED_COUNT
       );
     } finally {
@@ -197,7 +199,9 @@ export async function bootstrapNativeCluster({
       fixedRoleGraphHash: actors.fixedRoleGraphHash,
       independentlyMigratedDatabases: [...allowed],
       // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
-      migrations: 67,
+      // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
+      migrations: 68,
+      // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT
       // END PAPER EXECUTED VALUATION MIGRATION_COUNT
       secondaryResets: {
         nativeAdmission: nativeReset ? 'PASS' : 'PENDING',

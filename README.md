@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Accepted PR71; historical inventory candidate — 13 November 2026
+
+Protected main `514f68240bb9f5890138af51a766c0173e08b4d4` accepts PR71 through [Platform 43392269284](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43392269284) and [CodeQL 43392269265](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43392269265): 6,329 unit / 41 HTTP per OS, 1,507 PostgreSQL / 49 files / 24 owners, all 67 migrations, populated upgrade/reset/restart, twelve clean deployments and audit zero. Main artifact digests/windows, prior-case retention and strict protection are verified. Earlier pending/HOLD checkpoints below retain their historical scope.
+
+The next [readonly historical inventory source](docs/phase-13/historical-inventory.md) combines one authenticated executed Spot BUY book with pristine sibling books in one bounded tenant capture. Initial source unit contracts pass; Linux tests-first RED and earlier native failures are retained. Additive migration68, full regression, populated upgrade/redeploy/reset, owner proofs and independent exact-head CI remain candidate work. Unknown acquired-asset availability remains null; complete catalog coverage does not certify spendable funds or grant financial authority. **PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14**. Financial PAPER/LIVE dispatch and positive native collateral credit remain disabled; native AMEND remains Binance Spot TESTNET only. Real private-exchange tests, production soak and complete Paper acceptance are not claimed.
+
 ## Accepted PR70 and next PHASE 13 prerequisite — 13 November 2026
 
 Protected main `e078554bd5b56b556f36af4db8ec333a45f01834` accepts PR70 through [Platform 43382582643](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43382582643) and [CodeQL 43382582572](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43382582572): 6,276 unit / 41 HTTP per OS, 1,507 PostgreSQL / 24 owners, migration67 upgrade/reset/restart, twelve clean deployments and audit zero. Artifact digests/windows, prior-case retention and strict protection are verified. Earlier “current” HOLD/pending sections below are historical checkpoints.

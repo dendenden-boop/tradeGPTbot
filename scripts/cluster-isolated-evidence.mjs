@@ -48,7 +48,9 @@ export function requireClusterIsolatedEvidence(cohorts, native) {
   assert.deepEqual(proof.roleIsolation, { independent: true, probeRolesRemoved: true });
   assert.equal(proof.actors, 32);
   // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
-  assert.equal(proof.migrations, 67);
+  // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
+  assert.equal(proof.migrations, 68);
+  // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT
   // END PAPER EXECUTED VALUATION MIGRATION_COUNT
   hex(proof.fixedRoleGraphHash);
   assert.equal(cohorts.roleScopedManifest, scopedMainManifestHash);

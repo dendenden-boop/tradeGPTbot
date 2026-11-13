@@ -2,14 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { beforeExecutedValuation, executedValuationReview } from './executed-valuation-legacy.mjs';
+import { beforeHistoricalInventory } from './historical-inventory-legacy.mjs';
+const sourceOf = async (file) =>
+  beforeHistoricalInventory(
+    file,
+    (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
+  );
 const hash = (text) => createHash('sha256').update(text).digest('hex');
 it.each(Object.keys(executedValuationReview))(
   'preserves exact accepted Daa bytes below reviewed valuation harness additions: %s',
   async (file) => {
-    const text = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(
-      '\r\n',
-      '\n',
-    );
+    const text = await sourceOf(file);
     const old = beforeExecutedValuation(file, text),
       review = executedValuationReview[file];
     expect(hash(old)).toBe(review.predecessor);
@@ -33,10 +36,7 @@ it.each(Object.keys(executedValuationReview))(
 );
 it('cannot hide changes to original native acceptance budgets', async () => {
   const file = 'scripts/test-database.mjs',
-    text = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(
-      '\r\n',
-      '\n',
-    );
+    text = await sourceOf(file);
   const changed = text.replace('90000', '90001');
   expect(changed).not.toBe(text);
   expect(hash(beforeExecutedValuation(file, changed))).not.toBe(

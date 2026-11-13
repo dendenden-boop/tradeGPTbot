@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Current prerequisite after accepted PR71
+
+Protected main `514f68240bb9f5890138af51a766c0173e08b4d4` accepts the pure executed-order exposure increment; exact-main results are recorded in [verification](verification.md). The next [historical inventory source](historical-inventory.md) must enumerate the entire bounded supported PAPER catalog: exactly one authenticated executed Spot BUY book and pristine siblings, with current direct marks, original economic history and position/residual collateral counted once. Additional or unknown history, missing books, stale/ambiguous prices or uncertain COMMIT must reject the whole capture. Unknown availability stays null. This readonly prerequisite issues no certificate, reservation, grant or transport permit. Published1–67 remain unchanged; additive68 is a candidate pending complete acceptance. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE dispatch and positive native credit disabled. Earlier checkpoints preserve their original scope and evidence.
+
 ## Current prerequisite after accepted PR70
 
 Starting protected main is `e078554bd5b56b556f36af4db8ec333a45f01834`, accepted by complete Platform43382582643 / CodeQL43382582572. All thirteen unchanged-main baseline commands pass again: 6,276 unit / 41 HTTP, twelve clean deployments and audit zero on 1,040 frozen files. Earlier candidate/pending descriptions below are historical.

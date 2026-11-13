@@ -30,8 +30,8 @@ export function historicalInventoryFixture(count = 2) {
     key: {
       scope: record.instrument.scope,
       instrumentId: record.instrument.id,
-      dbInstrumentId: request.admission.dbInstrumentId,
-      dbRuleId: request.admission.dbRuleId,
+      dbInstrumentId: f.packet.input.attempt.request.admission.dbInstrumentId,
+      dbRuleId: f.packet.input.attempt.request.admission.dbRuleId,
     },
     record,
     ticker: {
