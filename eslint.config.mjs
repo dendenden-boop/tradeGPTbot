@@ -35,6 +35,15 @@ export default defineConfig([
     rules: { 'no-eval': 'error', 'no-new-func': 'error' },
   },
   {
+    files: ['scripts/fixtures/execution-start-cohort-prefix.cjs'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { require: 'readonly', process: 'readonly', setTimeout: 'readonly' },
+    },
+    rules: { 'no-eval': 'error', 'no-new-func': 'error' },
+  },
+  {
     files: ['**/*.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
     languageOptions: {

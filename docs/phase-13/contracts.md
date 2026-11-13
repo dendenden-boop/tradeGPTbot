@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Current executed valuation contract
+
+The server-only `@ctp/paper-engine/risk` source selects a committed execution with exact `PAPER_EXECUTED_VALUATION_CAPTURE` keys: `executionKey`, `preparationKey`, `startKey`, immutable `admission`, and current `authorization` epochs. No caller prices, projections, timestamps, SQL, roles or connection/profile overrides enter this request. The fixed bounded admission transaction delegates old reconciliation kinds unchanged and authenticates the current causal book before reading locked metadata/public-head catalogs. The result is exact `MISSING` or immutable `CAPTURED` with book, current balances/Spot PnL valuation, price references, finite `validUntil` and content hash. Original execution and economic timestamps are retained. A new `asOf` renews neither old prices nor financial authority. Uncertain read COMMIT returns no source and never retries. [Scope, RED and verification](executed-valuation.md). Financial PAPER/LIVE dispatch remains disabled; PHASE 14 is not started.
+
 ## Committed pristine book capture — 12 November 2026
 
 Starting accepted main is `b15e6864cbdc2136553970b1e72b74d113776bf7` (PR68, own Platform43189290024/CodeQL43189290185). All 66 migrations are published and immutable. The [new server-only readonly capture](executed-book.md) uses the existing exact reconciliation/ownership/causal storage boundary and independently checked effects. It adds no grant, reservation, monetary posting, allocation or SQL permission. Original writer receipt outputs remain unchanged; current capture time is separate from retained execution, snapshot and market times. Missing execution yields no inferred Portfolio or released hold. Full exact-head acceptance remains pending; earlier checkpoint contracts are historical.

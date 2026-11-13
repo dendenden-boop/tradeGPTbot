@@ -1,3 +1,10 @@
+// BEGIN PAPER EXECUTED VALUATION IMPORT
+import {
+  verifyPaperExecutedValuationStorage,
+  verifyPaperExecutedValuationUpgrade,
+  verifyCompiledExecutedValuation,
+} from './paper-executed-valuation-upgrade.mjs';
+// END PAPER EXECUTED VALUATION IMPORT
 // BEGIN PAPER STARTED PREVIEW IMPORT
 import { verifyStartedPreviewParallelFiles } from './database-cohorts.mjs';
 // END PAPER STARTED PREVIEW IMPORT
@@ -189,7 +196,10 @@ const expectedMigrations = [
   '202611030002_paper_started_risk_source',
   // END PAPER STARTED RISK MIGRATION
   '202611060001_paper_execution_math',
+  // BEGIN PAPER EXECUTED VALUATION MIGRATION
   '202611060002_paper_execution_commit',
+  '202611120001_paper_executed_valuation',
+  // END PAPER EXECUTED VALUATION MIGRATION
 ];
 
 const project = process.env.CTP_TEST_PROJECT;
@@ -2608,7 +2618,12 @@ async function runDatabaseProof() {
     // END PAPER STARTED PREVIEW OWNER
     // BEGIN PAPER EXECUTION COMMIT OWNER
     const executionCommitDb = connect(dbUrl(databases[2]));
+    // BEGIN PAPER EXECUTED VALUATION OWNER_PROOF
     await verifyPaperExecutionCommitStorage(executionCommitDb, { ownership: 'REQUIRE_NON_BYPASS' });
+    await verifyPaperExecutedValuationStorage(executionCommitDb, {
+      ownership: 'REQUIRE_NON_BYPASS',
+    });
+    // END PAPER EXECUTED VALUATION OWNER_PROOF
     await executionCommitDb.end();
     pools.delete(executionCommitDb);
     await run(
@@ -2630,9 +2645,11 @@ async function runDatabaseProof() {
       ),
     );
     assert.equal(executionCommitOwner.success, true);
+    // BEGIN PAPER EXECUTED VALUATION OWNER_COUNT
     // BEGIN PAPER EXECUTED BOOK OWNER_COUNT
-    assert.equal(executionCommitOwner.numPassedTests, 20);
+    assert.equal(executionCommitOwner.numPassedTests, 28);
     // END PAPER EXECUTED BOOK OWNER_COUNT
+    // END PAPER EXECUTED VALUATION OWNER_COUNT
     assert.equal(executionCommitOwner.numFailedTests, 0);
     assert.equal(executionCommitOwner.numPendingTests, 0);
     // END PAPER EXECUTION COMMIT OWNER
@@ -4596,7 +4613,49 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   await verifyPaperExecutionCommitUpgrade(paperUpgrade, beforeExecutionCommit);
   await migrate(databases[4], paperConfig, true);
   await verifyPaperExecutionCommitUpgrade(paperUpgrade, beforeExecutionCommit);
+  // BEGIN PAPER EXECUTED VALUATION UPGRADE
   // END PAPER EXECUTION COMMIT UPGRADE
+  // Seed a real published66 financial execution through the accepted writer.
+  await run(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
+      'run',
+      '--config',
+      'vitest.database.config.ts',
+      'packages/database/test/paper-execution-commit.integration.test.ts',
+      '-t',
+      '^paper-executed-book: captures the real committed book and conserved ledger without another monetary effect$',
+      '--outputFile.json=test-results/paper-executed-valuation-pre67-tests.json',
+    ],
+    { env: paperAdmissionEnvironment(databases[4]), secrets, echo: true, timeoutMs: 90000 },
+  );
+  const executedValuationSeed = JSON.parse(
+    await readFile(
+      new URL('../test-results/paper-executed-valuation-pre67-tests.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(executedValuationSeed.success, true);
+  assert.equal(executedValuationSeed.numPassedTests, 1);
+  assert.equal(executedValuationSeed.numFailedTests, 0);
+  assert.equal(executedValuationSeed.numPendingTests, 27);
+  const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[66]),
+    path.join(paperMigrations, expectedMigrations[66]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutedValuationUpgrade(paperUpgrade, beforeExecutedValuation);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperExecutedValuationUpgrade(paperUpgrade, beforeExecutedValuation);
+  const executedValuationCompiled = await verifyCompiledExecutedValuation(
+    paperUpgrade,
+    paperAdmissionEnvironment(databases[4]),
+  );
+  assert.equal(executedValuationCompiled.status, 'PASS');
+  // END PAPER EXECUTED VALUATION UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -5133,7 +5192,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER STARTED SOURCE RESET_AFTER
   // BEGIN PAPER STARTED RISK RESET_AFTER
   await verifyPaperStartedRiskStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER EXECUTED VALUATION RESET_ADMISSIONRESET
   await verifyPaperExecutionCommitStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutedValuationStorage(admissionReset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER EXECUTED VALUATION RESET_ADMISSIONRESET
   // END PAPER STARTED RISK RESET_AFTER
   await admissionReset.end();
   pools.delete(admissionReset);
@@ -5170,7 +5232,10 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   // END PAPER STARTED SOURCE POPULATED_RESET
   // BEGIN PAPER STARTED RISK POPULATED_RESET
   await verifyPaperStartedRiskStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER EXECUTED VALUATION RESET_STARTEDAFTERRESET
   await verifyPaperExecutionCommitStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutedValuationStorage(startedAfterReset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER EXECUTED VALUATION RESET_STARTEDAFTERRESET
   for (const table of ['execution_commit', 'execution_liquidity'])
     assert.equal(
       (await startedAfterReset.query('SELECT count(*)::int n FROM ctp_paper.' + table)).rows[0].n,
@@ -5313,7 +5378,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperStartedRiskUpgradePreserved: true,
     paperStartedRiskResetValidated: true,
     paperExecutionCommitUpgradePreserved: true,
+    // BEGIN PAPER EXECUTED VALUATION REPORT
     paperExecutionCommitResetValidated: true,
+    paperExecutedValuationUpgradePreserved: true,
+    paperExecutedValuationResetValidated: true,
+    paperExecutedValuationCompiled: executedValuationCompiled,
+    // END PAPER EXECUTED VALUATION REPORT
     // END PAPER STARTED RISK FLAGS
     paperRiskContextNonBypassOwner: 'PASS',
     paperRiskContextPopulatedUpgradeFromPublished48: 'PASS',
@@ -5368,7 +5438,10 @@ async function resetDatabaseProof(fresh) {
   // END PAPER STARTED SOURCE RESET_FRESH
   // BEGIN PAPER STARTED RISK RESET_FRESH
   await verifyPaperStartedRiskStorage(reset, { ownership: 'STORAGE_ONLY' });
+  // BEGIN PAPER EXECUTED VALUATION RESET_RESET
   await verifyPaperExecutionCommitStorage(reset, { ownership: 'STORAGE_ONLY' });
+  await verifyPaperExecutedValuationStorage(reset, { ownership: 'STORAGE_ONLY' });
+  // END PAPER EXECUTED VALUATION RESET_RESET
   // END PAPER STARTED RISK RESET_FRESH
   assert.equal((await reset.query('SELECT count(*)::int n FROM "user"')).rows[0].n, 0);
   for (const table of [

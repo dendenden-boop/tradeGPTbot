@@ -24,7 +24,16 @@ it('isolates the financial writer after every mutating cohort and before final r
   );
 });
 it('requires native non-bypass owner, populated upgrade/redeploy and reset writer proofs', async () => {
-  const runner = await readFile(new URL('./test-database.mjs', import.meta.url), 'utf8');
+  // BEGIN PAPER EXECUTED VALUATION RETAINED_RUNNER
+  const { beforeExecutedValuation } = await import('./executed-valuation-legacy.mjs');
+  const runner = beforeExecutedValuation(
+    'scripts/test-database.mjs',
+    (await readFile(new URL('./test-database.mjs', import.meta.url), 'utf8')).replaceAll(
+      '\r\n',
+      '\n',
+    ),
+  );
+  // END PAPER EXECUTED VALUATION RETAINED_RUNNER
   expect(runner).toContain('executionCommitOwner.numPassedTests, 20');
   expect(runner).toContain(
     "'--outputFile.json=test-results/paper-execution-commit-owner-tests.json'",

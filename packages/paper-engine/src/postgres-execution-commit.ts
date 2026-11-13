@@ -191,6 +191,14 @@ function decode(raw: unknown, request: PaperExecutionCommitRequest) {
   return decodeContents(raw, request).receipt;
 }
 
+// Internal fixed-RPC helpers, absent from every package entrypoint. Reusing the
+// accepted committed-content proof must never turn caller content into authority.
+export {
+  lookup as lookupPaperExecutionCommitRequest,
+  decodeContents as decodePaperCommittedExecutionContents,
+  executedBookSource as projectPaperExecutedBookSource,
+};
+
 export type PaperExecutedBookRequest = Omit<PaperExecutionCommitRequest, 'kind'> & {
   kind: 'PAPER_EXECUTED_BOOK_CAPTURE';
 };

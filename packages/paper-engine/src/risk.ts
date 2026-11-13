@@ -98,6 +98,12 @@ export type {
 export { createPostgresPaperStartedExecutionPreview } from './postgres-started-preview.js';
 export { createPostgresPaperExecutionCommitter } from './postgres-execution-commit.js';
 export { createPostgresPaperExecutedBookSource } from './postgres-execution-commit.js';
+export { createPostgresPaperExecutedValuationSource } from './postgres-executed-valuation.js';
+export type {
+  PaperExecutedValuationRequest,
+  PaperExecutedValuationSource,
+  PaperExecutedValuationReader,
+} from './postgres-executed-valuation.js';
 export type {
   PaperExecutedBookRequest,
   PaperExecutedBookSource,

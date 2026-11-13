@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { parseDecimal } from '@ctp/exchange-core';
+import { valuePortfolio } from '@ctp/portfolio';
+import type { PortfolioState } from '@ctp/portfolio';
 import { Pool } from 'pg';
 import { afterAll, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
+import { verifyPaperExecutedValuationStorage } from '../../../scripts/paper-executed-valuation-upgrade.mjs';
 import {
   closeStartFixture,
   readyExecutionStart,
@@ -529,4 +533,263 @@ it('paper-executed-book: lost read COMMIT and abort return no capture and restar
     await reader.close();
     await proxy.close();
   }
+});
+
+interface ExecutedValuationReader {
+  read(
+    request: unknown,
+    io: ReturnType<typeof startIo>,
+  ): Promise<
+    | { kind: 'MISSING' }
+    | {
+        kind: 'CAPTURED';
+        source: {
+          asOf: number;
+          validUntil: number;
+          hash: string;
+          book: { content: { portfolio: PortfolioState; evaluatedAt: number }; hash: string };
+          valuation: {
+            equity: string;
+            positions: { unrealizedGross: string; netRealized: string }[];
+          };
+        };
+      }
+  >;
+  close(): Promise<void>;
+}
+const valuationReaders: ExecutedValuationReader[] = [];
+afterAll(async () => {
+  for (const reader of valuationReaders) await reader.close();
+});
+async function openExecutedValuation(connectionString = startFixtureConnection()) {
+  const fn = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperExecutedValuationSource'
+  ];
+  if (typeof fn !== 'function') throw Error('PAPER_EXECUTED_VALUATION_SOURCE_MISSING');
+  const reader = await (fn as (options: unknown) => Promise<ExecutedValuationReader>)({
+    connectionString,
+    environment: 'test',
+  });
+  valuationReaders.push(reader);
+  return reader;
+}
+const valuationRequest = (f: Awaited<ReturnType<typeof ready>>) => ({
+  ...f.request,
+  kind: 'PAPER_EXECUTED_VALUATION_CAPTURE',
+});
+async function refreshValuationMark(
+  f: Awaited<ReturnType<typeof ready>>,
+  publication = f.f.s,
+  capturedRevision?: string,
+) {
+  const p = structuredClone(publication),
+    revision = capturedRevision ?? (await f.snapshots.read(p.key, startIo())).revision;
+  const now = Date.now();
+  p.id = randomUUID();
+  p.expectedRevision = revision;
+  p.timestamp = now;
+  p.ticker.last = { state: 'AVAILABLE', value: parseDecimal('12.05') };
+  for (const v of [p.book, p.ticker]) v.receivedAt = v.exchangeTime = now;
+  if (p.book.sourceSequence !== null)
+    p.book.sourceSequence = (BigInt(p.book.sourceSequence) + BigInt(revision) + 1n).toString();
+  expect((await f.snapshots.publish(p, startIo())).status).toBe('APPLIED');
+  return p;
+}
+it('paper-executed-valuation: current public marks value the genuine committed Spot book once without new financial effects', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const p = await refreshValuationMark(f),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    reader = await openExecutedValuation();
+  const result = await reader.read(valuationRequest(f), startIo());
+  if (result.kind !== 'CAPTURED') throw Error('EXECUTED_VALUATION_CAPTURE_REQUIRED');
+  const s = result.source,
+    oracle = valuePortfolio(
+      [s.book.content.portfolio],
+      [
+        {
+          asset: p.record.instrument.baseAsset,
+          quote: p.record.instrument.quoteAsset,
+          price: '12.05',
+          kind: 'LAST',
+          fresh: true,
+          asOf: p.timestamp,
+          sourceId: p.id,
+        },
+      ],
+      { quote: p.record.instrument.quoteAsset, now: s.asOf, reconciledAfterRestart: true },
+    );
+  expect(s.valuation.equity).toBe(oracle.estimate);
+  expect(s.valuation.positions[0]).toMatchObject({
+    unrealizedGross: oracle.accounts[0]!.positions[0]!.unrealizedGross,
+    netRealized: oracle.accounts[0]!.positions[0]!.netRealized,
+  });
+  expect(s.valuation.positions[0]!.unrealizedGross).not.toBe('0');
+  expect(s.validUntil).toBeGreaterThan(Date.now());
+  expect(s.asOf).toBeGreaterThanOrEqual(s.book.content.evaluatedAt);
+  expect('grant' in s || 'permit' in s).toBe(false);
+  await reader.close();
+  const restarted = await openExecutedValuation(),
+    again = await restarted.read(valuationRequest(f), startIo());
+  if (again.kind !== 'CAPTURED') throw Error('EXECUTED_VALUATION_CAPTURE_REQUIRED');
+  expect(again.source.hash).toBe(s.hash);
+  expect(again.source.book.content).toEqual(s.book.content);
+  expect(again.source.book.hash).toBe(s.book.hash);
+  expect(again.source.validUntil).toBe(s.validUntil);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-valuation: MISSING and UNKNOWN never become a valued executed book or release collateral', async () => {
+  const f = await ready(),
+    reader = await openExecutedValuation();
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  expect(await reader.read(valuationRequest(f), startIo())).toEqual({ kind: 'MISSING' });
+  await f.lifecycle.markUnknown(
+    {
+      kind: 'PAPER_RESERVATION_UNKNOWN',
+      admission: f.admission,
+      reservationId: f.approval.reservationId,
+      eventId: randomUUID(),
+      expectedRevision: '1',
+    },
+    startIo(),
+  );
+  const unknown = await startFixtureEffects(f.c.owner.tenantId);
+  expect(unknown.ledger).toBe(before.ledger);
+  expect(await reader.read(valuationRequest(f), startIo())).toEqual({ kind: 'MISSING' });
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(unknown);
+});
+it('paper-executed-valuation: a retired current rule blocks marking without erasing the historical book', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const reader = await openExecutedValuation(),
+    book = await openExecutedBook(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.p.key.dbRuleId,
+  ]);
+  await expect(reader.read(valuationRequest(f), startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  expect((await book.read(executedRequest(f), startIo())).kind).toBe('CAPTURED');
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-valuation: a GAP head fails closed instead of valuing at the old execution price', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const reader = await openExecutedValuation(),
+    head = await f.snapshots.read(f.f.s.key, startIo()),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  expect(
+    (
+      await f.snapshots.publish(
+        {
+          kind: 'GAP',
+          id: randomUUID(),
+          key: f.f.s.key,
+          expectedRevision: head.revision,
+          timestamp: Date.now(),
+          reason: 'VALUATION_RESYNC',
+        },
+        startIo(),
+      )
+    ).status,
+  ).toBe('APPLIED');
+  await expect(reader.read(valuationRequest(f), startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_EVIDENCE',
+  );
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-valuation: current permission epochs and exact execution semantics remain mandatory', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const reader = await openExecutedValuation(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(
+    reader.read({ ...valuationRequest(f), startKey: 'other' }, startIo()),
+  ).rejects.toThrow('PAPER_ADMISSION_CONFLICT');
+  await startFixtureSql(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  await expect(reader.read(valuationRequest(f), startIo())).rejects.toThrow(
+    'PAPER_ADMISSION_SCOPE',
+  );
+  const current = {
+    ...valuationRequest(f),
+    authorization: {
+      ...f.request.authorization,
+      permissionEpoch: String(BigInt(f.request.authorization.permissionEpoch) + 1n),
+    },
+  };
+  expect((await reader.read(current, startIo())).kind).toBe('CAPTURED');
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-valuation: lost readonly COMMIT and abort return no valuation and never re-execute money', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  const direct = await openExecutedValuation(),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    controller = new AbortController();
+  controller.abort();
+  await expect(direct.read(valuationRequest(f), startIo(controller.signal))).rejects.toThrow(
+    'PAPER_ADMISSION_ABORTED',
+  );
+  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE'),
+    reader = await openExecutedValuation(proxy.connectionString);
+  try {
+    proxy.arm();
+    await expect(reader.read(valuationRequest(f), startIo())).rejects.toThrow(
+      'PAPER_ADMISSION_UNCERTAIN',
+    );
+    expect(proxy.dropped()).toBe(1);
+    expect((await direct.read(valuationRequest(f), startIo())).kind).toBe('CAPTURED');
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await reader.close();
+    await proxy.close();
+  }
+});
+it('paper-executed-valuation: genuine current rule replacement marks the historical v1 book without rewriting it', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const book = await openExecutedBook(),
+    original = await captureExecuted(book, executedRequest(f)),
+    p = structuredClone(f.f.s);
+  const old = p.key.dbRuleId,
+    head = await f.snapshots.read(p.key, startIo());
+  p.key.dbRuleId = randomUUID();
+  p.record.rules.version = 'valuation-refresh-' + randomUUID();
+  p.record.rules.effectiveAt = Date.now() - 1;
+  p.record.rules.expiresAt = Date.now() + 60000;
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    old,
+  ]);
+  await startFixtureSql(
+    `INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",rules)
+    SELECT $1,"instrumentId",version+1,true,$2,now(),"sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",$3::jsonb FROM public.instrument_rule_version WHERE id=$4`,
+    [p.key.dbRuleId, new Date(p.record.rules.effectiveAt), JSON.stringify(p.record.rules), old],
+  );
+  await refreshValuationMark(f, p, head.revision);
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    reader = await openExecutedValuation(),
+    result = await reader.read(valuationRequest(f), startIo());
+  if (result.kind !== 'CAPTURED') throw Error('EXECUTED_VALUATION_CAPTURE_REQUIRED');
+  expect(result.source.book.content).toEqual(original.content);
+  expect(result.source.book.hash).toBe(original.hash);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-executed-valuation: preserves accepted started-source and Risk RPC security settings', async () => {
+  await verifyPaperExecutedValuationStorage(
+    { query: startFixtureSql },
+    { ownership: 'STORAGE_ONLY' },
+  );
 });

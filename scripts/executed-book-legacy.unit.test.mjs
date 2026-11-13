@@ -11,8 +11,14 @@ const pins = {
     'ce821ea884ccc3ff433aa6e91dd5477549d45e8de0ea5fba41a00843a67ddd79',
 };
 const hash = (text) => createHash('sha256').update(text).digest('hex');
+// BEGIN PAPER EXECUTED VALUATION RETAINED_BOOK_FIXTURE
+import { beforeExecutedValuation } from './executed-valuation-legacy.mjs';
 const sourceOf = async (file) =>
-  (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  beforeExecutedValuation(
+    file,
+    (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
+  );
+// END PAPER EXECUTED VALUATION RETAINED_BOOK_FIXTURE
 it.each(Object.entries(pins))(
   'retains every B15 predecessor byte beneath reviewed capture owner coverage: %s',
   async (file, pin) => {
