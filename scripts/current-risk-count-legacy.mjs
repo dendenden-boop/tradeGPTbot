@@ -1,27 +1,59 @@
-// Test-only exact accepted455 count review; no runtime authority or waiver.
+// Test-only exact accepted455 count and additive69 harness review; no runtime authority or waiver.
 import { createHash } from 'node:crypto';
 export const currentRiskCountReview = {
   'scripts/native-proof-artifacts.mjs': {
     predecessor: '67b79c58f98ccd2d6b457ba499c9fe512ec21d7783461608d859ab3cf8cb7e54',
-    current: 'dab04cff170a516967c93eeaad00041d6af9664dce8eef90e05febe25a48feba',
+    current: 'c17dcda47977adc105aed05f7e5af4a16fbd08683b245de9938236b4c18a9dd3',
     patches: [
       {
         old: "  'paper-execution-commit': 35,\n",
-        next: "  // BEGIN PAPER CURRENT RISK REPORT_COUNT\n  'paper-execution-commit': 36,\n  // END PAPER CURRENT RISK REPORT_COUNT\n",
+        next: "  // BEGIN PAPER CURRENT RISK REPORT_COUNT\n  'paper-execution-commit': 40,\n  // END PAPER CURRENT RISK REPORT_COUNT\n",
       },
     ],
   },
   'scripts/test-database.mjs': {
     predecessor: '447f831f911cbdbd8924da9916de66b03f1e567ebe421e8fdf260026e4f73949',
-    current: 'a6928ed2251b0b9523fabb25bcf830c48b3af03363eebc85e325a02b54e305ff',
+    current: '31fefc62c6b9cc24eb5803def1f6dbf1151671747e27af908a06caf4f0ffab64',
     patches: [
       {
         old: '    assert.equal(executionCommitOwner.numPassedTests, 35);\n',
-        next: '    // BEGIN PAPER CURRENT RISK OWNER_COUNT\n    assert.equal(executionCommitOwner.numPassedTests, 36);\n    // END PAPER CURRENT RISK OWNER_COUNT\n',
+        next: '    // BEGIN PAPER CURRENT RISK OWNER_COUNT\n    assert.equal(executionCommitOwner.numPassedTests, 40);\n    // END PAPER CURRENT RISK OWNER_COUNT\n',
       },
       {
         old: '  assert.equal(executedValuationSeed.numPendingTests, 34);\n',
-        next: '  // BEGIN PAPER CURRENT RISK PRE67_COUNT\n  assert.equal(executedValuationSeed.numPendingTests, 35);\n  // END PAPER CURRENT RISK PRE67_COUNT\n',
+        next: '  // BEGIN PAPER CURRENT RISK PRE67_COUNT\n  assert.equal(executedValuationSeed.numPendingTests, 39);\n  // END PAPER CURRENT RISK PRE67_COUNT\n',
+      },
+      {
+        old: '',
+        next: "// BEGIN PAPER CURRENT RISK IMPORT\nimport {\n  verifyPaperCurrentRiskStorage,\n  verifyPaperCurrentRiskUpgrade,\n  verifyCompiledCurrentRisk,\n} from './paper-current-risk-upgrade.mjs';\n// END PAPER CURRENT RISK IMPORT\n",
+      },
+      {
+        old: '',
+        next: "  // BEGIN PAPER CURRENT RISK MIGRATION\n  '202611140001_paper_current_risk',\n  // END PAPER CURRENT RISK MIGRATION\n",
+      },
+      {
+        old: '',
+        next: "    // BEGIN PAPER CURRENT RISK OWNER_PROOF\n    await verifyPaperCurrentRiskStorage(executionCommitDb, { ownership: 'REQUIRE_NON_BYPASS' });\n    // END PAPER CURRENT RISK OWNER_PROOF\n",
+      },
+      {
+        old: '',
+        next: "  // BEGIN PAPER CURRENT RISK UPGRADE\n  const beforeCurrentRisk = await capturePaperExecutionStartUpgrade(paperUpgrade);\n  await cp(\n    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[68]),\n    path.join(paperMigrations, expectedMigrations[68]),\n    { recursive: true },\n  );\n  await migrate(databases[4], paperConfig, true);\n  await verifyPaperCurrentRiskUpgrade(paperUpgrade, beforeCurrentRisk);\n  await migrate(databases[4], paperConfig, true);\n  await verifyPaperCurrentRiskUpgrade(paperUpgrade, beforeCurrentRisk);\n  const currentRiskCompiled = await verifyCompiledCurrentRisk(\n    paperUpgrade,\n    paperAdmissionEnvironment(databases[4]),\n  );\n  assert.equal(currentRiskCompiled.status, 'PASS');\n  // END PAPER CURRENT RISK UPGRADE\n",
+      },
+      {
+        old: '',
+        next: "  // BEGIN PAPER CURRENT RISK RESET_UPGRADE\n  await verifyPaperCurrentRiskStorage(admissionReset, { ownership: 'STORAGE_ONLY', empty: true });\n  // END PAPER CURRENT RISK RESET_UPGRADE\n",
+      },
+      {
+        old: '',
+        next: "  // BEGIN PAPER CURRENT RISK RESET_POPULATED\n  await verifyPaperCurrentRiskStorage(startedAfterReset, {\n    ownership: 'STORAGE_ONLY',\n    empty: true,\n  });\n  // END PAPER CURRENT RISK RESET_POPULATED\n",
+      },
+      {
+        old: '',
+        next: "  // BEGIN PAPER CURRENT RISK RESET_FRESH\n  await verifyPaperCurrentRiskStorage(reset, { ownership: 'STORAGE_ONLY', empty: true });\n  // END PAPER CURRENT RISK RESET_FRESH\n",
+      },
+      {
+        old: '',
+        next: '    // BEGIN PAPER CURRENT RISK FLAGS\n    paperCurrentRiskUpgradePreserved: true,\n    paperCurrentRiskResetValidated: true,\n    paperCurrentRiskCompiled: currentRiskCompiled,\n    // END PAPER CURRENT RISK FLAGS\n',
       },
     ],
   },
@@ -50,6 +82,92 @@ export const currentRiskCountReview = {
       {
         old: "    const source = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(\n      '\\r\\n',\n      '\\n',\n    );\n",
         next: "    const source = beforeCurrentRiskCounts(\n      file,\n      (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\\r\\n', '\\n'),\n    );\n",
+      },
+    ],
+  },
+  'scripts/native-cluster-bootstrap.mjs': {
+    predecessor: 'cfb8bd383d124dd270c774a8d8b4b520d8c0d10711135aecf0356c658a07c4f4',
+    current: '56901bdfcb8656ae2b2b97a70af13cbc92d66ec5c79649af112ed270617ee48f',
+    patches: [
+      {
+        old: '        68,\n',
+        next: '        // BEGIN PAPER CURRENT RISK SECONDARY_COUNT\n        69,\n        // END PAPER CURRENT RISK SECONDARY_COUNT\n',
+      },
+      {
+        old: '      migrations: 68,\n',
+        next: '      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n      migrations: 69,\n      // END PAPER CURRENT RISK MIGRATION_COUNT\n',
+      },
+    ],
+  },
+  'scripts/cluster-isolated-evidence.mjs': {
+    predecessor: '169ddeaa287b531b5e5afbd7a9062a61b86bfb314fa28cbaaa2fd021a5308228',
+    current: '2c3c5bf08ff62e92cfe4b05775a93ce27b20742dfd1ab36d1c4fe335c74051dd',
+    patches: [
+      {
+        old: '  assert.equal(proof.migrations, 68);\n',
+        next: '  // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n  assert.equal(proof.migrations, 69);\n  // END PAPER CURRENT RISK MIGRATION_COUNT\n',
+      },
+    ],
+  },
+  'scripts/cluster-isolated-evidence.unit.test.mjs': {
+    predecessor: '930e377caa75ee495016d7cbb590944260a78160181fa2b72235d024145def94',
+    current: 'e6765aae5c15d5136c1412e4ed286dc2b1b446e75af01b0958bdbe9ce5eaa1fb',
+    patches: [
+      {
+        old: '    migrations: 68,\n',
+        next: '    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n    migrations: 69,\n    // END PAPER CURRENT RISK MIGRATION_COUNT\n',
+      },
+    ],
+  },
+  'scripts/registry-domain-evidence.unit.test.mjs': {
+    predecessor: 'b9feaaa7857cef4b0287b05990ef121b938d345e7d5f6a5a02be06f7830ebae4',
+    current: '762ab1c3c229800c1b9ea0f8e26f5dcde9c0cc8d3c62cd96bd6b9e5265f75e46',
+    patches: [
+      {
+        old: '    migrations: 68,\n',
+        next: '    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n    migrations: 69,\n    // END PAPER CURRENT RISK MIGRATION_COUNT\n',
+      },
+    ],
+  },
+  'scripts/native-migration-count.unit.test.mjs': {
+    predecessor: '0ba313596d62ef4e050bb009f41ac1185e016becf1466df69596999377e490ba',
+    current: '218867a3cb186a7f2221ea762c2779b61335600ffb7c54794040b0ab1fb3679d',
+    patches: [
+      {
+        old: 'const fixture = vi.hoisted(() => ({ count: 68, cloned: 0, inspections: [] }));\n',
+        next: '// BEGIN PAPER CURRENT RISK FIXTURE\nconst fixture = vi.hoisted(() => ({ count: 69, cloned: 0, inspections: [] }));\n// END PAPER CURRENT RISK FIXTURE\n',
+      },
+      {
+        old: 'beforeEach(() => Object.assign(fixture, { count: 68, cloned: 0, inspections: [] }));\n',
+        next: '// BEGIN PAPER CURRENT RISK RESET\nbeforeEach(() => Object.assign(fixture, { count: 69, cloned: 0, inspections: [] }));\n// END PAPER CURRENT RISK RESET\n',
+      },
+      {
+        old: "it('checks migration68 in all four secondary ledgers before starting actor cloning', async () => {\n",
+        next: "// BEGIN PAPER CURRENT RISK TITLE\nit('checks migration69 in all four secondary ledgers before starting actor cloning', async () => {\n  // END PAPER CURRENT RISK TITLE\n",
+      },
+      {
+        old: '',
+        next: "// BEGIN PAPER CURRENT RISK STALE\nit('rejects the previously latest published68 secondary ledger before any actor cloning', async () => {\n  fixture.count = 68;\n  const f = run();\n  await expect(f.promise).rejects.toThrow();\n  expect(f.migrated).toHaveLength(1);\n  expect(f.observed).toEqual(f.migrated);\n  expect(f.closed).toEqual(f.migrated);\n  expect(fixture.cloned).toBe(0);\n});\n// END PAPER CURRENT RISK STALE\n",
+      },
+    ],
+  },
+  'scripts/test-integration.mjs': {
+    predecessor: '760b50363b20670d3eafe527f298fce5be5fdad857a8868f75089bb766f519e7',
+    current: '12f9564acd5e16884a0a312d007c81ab782e66f51534733091d37cf124b2296b',
+    patches: [
+      {
+        old: '      databaseReport.nativeClusterIsolation?.migrations !== 68 ||\n',
+        next: '      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n      databaseReport.nativeClusterIsolation?.migrations !== 69 ||\n      // END PAPER CURRENT RISK MIGRATION_COUNT\n',
+      },
+    ],
+  },
+  'scripts/historical-inventory-harness.unit.test.mjs': {
+    predecessor: '5db896a1bfee0695e5fe1cd0f503eb199d20b4e89dfcac5d1c60ed19c065aef8',
+    current: '263556403e3f46a6c2672119f2d891b57d0071d15bf2028f2cfa57a0c68f4701',
+    patches: [
+      {
+        old: '    /^it\\(/gm,\n',
+        next: '    // BEGIN PAPER CURRENT RISK NESTED_CASE_DISCOVERY\n    /^[ \\t]*it\\(/gmu,\n    // END PAPER CURRENT RISK NESTED_CASE_DISCOVERY\n',
       },
     ],
   },

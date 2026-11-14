@@ -158,7 +158,9 @@ try {
       databaseReport.nativeClusterIsolation?.actors !== 32 ||
       // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
       // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
-      databaseReport.nativeClusterIsolation?.migrations !== 68 ||
+      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
+      databaseReport.nativeClusterIsolation?.migrations !== 69 ||
+      // END PAPER CURRENT RISK MIGRATION_COUNT
       // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT
       // END PAPER EXECUTED VALUATION MIGRATION_COUNT
       ['admission', 'startedExecution', 'nativeAdmission'].some(

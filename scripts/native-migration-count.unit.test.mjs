@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 // BEGIN PAPER HISTORICAL INVENTORY FIXTURE
-const fixture = vi.hoisted(() => ({ count: 68, cloned: 0, inspections: [] }));
+// BEGIN PAPER CURRENT RISK FIXTURE
+const fixture = vi.hoisted(() => ({ count: 69, cloned: 0, inspections: [] }));
+// END PAPER CURRENT RISK FIXTURE
 // END PAPER HISTORICAL INVENTORY FIXTURE
 vi.mock('./owned-native-secondary.mjs', () => ({
   inspectOwnedPostgres: async (project, port) => {
@@ -23,7 +25,9 @@ vi.mock('./native-cluster-isolation.mjs', () => ({
 import { bootstrapNativeCluster } from './native-cluster-bootstrap.mjs';
 
 // BEGIN PAPER HISTORICAL INVENTORY RESET
-beforeEach(() => Object.assign(fixture, { count: 68, cloned: 0, inspections: [] }));
+// BEGIN PAPER CURRENT RISK RESET
+beforeEach(() => Object.assign(fixture, { count: 69, cloned: 0, inspections: [] }));
+// END PAPER CURRENT RISK RESET
 // END PAPER HISTORICAL INVENTORY RESET
 function run(budget = 10000) {
   const project = 'ctp-integration-900-aabbcc112233',
@@ -67,7 +71,9 @@ function run(budget = 10000) {
   return { promise, migrated, observed, closed };
 }
 // BEGIN PAPER HISTORICAL INVENTORY TITLE
-it('checks migration68 in all four secondary ledgers before starting actor cloning', async () => {
+// BEGIN PAPER CURRENT RISK TITLE
+it('checks migration69 in all four secondary ledgers before starting actor cloning', async () => {
+  // END PAPER CURRENT RISK TITLE
   // END PAPER HISTORICAL INVENTORY TITLE
   const f = run();
   await expect(f.promise).rejects.toThrow('TEST_ONLY_ACTOR_CLONE_BOUNDARY');
@@ -93,3 +99,14 @@ it('cannot mint a fresh migration budget after the shared window expires', async
   expect(f.observed).toEqual([]);
   expect(fixture.cloned).toBe(0);
 });
+// BEGIN PAPER CURRENT RISK STALE
+it('rejects the previously latest published68 secondary ledger before any actor cloning', async () => {
+  fixture.count = 68;
+  const f = run();
+  await expect(f.promise).rejects.toThrow();
+  expect(f.migrated).toHaveLength(1);
+  expect(f.observed).toEqual(f.migrated);
+  expect(f.closed).toEqual(f.migrated);
+  expect(fixture.cloned).toBe(0);
+});
+// END PAPER CURRENT RISK STALE
