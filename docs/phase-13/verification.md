@@ -1,5 +1,21 @@
 # PHASE 13 verification
 
+## Current ticker-coherence checkpoint — HOLD
+
+[Current Risk/loss evidence](current-risk-certification.md) records source622219d
+Platform43613566944 / CodeQL43613566798 GREEN and all13 frozen local commands
+GREEN: 6,494 unit, 41 HTTP, twelve clean deployments, audit zero. Subsequent
+tests-first151c7f9/native19 reproduces a new ticker-only/current-equity defect
+on69. Separate additive70 makes that regression GREEN in native20; native22
+retains all populated69 rows, old function bodies/security and existing
+certificates through local upgrade and compiled restart. Both selected proofs
+preserve monetary effects and stop their owned servers. Neither claims full
+owner/Prisma/CI acceptance. Migrations1–69 remain unchanged. Full exact70-source
+regression and independent CI remain pending, so HOLD / PHASE13 IN_PROGRESS /
+NOT READY FOR PHASE14. Financial PAPER/LIVE dispatch and positive native
+collateral credit remain disabled. Earlier checkpoints retain their original
+timing and are superseded only within the explicit scope of later evidence.
+
 ## Accepted PR72 main and next candidate — 14 November 2026
 
 Ordinary protected squash of the expressly authorized PR72 HEAD `005b636c5d7e448f09772ff9fe92638fd9148638` produced main `455f8929c19422b7f7cdb65a417d11b63574ce77`, parent `514f68240bb9f5890138af51a766c0173e08b4d4`. The resulting tree equals the approved tree. Own-main [Platform43478355797](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355797) and [CodeQL43478355931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355931) are fully GREEN: all nine main checks, 6,427 unit / 2,486 Paper / 41 HTTP per OS, 1,514 PostgreSQL / 49 files / 24 owners / 35 writer-capture cases, all68 migrations, populated67→68 upgrade/redeploy/reset, compiled restart, twelve clean deployments and audit0. Six actual ZIPs and both raw native logs verify; the original1,507 PostgreSQL and6,329 unit cases remain. Native aggregate297.753 seconds stays below480 seconds. The separate security-app check was GREEN on the identical PR72 tree; it is not reported as an extra own-main check. GitHub API confirms strict administrator enforcement and the same five app-bound required contexts, without force/delete or bypass changes.

@@ -2,6 +2,52 @@
 
 ## Starting point and gate
 
+### Latest checkpoint — ticker coherence HOLD
+
+Source `622219d23d90a70d349acd0a01d1a173f3df0aaf` completes
+[Platform 43613566944](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43613566944)
+and [CodeQL 43613566798](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43613566798)
+with every workflow job GREEN. Its complete frozen local13-command regression
+also passes: 6,494 unit / 2,537 Paper / 41 HTTP, twelve clean deployments and
+audit zero. All6,427 original unit occurrences are retained. This later clean
+success does not erase the earlier EPERM failure below. The six CI ZIP digests
+and producer windows are verified; detailed native report acceptance remains
+separate from workflow success.
+
+A subsequent actual restricted-publisher native regression finds a new candidate
+defect: fresh APPLIED LAST16.05 followed by a newer DUPLICATE ticker LAST10.05
+with unchanged book clocks still produces a certificate using the old higher
+equity. Tests-first `151c7f97e59660815f20b5a384adb8ed0df8d33e` records the failing
+contract before its fix. Local native19 reproduces RED on69; native20 passes
+the same test with additive70, including restored certification after a genuine
+coherent fresh snapshot, retained earlier peak and unchanged monetary effects.
+The other40 owner cases are filtered in that selected diagnostic, not claimed
+passed. Both owned servers are stopped.
+
+Additive70 retains69 and the accepted publisher unchanged. A private invoker
+wrapper keeps all original authentication, source/rule validation and lock
+ordering, then compares the latest retained APPLIED/DUPLICATE ticker using native
+bigint exchange time. Every receipt tied at the latest native time must agree
+with the selected available LAST; unavailable/missing/conflicting prices reject
+certification. Equal values never copy new ticker timestamps into an old book
+or extend its finite lease. A partial native-time index supports this lookup.
+No new runtime grants, monetary tables, writes or transport permits are added.
+
+Local native22 populates69 with an actual START/BUY and compiled current
+certificate, applies70 and verifies every pre-existing row, function body and
+security property, retaining the old private function under its v69 name.
+Restricted-owner/index checks and compiled70 restart pass without financial
+effects; the server is stopped. This direct-SQL local proof does not substitute
+for Prisma upgrade/redeploy/reset or independent full CI. Native21's earlier
+metadata-expiry failure remains a failed diagnostic, not a passed upgrade.
+
+**HOLD: exact70-source full regression and CI are pending. PHASE13 IN_PROGRESS /
+NOT READY FOR PHASE14.** Accepted main remains `455f8929`; financial PAPER/LIVE
+dispatch and positive native collateral credit stay disabled. Historical
+checkpoints below preserve their original results and limitations.
+
+### Accepted main and historical checkpoints
+
 Protected main `455f8929c19422b7f7cdb65a417d11b63574ce77` accepts PR72 through
 its own [Platform 43478355797](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355797)
 and [CodeQL 43478355931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355931).

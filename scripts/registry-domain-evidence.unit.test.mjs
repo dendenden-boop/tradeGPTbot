@@ -49,7 +49,7 @@ function fixture() {
     roleIsolation: { independent: true, probeRolesRemoved: true },
     actors: 32,
     // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
-    migrations: 69,
+    migrations: 70,
     // END PAPER CURRENT RISK MIGRATION_COUNT
     fixedRoleGraphHash: 'e'.repeat(64),
     registryIndependence: globalThis.structuredClone(evidence),
