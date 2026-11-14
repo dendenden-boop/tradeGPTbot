@@ -1,5 +1,64 @@
 # PHASE 13 verification
 
+## Verified current Risk/loss code checkpoint — publication pending
+
+Source `352f19102421cb42a9e4c71a611a9e08c95c7b80` has complete
+[Platform43617782181](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43617782181)
+and [CodeQL43617782174](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43617782174)
+GREEN. All13 frozen local commands pass: 6,495 unit / 2,537 Paper / 41 HTTP,
+twelve clean deployments and audit zero. Both OS case identities match; all
+6,427 original unit occurrences are retained. Native passes1,520 PostgreSQL /
+49 files / 24 owner suites / 41 writer-capture cases; all1,514 original cases
+and45 raw report copies are preserved. Six actual ZIP digests/windows and two
+raw native logs verify. Populated68→69/69→70 upgrade, Prisma redeploy, reset,
+compiled restart, three secondary resets and cleanup pass. Native aggregate
+456.586 seconds remains below480; budgets, rights and assertions are unchanged.
+Tests-first151c7f9/native19 ticker RED is closed by separate additive70 and the
+full exact-code CI, not waived by the earlier622219d GREEN. All migrations1–69
+and all226 TypeScript source files from622219d remain unchanged. Exact-SHA
+CodeQL analysis and zero open branch alerts are verified; strict/admin main
+protection retains all five app-bound required checks.
+
+[Detailed evidence and limitations](current-risk-certification.md) retain every
+earlier failure. Final documentation-head source/PR checks, protected review
+and own-main CI remain separate requirements; accepted main455f8929 is unchanged.
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. Financial PAPER/LIVE dispatch
+and positive native collateral credit remain disabled; native AMEND stays
+Binance Spot TESTNET only. No real private-exchange or production-soak acceptance
+is claimed.
+
+## Ticker-coherence reproduction checkpoint — historical HOLD
+
+[Current Risk/loss evidence](current-risk-certification.md) records source622219d
+Platform43613566944 / CodeQL43613566798 GREEN and all13 frozen local commands
+GREEN: 6,494 unit, 41 HTTP, twelve clean deployments, audit zero. Subsequent
+tests-first151c7f9/native19 reproduces a new ticker-only/current-equity defect
+on69. Separate additive70 makes that regression GREEN in native20; native22
+retains all populated69 rows, old function bodies/security and existing
+certificates through local upgrade and compiled restart. Both selected proofs
+preserve monetary effects and stop their owned servers. Neither claims full
+owner/Prisma/CI acceptance. Migrations1–69 remain unchanged. Full exact70-source
+regression and independent CI remain pending, so HOLD / PHASE13 IN_PROGRESS /
+NOT READY FOR PHASE14. Financial PAPER/LIVE dispatch and positive native
+collateral credit remain disabled. Earlier checkpoints retain their original
+timing and are superseded only within the explicit scope of later evidence.
+
+## Accepted PR72 main and next candidate — 14 November 2026
+
+Ordinary protected squash of the expressly authorized PR72 HEAD `005b636c5d7e448f09772ff9fe92638fd9148638` produced main `455f8929c19422b7f7cdb65a417d11b63574ce77`, parent `514f68240bb9f5890138af51a766c0173e08b4d4`. The resulting tree equals the approved tree. Own-main [Platform43478355797](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355797) and [CodeQL43478355931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355931) are fully GREEN: all nine main checks, 6,427 unit / 2,486 Paper / 41 HTTP per OS, 1,514 PostgreSQL / 49 files / 24 owners / 35 writer-capture cases, all68 migrations, populated67→68 upgrade/redeploy/reset, compiled restart, twelve clean deployments and audit0. Six actual ZIPs and both raw native logs verify; the original1,507 PostgreSQL and6,329 unit cases remain. Native aggregate297.753 seconds stays below480 seconds. The separate security-app check was GREEN on the identical PR72 tree; it is not reported as an extra own-main check. GitHub API confirms strict administrator enforcement and the same five app-bound required contexts, without force/delete or bypass changes.
+
+All thirteen fresh unchanged-main baseline commands pass on1,061 frozen inputs. The [current Risk/loss increment](current-risk-certification.md) has independent tests-first Linux RED at source `c3a2c7c` / Platform43597660366: both native jobs retain35 PASS and fail only the missing coordinator; both OS unit matrices and CodeQL43597660255 pass. Initial count-fixture failures and every partial diagnostic remain historical evidence, not acceptance.
+
+Candidate implementation now has55 targeted unit/storage-contract PASS and four selected native current-Risk lifecycle PASS, with original35 native cases filtered in that diagnostic. A separate non-BYPASS PAPER-owner/storage and compiled restart diagnostic passes using migration69 and real START/BUY, preserving financial rows. The complete candidate unit attempt reports6,489 PASS / one migration-count-fixture FAIL; its correction retains the published67 rejection and adds a published68 rejection, with21 targeted review/count contracts PASS. Bounded backlog, all original native cases, populated upgrade/reset, full final regression and independent exact-head CI remain required. New runtime is not promoted or accepted, migration69 remains unpublished, and **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. Financial PAPER/LIVE dispatch and positive native credit stay disabled; no real private-exchange or production-soak acceptance is claimed. Earlier pending main/PR72 sections below preserve their historical timing and are superseded only by the accepted-main evidence above.
+
+The subsequent [bounded history diagnostic](current-risk-certification.md) passes1,001 actual restricted-role DUPLICATE publications, incomplete rejection/rollback, durable catch-up/restart, full coverage and peak retention, followed by compiled restart. Its original1,000-point implementation reproduced a two-second SQL timeout; the correction uses128 points per durable batch without changing any deadline, rights or assertions. Native coordinator assertions take13.225 seconds under15 seconds; real immutable-history setup is separately bounded by the existing hook and remains inside the90-second owner aggregate. No timing guarantee or full CI acceptance is inferred. Current69 targeted contracts pass. All original native cases and full final regression/independent CI still require verification.
+
+The frozen complete candidate run passes12 of13 local commands, including41 HTTP, database validation, build/runtime, twelve clean deployments and all audits. Its unit result is6,490 PASS / three static counter FAIL out of6,493: the previous detector counted39 top-level cases and missed the new nested40th test. Recognizing horizontal indentation corrects discovery while preserving all strict assertions;14 targeted review/harness cases pass. All35 original native case bodies/setup,68 published migrations,223 original runtime files and18 package/lock/workflow inputs remain exact. Complete new frozen regression, native upgrade/reset/owner and independent CI remain pending. No source or phase acceptance is inferred from this partial run.
+
+Source `fc618d84b710f5ecb270e3ba0d44c852c42764b9` then completes [Platform43610618813](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43610618813) / [CodeQL43610618760](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43610618760). Both OS matrices pass6,494 unit /41 HTTP, twelve clean deployments and audit0; all24 owner reports, including40 execution/capture cases, pass with zero failed/pending tests. Six actual ZIP digests/producer windows and both exact failed-native logs verify. Native main and owners subsequently fail the new compiled upgrade fixture with MARKET_TRADE_METADATA; full main-native completion/reset is not accepted and the gate remains HOLD. A separate real rules-replacement diagnostic reproduces retired trade-template metadata, then passes after correcting only the new fixture publication's key/record to current metadata. The production gate stays intact; compiled restart, concurrent single-certificate issuance and current policy/pause/permission tests pass locally. Complete corrected-source CI is required; no rerun/cancellation or relaxation occurred.
+
+Local source6,494 unit /41 HTTP and all completed frozen commands are retained. Connection restoration interrupted clean before a result; recovery verifies identical source and resumes only clean/audits. Clean fails Windows symlink EPERM while all audits pass; an isolated probe confirms the host file-link restriction without modifying rights/settings. This FAIL is not labelled PASS or substituted with an earlier run. The exact source's independent Ubuntu/Windows clean CI results are GREEN, and the local/environment limitation remains explicit. Full corrected-source acceptance and protected publication remain pending; main remains455f8929 and financial dispatch stays disabled.
+
 ## Verified historical inventory code checkpoint — 13 November 2026
 
 Code `0fef296749ce12167ccb1047cfc98f8f763b2bec` passes full

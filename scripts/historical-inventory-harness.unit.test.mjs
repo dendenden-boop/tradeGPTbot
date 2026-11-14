@@ -3,7 +3,9 @@ import { expect, it } from 'vitest';
 import { ownerReports } from './native-proof-artifacts.mjs';
 const cases = (
   readFileSync('packages/database/test/paper-execution-commit.integration.test.ts', 'utf8').match(
-    /^it\(/gm,
+    // BEGIN PAPER CURRENT RISK NESTED_CASE_DISCOVERY
+    /^[ \t]*it\(/gmu,
+    // END PAPER CURRENT RISK NESTED_CASE_DISCOVERY
   ) ?? []
 ).length;
 const runner = readFileSync('scripts/test-database.mjs', 'utf8');

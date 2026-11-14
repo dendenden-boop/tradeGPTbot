@@ -56,7 +56,9 @@ export function requireClusterIsolatedEvidence(cohorts, native) {
   assert.equal(proof.actors, 32);
   // BEGIN PAPER EXECUTED VALUATION MIGRATION_COUNT
   // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
-  assert.equal(proof.migrations, 68);
+  // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
+  assert.equal(proof.migrations, 70);
+  // END PAPER CURRENT RISK MIGRATION_COUNT
   // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT
   // END PAPER EXECUTED VALUATION MIGRATION_COUNT
   hex(proof.fixedRoleGraphHash);

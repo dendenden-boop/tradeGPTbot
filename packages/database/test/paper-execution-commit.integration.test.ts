@@ -1,14 +1,15 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import { parseDecimal } from '@ctp/exchange-core';
-import { valuePortfolio } from '@ctp/portfolio';
+import { decimalCompare, parseDecimal } from '@ctp/exchange-core';
+import { canonical, valuePortfolio } from '@ctp/portfolio';
 import type { PortfolioState } from '@ctp/portfolio';
 import { Pool } from 'pg';
-import { afterAll, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
 import { createPostgresPaperConfiguration } from '@ctp/paper-engine/configuration';
 import { createPostgresPaperFunding } from '@ctp/paper-engine/funding';
 import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfolio';
+import { paperRuntimeDependencies, type PaperRuntimePublication } from '@ctp/paper-engine/runtime';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
@@ -1062,4 +1063,392 @@ it('paper-executed-valuation: preserves accepted started-source and Risk RPC sec
     { query: startFixtureSql },
     { ownership: 'STORAGE_ONLY' },
   );
+});
+
+it('paper-current-risk: certifies an actual executed inventory with durable current loss evidence without another financial effect', async () => {
+  const writer = await open(),
+    f = await ready();
+  const execution = await writer.execute(f.request, startIo());
+  expect(execution.order.executedQuantity).not.toBe('0');
+  await refreshValuationMark(f);
+  await refreshCurrentRiskEvidence(f);
+  const inventory = await historicalCapture(await openHistorical(), f),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  expect(inventory.complete).toBe(true);
+  expect(inventory.valuation.accounts[0]!.positions).toHaveLength(1);
+  const factory = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperCurrentRiskCoordinator'
+  ];
+  expect(factory).toBeTypeOf('function');
+  type Certificate = {
+    kind: string;
+    id: string;
+    revision: string;
+    inventory: paper.PaperHistoricalInventorySource;
+    loss: { complete: boolean; actualEquity: string };
+    snapshot: { lossBaselineComplete: boolean; userExposure: string };
+  };
+  const coordinator = await (
+    factory as (options: unknown) => Promise<{
+      certify(request: unknown, io: ReturnType<typeof startIo>): Promise<Certificate>;
+      readCurrent(request: unknown, io: ReturnType<typeof startIo>): Promise<Certificate>;
+      close(): Promise<void>;
+    }>
+  )({ connectionString: startFixtureConnection(), environment: 'test' });
+  try {
+    const request = { ...f.request, kind: 'PAPER_CURRENT_RISK_CERTIFY' },
+      [certificate, concurrent] = await Promise.all([
+        coordinator.certify(request, startIo()),
+        coordinator.certify(request, startIo()),
+      ]);
+    expect(concurrent).toEqual(certificate);
+    expect(certificate.kind).toBe('PAPER_CURRENT_RISK_CERTIFICATE');
+    expect(certificate.inventory.accountIds).toEqual(inventory.accountIds);
+    expect(certificate.inventory.accounts.map((a) => [a.bookId, a.revision, a.state])).toEqual(
+      inventory.accounts.map((a) => [a.bookId, a.revision, a.state]),
+    );
+    expect(certificate.loss.complete).toBe(true);
+    expect(certificate.loss.actualEquity).toBe(inventory.valuation.equity);
+    expect(certificate.snapshot.lossBaselineComplete).toBe(true);
+    expect(certificate.snapshot.userExposure).toBe(inventory.exposure.userExposure);
+    expect(certificate).not.toHaveProperty('grant');
+    expect(certificate).not.toHaveProperty('permit');
+    const current = await coordinator.readCurrent(request, startIo());
+    expect([current.id, current.revision]).toEqual([certificate.id, certificate.revision]);
+    expect(current).toEqual(certificate);
+    const evidenceCounts = () =>
+      startFixtureSql(
+        `SELECT (SELECT count(*)::int FROM ctp_paper.current_risk_certificate WHERE tenant_id=$1) certificates,
+       (SELECT count(*)::int FROM ctp_paper.current_loss_checkpoint WHERE tenant_id=$1) checkpoints,
+       (SELECT "clientIdHighWatermark"::text FROM public.exchange_account WHERE "tenantId"=$1 AND id=$2) client_ids,
+       (SELECT last_value::text FROM ctp_paper.current_risk_revision) certificate_sequence,
+       (SELECT last_value::text FROM ctp_paper.current_loss_revision) loss_sequence`,
+        [f.c.owner.tenantId, f.c.owner.accountId],
+      );
+    const counts = (await evidenceCounts()).rows;
+    expect(counts[0]).toMatchObject({ certificates: 1, checkpoints: 1 });
+    expect(await coordinator.certify(request, startIo())).toEqual(certificate);
+    expect((await evidenceCounts()).rows).toEqual(counts);
+    await coordinator.close();
+    const restarted = await (
+      factory as (options: unknown) => Promise<{
+        readCurrent(request: unknown, io: ReturnType<typeof startIo>): Promise<Certificate>;
+        close(): Promise<void>;
+      }>
+    )({ connectionString: startFixtureConnection(), environment: 'test' });
+    try {
+      expect(await restarted.readCurrent(request, startIo())).toEqual(certificate);
+      expect((await evidenceCounts()).rows).toEqual(counts);
+    } finally {
+      await restarted.close();
+    }
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await coordinator.close();
+  }
+});
+
+const currentRiskPorts: paper.PaperCurrentRiskCoordinator[] = [];
+afterAll(async () => {
+  for (const port of currentRiskPorts) await port.close();
+});
+async function openCurrentRisk(connectionString = startFixtureConnection()) {
+  const port = await paper.createPostgresPaperCurrentRiskCoordinator({
+    connectionString,
+    environment: 'test',
+  });
+  currentRiskPorts.push(port);
+  return port;
+}
+function currentRiskRequest(f: Awaited<ReturnType<typeof ready>>) {
+  return { ...f.request, kind: 'PAPER_CURRENT_RISK_CERTIFY' as const };
+}
+async function refreshCurrentRiskEvidence(f: Awaited<ReturnType<typeof ready>>) {
+  const context = await f.runtime.context(f.c.owner, startIo()),
+    head = await f.runtime.head(f.c.owner, startIo()),
+    publication: PaperRuntimePublication = {
+      id: randomUUID(),
+      expectedRevision: head?.revision ?? '0',
+      observation: {
+        owner: f.c.owner,
+        configurationId: f.c.id,
+        configurationHash: context.configurationHash,
+        permissionEpoch: context.current.permissionEpoch,
+        userSessionEpoch: context.current.userSessionEpoch,
+        accountVersion: context.current.accountVersion,
+        health: Object.fromEntries(
+          paperRuntimeDependencies.map((name) => [
+            name,
+            { sourceId: 'current-risk-native:' + name, asOf: Date.now(), status: 'HEALTHY' },
+          ]),
+        ) as PaperRuntimePublication['observation']['health'],
+      },
+    };
+  await f.runtime.publish(publication, startIo());
+  const trade = structuredClone(f.f.p),
+    tradeHead = await f.trades.read(trade.key, startIo()),
+    now = Date.now();
+  trade.id = randomUUID();
+  trade.expectedRevision = tradeHead.revision;
+  trade.timestamp = now;
+  trade.trade.tradeId = 'current-risk-' + randomUUID();
+  trade.trade.receivedAt = trade.trade.exchangeTime = now;
+  if (trade.trade.sourceSequence !== null)
+    trade.trade.sourceSequence = (
+      BigInt(trade.trade.sourceSequence) +
+      BigInt(tradeHead.revision) +
+      1n
+    ).toString();
+  expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
+}
+async function publishCurrentRiskPrice(f: Awaited<ReturnType<typeof ready>>, price: string) {
+  const p = structuredClone(f.f.s),
+    head = await f.snapshots.read(p.key, startIo()),
+    now = Date.now();
+  p.id = randomUUID();
+  p.expectedRevision = head.revision;
+  p.timestamp = now;
+  p.ticker.last = { state: 'AVAILABLE', value: parseDecimal(price) };
+  for (const value of [p.book, p.ticker]) value.receivedAt = value.exchangeTime = now;
+  if (p.book.sourceSequence !== null)
+    p.book.sourceSequence = (BigInt(p.book.sourceSequence) + BigInt(head.revision) + 1n).toString();
+  expect((await f.snapshots.publish(p, startIo())).status).toBe('APPLIED');
+  await refreshCurrentRiskEvidence(f);
+  return p;
+}
+it('paper-current-risk: preserves a real intermediate equity peak across a lower mark and coordinator restart', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const highMark = await publishCurrentRiskPrice(f, '16.05'),
+    coordinator = await openCurrentRisk(),
+    request = currentRiskRequest(f),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    high = await coordinator.certify(request, startIo());
+  expect(high.loss.complete).toBe(true);
+  expect(high.loss.actualEquity).toBe(high.inventory.valuation.equity);
+  await publishCurrentRiskPrice(f, '12.05');
+  await expect(coordinator.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  await coordinator.close();
+  const restarted = await openCurrentRisk(),
+    low = await restarted.certify(request, startIo());
+  expect(low.loss.adjustedPeakEquity).toBe(high.loss.adjustedPeakEquity);
+  expect(
+    decimalCompare(parseDecimal(low.loss.actualEquity), parseDecimal(high.loss.actualEquity)),
+  ).toBe(-1);
+  expect(low.loss.baseline).toEqual(high.loss.baseline);
+  expect(low.loss.dailyNetRealizedPnl).toBe(high.loss.dailyNetRealizedPnl);
+  const retained = await startFixtureSql<{ count: number }>(
+    `SELECT count(*)::int count FROM ctp_paper.current_loss_seen WHERE tenant_id=$1 AND event_id=$2`,
+    [f.c.owner.tenantId, highMark.id],
+  );
+  expect(retained.rows[0]!.count).toBe(1);
+  expect(await restarted.readCurrent(request, startIo())).toEqual(low);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-risk: uncertain certificate COMMIT grants nothing and restart reads its single durable nonfinancial result', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  await refreshCurrentRiskEvidence(f);
+  const request = currentRiskRequest(f),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE');
+  try {
+    const coordinator = await openCurrentRisk(proxy.connectionString);
+    proxy.arm();
+    await expect(coordinator.certify(request, startIo())).rejects.toThrow(
+      'PAPER_ADMISSION_UNCERTAIN',
+    );
+    expect(proxy.dropped()).toBe(1);
+    await coordinator.close();
+    const restarted = await openCurrentRisk(),
+      current = await restarted.readCurrent(request, startIo());
+    expect(current.kind).toBe('PAPER_CURRENT_RISK_CERTIFICATE');
+    expect(current).not.toHaveProperty('grant');
+    expect(current).not.toHaveProperty('permit');
+    expect(await restarted.certify(request, startIo())).toEqual(current);
+    expect(
+      (
+        await startFixtureSql<{ count: number }>(
+          `SELECT count(*)::int count FROM ctp_paper.current_risk_certificate WHERE tenant_id=$1`,
+          [f.c.owner.tenantId],
+        )
+      ).rows[0]!.count,
+    ).toBe(1);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+it('paper-current-risk: current pause and permission epochs cannot be bypassed by a stored certificate', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  await refreshValuationMark(f);
+  await refreshCurrentRiskEvidence(f);
+  const coordinator = await openCurrentRisk(),
+    request = currentRiskRequest(f),
+    certificate = await coordinator.certify(request, startIo()),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  await expect(coordinator.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  const refreshed = await coordinator.certify(request, startIo());
+  expect(refreshed.policies.user.version).not.toBe(certificate.policies.user.version);
+  expect(refreshed.policies.effective.maxOrderNotional).toBe('1');
+  expect(refreshed.loss.adjustedPeakEquity).toBe(certificate.loss.adjustedPeakEquity);
+  await startFixturePause(f.c.owner.tenantId, 'PAUSED');
+  await expect(coordinator.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  const paused = await coordinator.certify(request, startIo());
+  expect(paused.snapshot.pauses.user).toBe(true);
+  expect(paused.id).not.toBe(refreshed.id);
+  expect(paused).not.toHaveProperty('grant');
+  await startFixtureSql(
+    'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',
+    [f.c.owner.tenantId, f.c.owner.accountId],
+  );
+  await expect(coordinator.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  await expect(coordinator.certify(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+async function prepareCurrentRiskBacklog() {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const high = await publishCurrentRiskPrice(f, '16.05'),
+    head = await f.snapshots.read(high.key, startIo()),
+    before = await startFixtureEffects(f.c.owner.tenantId),
+    request = currentRiskRequest(f),
+    roleConnection = process.env['DATABASE_MARKET_SNAPSHOT_URL'];
+  if (!roleConnection) throw Error('CURRENT_RISK_PUBLIC_ROLE_REQUIRED');
+  // Genuine restricted public publisher calls, not administrator row inserts.
+  // Bounded publisher batches retain the same per-query deadlines and avoid
+  // adding 1,001 connection handshakes to the fixture.
+  const publisher = new Pool({
+    connectionString: roleConnection,
+    max: 1,
+    connectionTimeoutMillis: 1000,
+    query_timeout: 2500,
+    statement_timeout: 2000,
+  });
+  try {
+    let revision = head.revision,
+      sequence = BigInt(high.book.sourceSequence ?? '0');
+    for (let offset = 0; offset < 1001; offset += 100) {
+      const fresh = structuredClone(high),
+        now = Date.now();
+      fresh.id = randomUUID();
+      fresh.expectedRevision = revision;
+      fresh.timestamp = now;
+      for (const value of [fresh.book, fresh.ticker]) value.receivedAt = value.exchangeTime = now;
+      if (fresh.book.sourceSequence !== null) fresh.book.sourceSequence = (++sequence).toString();
+      const text = canonical(fresh),
+        applied = await publisher.query<{ result: { status: string; revision: string } }>(
+          'SELECT ctp_market.publish_snapshot($1,$2) result',
+          [text, createHash('sha256').update(text).digest('hex')],
+        );
+      expect(applied.rows[0]!.result.status).toBe('APPLIED');
+      revision = applied.rows[0]!.result.revision;
+      const observations = Array.from({ length: Math.min(100, 1001 - offset) }, () => {
+        const p = { ...fresh, id: randomUUID(), expectedRevision: revision },
+          body = canonical(p);
+        return { text: body, hash: createHash('sha256').update(body).digest('hex') };
+      });
+      const published = await publisher.query<{ result: { status: string } }>(
+        `SELECT ctp_market.publish_snapshot(p->>'text',p->>'hash') result FROM jsonb_array_elements($1::jsonb) q(p)`,
+        [JSON.stringify(observations)],
+      );
+      expect(published.rows).toHaveLength(observations.length);
+      expect(published.rows.every((r) => r.result.status === 'DUPLICATE')).toBe(true);
+    }
+  } finally {
+    await publisher.end();
+  }
+  await publishCurrentRiskPrice(f, '12.05');
+  return { f, before, request };
+}
+describe('paper-current-risk: bounded DUPLICATE catch-up', () => {
+  let fixture: Awaited<ReturnType<typeof prepareCurrentRiskBacklog>>;
+  // Only immutable retained-history setup is in the existing bounded hook.
+  // Every coordinator assertion remains under the unchanged 15-second test
+  // limit; setup also remains inside the aggregate 90-second owner budget.
+  beforeAll(async () => {
+    fixture = await prepareCurrentRiskBacklog();
+  });
+  it('remains incomplete until durable restart consumes every retained observation', async () => {
+    const { f, before, request } = fixture;
+    const coordinator = await openCurrentRisk();
+    await expect(coordinator.certify(request, startIo())).rejects.toThrow(/^PAPER_/u);
+    expect(
+      (
+        await startFixtureSql<{ count: number }>(
+          'SELECT count(*)::int count FROM ctp_paper.current_loss_checkpoint WHERE tenant_id=$1',
+          [f.c.owner.tenantId],
+        )
+      ).rows[0]!.count,
+    ).toBe(0);
+    const partial = await coordinator.advanceLoss(request, startIo());
+    expect(partial.complete).toBe(false);
+    expect(partial).not.toHaveProperty('certificate');
+    expect(partial).not.toHaveProperty('grant');
+    await coordinator.close();
+    await publishCurrentRiskPrice(f, '12.05');
+    const restarted = await openCurrentRisk();
+    let complete: paper.PaperCurrentLossProgress = partial;
+    for (let batch = 0; batch < 16 && !complete.complete; batch++) {
+      if (batch > 0 && batch % 2 === 0) await publishCurrentRiskPrice(f, '12.05');
+      complete = await restarted.advanceLoss(request, startIo());
+      expect(complete.loss.adjustedPeakEquity).toBe(partial.loss.adjustedPeakEquity);
+    }
+    expect(complete.complete).toBe(true);
+    await expect(restarted.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+    const certificate = await restarted.certify(request, startIo());
+    expect(certificate.loss.adjustedPeakEquity).toBe(partial.loss.adjustedPeakEquity);
+    expect(
+      decimalCompare(
+        parseDecimal(certificate.loss.adjustedPeakEquity),
+        parseDecimal(certificate.loss.adjustedCurrentEquity),
+      ),
+    ).toBe(1);
+    const consumed = await startFixtureSql<{ count: number }>(
+      `SELECT count(*)::int count FROM ctp_paper.current_loss_seen s
+    JOIN ctp_market.snapshot_event e ON e.id=s.event_id WHERE s.tenant_id=$1 AND e.status='DUPLICATE'`,
+      [f.c.owner.tenantId],
+    );
+    expect(consumed.rows[0]!.count).toBe(1001);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  });
+});
+it('paper-current-risk: a newer ticker-only observation cannot be ignored in favour of an older current equity mark', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const high = await publishCurrentRiskPrice(f, '16.05'),
+    head = await f.snapshots.read(high.key, startIo()),
+    tickerOnly = structuredClone(high),
+    now = Date.now();
+  tickerOnly.id = randomUUID();
+  tickerOnly.expectedRevision = head.revision;
+  tickerOnly.timestamp = now;
+  tickerOnly.ticker.receivedAt = tickerOnly.ticker.exchangeTime = now;
+  tickerOnly.ticker.last = { state: 'AVAILABLE', value: parseDecimal('10.05') };
+  // Keep the native book version and all book clocks unchanged. This is an
+  // actual retained ticker observation, not a fresh-book liquidity receipt.
+  expect((await f.snapshots.publish(tickerOnly, startIo())).status).toBe('DUPLICATE');
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    coordinator = await openCurrentRisk(),
+    request = currentRiskRequest(f);
+  await expect(coordinator.certify(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  await publishCurrentRiskPrice(f, '10.05');
+  const coherent = await coordinator.certify(request, startIo());
+  expect(coherent.loss.actualEquity).toBe(coherent.inventory.valuation.equity);
+  expect(
+    decimalCompare(
+      parseDecimal(coherent.loss.adjustedPeakEquity),
+      parseDecimal(coherent.loss.adjustedCurrentEquity),
+    ),
+  ).toBe(1);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });

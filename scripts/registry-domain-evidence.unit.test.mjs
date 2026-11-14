@@ -48,7 +48,9 @@ function fixture() {
     roleCatalogAfter: { primary: 'c'.repeat(64), secondary: 'd'.repeat(64) },
     roleIsolation: { independent: true, probeRolesRemoved: true },
     actors: 32,
-    migrations: 68,
+    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
+    migrations: 70,
+    // END PAPER CURRENT RISK MIGRATION_COUNT
     fixedRoleGraphHash: 'e'.repeat(64),
     registryIndependence: globalThis.structuredClone(evidence),
     independentlyMigratedDatabases: [
