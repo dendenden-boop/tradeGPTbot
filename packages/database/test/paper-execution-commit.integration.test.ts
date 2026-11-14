@@ -1097,7 +1097,11 @@ it('paper-current-risk: certifies an actual executed inventory with durable curr
   )({ connectionString: startFixtureConnection(), environment: 'test' });
   try {
     const request = { ...f.request, kind: 'PAPER_CURRENT_RISK_CERTIFY' },
-      certificate = await coordinator.certify(request, startIo());
+      [certificate, concurrent] = await Promise.all([
+        coordinator.certify(request, startIo()),
+        coordinator.certify(request, startIo()),
+      ]);
+    expect(concurrent).toEqual(certificate);
     expect(certificate.kind).toBe('PAPER_CURRENT_RISK_CERTIFICATE');
     expect(certificate.inventory.accountIds).toEqual(inventory.accountIds);
     expect(certificate.inventory.accounts.map((a) => [a.bookId, a.revision, a.state])).toEqual(
@@ -1122,6 +1126,7 @@ it('paper-current-risk: certifies an actual executed inventory with durable curr
         [f.c.owner.tenantId, f.c.owner.accountId],
       );
     const counts = (await evidenceCounts()).rows;
+    expect(counts[0]).toMatchObject({ certificates: 1, checkpoints: 1 });
     expect(await coordinator.certify(request, startIo())).toEqual(certificate);
     expect((await evidenceCounts()).rows).toEqual(counts);
     await coordinator.close();
@@ -1287,11 +1292,17 @@ it('paper-current-risk: current pause and permission epochs cannot be bypassed b
     request = currentRiskRequest(f),
     certificate = await coordinator.certify(request, startIo()),
     before = await startFixtureEffects(f.c.owner.tenantId);
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrderNotional: '1' });
+  await expect(coordinator.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  const refreshed = await coordinator.certify(request, startIo());
+  expect(refreshed.policies.user.version).not.toBe(certificate.policies.user.version);
+  expect(refreshed.policies.effective.maxOrderNotional).toBe('1');
+  expect(refreshed.loss.adjustedPeakEquity).toBe(certificate.loss.adjustedPeakEquity);
   await startFixturePause(f.c.owner.tenantId, 'PAUSED');
   await expect(coordinator.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
   const paused = await coordinator.certify(request, startIo());
   expect(paused.snapshot.pauses.user).toBe(true);
-  expect(paused.id).not.toBe(certificate.id);
+  expect(paused.id).not.toBe(refreshed.id);
   expect(paused).not.toHaveProperty('grant');
   await startFixtureSql(
     'UPDATE public.exchange_account SET "permissionEpoch"="permissionEpoch"+1 WHERE "tenantId"=$1 AND id=$2',

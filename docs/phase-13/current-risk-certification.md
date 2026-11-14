@@ -106,6 +106,42 @@ is not acceptance. Original35 native case bodies/setup and all68 published
 migrations are preserved exactly;223 original runtime files and18 package,
 lockfile/workflow inputs remain byte-identical.
 
+### Initial complete implementation CI — HOLD
+
+Source `fc618d84b710f5ecb270e3ba0d44c852c42764b9` completes
+[Platform43610618813](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43610618813)
+and [CodeQL43610618760](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43610618760).
+Both OS matrices pass6,494 unit /41 HTTP, twelve clean deployments and audit0;
+CodeQL, Auth, Docker and the shared-deadline job pass. All24 owner suites,
+including40 execution/capture cases with no pending cases, pass. Both native
+jobs then fail the new compiled upgrade fixture with MARKET_TRADE_METADATA.
+Full main-native completion/reset is not accepted. All six actual ZIPs and both
+failed-native raw logs are digest/window/SHA verified; no workflow was retried,
+cancelled or weakened.
+
+The failure is reproduced separately with real v1→v2 rules replacement and an
+actual current snapshot publication while the immutable retained trade remains
+v1. The helper attempted a new fixture trade with that retired metadata. The
+correction binds only the new synthetic publication's key/record to the proven
+current snapshot; the old trade receipt and production metadata guard remain
+unchanged. The same diagnostic then passes current-rule certification, compiled
+restart and financial-row preservation. Concurrent initial certification returns
+one identical certificate/checkpoint; current policy refresh, pause and permission
+epoch tests also pass. Published migrations and all financial/runtime code remain
+unchanged by this fixture correction. Complete corrected-source regression and CI
+remain required.
+
+The initial local source regression passes6,494 unit,41 HTTP and its other
+completed commands, but connection restoration interrupted clean install before
+a result. Its nine successful command results and unchanged frozen inputs were
+retained; only clean/audits were resumed. The resumed clean install fails Windows
+EPERM while creating a dependency link; all three audits pass. An isolated host
+probe confirms file-symlink EPERM and working directory junctions, without changing
+permissions or settings. This local clean result remains FAIL, not a waived PASS.
+Both independent OS CI clean deployments on the exact source are GREEN. The
+earlier local baseline and earlier12/13 diagnostic results keep their own scope;
+neither substitutes for corrected-source acceptance.
+
 **Current certification is under implementation and is not accepted. PHASE13 IN_PROGRESS /
 NOT READY FOR PHASE14.** Financial PAPER/LIVE dispatch and positive native
 collateral credit stay disabled; native AMEND remains Binance Spot TESTNET

@@ -244,6 +244,10 @@ export async function verifyCompiledCurrentRisk(db, env) {
         1n
       ).toString();
     assert.equal((await snapshots.publish(snapshot, io())).status, 'APPLIED');
+    // This is a new synthetic fixture observation under the proven current
+    // metadata, not reinterpretation of the retained immutable trade receipt.
+    trade.key = globalThis.structuredClone(snapshot.key);
+    trade.record = globalThis.structuredClone(snapshot.record);
     trade.id = randomUUID();
     trade.expectedRevision = tradeHead.revision;
     trade.timestamp = Date.now();
@@ -283,6 +287,7 @@ export async function verifyCompiledCurrentRisk(db, env) {
     coordinator = await createPostgresPaperCurrentRiskCoordinator(options);
     const first = await coordinator.certify(request, io());
     assert.equal(first.loss.complete, true);
+    assert.equal(first.scope.dbRuleId, snapshot.key.dbRuleId);
     assert.equal(first.loss.actualEquity, first.inventory.valuation.equity);
     assert(!('grant' in first));
     assert(!('permit' in first));
@@ -304,6 +309,7 @@ export async function verifyCompiledCurrentRisk(db, env) {
       compiledSource: true,
       restart: true,
       finiteLease: true,
+      currentRulesValidated: true,
       financialRowsUnchanged: true,
     };
   } finally {
