@@ -1,6 +1,33 @@
 # PHASE 13 verification
 
-## Current ticker-coherence checkpoint — HOLD
+## Verified current Risk/loss code checkpoint — publication pending
+
+Source `352f19102421cb42a9e4c71a611a9e08c95c7b80` has complete
+[Platform43617782181](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43617782181)
+and [CodeQL43617782174](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43617782174)
+GREEN. All13 frozen local commands pass: 6,495 unit / 2,537 Paper / 41 HTTP,
+twelve clean deployments and audit zero. Both OS case identities match; all
+6,427 original unit occurrences are retained. Native passes1,520 PostgreSQL /
+49 files / 24 owner suites / 41 writer-capture cases; all1,514 original cases
+and45 raw report copies are preserved. Six actual ZIP digests/windows and two
+raw native logs verify. Populated68→69/69→70 upgrade, Prisma redeploy, reset,
+compiled restart, three secondary resets and cleanup pass. Native aggregate
+456.586 seconds remains below480; budgets, rights and assertions are unchanged.
+Tests-first151c7f9/native19 ticker RED is closed by separate additive70 and the
+full exact-code CI, not waived by the earlier622219d GREEN. All migrations1–69
+and all226 TypeScript source files from622219d remain unchanged. Exact-SHA
+CodeQL analysis and zero open branch alerts are verified; strict/admin main
+protection retains all five app-bound required checks.
+
+[Detailed evidence and limitations](current-risk-certification.md) retain every
+earlier failure. Final documentation-head source/PR checks, protected review
+and own-main CI remain separate requirements; accepted main455f8929 is unchanged.
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. Financial PAPER/LIVE dispatch
+and positive native collateral credit remain disabled; native AMEND stays
+Binance Spot TESTNET only. No real private-exchange or production-soak acceptance
+is claimed.
+
+## Ticker-coherence reproduction checkpoint — historical HOLD
 
 [Current Risk/loss evidence](current-risk-certification.md) records source622219d
 Platform43613566944 / CodeQL43613566798 GREEN and all13 frozen local commands

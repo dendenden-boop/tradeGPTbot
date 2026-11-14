@@ -2,7 +2,43 @@
 
 ## Starting point and gate
 
-### Latest checkpoint — ticker coherence HOLD
+### Verified code checkpoint — protected publication pending
+
+Code checkpoint `352f19102421cb42a9e4c71a611a9e08c95c7b80` completes
+[Platform 43617782181](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43617782181)
+and [CodeQL 43617782174](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43617782174)
+GREEN. All thirteen frozen local commands pass on1,074 unchanged inputs:
+6,495 unit / 2,537 Paper / 41 HTTP, twelve clean deployments and audit zero.
+Both actual OS artifacts match the local case identities; all6,427 original
+unit occurrences are retained. CodeQL analysis for this exact SHA has no error
+and its branch has no open alerts. No workflow or scanning rule is relaxed.
+
+All six actual CI ZIP digests/producer windows, two raw native job logs and
+45 raw report copies verify. Native regression passes1,520 cases in49 files,
+all24 owner suites and all41 writer/capture cases, preserving the original
+1,514 PostgreSQL cases. The native aggregate is456.586 seconds under the
+unchanged480-second cap; this measured margin is not a future timing guarantee.
+Populated68→69 and69→70 upgrade, repeated Prisma deploy, all required resets,
+compiled restart, all three secondary resets and cleanup pass. Old certificates,
+rows, function bodies and security properties remain intact across70, with the
+original private facts function retained as its v69 alias. The six new native
+cases cover exact replay/restart/concurrent capture and metadata replacement,
+intermediate peak, lost COMMIT, policy/pause/permission replacement,1,001-point
+durable catch-up and the ticker-only regression below.
+
+The ticker defect is closed at this code checkpoint. All69 prior migration
+files and all226 TypeScript runtime files from622219d remain byte-identical;
+accepted main stays455f8929. Only current certification's private SQL wrapper
+and index change runtime semantics. Final documentation-head source/PR CI,
+protected exact-head review and own-main CI remain required before publication.
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; this increment is not complete
+Paper acceptance or permission for another financial operation. Financial
+PAPER/LIVE dispatch and positive native collateral credit remain disabled;
+native AMEND remains Binance Spot TESTNET only. Real private-exchange tests
+and production soak are not claimed. Earlier checkpoints below preserve their
+original RED, partial and pending scopes.
+
+### Ticker-coherence reproduction checkpoint — historical HOLD
 
 Source `622219d23d90a70d349acd0a01d1a173f3df0aaf` completes
 [Platform 43613566944](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43613566944)
