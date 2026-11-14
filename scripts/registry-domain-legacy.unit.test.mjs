@@ -1,3 +1,5 @@
+// PAPER CURRENT RISK COUNTS: isolate older fixtures before their tamper checks.
+import { beforeCurrentRiskCounts } from './current-risk-count-legacy.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
@@ -6,9 +8,9 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 it.each(Object.entries(registryDomainReview))(
   'retains complete307 source, assertions, budgets and default behavior beneath reviewed extra profile: %s',
   async (file, r) => {
-    const source = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(
-      '\r\n',
-      '\n',
+    const source = beforeCurrentRiskCounts(
+      file,
+      (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
     );
     expect(source).toContain('REGISTRY_DOMAIN_EARLY_NATIVE');
     expect(hash(source)).toBe(r.current);

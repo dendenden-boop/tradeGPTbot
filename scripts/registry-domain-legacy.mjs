@@ -1,3 +1,5 @@
+// PAPER CURRENT RISK COUNTS: exact36-case metadata peels before older reviews.
+import { beforeCurrentRiskCounts } from './current-risk-count-legacy.mjs';
 // Test-only exact307 reconstruction; no runtime authority or waiver.
 import { createHash } from 'node:crypto';
 export const registryDomainReview = {
@@ -131,6 +133,7 @@ export const registryDomainReview = {
   },
 };
 export function beforeRegistryDomain(file, source) {
+  source = beforeCurrentRiskCounts(file, source);
   const review = registryDomainReview[file];
   if (!review || !source.includes('REGISTRY_DOMAIN_EARLY_NATIVE')) return source;
   const hash = (s) => createHash('sha256').update(s).digest('hex');

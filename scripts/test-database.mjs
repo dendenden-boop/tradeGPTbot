@@ -2664,7 +2664,9 @@ async function runDatabaseProof() {
     // BEGIN PAPER EXECUTED VALUATION OWNER_COUNT
     // BEGIN PAPER EXECUTED BOOK OWNER_COUNT
     // BEGIN PAPER HISTORICAL INVENTORY OWNER_COUNT
-    assert.equal(executionCommitOwner.numPassedTests, 35);
+    // BEGIN PAPER CURRENT RISK OWNER_COUNT
+    assert.equal(executionCommitOwner.numPassedTests, 36);
+    // END PAPER CURRENT RISK OWNER_COUNT
     // END PAPER HISTORICAL INVENTORY OWNER_COUNT
     // END PAPER EXECUTED BOOK OWNER_COUNT
     // END PAPER EXECUTED VALUATION OWNER_COUNT
@@ -4658,7 +4660,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(executedValuationSeed.numPassedTests, 1);
   assert.equal(executedValuationSeed.numFailedTests, 0);
   // BEGIN PAPER HISTORICAL INVENTORY PRE67_PENDING
-  assert.equal(executedValuationSeed.numPendingTests, 34);
+  // BEGIN PAPER CURRENT RISK PRE67_COUNT
+  assert.equal(executedValuationSeed.numPendingTests, 35);
+  // END PAPER CURRENT RISK PRE67_COUNT
   // END PAPER HISTORICAL INVENTORY PRE67_PENDING
   const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);
   await cp(
