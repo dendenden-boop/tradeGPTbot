@@ -1420,3 +1420,35 @@ describe('paper-current-risk: bounded DUPLICATE catch-up', () => {
     expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
   });
 });
+it('paper-current-risk: a newer ticker-only observation cannot be ignored in favour of an older current equity mark', async () => {
+  const writer = await open(),
+    f = await ready();
+  await writer.execute(f.request, startIo());
+  const high = await publishCurrentRiskPrice(f, '16.05'),
+    head = await f.snapshots.read(high.key, startIo()),
+    tickerOnly = structuredClone(high),
+    now = Date.now();
+  tickerOnly.id = randomUUID();
+  tickerOnly.expectedRevision = head.revision;
+  tickerOnly.timestamp = now;
+  tickerOnly.ticker.receivedAt = tickerOnly.ticker.exchangeTime = now;
+  tickerOnly.ticker.last = { state: 'AVAILABLE', value: parseDecimal('10.05') };
+  // Keep the native book version and all book clocks unchanged. This is an
+  // actual retained ticker observation, not a fresh-book liquidity receipt.
+  expect((await f.snapshots.publish(tickerOnly, startIo())).status).toBe('DUPLICATE');
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    coordinator = await openCurrentRisk(),
+    request = currentRiskRequest(f);
+  await expect(coordinator.certify(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  await publishCurrentRiskPrice(f, '10.05');
+  const coherent = await coordinator.certify(request, startIo());
+  expect(coherent.loss.actualEquity).toBe(coherent.inventory.valuation.equity);
+  expect(
+    decimalCompare(
+      parseDecimal(coherent.loss.adjustedPeakEquity),
+      parseDecimal(coherent.loss.adjustedCurrentEquity),
+    ),
+  ).toBe(1);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
