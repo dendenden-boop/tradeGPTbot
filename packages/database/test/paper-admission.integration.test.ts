@@ -415,7 +415,10 @@ async function fundCash(c: PaperConfiguration, noncash = false) {
 // BEGIN ADMISSION FUNDING LANE
 // BEGIN NATIVE SETUP BARRIERS
 async function tenantReady(liquid = false) {
-  const f = await fixture();
+  // BEGIN SINGLE CONFIGURATION SETUP
+  // fundCash registers this configuration through the actual authority before funding.
+  const f = await fixture({ configure: false });
+  // END SINGLE CONFIGURATION SETUP
   // Own one actual funding operation. Independent policies may run while it
   // settles; neither drafts nor newly timestamped public evidence may precede it.
   const fundingPromise = fundCash(f.c);

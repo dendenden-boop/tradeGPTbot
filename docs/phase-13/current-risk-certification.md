@@ -2,6 +2,20 @@
 
 ## Starting point and gate
 
+### PR73 own-main checkpoint — HOLD
+
+PR73 is merged at `525aaac27ce48ebc75e60b7f839966633de84048`, with exactly the
+approved3ab47e8 tree and previous455f8929 parent. Its own Platform43622417471
+is RED at the admission owner's90-second command deadline; CodeQL43622417535
+passes. The general native job passes1,520 PostgreSQL cases/49 files and41
+writer/capture cases, but does not replace the incomplete owner proof.
+[Reproduction and test-only setup correction](admission-setup-hardening.md)
+preserve runtime, migrations1–70, all69 admission cases and original deadlines.
+Main acceptance is HOLD. Earlier source/PR GREEN and publication-pending
+statements below retain their historical checkpoint scope; PHASE13 remains
+IN_PROGRESS / NOT READY FOR PHASE14, with financial dispatch and positive native
+credit disabled.
+
 ### Verified code checkpoint — protected publication pending
 
 Code checkpoint `352f19102421cb42a9e4c71a611a9e08c95c7b80` completes

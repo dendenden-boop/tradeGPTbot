@@ -28,7 +28,7 @@ export async function verifyAdmissionParallelFiles(root = workspace) {
       'packages/database/test/fixtures/risk-certification.ts',
       '7f6f2037b5afc4e5e8e74a8390091fc04511ae2777fbda417f9b84d0268942f9',
     ],
-    [admission, '9e27194b1d8bf053090f6621098a663d03aa06c55b074133d15618a3ea566c87'],
+    [admission, '27ab665e12d17d0422766c51e019377e152b6516dfc3440334d87e315763a453'],
     [
       'packages/database/test/fixtures/registry-commit-proxy.ts',
       'a64aefc8526cea37cc6f218c407ee730d82e58f504d8a111888d03ca0a915af4',

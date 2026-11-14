@@ -1,5 +1,25 @@
 # PHASE 13 verification
 
+## PR73 own-main RED — HOLD
+
+Authorized protected PR73 squash produces main
+`525aaac27ce48ebc75e60b7f839966633de84048`, identical to the approved3ab47e8
+tree. Own Platform43622417471 fails the admission-owner90-second deadline after
+67 of69 cases report PASS; remaining coverage is not accepted. Own
+CodeQL43622417535, both OS matrices, Auth, Docker and general native1,520/49
+files/41 writer-capture cases pass. Six ZIP digests/windows and both raw native
+logs are retained; native aggregate458.757s remains below480. No retry or earlier
+GREEN substitutes for this failure.
+
+[Admission setup hardening](admission-setup-hardening.md) records tests-first
+ea3372f RED, the redundant registration path, minimal fixture correction and48
+targeted contracts GREEN with old error/tamper/budget contracts retained.
+All production runtime and migrations1–70 remain unchanged. Full candidate
+regression/source/PR/own-main acceptance is still required. **HOLD / PHASE13
+IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE dispatch and positive
+native credit remain disabled. Earlier checkpoints below retain their original
+scope and results.
+
 ## Verified current Risk/loss code checkpoint — publication pending
 
 Source `352f19102421cb42a9e4c71a611a9e08c95c7b80` has complete

@@ -1,9 +1,19 @@
 // Test-only exact predecessor reconstruction; no native operation or assertion is omitted.
 import { createHash } from 'node:crypto';
+// BEGIN SINGLE CONFIGURATION REVIEW_IMPORT
+import { beforeAdmissionConfiguration } from './admission-configuration-legacy.mjs';
+// END SINGLE CONFIGURATION REVIEW_IMPORT
 import { beforeRiskSeedSetup } from './risk-seed-setup-legacy.mjs';
 const original =
   "// BEGIN NATIVE SETUP BARRIERS\nasync function tenantReady(liquid = false) {\n  const f = await fixture(),\n    fundingId = await fundCash(f.c);\n  const [{ orders, order }, { snapshots, trades }] = await runIndependentFixtureSetup([\n    async () => {\n      const orders = await openOrders();\n      const order = await orders.create(\n        f.binding,\n        liquid\n          ? draftSchema.parse({\n              ...f.draft,\n              order: { ...f.draft.order, type: 'LIMIT', limitPrice: '10.5', timeInForce: 'GTC' },\n            })\n          : f.draft,\n        io(),\n      );\n      return { orders, order };\n    },\n    async () => {\n      // BEGIN PUBLIC MARKET FIXTURE USE\n      const snapshots = await publicMarketFixturePorts.snapshots(),\n        trades = await publicMarketFixturePorts.trades();\n      // END PUBLIC MARKET FIXTURE USE\n      const now = Date.now();\n      f.f.s.timestamp = f.f.p.timestamp = now;\n      for (const v of [f.f.s.ticker, f.f.s.book, f.f.p.trade]) v.receivedAt = v.exchangeTime = now;\n      if (liquid) {\n        f.f.s.book.bids = f.f.s.book.bids.map((v) => ({ ...v, quantity: parseDecimal('100') }));\n        f.f.s.book.asks = f.f.s.book.asks.map((v) => ({ ...v, quantity: parseDecimal('100') }));\n        f.f.p.trade.quantity = parseDecimal('100');\n      }\n      await snapshots.publish(f.f.s, io());\n      await trades.publish(f.f.p, io());\n      return { snapshots, trades };\n    },\n    () => ensurePolicies(f.c.owner.tenantId),\n  ]);\n  // Both funding and the complete genuine DRAFT must precede bootstrap. Never\n  // race book_activity against draft creation or return after a partial setup.\n  await (await openBook()).initialize(f.c.owner, io());\n  return {\n    ...f,\n    fundingId,\n    orders,\n    order,\n    snapshots,\n    trades,\n    request: { owner: f.c.owner, intentId: order.intentId },\n  };\n}\n// END NATIVE SETUP BARRIERS\n";
 export function beforeAdmissionFundingLane(file, source) {
+  // BEGIN SINGLE CONFIGURATION REVIEW_RESTORE
+  try {
+    source = beforeAdmissionConfiguration(file, source);
+  } catch {
+    throw Error('ADMISSION_FUNDING_REVIEW_REQUIRED');
+  }
+  // END SINGLE CONFIGURATION REVIEW_RESTORE
   source = beforeRiskSeedSetup(file, source);
   if (file === 'scripts/database-cohorts.mjs') {
     const current =
