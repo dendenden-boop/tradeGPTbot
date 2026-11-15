@@ -15,6 +15,7 @@ function calculate(input: unknown) {
     fn as (input: unknown) => {
       kind: string;
       validUntil: number;
+      target: unknown;
       source: { id: string; revision: string; hash: string } | null;
       result: { kind: string; reasons?: string[]; notional?: string; budget?: unknown };
     }
@@ -262,4 +263,17 @@ it('rejects oversized arrays before element getters can execute', () => {
   });
   expect(() => calculate({ array })).toThrow('PAPER_CURRENT_EVALUATION_EVIDENCE');
   expect(reads).toBe(0);
+});
+it('binds the immutable calculation to the exact target scope and semantic command', () => {
+  const f = currentRiskEvaluationFixture(), input = f.reseal();
+  const value = calculate(input);
+  expect(value.target).toEqual(input.target);
+  expect(Object.isFrozen(value.target)).toBe(true);
+});
+it('distinguishes different target identities even when their monetary proposals are equal', () => {
+  const f = currentRiskEvaluationFixture(), input = f.reseal();
+  const other = {...input, target: {...input.target, orderId: randomUUID(), intentId: randomUUID(), command: {...input.target.command, clientOrderId: 'different-target'}}};
+  const first = calculate(input), second = calculate(other);
+  expect(first.result).toEqual(second.result);
+  expect(first.target).not.toEqual(second.target);
 });
