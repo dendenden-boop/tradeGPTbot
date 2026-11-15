@@ -55,6 +55,16 @@ security query, source exclusion, administrator enforcement or permission is
 relaxed. The correction removes redundant fixture work; it cannot guarantee a
 future CI duration or substitute for complete native owner acceptance.
 
+The subsequent frozen92f5408 regression completes all thirteen commands:
+twelve PASS, unit6,499 PASS / one historical scheduler-fingerprint FAIL.
+Its unchanged1,077-file snapshot and all command results are retained. The
+older seed-review test must first reconstruct the same explicitly reviewed
+fixture fingerprint before applying its existing historical normalization.
+Its expected `eb202513` predecessor hash and original assertions are preserved;
+the additional review also reconstructs the complete prior seed-test file.
+All57 targeted setup, lifetime, seed and tamper contracts then PASS. This fixes
+the review composition; the failed full regression is not relabelled GREEN.
+
 ## Acceptance boundary
 
 The published-main RED remains historical evidence. This source candidate needs

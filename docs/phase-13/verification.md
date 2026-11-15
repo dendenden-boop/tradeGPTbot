@@ -14,6 +14,10 @@ GREEN substitutes for this failure.
 [Admission setup hardening](admission-setup-hardening.md) records tests-first
 ea3372f RED, the redundant registration path, minimal fixture correction and48
 targeted contracts GREEN with old error/tamper/budget contracts retained.
+Frozen92f5408 then completes12/13 local commands GREEN, with6,499 unit PASS
+and one old scheduler-fingerprint FAIL. Its correction retains the old expected
+hash, adds exact reviewed predecessor composition and passes57 targeted
+contracts. The original failed run remains evidence, not acceptance.
 All production runtime and migrations1–70 remain unchanged. Full candidate
 regression/source/PR/own-main acceptance is still required. **HOLD / PHASE13
 IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE dispatch and positive

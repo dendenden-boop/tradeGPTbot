@@ -40,6 +40,23 @@ export const admissionConfigurationReview = {
       },
     ],
   },
+  'scripts/risk-seed-setup.unit.test.mjs': {
+    predecessor: '3f43f5fd4a370f7eb74b7a77ff9583aac51a1448169c5d04c71f4ef7ada0b1d9',
+    patches: [
+      {
+        tag: 'SINGLE CONFIGURATION SEED_IMPORT',
+        old: '',
+        next: "// BEGIN SINGLE CONFIGURATION SEED_IMPORT\nimport { beforeAdmissionConfiguration } from './admission-configuration-legacy.mjs';\n// END SINGLE CONFIGURATION SEED_IMPORT\n",
+        hash: '88ae4ab763780de4ec7a5c3a58948bee6f42f9c82e9d993477ca0a56220d6299',
+      },
+      {
+        tag: 'SINGLE CONFIGURATION SEED_RESTORE',
+        old: '    const previous = beforeRiskSeedSetup(path, current);\n',
+        next: '    // BEGIN SINGLE CONFIGURATION SEED_RESTORE\n    const previous = beforeRiskSeedSetup(path, beforeAdmissionConfiguration(path, current));\n    // END SINGLE CONFIGURATION SEED_RESTORE\n',
+        hash: 'd90e2f3862cf833badb423a601a717cb7cb70b15b14f6c9d8dfa709a48601024',
+      },
+    ],
+  },
 };
 export function beforeAdmissionConfiguration(file, source) {
   const review = admissionConfigurationReview[file];
