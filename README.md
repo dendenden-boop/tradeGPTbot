@@ -1,5 +1,24 @@
 # Crypto Trading Platform
 
+## Current PHASE 13 checkpoint — 15 November 2026
+
+Protected main **9f2f324cfdaf0276e9ad5c0981d7d14b6d52199c** accepts PR74 with
+own-main [Platform43705701033](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43705701033)
+and [CodeQL43705701125](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43705701125)
+GREEN:6,501 unit per OS,1,520 PostgreSQL,24 owner suites,70 migrations,audit0.
+The earlier525aaac HOLD below is historical. A fresh thirteen-command local
+baseline also passed with all1,077 tracked input hashes unchanged.
+
+The next [current Risk calculation](docs/phase-13/current-risk-evaluation.md)
+checks a new order against an executed position and complete supported current
+inventory. Its110 targeted contracts pass; native investigation, full regression
+and final-source CI remain open. Calculation content grants no financial authority.
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Financial PAPER/LIVE dispatch
+and positive native collateral credit remain disabled; collateral is conservative,
+native AMEND is Binance Spot TESTNET only. Real private exchange acceptance,
+crash/backup restore and production soak are not claimed. Earlier checkpoints
+retain their exact source/run scope.
+
 ## Accepted PR72 and current Risk/loss work — 14 November 2026
 
 Protected main `455f8929c19422b7f7cdb65a417d11b63574ce77` accepts the bounded historical inventory increment through its own [Platform 43478355797](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355797) and [CodeQL 43478355931](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43478355931): all nine main checks GREEN, 6,427 unit / 41 HTTP per OS, 1,514 PostgreSQL / 24 owner suites, all 68 migrations, populated upgrade/redeploy/reset and compiled restart, twelve clean deployments and audit zero. Six ZIP digests/windows and both native logs verify; strict five-context administrator-enforced protection remains. The security-app CodeQL check was GREEN on the identical approved PR72 tree. Historical pending-publication checkpoints below retain their then-current scope.

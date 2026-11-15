@@ -1,5 +1,18 @@
 # PHASE 13 contracts
 
+## Current next-order Risk calculation contract — 15 November 2026
+
+The [bounded pure calculation](current-risk-evaluation.md) composes the existing
+current-certificate content decoder, complete supported inventory, budget and
+common policy. It must independently match all four existing exposure totals,
+open-order/position counts and spendable quote, then add the new order once with
+the full per-lot fee vector. It cannot authenticate target intent/current SQL
+heads, grant/permit/reserve, renew evidence or alter the certificate's false
+execution-bound flag. A future fixed atomic writer must independently recheck and
+enforce these bounds. Accepted main9f2f324 is GREEN; this candidate is unaccepted
+until full regression/native/CI. PHASE13 IN_PROGRESS; PHASE14 and financial
+PAPER/LIVE dispatch and positive native credit remain disabled.
+
 ## Candidate current Risk/loss certification
 
 The [current certification contract](current-risk-certification.md) follows accepted PR72/main `455f8929`. Only the server-only Risk entrypoint exposes the fixed coordinator; the pure root exports no coordinator or decoder. Callers supply the original execution/preparation/START/admission selector and authorization epochs, never a complete inventory, loss baseline, policy, source hash, backend callback or SQL. Current source validation uses the accepted complete bounded historical-inventory closure: one authenticated executed pristine Spot BUY plus pristine siblings; extra/UNKNOWN history fails closed.

@@ -1,5 +1,17 @@
 # PHASE 13 requirements
 
+## Current next-order Risk prerequisite — 15 November 2026
+
+Accepted starting main is9f2f324 (PR74), with own-main Platform43705701033 and
+CodeQL43705701125 GREEN. Historical525aaac HOLD statements below remain history.
+The [current Risk evaluation contract](current-risk-evaluation.md) requires
+preserving executed positions and every supported liability when calculating a
+new order. Exact owner/instrument/rules, current policy/loss/controls/health,
+complete fee coverage and unchanged finite leases must fail closed. Pure
+EVALUATED content is not atomic admission or a financial grant. Native and full
+candidate regression/CI remain required. PHASE13 stays IN_PROGRESS; PHASE14,
+financial PAPER/LIVE dispatch and positive native credit remain disabled.
+
 ## Current Risk/loss increment after accepted PR72
 
 Protected main `455f8929c19422b7f7cdb65a417d11b63574ce77` accepts historical inventory and all68 migrations through its own complete Platform/CodeQL acceptance. The next [current Risk/loss coordinator](current-risk-certification.md) must authenticate the original durable execution selector and current exact tenant/account/PAPER/profile/instrument/permission scope. A fixed bounded transaction acquires coherent current policies, rules, model capabilities, Portfolio inventory, all supported pending/reserved exposure, runtime health, controls and public prices/liquidity/identity FX. Missing, stale, conflicting, unsupported or incomplete history must not produce a current usable certificate.

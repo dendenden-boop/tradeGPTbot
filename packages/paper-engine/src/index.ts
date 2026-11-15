@@ -3,6 +3,10 @@ export * from './risk-envelope.js';
 export * from './reservation-coverage.js';
 export * from './reservation-progress.js';
 export { calculatePaperRiskBudget } from './risk-budget.js';
+export {
+  calculatePaperCurrentRiskEvaluation,
+  type PaperCurrentRiskEvaluationCalculation,
+} from './current-risk-evaluation.js';
 export * from './competition.js';
 export {
   preparePaperExecutionAttempt,

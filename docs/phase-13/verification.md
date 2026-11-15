@@ -1,5 +1,34 @@
 # PHASE 13 verification
 
+## Current Risk evaluation candidate — 15 November 2026
+
+Starting accepted main **9f2f324cfdaf0276e9ad5c0981d7d14b6d52199c** (PR74) passed
+own-main [Platform43705701033](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43705701033)
+and [CodeQL43705701125](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43705701125):
+6,501 unit/41HTTP each OS,1,520 PostgreSQL,24 owners,41 writer cases,70 migrations,
+audits0. All five strict app-bound required contexts/admin enforcement were
+verified. The failed525aaac run remains historical, not a current HOLD on9f2f324.
+
+Fresh9f2f324 baseline: all13 existing local commands PASS,6,501unit/41HTTP,
+clean deployments and audits0; all1,077 input hashes unchanged. New calculation
+tests initially reproduce17 RED missing-export contracts; final36 contracts against
+the exact9f2f324 root reproduce35 RED plus one input-rejection PASS, with the
+candidate index restored byte-for-byte. Latest targeted run
+passes110 (36new+32certification+42pristine). Intermediate typecheck/changed-file
+lint pass. The [contract and exact limitations](current-risk-evaluation.md) records
+the first local PostgreSQL diagnostic RED: existing readCurrent expires before
+new assertions. Failed evidence is retained; owned cluster stopped. A separate
+two-case timing diagnostic passes the original first execution plus certificate
+case, including the new assertions and restart, at unchanged deadlines; both
+owned clusters are stopped. Windows startup-GUC normalization and5ms delivery
+latency limit this to local diagnostics. Full final regression and complete
+source/PR CI remain open; that later PASS does not relabel the earlier RED.
+No candidate CI/native acceptance or new merge permission is claimed.
+
+**PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** LIVE/PAPER financial dispatch
+and positive native credit disabled; conservative collateral; Binance Spot
+TESTNET-only native AMEND. Earlier source-specific checkpoints remain unchanged.
+
 ## PR73 own-main RED — HOLD
 
 Authorized protected PR73 squash produces main

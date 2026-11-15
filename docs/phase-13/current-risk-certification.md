@@ -1,5 +1,17 @@
 # Current PAPER Risk and loss certification
 
+## Accepted main after PR74 — 15 November 2026
+
+Main9f2f324 accepts PR74 with own-main Platform43705701033 and CodeQL43705701125
+GREEN:6,501 unit per OS,1,520 PostgreSQL,24 owner suites,70 migrations,audits0.
+The admission fixture correction preserved current Risk runtime and all published
+migrations. The525aaac HOLD below is historical and is lifted for accepted9f2f324.
+The next [current order calculation](current-risk-evaluation.md) is an unaccepted
+candidate prerequisite; its native investigation and full regression/CI remain
+open. PHASE13 remains IN_PROGRESS; PHASE14, financial PAPER/LIVE dispatch and
+positive native credit remain disabled. Earlier source-specific checkpoints and
+limitations remain intact.
+
 ## Starting point and gate
 
 ### PR73 own-main checkpoint — HOLD
