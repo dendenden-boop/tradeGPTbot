@@ -528,12 +528,29 @@ function decodeCertificate(raw: unknown, request: PaperCurrentRiskRequest, now: 
 export type PaperCurrentRiskCertificate = ReturnType<typeof decodeCertificate>;
 // Internal wire validation only; not exported by any package entrypoint.
 export { decodeCertificate as decodePaperCurrentRiskContents };
+export { bounded as validatePaperCurrentRiskJson };
 export type PaperCurrentLossProgress = Readonly<{
   kind: 'PAPER_CURRENT_LOSS_PROGRESS';
   complete: boolean;
   loss: ReturnType<typeof projectPaperCurrentLoss>;
   reference: z.infer<typeof captureSchema>['lossReference'];
 }>;
+// Internal complete graph validation shared by the fixed stored-order source.
+// It grants no authority and is absent from both package entrypoints.
+export function decodePaperCurrentLossProgressContents(
+  raw: unknown,
+  request: PaperCurrentRiskRequest,
+  now: number,
+): PaperCurrentLossProgress {
+  bounded(raw);
+  const source = capture(raw, request, now);
+  return immutable({
+    kind: 'PAPER_CURRENT_LOSS_PROGRESS' as const,
+    complete: source.loss.complete,
+    loss: source.loss,
+    reference: source.w.lossReference,
+  });
+}
 export interface PaperCurrentRiskCoordinator {
   certify(
     request: PaperCurrentRiskRequest,

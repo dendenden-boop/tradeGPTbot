@@ -1,5 +1,9 @@
 # PHASE 13 contracts
 
+## Current durable-order Risk capture boundary
+
+Accepted main116c9b0 includes the pure current Risk calculation. The separate [stored-order source contract](current-order-risk-source.md) accepts only an original execution selector plus exact durable target IDs/hash. A fixed bounded server transaction authenticates the new target and complete current graph, then evaluates it without issuing financial authority. Public unpersisted-proposal arithmetic stays unchanged. Stored-intent counting uses its actual immutable creation time and the certificate bucket, with no client override. Original readers and all financial writers remain unchanged. Finite certificate replay, explicit reconciliation after uncertain COMMIT, current rules/epochs/controls and fail-closed incomplete history remain mandatory. Migration71 and full acceptance are candidate work; PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.
+
 ## Current next-order Risk calculation contract — 15 November 2026
 
 The [bounded pure calculation](current-risk-evaluation.md) composes the existing

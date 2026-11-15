@@ -1,5 +1,9 @@
 # PHASE 13 requirements
 
+## Current durable-order Risk prerequisite after accepted PR75
+
+Accepted main116c9b0 has its own GREEN Platform43731942645 / CodeQL43731942634. Historical pending/HOLD sections retain their original scope. The [current durable-order Risk source](current-order-risk-source.md) must authenticate an actual untouched CREATED target from storage, retain every supported current liability and current rules/policies/permissions/health/loss guard, and count a stored target once in the minute bucket. Original readers must remain strict. No reservation, grant, monetary effect, financial dispatch or positive native credit is added. Published migrations1–70 remain immutable; additive71 requires populated upgrade/redeploy/reset, compiled restart, owner proofs and full independent CI. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14.
+
 ## Current next-order Risk prerequisite — 15 November 2026
 
 Accepted starting main is9f2f324 (PR74), with own-main Platform43705701033 and

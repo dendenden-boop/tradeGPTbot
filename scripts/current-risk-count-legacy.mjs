@@ -1,5 +1,6 @@
 // Test-only exact accepted455 count and additive69/70 harness review; no runtime authority or waiver.
 import { createHash } from 'node:crypto';
+import { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';
 export const currentRiskCountReview = {
   'scripts/native-proof-artifacts.mjs': {
     predecessor: '67b79c58f98ccd2d6b457ba499c9fe512ec21d7783461608d859ab3cf8cb7e54',
@@ -185,6 +186,7 @@ export const currentRiskCountReview = {
   },
 };
 export function beforeCurrentRiskCounts(file, source) {
+  source = beforeCurrentOrderRiskReview(file, source, 'PAPER_CURRENT_RISK_COUNT_REVIEW_REQUIRED');
   const review = currentRiskCountReview[file];
   if (!review || !source.includes('PAPER CURRENT RISK')) return source;
   const hash = (s) => createHash('sha256').update(s).digest('hex');

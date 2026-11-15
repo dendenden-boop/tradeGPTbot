@@ -1,5 +1,13 @@
 # PHASE 13 verification
 
+## Accepted PR75 main; stored-order source work — 15 November 2026
+
+Protected main **116c9b0615779a84c5c354fbb381c4ce1a8815bd** has own [Platform43731942645](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43731942645) and [CodeQL43731942634](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43731942634) GREEN: 6,546 unit / 2,575 Paper / 41 HTTP per OS, 1,520 PostgreSQL / 49 files / 24 owners / 41 writer-capture cases, all70 immutable migrations, upgrade/redeploy/reset/compiled restart, twelve clean deployments and audit0. Six own-main ZIPs, two raw native logs and45 report copies verify. Native aggregate302.738s remains below480s; all69 admission cases pass in50.890s below90s. Security-app CodeQL was GREEN on the identical approved PR75 tree; it is not invented as an extra own-main check. Strict five-context administrator-enforced protection remains. Earlier pending and RED checkpoints preserve their original scope.
+
+A fresh unchanged116 baseline passes all13 commands on1,083 frozen files. The [stored-order Risk source](current-order-risk-source.md) starts from tests-first33c79ab:24 unit failures and a genuine PostgreSQL second-target failure because the factory is absent. The original reader correctly rejects the extra draft. After implementation,25 initial unit contracts and five genuine native cases pass, including restart/lost COMMIT with unchanged financial rows. Subsequent targeted verification passes103 contracts. An additional genuine rules-replacement test reproduces rejection in the new target validator, then passes after separating current target rules from immutable original execution rules. Earlier metadata-publication fixture failures remain diagnostic failures, not successful reproduction.
+
+These are local candidate diagnostics, not independent source/PR/main acceptance. Additive71, full regression, owner/upgrade/reset/compiled proofs and complete CI remain required. PHASE13 stays **IN_PROGRESS / NOT READY FOR PHASE14**. Financial PAPER/LIVE dispatch and positive native collateral credit remain disabled; native AMEND is Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed.
+
 ## Verified current Risk code checkpoint — 15 November 2026
 
 Exact code **b5e7b42cb6b3573a679b669f40e82535b2c8314e** passes all13 frozen local

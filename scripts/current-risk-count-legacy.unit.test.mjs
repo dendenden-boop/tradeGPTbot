@@ -1,3 +1,4 @@
+import { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
@@ -6,9 +7,9 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 it.each(Object.entries(currentRiskCountReview))(
   'reconstructs complete accepted455 source below exact new mandatory case counts: %s',
   async (file, review) => {
-    const source = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(
-      '\r\n',
-      '\n',
+    const source = beforeCurrentOrderRiskReview(
+      file,
+      (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
     );
     expect(hash(source)).toBe(review.current);
     expect(hash(beforeCurrentRiskCounts(file, source))).toBe(review.predecessor);

@@ -2,6 +2,7 @@ import { canonical } from '@ctp/portfolio';
 import { policyFingerprint } from '@ctp/risk-engine';
 import { currentRiskEvaluationFixture } from './current-risk-evaluation-fixtures.js';
 import { wireHash } from './admission-wire-fixtures.js';
+import { projectPaperCurrentLoss } from '../src/current-loss-domain.js';
 import type { historicalInventoryFixture } from './historical-inventory-fixtures.js';
 
 // Test-only complete wire content. A resealed graph proves no database target
@@ -15,6 +16,10 @@ export function currentOrderRiskFixture() {
   inventory.catalog.find((a) => a.accountId === f.target.owner.accountId)!.clientIdHighWatermark =
     '2';
   s.inventory = f.seal(inventory);
+  s.lossInput.current.sourceHash = s.inventory.hash;
+  s.lossInput.coverage.sourceHash = s.inventory.hash;
+  s.loss = f.seal(projectPaperCurrentLoss(s.lossInput, f.now));
+  s.lossReference.hash = s.loss.hash;
   s.ordersInLastMinute = 2;
   f.target.command.clientOrderId = '2';
   for (const p of s.policies) {

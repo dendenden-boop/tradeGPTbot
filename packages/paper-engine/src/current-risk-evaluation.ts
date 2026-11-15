@@ -98,6 +98,20 @@ function bounded(raw: unknown) {
 export function calculatePaperCurrentRiskEvaluation(
   raw: unknown,
 ): PaperCurrentRiskEvaluationCalculation {
+  return calculate(raw);
+}
+
+// Internal server-source arithmetic only. The database must attest the target's
+// actual intent timestamp. Neither package entrypoint exposes this adjustment.
+export function calculatePaperStoredOrderRiskEvaluation(
+  raw: unknown,
+  createdAt: number,
+): PaperCurrentRiskEvaluationCalculation {
+  if (!timestampSchema.safeParse(createdAt).success) fail();
+  return calculate(raw, createdAt);
+}
+
+function calculate(raw: unknown, storedCreatedAt?: number): PaperCurrentRiskEvaluationCalculation {
   bounded(raw);
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success) throw Error('PAPER_CURRENT_EVALUATION_INPUT');
@@ -126,6 +140,17 @@ export function calculatePaperCurrentRiskEvaluation(
     );
     source = { id: c.id, revision: c.revision, hash: c.hash, fingerprint: c.sourceFingerprint };
     validUntil = c.expiresAt;
+    let ordersInLastMinute = c.snapshot.ordersInLastMinute;
+    if (storedCreatedAt !== undefined) {
+      if (storedCreatedAt > c.createdAt) fail();
+      // The source count was taken at certificate creation, not at this read.
+      // The common policy adds the proposed order once. Remove only this
+      // authenticated intent when it was already in that captured bucket.
+      if (storedCreatedAt >= c.createdAt - 60000) {
+        if (ordersInLastMinute < 1) fail();
+        ordersInLastMinute--;
+      }
+    }
     const owner = target.owner,
       originalOrder = original.admission;
     if (
@@ -238,6 +263,7 @@ export function calculatePaperCurrentRiskEvaluation(
       capabilities: c.capabilities.features,
       snapshot: {
         ...c.snapshot,
+        ordersInLastMinute,
         market: {
           ...c.snapshot.market,
           lowerExecutionPrice: budget.coverage.envelope.executionPrice.minimum,

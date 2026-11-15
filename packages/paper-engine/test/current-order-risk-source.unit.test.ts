@@ -3,11 +3,18 @@ import { randomUUID } from 'node:crypto';
 import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import { currentOrderRiskFixture } from './current-order-risk-fixtures.js';
-const fake = vi.hoisted(() => ({
-  queries: [] as string[],
-  requests: [] as unknown[],
+import { decodePaperCurrentRiskContents } from '../src/postgres-current-risk.js';
+const fake = vi.hoisted<{
+  queries: string[];
+  requests: unknown[];
+  safe: boolean;
+  payload: unknown;
+  commitFailure: boolean;
+}>(() => ({
+  queries: [],
+  requests: [],
   safe: true,
-  payload: null as unknown,
+  payload: null,
   commitFailure: false,
 }));
 vi.mock('pg', () => ({
@@ -77,6 +84,13 @@ it('requires a separate fixed server source before accepting durable target cont
   expect(
     (server as unknown as Record<string, unknown>)['createPostgresPaperCurrentOrderRiskSource'],
   ).toBeTypeOf('function');
+});
+it('retains the original complete certificate decoder for the new server fixture', () => {
+  const f = currentOrderRiskFixture();
+  expect(
+    decodePaperCurrentRiskContents(f.reply().certificate, f.sourceRequest, f.now).snapshot
+      .ordersInLastMinute,
+  ).toBe(2);
 });
 it('evaluates the stored target once in the actual minute count without changing unpersisted pure semantics', async () => {
   const f = currentOrderRiskFixture();
@@ -211,4 +225,101 @@ it('keeps the coordinator and stored-target arithmetic absent from the pure name
   expect(pure).not.toHaveProperty('createPostgresPaperCurrentOrderRiskSource');
   expect(pure).not.toHaveProperty('calculatePaperStoredOrderRiskEvaluation');
   expect(server).not.toHaveProperty('calculatePaperStoredOrderRiskEvaluation');
+});
+it.each([
+  [
+    'owner',
+    (f: ReturnType<typeof currentOrderRiskFixture>) => {
+      f.target.owner.accountId = randomUUID();
+    },
+  ],
+  [
+    'instrument',
+    (f: ReturnType<typeof currentOrderRiskFixture>) => {
+      f.target.dbInstrumentId = randomUUID();
+    },
+  ],
+  [
+    'rule',
+    (f: ReturnType<typeof currentOrderRiskFixture>) => {
+      f.target.dbRuleId = randomUUID();
+    },
+  ],
+  [
+    'future creation',
+    (f: ReturnType<typeof currentOrderRiskFixture>) => {
+      f.target.createdAt = f.now + 1;
+    },
+  ],
+  [
+    'command',
+    (f: ReturnType<typeof currentOrderRiskFixture>) => {
+      f.target.command.clientOrderId = '3';
+    },
+  ],
+] as const)('rejects substituted %s content before COMMIT', async (_label, mutate) => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  mutate(f);
+  fake.payload = f.reply();
+  const port = await open();
+  await expect(port.capture(f.request, io())).rejects.toThrow(/^PAPER_/u);
+  expect(fake.queries).not.toContain('COMMIT');
+});
+it.each([
+  [60000, 'EVALUATED'],
+  [60001, 'REJECTED'],
+] as const)(
+  'counts a stored target aged %i ms only if present in the captured minute bucket',
+  async (age, kind) => {
+    const f = currentOrderRiskFixture();
+    vi.spyOn(Date, 'now').mockReturnValue(f.now);
+    f.target.createdAt = f.now - age;
+    fake.payload = f.reply();
+    const port = await open();
+    expect((await port.capture(f.request, io())).evaluation.result.kind).toBe(kind);
+  },
+);
+it('does not execute getters while checking a caller selector', async () => {
+  const f = currentOrderRiskFixture(),
+    port = await open();
+  let reads = 0;
+  const raw = { ...f.request };
+  Object.defineProperty(raw, 'target', {
+    enumerable: true,
+    get() {
+      reads++;
+      return f.request.target;
+    },
+  });
+  await expect(port.capture(raw, io())).rejects.toThrow('PAPER_CURRENT_ORDER_RISK_INPUT');
+  expect(reads).toBe(0);
+  expect(fake.queries).toEqual([]);
+});
+it('validates an explicit bounded loss-advance reply without manufacturing a certificate or grant', async () => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  const p = f.reply();
+  fake.payload = {
+    kind: 'ADVANCED',
+    request: f.request,
+    capturedAt: f.now,
+    target: p.target,
+    source: f.source,
+  };
+  const port = await open();
+  expect(await port.advanceLoss(f.request, io())).toMatchObject({
+    kind: 'PAPER_CURRENT_LOSS_PROGRESS',
+    complete: true,
+  });
+  expect(fake.requests[0]).toMatchObject({ kind: 'PAPER_CURRENT_ORDER_RISK_ADVANCE' });
+  expect(fake.queries.filter((q) => q.includes(' AS result'))).toHaveLength(1);
+});
+it('does not accept a certificate as a completed loss-advance operation', async () => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  const port = await open();
+  await expect(port.advanceLoss(f.request, io())).rejects.toThrow(/^PAPER_/u);
+  expect(fake.queries).not.toContain('COMMIT');
 });

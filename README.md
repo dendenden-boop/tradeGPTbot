@@ -1,5 +1,11 @@
 # Crypto Trading Platform
 
+## Accepted PR75; current durable-order Risk candidate
+
+Protected main `116c9b0615779a84c5c354fbb381c4ce1a8815bd` accepts PR75 through its own [Platform43731942645](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43731942645) and [CodeQL43731942634](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43731942634): 6,546 unit per OS, 1,520 PostgreSQL, 24 owner suites, all70 migrations, reset/restart, twelve clean deployments and audit0. Own-main artifact digests/windows and strict protection verify. Earlier publication-pending checkpoints remain historical.
+
+The next [current durable-order Risk source](docs/phase-13/current-order-risk-source.md) authenticates a real untouched new intent and evaluates it over the current executed book without double counting the minute frequency. Additive71 and complete acceptance remain candidate work. It creates no reservation or grant and enables no financial dispatch. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE dispatch and positive native credit stay disabled, native AMEND Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed.
+
 ## Current PHASE 13 checkpoint — 15 November 2026
 
 Protected main **9f2f324cfdaf0276e9ad5c0981d7d14b6d52199c** accepts PR74 with

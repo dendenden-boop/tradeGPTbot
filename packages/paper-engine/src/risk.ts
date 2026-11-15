@@ -101,6 +101,12 @@ export { createPostgresPaperExecutedBookSource } from './postgres-execution-comm
 export { createPostgresPaperExecutedValuationSource } from './postgres-executed-valuation.js';
 export { createPostgresPaperHistoricalInventorySource } from './postgres-historical-inventory.js';
 export { createPostgresPaperCurrentRiskCoordinator } from './postgres-current-risk.js';
+export { createPostgresPaperCurrentOrderRiskSource } from './postgres-current-order-risk.js';
+export type {
+  PaperCurrentOrderRiskRequest,
+  PaperCurrentOrderRiskSource,
+  PaperCurrentOrderRiskReader,
+} from './postgres-current-order-risk.js';
 export type {
   PaperCurrentRiskRequest,
   PaperCurrentRiskCertificate,
