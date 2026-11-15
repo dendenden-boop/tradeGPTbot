@@ -67,6 +67,29 @@ the review composition; the failed full regression is not relabelled GREEN.
 
 ## Acceptance boundary
 
+Code checkpoint `4a2de4ca9a5cad526cc9eb46f5081b8389312206` completes all13
+frozen local commands on1,077 unchanged inputs: 6,501 unit / 2,537 Paper /
+41 HTTP, twelve clean deployments and audit zero. All6,495 prior unit cases are
+retained. Its own [source Platform43701732093](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43701732093)
+and [PR Platform43701809613](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43701809613),
+[source CodeQL43701732068](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43701732068)
+and [PR CodeQL43701809648](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43701809648)
+are GREEN. All24 owner suites and all69 admission owner cases pass. Admission
+owner duration is56.269/54.213 seconds for source/PR under the unchanged90-second
+cap; native aggregate364.460/310.074 seconds remains below480. These are measured
+results, not future timing guarantees.
+
+Both actual artifact sets verify1,520 PostgreSQL cases/49 files and41
+writer-capture cases, preserving every prior native case and all45 report copies
+per run. All12 ZIP digests/producer windows and four raw native logs verify.
+Upgrade/redeploy/reset, compiled restart, three secondary resets and cleanup
+pass. All70 migration files,226 TypeScript runtime files and18 package/lock/
+workflow files remain unchanged; exact predecessor reviews preserve all native
+case bodies and original setup assertions. No migration or financial feature is
+added. The final documentation-head source/PR checks remain separate requirements
+from this code checkpoint. Main525aaac is still HOLD until a separately approved
+protected merge and successful own-main acceptance.
+
 The published-main RED remains historical evidence. This source candidate needs
 the complete frozen local regression and independent full source/PR CI, including
 all69 admission cases and all24 owner suites within their original deadlines.

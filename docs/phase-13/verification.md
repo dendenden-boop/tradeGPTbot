@@ -24,6 +24,19 @@ IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE dispatch and positiv
 native credit remain disabled. Earlier checkpoints below retain their original
 scope and results.
 
+The subsequent code checkpoint `4a2de4c` passes all13 frozen local commands:
+6,501 unit / 2,537 Paper / 41 HTTP, twelve clean deployments, audit zero and
+all6,495 prior unit cases retained. Its source Platform43701732093 /
+CodeQL43701732068 and PR Platform43701809613 / CodeQL43701809648 are GREEN.
+All24 owner suites pass; all69 admission cases complete in56.269/54.213s under
+the original90s limit. Native aggregates364.460/310.074s remain under480s.
+Both runs retain every1,520 native case,49 files,41 writer-capture cases and45
+raw report copies. All12 ZIP sets/windows/digests, four raw native logs,
+upgrade/redeploy/reset, compiled restart and secondary cleanup verify.
+[Detailed evidence](admission-setup-hardening.md) preserves the earlier REDs.
+Final documentation-head source/PR CI and separately authorized own-main CI are
+still required; the published main525aaac HOLD is not reclassified by this result.
+
 ## Verified current Risk/loss code checkpoint — publication pending
 
 Source `352f19102421cb42a9e4c71a611a9e08c95c7b80` has complete
