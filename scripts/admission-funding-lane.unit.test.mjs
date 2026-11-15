@@ -58,6 +58,7 @@ function gate() {
 function fixture({ failPolicy = false } = {}) {
   const funding = gate(),
     events = [],
+    configurationWrites = [],
     policyFailure = Error('POLICY_FAILED');
   const frame = {
     c: { owner: { tenantId: 'isolated-tenant' } },
@@ -70,6 +71,7 @@ function fixture({ failPolicy = false } = {}) {
   };
   const fundCash = vi.fn(async (configuration) => {
     expect(configuration).toBe(frame.c);
+    configurationWrites.push(configuration);
     events.push('funding:start');
     const id = await funding.promise;
     events.push('funding:done');
@@ -105,7 +107,10 @@ function fixture({ failPolicy = false } = {}) {
     events.push('book');
   });
   const bindings = {
-    fixture: async () => frame,
+    fixture: async ({ configure = true } = {}) => {
+      if (configure) configurationWrites.push(frame.c);
+      return frame;
+    },
     fundCash,
     runIndependentFixtureSetup,
     openOrders: async () => ({ create }),
@@ -132,6 +137,7 @@ function fixture({ failPolicy = false } = {}) {
     pending,
     frame,
     events,
+    configurationWrites,
     ensurePolicies,
     create,
     snapshot,
@@ -141,6 +147,33 @@ function fixture({ failPolicy = false } = {}) {
     policyFailure,
   };
 }
+
+it('registers each new tenant configuration once before funding without replaying setup or caching authority', async () => {
+  const first = fixture(),
+    second = fixture();
+  try {
+    await tick();
+    for (const f of [first, second]) {
+      expect(f.configurationWrites).toEqual([f.frame.c]);
+      expect(f.fundCash).toHaveBeenCalledTimes(1);
+      expect(f.create).not.toHaveBeenCalled();
+      expect(f.initialize).not.toHaveBeenCalled();
+    }
+    expect(first.configurationWrites[0]).not.toBe(second.configurationWrites[0]);
+    first.funding.resolve('first-funding');
+    second.funding.resolve('second-funding');
+    for (const f of [first, second]) {
+      expect((await f.pending).error).toBeUndefined();
+      expect(f.configurationWrites).toEqual([f.frame.c]);
+      expect(f.create).toHaveBeenCalledTimes(1);
+      expect(f.initialize).toHaveBeenCalledTimes(1);
+    }
+  } finally {
+    first.funding.resolve('first-funding');
+    second.funding.resolve('second-funding');
+    await Promise.all([first.pending, second.pending]);
+  }
+});
 
 it('starts independent actual policy setup while the one shared funding operation is pending', async () => {
   const f = fixture();

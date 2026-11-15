@@ -10,6 +10,9 @@ import { parseDecimal } from '@ctp/exchange-core';
 import { riskLimitsSchema, riskNativeObservationSchema } from '@ctp/risk-engine';
 import { marketSnapshotPublicationSchema } from '@ctp/market-data';
 import { beforeRiskSeedSetup } from './risk-seed-setup-legacy.mjs';
+// BEGIN SINGLE CONFIGURATION SEED_IMPORT
+import { beforeAdmissionConfiguration } from './admission-configuration-legacy.mjs';
+// END SINGLE CONFIGURATION SEED_IMPORT
 
 const file = 'packages/database/test/fixtures/risk-certification.ts';
 const source = readFileSync(file, 'utf8');
@@ -38,7 +41,9 @@ it('retains the complete prior native seed and scheduler/review source bytes ben
     ],
   ]) {
     const current = readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
-    const previous = beforeRiskSeedSetup(path, current);
+    // BEGIN SINGLE CONFIGURATION SEED_RESTORE
+    const previous = beforeRiskSeedSetup(path, beforeAdmissionConfiguration(path, current));
+    // END SINGLE CONFIGURATION SEED_RESTORE
     expect(createHash('sha256').update(previous).digest('hex')).toBe(expected);
     expect(beforeRiskSeedSetup(path, previous)).toBe(previous);
   }

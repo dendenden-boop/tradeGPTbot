@@ -1,5 +1,42 @@
 # PHASE 13 verification
 
+## PR73 own-main RED — HOLD
+
+Authorized protected PR73 squash produces main
+`525aaac27ce48ebc75e60b7f839966633de84048`, identical to the approved3ab47e8
+tree. Own Platform43622417471 fails the admission-owner90-second deadline after
+67 of69 cases report PASS; remaining coverage is not accepted. Own
+CodeQL43622417535, both OS matrices, Auth, Docker and general native1,520/49
+files/41 writer-capture cases pass. Six ZIP digests/windows and both raw native
+logs are retained; native aggregate458.757s remains below480. No retry or earlier
+GREEN substitutes for this failure.
+
+[Admission setup hardening](admission-setup-hardening.md) records tests-first
+ea3372f RED, the redundant registration path, minimal fixture correction and48
+targeted contracts GREEN with old error/tamper/budget contracts retained.
+Frozen92f5408 then completes12/13 local commands GREEN, with6,499 unit PASS
+and one old scheduler-fingerprint FAIL. Its correction retains the old expected
+hash, adds exact reviewed predecessor composition and passes57 targeted
+contracts. The original failed run remains evidence, not acceptance.
+All production runtime and migrations1–70 remain unchanged. Full candidate
+regression/source/PR/own-main acceptance is still required. **HOLD / PHASE13
+IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE dispatch and positive
+native credit remain disabled. Earlier checkpoints below retain their original
+scope and results.
+
+The subsequent code checkpoint `4a2de4c` passes all13 frozen local commands:
+6,501 unit / 2,537 Paper / 41 HTTP, twelve clean deployments, audit zero and
+all6,495 prior unit cases retained. Its source Platform43701732093 /
+CodeQL43701732068 and PR Platform43701809613 / CodeQL43701809648 are GREEN.
+All24 owner suites pass; all69 admission cases complete in56.269/54.213s under
+the original90s limit. Native aggregates364.460/310.074s remain under480s.
+Both runs retain every1,520 native case,49 files,41 writer-capture cases and45
+raw report copies. All12 ZIP sets/windows/digests, four raw native logs,
+upgrade/redeploy/reset, compiled restart and secondary cleanup verify.
+[Detailed evidence](admission-setup-hardening.md) preserves the earlier REDs.
+Final documentation-head source/PR CI and separately authorized own-main CI are
+still required; the published main525aaac HOLD is not reclassified by this result.
+
 ## Verified current Risk/loss code checkpoint — publication pending
 
 Source `352f19102421cb42a9e4c71a611a9e08c95c7b80` has complete
