@@ -11,10 +11,13 @@ baseline also passed with all1,077 tracked input hashes unchanged.
 
 The next [current Risk calculation](docs/phase-13/current-risk-evaluation.md)
 checks a new order against an executed position and complete supported current
-inventory. Its132 targeted contracts pass. The first source134ff20 local/source/PR
-runs failed three predecessor-root review checks; both CodeQL runs passed. Exact
-predecessor reconstruction and target binding are corrected, with full corrected
-regression/native/CI still open. Calculation content grants no financial authority.
+inventory. Exact codeb5e7b42 passes all13 local commands and full source/PR75
+Platform43711660217/43711665480 and CodeQL43711660257/43711665484:
+6,546unit/41HTTP per OS,1,520 PostgreSQL,24 owners,70 unchanged migrations,audit0.
+All old cases and twelve actual ZIP digests/windows verify. Initial134ff20 failures
+remain historical; the exact predecessor review and target binding are corrected.
+Any reporting-only HEAD must pass its own complete CI; protected merge/new-main
+acceptance remains separate. Calculation content grants no financial authority.
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Financial PAPER/LIVE dispatch
 and positive native collateral credit remain disabled; collateral is conservative,
 native AMEND is Binance Spot TESTNET only. Real private exchange acceptance,

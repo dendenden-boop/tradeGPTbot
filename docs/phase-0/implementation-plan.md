@@ -8,8 +8,10 @@ and audit0. A fresh thirteen-command unchanged-source baseline also passed.
 Historical earlier HOLD/pending paragraphs below keep their original source scope.
 The next [current Risk evaluation](../phase-13/current-risk-evaluation.md) adds a
 new order's bounded mathematical proposal to existing executed inventory once.
-Its132 targeted contracts pass; native investigation, full regression and
-candidate CI remain open. Atomic postexecution admission, continued/multiple-order
+Exact codeb5e7b42 passes all13 local checks and complete source/PR75 Platform
+43711660217/43711665480 and CodeQL43711660257/43711665484:6,546unit per OS,
+1,520 PostgreSQL,24 owners,70 unchanged migrations,audit0. Reporting-only HEADs
+require their own complete CI; protected publication remains separate. Atomic postexecution admission, continued/multiple-order
 financial progression and public composition remain outstanding. PHASE13 stays
 IN_PROGRESS / NOT READY FOR PHASE14; financial PAPER/LIVE dispatch and positive
 native collateral credit disabled. Native AMEND remains Binance Spot TESTNET

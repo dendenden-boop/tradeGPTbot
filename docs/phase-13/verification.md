@@ -1,5 +1,40 @@
 # PHASE 13 verification
 
+## Verified current Risk code checkpoint — 15 November 2026
+
+Exact code **b5e7b42cb6b3573a679b669f40e82535b2c8314e** passes all13 frozen local
+commands on1,083 unchanged files, with6,546unit/2,575Paper/41HTTP, twelve clean
+deployments and audits0. All6,501 prior unit cases and1,068 unchanged predecessor
+files verify; all historical documents remain intact. The45 new tests comprise
+38 calculation contracts and seven exact-root review contracts.
+
+Source [Platform43711660217](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711660217)
+/ [CodeQL43711660257](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711660257)
+and [PR75 Platform43711665480](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711665480)
+/ [CodeQL43711665484](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711665484)
+are fully GREEN. Each run preserves1,520 PostgreSQL/49files,24 owner suites,
+41 writer/capture cases, all70 migrations and upgrade/redeploy/reset/compiled
+restart, three secondary resets/cleanup, Auth/Docker, twelve clean deployments per
+OS and audit0. Both OS reports match every local unit/HTTP identity. Twelve ZIP
+digests/windows, ninety raw reports and four actual native job logs verify.
+
+Native source/PR aggregates418,397.254/450,137.684ms remain below480,000ms;
+69-case admission owners82,126.547/81,573.039ms remain below90,000ms. Shared
+1,020,000ms budget, all permissions/CI checks and original assertions are unchanged.
+The existing actual PostgreSQL case checks current position6.025 plus new order2.41
+equals8.435, replay/restart and unchanged financial/evidence rows. All70 published
+migrations are byte-identical. Failed134ff20 and narrower diagnostic reports below
+remain historical evidence, not relabelled GREEN.
+
+This accepts the exact code checkpoint only. A reporting-only HEAD requires its
+own complete CI; protected merge and own-main CI require separate authorization.
+Main remains9f2f324. [Contract and limitations](current-risk-evaluation.md) apply:
+the result is bounded pure content, not atomic admission, target authentication,
+a grant/permit or financial execution. **PHASE13 IN_PROGRESS / NOT READY FOR
+PHASE14.** PAPER/LIVE financial dispatch and positive native collateral credit
+remain disabled; native AMEND remains Binance Spot TESTNET only. Real private
+exchange acceptance, crash/backup restore and production soak are not claimed.
+
 ## Current Risk review and target binding correction — 15 November 2026
 
 Source134ff20 completed13 frozen local commands on1,081 unchanged files:12PASS,

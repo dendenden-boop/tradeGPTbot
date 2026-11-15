@@ -8,8 +8,10 @@ The [current Risk evaluation contract](current-risk-evaluation.md) requires
 preserving executed positions and every supported liability when calculating a
 new order, and immutable exact target/command binding in its result. Exact owner/instrument/rules, current policy/loss/controls/health,
 complete fee coverage and unchanged finite leases must fail closed. Pure
-EVALUATED content is not atomic admission or a financial grant. Native and full
-candidate regression/CI remain required. PHASE13 stays IN_PROGRESS; PHASE14,
+EVALUATED content is not atomic admission or a financial grant. Exact codeb5e7b42
+passes all13 local and full source/PR Platform/CodeQL with6,546unit,1,520 PostgreSQL,
+24 owners,70 unchanged migrations and audit0. Reporting-only heads need separate
+complete CI; protected publication remains open. PHASE13 stays IN_PROGRESS; PHASE14,
 financial PAPER/LIVE dispatch and positive native credit remain disabled.
 
 ## Current Risk/loss increment after accepted PR72

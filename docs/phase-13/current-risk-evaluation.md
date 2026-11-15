@@ -1,5 +1,42 @@
 # Current PAPER Risk evaluation after execution
 
+## Verified code checkpoint — 15 November 2026
+
+Code **b5e7b42cb6b3573a679b669f40e82535b2c8314e** passes source
+[Platform43711660217](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711660217)
+and [CodeQL43711660257](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711660257),
+and [PR75 Platform43711665480](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711665480)
+and [CodeQL43711665484](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43711665484).
+All eight Platform jobs and the CodeQL job pass in both workflows. Each run
+contains **6,546 unit / 2,575 Paper / 41 HTTP per OS, 1,520 PostgreSQL in49 files,
+24 owner suites, 41 writer/capture cases, twelve clean deployments and audits0**.
+All6,501 previous unit and1,520 PostgreSQL identities remain present and passing.
+The existing native case retains every original statement and adds44 lines of
+cross-package certificate/restart/calculation assertions; no native case is removed.
+
+All twelve actual ZIP digests and producer windows, ninety raw report copies and
+four raw native job logs are verified. Source/PR native aggregate elapsed is
+418,397.254/450,137.684ms below the unchanged480,000ms budget. Their69 admission
+owner cases take82,126.547/81,573.039ms below90,000ms; the shared1,020,000ms
+deadline is unchanged. All70 published migrations, populated upgrade/redeploy/reset,
+compiled restart, three secondary resets and secondary cleanup pass. Existing
+financial writers, policies, adapters, manifests/lockfile, workflows and permissions
+are unchanged.
+
+The exact code HEAD also passes all thirteen frozen local commands on1,083
+unchanged input files. All1,068 predecessor files outside the reviewed extension
+are byte-identical; all prior document history remains intact. The first134ff20
+RED runs and local cold finite-lease failure below remain preserved, without
+unchanged-source retries or weakened checks. The later complete native CI,
+including restricted owners and actual Docker services, is the acceptance
+evidence for this code increment.
+
+These results bind the exactb5e7b42 code checkpoint. A reporting-only later HEAD
+must pass its own complete source/PR CI, and a protected merge/new-main CI requires
+separate authorization. PR75 is not accepted into main by these results alone.
+PHASE13 remains IN_PROGRESS; current atomic postexecution admission and financial
+dispatch remain outstanding. No PHASE14 or positive native credit is enabled.
+
 ## Starting point
 
 The starting protected main is `9f2f324cfdaf0276e9ad5c0981d7d14b6d52199c`

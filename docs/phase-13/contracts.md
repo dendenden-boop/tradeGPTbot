@@ -9,15 +9,17 @@ open-order/position counts and spendable quote, then add the new order once with
 the full per-lot fee vector. It cannot authenticate target intent/current SQL
 heads, grant/permit/reserve, renew evidence or alter the certificate's false
 execution-bound flag. A future fixed atomic writer must independently recheck and
-enforce these bounds. Accepted main9f2f324 is GREEN; this candidate is unaccepted
-until full regression/native/CI. PHASE13 IN_PROGRESS; PHASE14 and financial
+enforce these bounds. Accepted main9f2f324 is GREEN; codeb5e7b42 passes full local,
+native and source/PR CI, while protected publication remains open. PHASE13 IN_PROGRESS; PHASE14 and financial
 PAPER/LIVE dispatch and positive native credit remain disabled.
 
 The result preserves the complete parsed target immutably; equal monetary
-proposals do not collapse distinct order/intent/command identities. Current
-correction targeted evidence is132PASS. Initial134ff20 Platform source/PR are
-RED on the additive root's uncomposed predecessor review; an exact reconstruction
-now preserves all original hashes/assertions. Full corrected CI remains required.
+proposals do not collapse distinct order/intent/command identities. Codeb5e7b42
+passes132 targeted tests, all13 local checks and full source/PR Platform/CodeQL,
+with6,546unit/1,520 PostgreSQL/24 owners and70 unchanged migrations. Initial134ff20
+failures remain historical; the exact reconstruction preserves all original hashes
+and assertions. Later reporting HEADs need their own complete CI. No result here
+authenticates current SQL/target identity or authorizes a reservation/dispatch.
 
 ## Candidate current Risk/loss certification
 
