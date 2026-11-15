@@ -1,3 +1,4 @@
+// PAPER CURRENT ORDER RISK: restore the latest exact layer before historical pins.
 // Test-only exact accepted455 count and additive69/70 harness review; no runtime authority or waiver.
 import { createHash } from 'node:crypto';
 import { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';

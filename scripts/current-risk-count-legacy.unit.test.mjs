@@ -1,3 +1,4 @@
+// PAPER CURRENT ORDER RISK: older tamper tests retain their exact predecessor fixture.
 import { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';

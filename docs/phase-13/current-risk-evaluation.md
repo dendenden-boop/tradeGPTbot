@@ -1,5 +1,7 @@
 # Current PAPER Risk evaluation after execution
 
+Accepted by protected PR75 main `116c9b0615779a84c5c354fbb381c4ce1a8815bd` with own Platform43731942645 / CodeQL43731942634 GREEN. The separate [durable-order source](current-order-risk-source.md) is candidate work and grants no financial authority. Earlier source/publication checkpoints remain historical. PHASE13 stays IN_PROGRESS / NOT READY FOR PHASE14.
+
 ## Verified code checkpoint — 15 November 2026
 
 Code **b5e7b42cb6b3573a679b669f40e82535b2c8314e** passes source

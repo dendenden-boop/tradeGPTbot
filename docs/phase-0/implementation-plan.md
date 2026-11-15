@@ -1,5 +1,9 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Current PHASE 13 checkpoint after accepted PR75
+
+Protected main `116c9b0615779a84c5c354fbb381c4ce1a8815bd` accepts the pure next-order Risk calculation through own Platform43731942645 / CodeQL43731942634 GREEN. The [current durable-order Risk source](../phase-13/current-order-risk-source.md) is the next candidate prerequisite: authenticate one real untouched new intent, capture current complete supported inventory/loss/policy evidence, and evaluate it without a second frequency count. Additive71 supplies private nonfinancial capture functions only. Atomic postexecution admission/reservations and wider execution remain outstanding. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. Financial PAPER/LIVE dispatch and positive native credit stay disabled; native AMEND remains Binance Spot TESTNET only. Historical checkpoints below retain their original scope.
+
 ## Current PHASE 13 prerequisite — 15 November 2026
 
 Accepted protected main9f2f324 (PR74) passed own-main Platform43705701033 and

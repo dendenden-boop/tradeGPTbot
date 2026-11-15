@@ -88,6 +88,98 @@ export async function verifyPaperCurrentOrderRiskUpgrade(db, before) {
   }
   await verifyPaperCurrentOrderRiskStorage(db, { ownership: 'REQUIRE_NON_BYPASS' });
 }
+async function publishCurrentFixtureEvidence(db, env, source) {
+  const { createPostgresMarketSnapshots, createPostgresMarketTrades } =
+      await import('../packages/market-data/dist/index.js'),
+    { createPostgresPaperRuntimeObservations, paperRuntimeDependencies } =
+      await import('../packages/paper-engine/dist/runtime.js');
+  const options = (connectionString) => ({ connectionString, environment: 'test' }),
+    io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2500 });
+  const snapshots = await createPostgresMarketSnapshots(options(env.DATABASE_MARKET_SNAPSHOT_URL)),
+    trades = await createPostgresMarketTrades(options(env.DATABASE_MARKET_TRADE_URL)),
+    runtime = await createPostgresPaperRuntimeObservations(
+      options(env.DATABASE_PAPER_RUNTIME_OBSERVER_URL),
+    );
+  try {
+    const row = (
+      await db.query(
+        `SELECT e.payload,h.revision::text revision FROM ctp_paper.execution_commit x
+      JOIN ctp_market.snapshot_event original ON original.id=(x.source->'started'->'capture'->'market'->'snapshot'->>'id')::uuid
+      JOIN ctp_market.snapshot_head h ON h.key=original.key JOIN ctp_market.snapshot_event e ON e.id=h.native
+      WHERE x.tenant_id=$1 AND x.execution_key=$2`,
+        [source.admission.binding.tenantId, source.executionKey],
+      )
+    ).rows[0];
+    assert(row);
+    const p = JSON.parse(row.payload);
+    const retained = (
+      await db.query(
+        `SELECT e.payload,h.revision::text revision FROM ctp_market.trade_head h
+      JOIN ctp_market.trade_event e ON e.id=h.native WHERE h.key=($1::jsonb-'dbRuleId')`,
+        [JSON.stringify(p.key)],
+      )
+    ).rows[0];
+    assert(retained);
+    p.id = randomUUID();
+    p.expectedRevision = row.revision;
+    p.timestamp = Date.now();
+    for (const v of [p.book, p.ticker]) v.receivedAt = v.exchangeTime = p.timestamp;
+    if (p.book.sourceSequence !== null)
+      p.book.sourceSequence = (
+        BigInt(p.book.sourceSequence) +
+        BigInt(row.revision) +
+        1n
+      ).toString();
+    assert.equal((await snapshots.publish(p, io())).status, 'APPLIED');
+    const trade = JSON.parse(retained.payload);
+    trade.id = randomUUID();
+    trade.key = structuredClone(p.key);
+    trade.record = structuredClone(p.record);
+    trade.expectedRevision = retained.revision;
+    trade.timestamp = Date.now();
+    trade.trade.tradeId = 'compiled-current-order-' + randomUUID();
+    trade.trade.receivedAt = trade.trade.exchangeTime = trade.timestamp;
+    if (trade.trade.sourceSequence !== null)
+      trade.trade.sourceSequence = (
+        BigInt(trade.trade.sourceSequence) +
+        BigInt(retained.revision) +
+        1n
+      ).toString();
+    assert.equal((await trades.publish(trade, io())).status, 'APPLIED');
+    const owner = {
+        tenantId: source.admission.binding.tenantId,
+        accountId: source.admission.binding.accountId,
+        mode: 'PAPER',
+      },
+      context = await runtime.context(owner, io()),
+      head = await runtime.head(owner, io());
+    await runtime.publish(
+      {
+        id: randomUUID(),
+        expectedRevision: head?.revision ?? '0',
+        observation: {
+          owner,
+          configurationId: context.configuration.configuration.id,
+          configurationHash: context.configurationHash,
+          permissionEpoch: context.current.permissionEpoch,
+          userSessionEpoch: context.current.userSessionEpoch,
+          accountVersion: context.current.accountVersion,
+          health: Object.fromEntries(
+            paperRuntimeDependencies.map((k) => [
+              k,
+              { sourceId: 'compiled-current-order:' + k, asOf: Date.now(), status: 'HEALTHY' },
+            ]),
+          ),
+        },
+      },
+      io(),
+    );
+  } finally {
+    await runtime.close();
+    await trades.close();
+    await snapshots.close();
+  }
+}
 export async function verifyCompiledCurrentOrderRisk(db, env) {
   // Publish genuine fresh fixture observations through the existing fixed
   // sources after upgrade/redeploy, before creating the new durable target.
@@ -131,6 +223,10 @@ export async function verifyCompiledCurrentOrderRisk(db, env) {
     };
     old = await createPostgresPaperCurrentRiskCoordinator(options);
     await assert.rejects(old.certify(source, io()));
+    // Preparation and complete preservation snapshots are not trading time.
+    // Publish actual new sequenced observations after the target exists; never
+    // renew retained source timestamps or extend any runtime evidence deadline.
+    await publishCurrentFixtureEvidence(db, env, source);
     const before = await capturePaperExecutionStartUpgrade(db);
     reader = await createPostgresPaperCurrentOrderRiskSource(options);
     const value = await reader.capture(request, io());

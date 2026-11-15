@@ -135,11 +135,11 @@ export const currentOrderRiskReview = {
   },
   'scripts/current-risk-count-legacy.mjs': {
     predecessor: 'aa523c32f1b789154cd2452cbb4ee499eeec47aac049c6f2c0a5d5d1267d5d6d',
-    current: '2af3506f9cae4b0ec0e6ac03bb5d24cbf159ae8bc98773eec11267835608641f',
+    current: 'eb46dcebc2997ad09d2154d80e2aa800aae2b8ed2a70e09f65f2bdcd0b1d0050',
     patches: [
       {
         old: "// Test-only exact accepted455 count and additive69/70 harness review; no runtime authority or waiver.\nimport { createHash } from 'node:crypto';\nexport const currentRiskCountReview = {\n  'scripts/native-proof-artifacts.mjs': {\n    predecessor: '67b79c58f98ccd2d6b457ba499c9fe512ec21d7783461608d859ab3cf8cb7e54',\n",
-        next: "// Test-only exact accepted455 count and additive69/70 harness review; no runtime authority or waiver.\nimport { createHash } from 'node:crypto';\nimport { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';\nexport const currentRiskCountReview = {\n  'scripts/native-proof-artifacts.mjs': {\n    predecessor: '67b79c58f98ccd2d6b457ba499c9fe512ec21d7783461608d859ab3cf8cb7e54',\n",
+        next: "// PAPER CURRENT ORDER RISK: restore the latest exact layer before historical pins.\n// Test-only exact accepted455 count and additive69/70 harness review; no runtime authority or waiver.\nimport { createHash } from 'node:crypto';\nimport { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';\nexport const currentRiskCountReview = {\n  'scripts/native-proof-artifacts.mjs': {\n    predecessor: '67b79c58f98ccd2d6b457ba499c9fe512ec21d7783461608d859ab3cf8cb7e54',\n",
       },
       {
         old: "  },\n};\nexport function beforeCurrentRiskCounts(file, source) {\n  const review = currentRiskCountReview[file];\n  if (!review || !source.includes('PAPER CURRENT RISK')) return source;\n  const hash = (s) => createHash('sha256').update(s).digest('hex');\n",
@@ -149,11 +149,11 @@ export const currentOrderRiskReview = {
   },
   'scripts/current-risk-count-legacy.unit.test.mjs': {
     predecessor: 'e1722e6ec2d985cd07d991d6527a5d9d6b9753b88731cbf63edae5ca904bf435',
-    current: '926cf6a295ecb4e5954d2ea3a2a287db53a0b14c705cd423b2d7348a854e9216',
+    current: '59ef27e7d393f6838858716c1c846a6e4edc4752a96b04dc8326908e93523011',
     patches: [
       {
         old: "import { readFile } from 'node:fs/promises';\nimport { createHash } from 'node:crypto';\nimport { expect, it } from 'vitest';\n",
-        next: "import { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';\nimport { readFile } from 'node:fs/promises';\nimport { createHash } from 'node:crypto';\nimport { expect, it } from 'vitest';\n",
+        next: "// PAPER CURRENT ORDER RISK: older tamper tests retain their exact predecessor fixture.\nimport { beforeCurrentOrderRiskReview } from './current-order-risk-legacy.mjs';\nimport { readFile } from 'node:fs/promises';\nimport { createHash } from 'node:crypto';\nimport { expect, it } from 'vitest';\n",
       },
       {
         old: "it.each(Object.entries(currentRiskCountReview))(\n  'reconstructs complete accepted455 source below exact new mandatory case counts: %s',\n  async (file, review) => {\n    const source = (await readFile(new URL('../' + file, import.meta.url), 'utf8')).replaceAll(\n      '\\r\\n',\n      '\\n',\n    );\n    expect(hash(source)).toBe(review.current);\n    expect(hash(beforeCurrentRiskCounts(file, source))).toBe(review.predecessor);\n",
@@ -168,7 +168,7 @@ export function beforeCurrentOrderRiskReview(
   code = 'PAPER_CURRENT_ORDER_RISK_REVIEW_REQUIRED',
 ) {
   const r = currentOrderRiskReview[file];
-  if (!r) return source;
+  if (!r || !source.includes('PAPER CURRENT ORDER RISK')) return source;
   const hash = (s) => createHash('sha256').update(s).digest('hex');
   if (hash(source) === r.predecessor) return source;
   if (hash(source) !== r.current) throw Error(code);
