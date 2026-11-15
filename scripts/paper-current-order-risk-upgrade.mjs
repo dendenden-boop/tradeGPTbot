@@ -133,8 +133,8 @@ async function publishCurrentFixtureEvidence(db, env, source) {
     assert.equal((await snapshots.publish(p, io())).status, 'APPLIED');
     const trade = JSON.parse(retained.payload);
     trade.id = randomUUID();
-    trade.key = structuredClone(p.key);
-    trade.record = structuredClone(p.record);
+    trade.key = globalThis.structuredClone(p.key);
+    trade.record = globalThis.structuredClone(p.record);
     trade.expectedRevision = retained.revision;
     trade.timestamp = Date.now();
     trade.trade.tradeId = 'compiled-current-order-' + randomUUID();
