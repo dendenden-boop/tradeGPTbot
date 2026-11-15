@@ -1,5 +1,22 @@
 # План PHASE 0–22 и критерии PHASE 1
 
+## Current PHASE 13 prerequisite — 15 November 2026
+
+Accepted protected main9f2f324 (PR74) passed own-main Platform43705701033 and
+CodeQL43705701125 with6,501 unit per OS,1,520 PostgreSQL,24 owners,70 migrations
+and audit0. A fresh thirteen-command unchanged-source baseline also passed.
+Historical earlier HOLD/pending paragraphs below keep their original source scope.
+The next [current Risk evaluation](../phase-13/current-risk-evaluation.md) adds a
+new order's bounded mathematical proposal to existing executed inventory once.
+Exact codeb5e7b42 passes all13 local checks and complete source/PR75 Platform
+43711660217/43711665480 and CodeQL43711660257/43711665484:6,546unit per OS,
+1,520 PostgreSQL,24 owners,70 unchanged migrations,audit0. Reporting-only HEADs
+require their own complete CI; protected publication remains separate. Atomic postexecution admission, continued/multiple-order
+financial progression and public composition remain outstanding. PHASE13 stays
+IN_PROGRESS / NOT READY FOR PHASE14; financial PAPER/LIVE dispatch and positive
+native collateral credit disabled. Native AMEND remains Binance Spot TESTNET
+only; real private exchange acceptance, crash/backup restore and soak are not claimed.
+
 ## Accepted PR70 and next PHASE 13 prerequisite — 13 November 2026
 
 Protected main `e078554bd5b56b556f36af4db8ec333a45f01834` accepts readonly executed valuation via PR70 and complete own-main Platform43382582643 / CodeQL43382582572: 6,276 unit per OS, 1,507 PostgreSQL /24owners,67migrations with populated upgrade/reset/restart, twelve deployments and audit0. Earlier pending/HOLD descriptions below retain their historical scope.

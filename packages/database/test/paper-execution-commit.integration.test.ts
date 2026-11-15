@@ -6,6 +6,7 @@ import type { PortfolioState } from '@ctp/portfolio';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as paper from '@ctp/paper-engine/risk';
+import { calculatePaperCurrentRiskEvaluation } from '@ctp/paper-engine';
 import { createPostgresPaperConfiguration } from '@ctp/paper-engine/configuration';
 import { createPostgresPaperFunding } from '@ctp/paper-engine/funding';
 import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfolio';
@@ -1129,6 +1130,48 @@ it('paper-current-risk: certifies an actual executed inventory with durable curr
     expect(counts[0]).toMatchObject({ certificates: 1, checkpoints: 1 });
     expect(await coordinator.certify(request, startIo())).toEqual(certificate);
     expect((await evidenceCounts()).rows).toEqual(counts);
+    // Cross-package proof over the actual immutable PostgreSQL certificate,
+    // not a re-sealed mocked graph. This calculation grants no new admission.
+    const sealed = await startFixtureSql<{ text: string; hash: string }>(
+      `SELECT document_text text,encode(document_hash,'hex') hash
+       FROM ctp_paper.current_risk_certificate WHERE tenant_id=$1 AND id=$2`,
+      [f.c.owner.tenantId, certificate.id],
+    );
+    const evaluationInput: unknown = JSON.parse(
+      canonical({
+        now: Date.now(),
+        sourceRequest: request,
+        certificate: sealed.rows[0],
+        target: {
+          owner: f.c.owner,
+          orderId: randomUUID(),
+          intentId: randomUUID(),
+          dbInstrumentId: f.f.s.key.dbInstrumentId,
+          dbRuleId: f.f.s.key.dbRuleId,
+          command: {
+            ...f.prepared.request.admission.command,
+            clientOrderId: 'calculation-only-' + randomUUID(),
+            limitPrice: '12.05',
+            size: { kind: 'BASE_QUANTITY', asset: f.f.s.record.instrument.baseAsset, value: '0.2' },
+          },
+        },
+      }),
+    );
+    const evaluated = calculatePaperCurrentRiskEvaluation(evaluationInput);
+    expect(evaluated).toMatchObject({
+      source: { id: certificate.id, revision: certificate.revision, hash: sealed.rows[0]!.hash },
+      result: {
+        kind: 'EVALUATED',
+        notional: '2.41',
+        budget: {
+          current: { instrument: '6.025', user: '6.025' },
+          projected: { instrument: '8.435', user: '8.435' },
+        },
+      },
+    });
+    expect(evaluated).not.toHaveProperty('grant');
+    expect(evaluated).not.toHaveProperty('permit');
+    expect((await evidenceCounts()).rows).toEqual(counts);
     await coordinator.close();
     const restarted = await (
       factory as (options: unknown) => Promise<{
@@ -1139,6 +1182,7 @@ it('paper-current-risk: certifies an actual executed inventory with durable curr
     try {
       expect(await restarted.readCurrent(request, startIo())).toEqual(certificate);
       expect((await evidenceCounts()).rows).toEqual(counts);
+      expect(calculatePaperCurrentRiskEvaluation(evaluationInput)).toEqual(evaluated);
     } finally {
       await restarted.close();
     }

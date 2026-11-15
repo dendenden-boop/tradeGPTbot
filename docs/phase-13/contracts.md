@@ -1,5 +1,26 @@
 # PHASE 13 contracts
 
+## Current next-order Risk calculation contract — 15 November 2026
+
+The [bounded pure calculation](current-risk-evaluation.md) composes the existing
+current-certificate content decoder, complete supported inventory, budget and
+common policy. It must independently match all four existing exposure totals,
+open-order/position counts and spendable quote, then add the new order once with
+the full per-lot fee vector. It cannot authenticate target intent/current SQL
+heads, grant/permit/reserve, renew evidence or alter the certificate's false
+execution-bound flag. A future fixed atomic writer must independently recheck and
+enforce these bounds. Accepted main9f2f324 is GREEN; codeb5e7b42 passes full local,
+native and source/PR CI, while protected publication remains open. PHASE13 IN_PROGRESS; PHASE14 and financial
+PAPER/LIVE dispatch and positive native credit remain disabled.
+
+The result preserves the complete parsed target immutably; equal monetary
+proposals do not collapse distinct order/intent/command identities. Codeb5e7b42
+passes132 targeted tests, all13 local checks and full source/PR Platform/CodeQL,
+with6,546unit/1,520 PostgreSQL/24 owners and70 unchanged migrations. Initial134ff20
+failures remain historical; the exact reconstruction preserves all original hashes
+and assertions. Later reporting HEADs need their own complete CI. No result here
+authenticates current SQL/target identity or authorizes a reservation/dispatch.
+
 ## Candidate current Risk/loss certification
 
 The [current certification contract](current-risk-certification.md) follows accepted PR72/main `455f8929`. Only the server-only Risk entrypoint exposes the fixed coordinator; the pure root exports no coordinator or decoder. Callers supply the original execution/preparation/START/admission selector and authorization epochs, never a complete inventory, loss baseline, policy, source hash, backend callback or SQL. Current source validation uses the accepted complete bounded historical-inventory closure: one authenticated executed pristine Spot BUY plus pristine siblings; extra/UNKNOWN history fails closed.
