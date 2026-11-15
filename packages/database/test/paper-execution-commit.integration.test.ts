@@ -1245,6 +1245,197 @@ async function refreshCurrentRiskEvidence(f: Awaited<ReturnType<typeof ready>>) 
     ).toString();
   expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
 }
+
+interface CurrentOrderRiskSourcePort {
+  capture(
+    request: unknown,
+    context: ReturnType<typeof startIo>,
+  ): Promise<{
+    kind: string;
+    target: { orderId: string; intentId: string; commandHash: string; command: unknown };
+    certificate: {
+      id: string;
+      revision: string;
+      expiresAt: number;
+      snapshot: { ordersInLastMinute: number };
+    };
+    evaluation: { result: { kind: string; reasons?: readonly string[] } };
+  }>;
+  readCurrent(
+    request: unknown,
+    context: ReturnType<typeof startIo>,
+  ): ReturnType<CurrentOrderRiskSourcePort['capture']>;
+  close(): Promise<void>;
+}
+const currentOrderRiskPorts: CurrentOrderRiskSourcePort[] = [];
+afterAll(async () => {
+  for (const p of currentOrderRiskPorts) await p.close();
+});
+async function openCurrentOrderRisk(connectionString = startFixtureConnection()) {
+  const factory = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperCurrentOrderRiskSource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_CURRENT_ORDER_RISK_SOURCE_MISSING');
+  const port = await (factory as (options: unknown) => Promise<CurrentOrderRiskSourcePort>)({
+    connectionString,
+    environment: 'test',
+  });
+  currentOrderRiskPorts.push(port);
+  return port;
+}
+async function currentOrderTargetReady() {
+  const f = await ready(),
+    writer = await open();
+  await writer.execute(f.request, startIo());
+  const target = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      order: {
+        ...f.draft.order,
+        limitPrice: parseDecimal('12.05'),
+        size: {
+          kind: 'BASE_QUANTITY',
+          asset: f.f.s.record.instrument.baseAsset,
+          value: parseDecimal('0.2'),
+        },
+      },
+    },
+    startIo(),
+  );
+  const wire = (
+    await startFixtureSql<{ hash: string; command: string }>(
+      `SELECT encode("commandHash",'hex') hash,command FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2`,
+      [f.c.owner.tenantId, target.intentId],
+    )
+  ).rows[0]!;
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrdersPerMinute: 2 });
+  await refreshValuationMark(f);
+  await refreshCurrentRiskEvidence(f);
+  return {
+    f,
+    target,
+    wire,
+    request: {
+      kind: 'PAPER_CURRENT_ORDER_RISK_CAPTURE',
+      source: currentRiskRequest(f),
+      target: { orderId: target.id, intentId: target.intentId, commandHash: wire.hash },
+    },
+  };
+}
+it('paper-current-order-risk: authenticates a real second CREATED intent without weakening the old reader or reserving again', async () => {
+  const { f, target, wire, request } = await currentOrderTargetReady();
+  const old = await openCurrentRisk();
+  await expect(old.certify(currentRiskRequest(f), startIo())).rejects.toThrow(/^PAPER_/u);
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    port = await openCurrentOrderRisk();
+  const source = await port.capture(request, startIo());
+  expect(source).toMatchObject({
+    kind: 'PAPER_CURRENT_ORDER_RISK_SOURCE',
+    target: {
+      orderId: target.id,
+      intentId: target.intentId,
+      commandHash: wire.hash,
+      command: JSON.parse(wire.command) as unknown,
+    },
+    certificate: { snapshot: { ordersInLastMinute: 2 } },
+    evaluation: {
+      result: {
+        kind: 'EVALUATED',
+        notional: '2.41',
+        budget: {
+          current: { instrument: '6.025', user: '6.025' },
+          projected: { instrument: '8.435', user: '8.435' },
+        },
+      },
+    },
+  });
+  expect(source).not.toHaveProperty('grant');
+  expect(source).not.toHaveProperty('permit');
+  expect(source).not.toHaveProperty('reservationId');
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  await port.close();
+  const restarted = await openCurrentOrderRisk();
+  const read = await restarted.readCurrent(request, startIo());
+  expect(read.certificate).toEqual(source.certificate);
+  expect(read.target).toEqual(source.target);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: lost nonfinancial COMMIT returns no result and explicit restart read recovers one finite certificate', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE');
+  try {
+    const port = await openCurrentOrderRisk(proxy.connectionString);
+    proxy.arm();
+    await expect(port.capture(request, startIo())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await port.close();
+    const restarted = await openCurrentOrderRisk(),
+      source = await restarted.readCurrent(request, startIo());
+    expect(source.evaluation.result.kind).toBe('EVALUATED');
+    const counts = await startFixtureSql<{ n: number }>(
+      `SELECT count(*)::int n FROM ctp_paper.current_risk_certificate WHERE tenant_id=$1`,
+      [f.c.owner.tenantId],
+    );
+    expect(counts.rows[0]!.n).toBe(1);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+it('paper-current-order-risk: current controls and exact authorization cannot be bypassed by a captured target', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk();
+  await port.capture(request, startIo());
+  await startFixturePause(f.c.owner.tenantId, 'PAUSED');
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    paused = await port.capture(request, startIo());
+  expect(paused.evaluation.result).toMatchObject({ kind: 'REJECTED', reasons: ['RISK_PAUSED'] });
+  await expect(
+    port.capture(
+      {
+        ...request,
+        source: {
+          ...request.source,
+          authorization: { ...request.source.authorization, permissionEpoch: '999' },
+        },
+      },
+      startIo(),
+    ),
+  ).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: an additional unselected draft invalidates the narrow complete capture', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk();
+  await port.capture(request, startIo());
+  await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, startIo());
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(port.capture(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  await expect(port.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: the executed original cannot masquerade as an untouched new target', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(
+    port.capture(
+      {
+        ...request,
+        target: {
+          orderId: f.request.admission.orderId,
+          intentId: f.request.admission.intentId,
+          commandHash: f.request.admission.commandHash,
+        },
+      },
+      startIo(),
+    ),
+  ).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
 async function publishCurrentRiskPrice(f: Awaited<ReturnType<typeof ready>>, price: string) {
   const p = structuredClone(f.f.s),
     head = await f.snapshots.read(p.key, startIo()),
