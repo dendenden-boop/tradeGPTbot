@@ -31,6 +31,7 @@ export interface PaperCurrentRiskEvaluationCalculation {
   readonly kind: 'PAPER_CURRENT_RISK_EVALUATION_CALCULATION';
   readonly computedAt: number;
   readonly validUntil: number;
+  readonly target: z.infer<typeof inputSchema>['target'];
   readonly source: Readonly<{
     id: string;
     revision: string;
@@ -108,6 +109,7 @@ export function calculatePaperCurrentRiskEvaluation(
       kind: 'PAPER_CURRENT_RISK_EVALUATION_CALCULATION' as const,
       computedAt: now,
       validUntil,
+      target,
       source,
       result: value,
     });

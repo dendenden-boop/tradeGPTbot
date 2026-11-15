@@ -8,7 +8,7 @@ and audit0. A fresh thirteen-command unchanged-source baseline also passed.
 Historical earlier HOLD/pending paragraphs below keep their original source scope.
 The next [current Risk evaluation](../phase-13/current-risk-evaluation.md) adds a
 new order's bounded mathematical proposal to existing executed inventory once.
-Its110 targeted contracts pass; native investigation, full regression and
+Its132 targeted contracts pass; native investigation, full regression and
 candidate CI remain open. Atomic postexecution admission, continued/multiple-order
 financial progression and public composition remain outstanding. PHASE13 stays
 IN_PROGRESS / NOT READY FOR PHASE14; financial PAPER/LIVE dispatch and positive

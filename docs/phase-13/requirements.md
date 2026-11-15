@@ -6,7 +6,7 @@ Accepted starting main is9f2f324 (PR74), with own-main Platform43705701033 and
 CodeQL43705701125 GREEN. Historical525aaac HOLD statements below remain history.
 The [current Risk evaluation contract](current-risk-evaluation.md) requires
 preserving executed positions and every supported liability when calculating a
-new order. Exact owner/instrument/rules, current policy/loss/controls/health,
+new order, and immutable exact target/command binding in its result. Exact owner/instrument/rules, current policy/loss/controls/health,
 complete fee coverage and unchanged finite leases must fail closed. Pure
 EVALUATED content is not atomic admission or a financial grant. Native and full
 candidate regression/CI remain required. PHASE13 stays IN_PROGRESS; PHASE14,

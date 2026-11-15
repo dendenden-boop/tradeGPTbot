@@ -26,6 +26,11 @@ identity. A future fixed atomic admission writer must acquire fresh coherent
 evidence, authenticate the new immutable intent and independently repeat checks
 before any reservation or execution.
 
+The immutable result includes the exact parsed target owner/order/intent,
+instrument/rules identifiers and semantic command. Equal monetary proposals for
+different targets are distinguishable. This content binding does not authenticate
+an intent or make a replay authoritative.
+
 Only a new Spot BUY LIMIT/MARKET calculation in the same exact PAPER account,
 profile and current instrument/rules is supported. The original execution's
 order/intent cannot be reused as a new target. The accepted inventory closure
@@ -55,6 +60,36 @@ admission and continued/multiple-order/SELL/conditional execution, shared liquid
 and public operational composition remain outstanding.
 
 ## Verification checkpoint — candidate, not accepted
+
+### Correction after the first full candidate regression
+
+Initial source **134ff206d9f153e21eabfdc54f4b18585a8d8fba** completed all13 local
+commands on1,081 unchanged input files:12 passed, unit failed on exactly three
+existing root-preservation guards (6,534 PASS/3FAIL of6,537). HTTP/build/runtime,
+twelve clean deployments, schema validation and audits0 passed. Source
+[Platform43710426289](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43710426289)
+and [PR75 Platform43710490387](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43710490387)
+also fail on those same three guards on both operating systems. Source
+[CodeQL43710426363](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43710426363)
+and [PR CodeQL43710490409](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43710490409)
+pass. Native/Auth/Docker were skipped: neither Platform run accepts the candidate.
+Both runs and all four actual OS ZIP digests/producer windows are preserved.
+
+The additive export was not composed with the accepted predecessor root review.
+A test-only helper now removes exactly that reviewed export and requires the
+complete accepted9f2f324 root SHA-256
+`7ce1c7c6ca4a7f0f18c2e4390c4cd8c9f3a7ad070083fa632ce25bee1ddac644`.
+The existing executed-exposure guard then performs its original reconstruction
+and checks its unchanged predecessor hash. Both original guard test files and
+all their assertions remain unchanged. Seven new contracts reject altered,
+duplicate, incomplete, prefixed or trailing content; no root bytes are exempted.
+
+Two additional tests first reproduce missing exact-target result binding, alongside
+the three root failures (5RED/46PASS). The result now preserves the parsed target
+immutably. The latest combined targeted run passes132 tests:38 current-evaluation,
+32 certification,42 pristine and20 predecessor review contracts. Full corrected
+source regression, native owners and source/PR CI remain open. Earlier failures
+and narrower successful diagnostics below retain their original scope.
 
 Tests first: the absent export initially reproduced17 failing contracts and one
 passing input rejection. The final36 contracts were also run with the exact9f2f324

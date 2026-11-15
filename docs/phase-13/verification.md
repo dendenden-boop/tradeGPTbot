@@ -1,5 +1,24 @@
 # PHASE 13 verification
 
+## Current Risk review and target binding correction — 15 November 2026
+
+Source134ff20 completed13 frozen local commands on1,081 unchanged files:12PASS,
+unit RED (6,534PASS/3FAIL of6,537). Source Platform43710426289 and PR75
+Platform43710490387 fail the same three predecessor-root guards on both operating
+systems; CodeQL43710426363/43710490409 pass. Native/Auth/Docker were skipped.
+All four actual OS ZIP digests and producer windows were verified; failed runs
+and reports remain retained. These runs do not accept current source.
+
+The [exact correction contract](current-risk-evaluation.md) preserves all old
+guard assertions and hashes, reconstructs every accepted9f2f324 root byte and
+adds seven rejection contracts. Two target-binding contracts reproduce RED first;
+the immutable result now distinguishes exact target scope/command even with equal
+monetary proposals. All132 targeted tests pass, including the original guards.
+Full corrected local/native/source/PR regression remains open. Main9f2f324 is
+still accepted; PR75 remains draft and no new merge is authorized. PHASE13
+IN_PROGRESS; PHASE14, PAPER/LIVE financial dispatch and positive native credit
+remain disabled.
+
 ## Current Risk evaluation candidate — 15 November 2026
 
 Starting accepted main **9f2f324cfdaf0276e9ad5c0981d7d14b6d52199c** (PR74) passed

@@ -11,8 +11,10 @@ baseline also passed with all1,077 tracked input hashes unchanged.
 
 The next [current Risk calculation](docs/phase-13/current-risk-evaluation.md)
 checks a new order against an executed position and complete supported current
-inventory. Its110 targeted contracts pass; native investigation, full regression
-and final-source CI remain open. Calculation content grants no financial authority.
+inventory. Its132 targeted contracts pass. The first source134ff20 local/source/PR
+runs failed three predecessor-root review checks; both CodeQL runs passed. Exact
+predecessor reconstruction and target binding are corrected, with full corrected
+regression/native/CI still open. Calculation content grants no financial authority.
 **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Financial PAPER/LIVE dispatch
 and positive native collateral credit remain disabled; collateral is conservative,
 native AMEND is Binance Spot TESTNET only. Real private exchange acceptance,

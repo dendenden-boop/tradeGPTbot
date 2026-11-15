@@ -13,6 +13,12 @@ enforce these bounds. Accepted main9f2f324 is GREEN; this candidate is unaccepte
 until full regression/native/CI. PHASE13 IN_PROGRESS; PHASE14 and financial
 PAPER/LIVE dispatch and positive native credit remain disabled.
 
+The result preserves the complete parsed target immutably; equal monetary
+proposals do not collapse distinct order/intent/command identities. Current
+correction targeted evidence is132PASS. Initial134ff20 Platform source/PR are
+RED on the additive root's uncomposed predecessor review; an exact reconstruction
+now preserves all original hashes/assertions. Full corrected CI remains required.
+
 ## Candidate current Risk/loss certification
 
 The [current certification contract](current-risk-certification.md) follows accepted PR72/main `455f8929`. Only the server-only Risk entrypoint exposes the fixed coordinator; the pure root exports no coordinator or decoder. Callers supply the original execution/preparation/START/admission selector and authorization epochs, never a complete inventory, loss baseline, policy, source hash, backend callback or SQL. Current source validation uses the accepted complete bounded historical-inventory closure: one authenticated executed pristine Spot BUY plus pristine siblings; extra/UNKNOWN history fails closed.
