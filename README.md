@@ -1,5 +1,9 @@
 # Crypto Trading Platform
 
+## Verified durable-order Risk code — 16 November 2026
+
+Code `764d773eaa0a3fa01d9d77e220ade37caed66eea` completes the [server-only current durable-order Risk source](docs/phase-13/current-order-risk-source.md) for one untouched new intent over the supported executed book. All13 frozen local checks and complete source/PR Platform/CodeQL pass:6,602 unit per OS,1,528 PostgreSQL,24 owner suites,49 writer/capture cases, migration71 upgrade/redeploy/reset/compiled restart,twelve clean deployments and audit0. All twelve ZIP sets/four native logs and19 checks verify. This reporting HEAD still requires independent full CI and separately authorized protected publication; main remains accepted116c9b0. **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**. Atomic postexecution admission/reservations and wider execution remain outstanding. Financial PAPER/LIVE dispatch and positive native collateral credit stay disabled; native AMEND remains Binance Spot TESTNET only. Real private exchange acceptance and production soak are not claimed. Earlier checkpoints retain their original scope.
+
 ## Accepted PR75; current durable-order Risk candidate
 
 Protected main `116c9b0615779a84c5c354fbb381c4ce1a8815bd` accepts PR75 through its own [Platform43731942645](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43731942645) and [CodeQL43731942634](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43731942634): 6,546 unit per OS, 1,520 PostgreSQL, 24 owner suites, all70 migrations, reset/restart, twelve clean deployments and audit0. Own-main artifact digests/windows and strict protection verify. Earlier publication-pending checkpoints remain historical.

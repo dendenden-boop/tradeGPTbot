@@ -1,5 +1,7 @@
 # Current durable-order Risk source
 
+Verified code checkpoint: `764d773eaa0a3fa01d9d77e220ade37caed66eea`. All13 local commands and complete [source Platform43815054605](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43815054605) / [PR Platform43815060638](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43815060638), both CodeQL workflows and all19 checks pass. Evidence verifies6,602 unit per OS,1,528 PostgreSQL,24 owners,49 writer/capture cases, migration71 populated upgrade/redeploy/reset/compiled restart,twelve clean deployments and audit0. Twelve ZIP digests/windows, four raw native logs and prior case identities verify. This reporting HEAD still requires independent full CI and protected publication; main116c9b0 is unchanged. The increment issues no financial authority; full PHASE13 acceptance remains outstanding.
+
 Status: PHASE 13 candidate, **IN_PROGRESS / NOT READY FOR PHASE 14**.
 Starting accepted main: `116c9b0615779a84c5c354fbb381c4ce1a8815bd` (PR75).
 This increment supplies server-owned capture/evaluation for a second untouched

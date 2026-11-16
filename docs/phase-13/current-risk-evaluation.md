@@ -1,5 +1,7 @@
 # Current PAPER Risk evaluation after execution
 
+The separate stored-target source reaches verified code764d773 with complete source/PR CI:6,602 unit per OS,1,528 PostgreSQL,24 owners and migration71 upgrade/reset/restart. It authenticates a real new intent and internally counts it once in the captured minute bucket. This public calculator retains its original unpersisted-proposal semantics and grants no authority. Independent full CI and protected publication of the reporting HEAD remain required. PHASE13 stays IN_PROGRESS / NOT READY FOR PHASE14; atomic postexecution admission/reservations, wider execution and financial dispatch remain outstanding.
+
 Accepted by protected PR75 main `116c9b0615779a84c5c354fbb381c4ce1a8815bd` with own Platform43731942645 / CodeQL43731942634 GREEN. The separate [durable-order source](current-order-risk-source.md) is candidate work and grants no financial authority. Earlier source/publication checkpoints remain historical. PHASE13 stays IN_PROGRESS / NOT READY FOR PHASE14.
 
 ## Verified code checkpoint — 15 November 2026
