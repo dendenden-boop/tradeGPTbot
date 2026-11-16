@@ -188,8 +188,10 @@ export async function verifyCompiledCurrentOrderRisk(db, env) {
       await import('../packages/paper-engine/dist/risk.js'),
     { createPostgresOrderStore } = await import('../packages/order-engine/dist/index.js');
   const x = (
-    await db.query(`SELECT x.request,x.authorization_epochs,c.binding,c.draft
+    await db.query(`SELECT x.request,x.authorization_epochs,c.binding,c.draft,native.payload current_market
    FROM ctp_paper.execution_commit x JOIN ctp_execution.command c ON c."tenantId"=x.tenant_id AND c."intentId"=x.intent_id
+   JOIN ctp_market.snapshot_event original ON original.id=(x.source->'started'->'capture'->'market'->'snapshot'->>'id')::uuid
+   JOIN ctp_market.snapshot_head h ON h.key=original.key JOIN ctp_market.snapshot_event native ON native.id=h.native
    ORDER BY x.tenant_id,x.execution_key LIMIT 1`)
   ).rows[0];
   assert(x);
@@ -200,6 +202,7 @@ export async function verifyCompiledCurrentOrderRisk(db, env) {
     },
     binding = JSON.parse(x.binding),
     draft = JSON.parse(x.draft),
+    currentMarket = JSON.parse(x.current_market),
     options = { connectionString: env.DATABASE_PAPER_ADMISSION_URL, environment: 'test' },
     io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2500 });
   const store = await createPostgresOrderStore({
@@ -208,7 +211,20 @@ export async function verifyCompiledCurrentOrderRisk(db, env) {
   });
   let reader, old;
   try {
-    const target = await store.create(binding, { ...draft, key: randomUUID() }, io());
+    // The retained v1 draft proves original history, not current admission.
+    // Earlier populated-upgrade probes intentionally publish genuine v2 rules.
+    // Create the new target against those actual current metadata IDs/versions.
+    assert.equal(currentMarket.key.dbInstrumentId, draft.dbInstrumentId);
+    const target = await store.create(
+      binding,
+      {
+        ...draft,
+        key: randomUUID(),
+        dbRuleId: currentMarket.key.dbRuleId,
+        order: { ...draft.order, ruleVersion: currentMarket.record.rules.version },
+      },
+      io(),
+    );
     const wire = (
       await db.query(
         'SELECT encode("commandHash",\'hex\') hash FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2',

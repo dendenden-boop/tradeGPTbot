@@ -13,6 +13,7 @@ import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfol
 import { paperRuntimeDependencies, type PaperRuntimePublication } from '@ctp/paper-engine/runtime';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
+import { createNativeDefaultFixturePort } from './fixtures/native-default-port.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
 import { verifyPaperExecutedValuationStorage } from '../../../scripts/paper-executed-valuation-upgrade.mjs';
 import {
@@ -53,11 +54,12 @@ afterAll(async () => {
   for (const port of ports) await port.close();
   await closeStartFixture();
 });
-async function open(connectionString?: string) {
+const open = createNativeDefaultFixturePort(openActual, startFixtureConnection);
+async function openActual(connectionString: string) {
   const fn = (paper as unknown as Record<string, unknown>)['createPostgresPaperExecutionCommitter'];
   if (typeof fn !== 'function') throw Error('PAPER_EXECUTION_COMMITTER_MISSING');
   const port = await (fn as (o: unknown) => Promise<Port>)({
-    connectionString: connectionString ?? startFixtureConnection(),
+    connectionString,
     environment: 'test',
   });
   ports.push(port);
@@ -72,8 +74,16 @@ async function ready() {
   );
   const snapshot = structuredClone(f.f.s),
     trade = structuredClone(f.f.p);
-  const snapshotHead = await f.snapshots.read(snapshot.key, startIo()),
-    tradeHead = await f.trades.read(trade.key, startIo());
+  // Independent public reads/publications drain before the financial writer.
+  // Actual heads, native clocks, receipts and original IO deadlines remain.
+  const heads = await Promise.allSettled([
+    f.snapshots.read(snapshot.key, startIo()),
+    f.trades.read(trade.key, startIo()),
+  ]);
+  if (heads[0].status === 'rejected') throw heads[0].reason;
+  if (heads[1].status === 'rejected') throw heads[1].reason;
+  const snapshotHead = heads[0].value,
+    tradeHead = heads[1].value;
   if (!snapshotHead || !tradeHead) throw Error('EXECUTION_COMMIT_SOURCE_MISSING');
   snapshot.id = randomUUID();
   snapshot.expectedRevision = snapshotHead.revision;
@@ -88,8 +98,14 @@ async function ready() {
   if (trade.trade.sourceSequence !== null)
     trade.trade.sourceSequence = (BigInt(trade.trade.sourceSequence) + 1n).toString();
   trade.trade.receivedAt = trade.trade.exchangeTime = now;
-  expect((await f.snapshots.publish(snapshot, startIo())).status).toBe('APPLIED');
-  expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
+  const publications = await Promise.allSettled([
+    f.snapshots.publish(snapshot, startIo()),
+    f.trades.publish(trade, startIo()),
+  ]);
+  if (publications[0].status === 'rejected') throw publications[0].reason;
+  if (publications[1].status === 'rejected') throw publications[1].reason;
+  expect(publications[0].value.status).toBe('APPLIED');
+  expect(publications[1].value.status).toBe('APPLIED');
   return {
     ...f,
     start,
@@ -366,7 +382,11 @@ const executedReaders: ExecutedBookReader[] = [];
 afterAll(async () => {
   for (const reader of executedReaders) await reader.close();
 });
-async function openExecutedBook(connectionString = startFixtureConnection()) {
+const openExecutedBook = createNativeDefaultFixturePort(
+  openActualExecutedBook,
+  startFixtureConnection,
+);
+async function openActualExecutedBook(connectionString: string) {
   const fn = (paper as unknown as Record<string, unknown>)['createPostgresPaperExecutedBookSource'];
   if (typeof fn !== 'function') throw Error('PAPER_EXECUTED_BOOK_SOURCE_MISSING');
   const reader = await (fn as (o: unknown) => Promise<ExecutedBookReader>)({
@@ -567,7 +587,11 @@ const valuationReaders: ExecutedValuationReader[] = [];
 afterAll(async () => {
   for (const reader of valuationReaders) await reader.close();
 });
-async function openExecutedValuation(connectionString = startFixtureConnection()) {
+const openExecutedValuation = createNativeDefaultFixturePort(
+  openActualExecutedValuation,
+  startFixtureConnection,
+);
+async function openActualExecutedValuation(connectionString: string) {
   const fn = (paper as unknown as Record<string, unknown>)[
     'createPostgresPaperExecutedValuationSource'
   ];
@@ -633,7 +657,8 @@ const historicalReaders: HistoricalReader[] = [];
 afterAll(async () => {
   for (const reader of historicalReaders) await reader.close();
 });
-async function openHistorical(connectionString = startFixtureConnection()) {
+const openHistorical = createNativeDefaultFixturePort(openActualHistorical, startFixtureConnection);
+async function openActualHistorical(connectionString: string) {
   const reader: HistoricalReader = await paper.createPostgresPaperHistoricalInventorySource({
     connectionString,
     environment: 'test',
@@ -1196,7 +1221,11 @@ const currentRiskPorts: paper.PaperCurrentRiskCoordinator[] = [];
 afterAll(async () => {
   for (const port of currentRiskPorts) await port.close();
 });
-async function openCurrentRisk(connectionString = startFixtureConnection()) {
+const openCurrentRisk = createNativeDefaultFixturePort(
+  openActualCurrentRisk,
+  startFixtureConnection,
+);
+async function openActualCurrentRisk(connectionString: string) {
   const port = await paper.createPostgresPaperCurrentRiskCoordinator({
     connectionString,
     environment: 'test',
@@ -1211,8 +1240,14 @@ async function refreshCurrentRiskEvidence(
   f: Awaited<ReturnType<typeof ready>>,
   knownTradeRevision?: string,
 ) {
-  const context = await f.runtime.context(f.c.owner, startIo()),
-    head = await f.runtime.head(f.c.owner, startIo()),
+  const reads = await Promise.allSettled([
+    f.runtime.context(f.c.owner, startIo()),
+    f.runtime.head(f.c.owner, startIo()),
+  ]);
+  if (reads[0].status === 'rejected') throw reads[0].reason;
+  if (reads[1].status === 'rejected') throw reads[1].reason;
+  const context = reads[0].value,
+    head = reads[1].value,
     publication: PaperRuntimePublication = {
       id: randomUUID(),
       expectedRevision: head?.revision ?? '0',
