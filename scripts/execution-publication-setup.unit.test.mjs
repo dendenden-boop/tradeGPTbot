@@ -3,7 +3,10 @@ import ts from 'typescript';
 import { createHash, randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { runIndependentFixtureSetup } from '../packages/database/test/fixtures/native-default-port.js';
-import { beforeExecutionPublications } from './execution-publication-legacy.mjs';
+import {
+  beforeExecutionPublications,
+  beforeExecutionPublicationFingerprint,
+} from './execution-publication-legacy.mjs';
 
 const source = fs.readFileSync('packages/database/test/fixtures/paper-execution-start.ts', 'utf8');
 const begin = source.indexOf('  const now = Date.now();');
@@ -12,6 +15,10 @@ it('preserves the exact accepted fixture below the publication-only change and a
   const hash = (text) => createHash('sha256').update(text).digest('hex');
   expect(hash(beforeExecutionPublications(source.replaceAll('\r\n', '\n')))).toBe(
     '22fc143b5771bef5b886cb7122bdc4a60c2db9758d29f9560c1ec18ddf4285fb',
+  );
+  const runner = fs.readFileSync('scripts/database-cohorts.mjs', 'utf8').replaceAll('\r\n', '\n');
+  expect(hash(beforeExecutionPublicationFingerprint('scripts/database-cohorts.mjs', runner))).toBe(
+    '3a4c22aa3fd564bd36f943f8f58672632d7235a3b92b2f746157a91985b3ffb9',
   );
   const native = fs
     .readFileSync('packages/database/test/paper-execution-commit.integration.test.ts', 'utf8')

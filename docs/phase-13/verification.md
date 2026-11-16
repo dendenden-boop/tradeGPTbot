@@ -28,6 +28,18 @@ integrity checks remain enforced. Full PostgreSQL and regression/CI evidence for
 this correction is still pending. Runtime and published migrations1–71 are
 unchanged; the 90/480/1020-second limits remain unchanged.
 
+Candidate `b84b2a1a37a56a0ca6374f2a6fbe79d6f777cc54` completes all13 frozen local
+commands:12 PASS; unit has one expected review failure (6,606 PASS/1 FAIL) because
+the overlap guard still pins the previous fixture. The guard correctly blocks
+unreviewed input. After reviewing the publication-only change, its fingerprint
+is renewed; historical scheduler checks restore the exact previous fingerprint,
+with all old hashes and tamper checks retained. All774 scripts tests then pass;
+a complete corrected run is still required. The Windows native diagnostic passes48/49 cases; the bounded catch-up
+case exceeds its unchanged15-second test limit. A separate focused diagnostic
+fails during setup with `PAPER_ADMISSION_EXPIRED`, so neither diagnostic is
+reported GREEN. Both owned clusters are physically stopped. Linux/native owner,
+upgrade/reset/compiled proofs and independent CI remain mandatory.
+
 **HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Atomic postexecution
 evaluate-and-reserve has not started. Financial PAPER/LIVE dispatch and positive
 native collateral credit remain disabled.
