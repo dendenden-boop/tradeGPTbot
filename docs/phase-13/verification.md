@@ -1,5 +1,44 @@
 # PHASE 13 verification
 
+## PR77 preliminary CI: aggregate deadline HOLD — 16 November 2026
+
+Candidate `503539348d750be2af084b5ec893ebb0248d5996` passes all13 frozen local
+commands on1,095 inputs:6,607 unit/2,610 Paper/41 HTTP, twelve clean deployments
+and audit0. Independent [source Platform43827687134](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827687134)
+and [source CodeQL43827687184](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827687184)
+are GREEN; six ZIP digests/windows, two raw native logs and45 report copies verify.
+Source verifies1,528 PostgreSQL,24 owners,49 writer/capture cases, all71 migrations,
+upgrade/redeploy/reset/compiled restart and secondary cleanup. Native aggregate
+is475.308s under480s; this small margin is not a performance guarantee.
+
+[PR Platform43827732376](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827732376)
+is **RED** despite all1,528 actual PostgreSQL case results passing: physical
+closure of the final `roles` cohort exceeds the existing480-second aggregate
+deadline. The final gate correctly fails. All24 owners pass separately, including
+the49-case writer suite in67.582s under90s. Both matrices, Auth, smoke and
+[PR CodeQL43827732344](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827732344)
+are GREEN. All six PR ZIP digests/windows and both raw native logs are preserved.
+No run was blindly repeated or relabelled GREEN; main remains HOLD at `e356367`.
+
+The first Windows48/49 diagnostic and expired focused setup remain historical
+failures. After the local build/clean workload settles, the unchanged isolated
+catch-up test passes in12.252s under its original15s cap, with the same5ms diagnostic
+delivery delay; its owned cluster is stopped. This single-case result does not
+claim full native Linux acceptance.
+
+Ten additional fixture contracts reproduce serialization of current runtime/trade
+reads, their publications and target mark/runtime preparation, then pass after
+independent genuine operations are grouped and fully drained on every failure.
+Actual current reads, captured revision semantics, lossless sequence, exact target
+scope and per-operation deadlines remain unchanged. All49 native case bodies
+remain exact; no financial runtime, migration, privilege, assertion, timeout or
+workflow is weakened. All20 targeted refresh/publication/integrity tests pass.
+The new correction still requires full regression and independent source/PR CI.
+
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Atomic postexecution
+evaluate-and-reserve has not started. Financial PAPER/LIVE dispatch and positive
+native collateral credit remain disabled.
+
 ## PR76 merged; own-main acceptance HOLD — 16 November 2026
 
 PR76 was merged by ordinary protected squash, exclusively for authorized source
