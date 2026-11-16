@@ -1,5 +1,41 @@
 # PHASE 13 verification
 
+## Owner correction code checkpoint verified — 16 November 2026
+
+Code `8189fc25872dca924beb6f0e6e42a984ab25bb76` passes all13 frozen local
+commands on1,112 unchanged inputs:6,675 unit/842 script contracts/2,610 Paper/
+41 HTTP, twelve clean deployments and audit0. All6,617 preceding unit identities
+are preserved; the58 additions cover test orchestration. Financial runtime,
+all49 native case bodies, published migrations1–71, workflows, grants and the
+90/480/1020s budgets are unchanged.
+
+| Proof                                                               | Source                                                                                | PR                                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Platform GREEN                                                      | [43888665810](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888665810) | [43888683001](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888683001) |
+| CodeQL GREEN                                                        | [43888666009](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888666009) | [43888683167](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888683167) |
+| Primary PostgreSQL aggregate /480s                                  | 473.847s                                                                              | 320.046s                                                                              |
+| Full owner budget /90s, including clone and physical group drainage | 61.433s                                                                               | 56.698s                                                                               |
+| Admission69-case owner /90s                                         | 71.272s                                                                               | 64.729s                                                                               |
+
+Each run proves1,528 PostgreSQL cases across49 files, all24 owner suites and all49
+writer cases. Both raw20/29 reports and their labelled derived owner view verify
+against actual assertions, input hashes, owner flags, ACLs and the run window.
+All12 ZIP digests/windows, four native raw logs and94 report copies verify;
+those copies include four new raw partition reports and two derived owner views.
+Populated71 upgrade/redeploy/reset, compiled restart,32 actors, all four secondary
+ledgers, three secondary resets and physical cleanup pass. The source primary
+proof has only6.153s spare under480s; this is not a soak or timing guarantee.
+
+GitHub API confirms19 GREEN checks, matching tested merge tree, error-free source
+and PR CodeQL analyses, zero open alerts, strict five app-bound required contexts,
+mandatory PR, administrator enforcement and no force push, deletion or bypass.
+This is **GREEN SOURCE/PR CODE REVIEW, NOT OWN-MAIN ACCEPTANCE**. A later docs-only
+head requires fresh complete CI; any authorized merge requires independent new
+main CI. At this review snapshot main `e356367` remains HOLD and the accepted
+pointer stays `116c9b0`. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14.
+Atomic postexecution reserve, financial PAPER/LIVE dispatch and positive native
+collateral credit remain disabled. Historical failures below remain failures.
+
 ## Kernel error diagnostic correction — 16 November 2026
 
 Checkpoint `98148696c05c0157a244f9d3916bf344e48abb96` preserves all1,112 frozen
