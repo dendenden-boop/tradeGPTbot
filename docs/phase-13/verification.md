@@ -1,5 +1,37 @@
 # PHASE 13 verification
 
+## PR76 merged; own-main acceptance HOLD — 16 November 2026
+
+PR76 was merged by ordinary protected squash, exclusively for authorized source
+`d8ad3dee301523912ab5742dab2ec5ab7c0da57e`. New main is
+`e3563675bad1df50b5cf90a4ca5b6c4c957f6d2b`, with the identical approved tree and
+parent `116c9b0615779a84c5c354fbb381c4ce1a8815bd`. No protection bypass was used.
+
+Independent [main Platform43821952590](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43821952590)
+is **RED**: the writer/capture restricted-owner suite exceeded its existing
+90-second command deadline. The final Real services/Docker gate correctly failed.
+Ubuntu, Windows, the primary PostgreSQL/cohort job, Auth, Docker smoke and
+[main CodeQL43821952737](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43821952737)
+passed. All six artifact ZIP digests, producer windows and exact SHA bindings,
+plus both original native job logs, are retained. The complete 24-owner proof
+and own-main acceptance are **not** claimed; the accepted-main pointer stays at
+`116c9b0615779a84c5c354fbb381c4ce1a8815bd`.
+
+Four new tests first reproduce serialized independent snapshot/trade/runtime
+fixture publications: only the first authority starts while its result is pending.
+The test-only setup now starts all three genuine publications together and drains
+every outcome before admission, including failure paths. The same four tests then
+pass; all 15 targeted fixture tests pass, including exact preservation of all
+49 native case bodies and rejection of altered publication lanes. Existing funding, draft/bootstrap,
+context and admission ordering, per-operation IO deadlines and historical source
+integrity checks remain enforced. Full PostgreSQL and regression/CI evidence for
+this correction is still pending. Runtime and published migrations1–71 are
+unchanged; the 90/480/1020-second limits remain unchanged.
+
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Atomic postexecution
+evaluate-and-reserve has not started. Financial PAPER/LIVE dispatch and positive
+native collateral credit remain disabled.
+
 ## Verified current durable-order Risk source — 16 November 2026
 
 Exact code **764d773eaa0a3fa01d9d77e220ade37caed66eea** passes all13 frozen local commands on1,093 unchanged files:6,602 unit/2,610 Paper/41 HTTP,twelve clean deployments and audits0. All6,546 previous unit identities remain, with only the explicit migration-count display update70→71; all41 original native case bodies remain exact. The56 additional unit contracts cover the server source, exact history/storage review and fixture lifecycle/drainage. All previous RED/incomplete checkpoints below remain historical failures, not acceptance.

@@ -28,7 +28,7 @@ it('execution-start setup completes genuine funding before independent lanes and
     funding = calls(fn, 'funding.initialize')[0],
     book = calls(fn, 'book.initialize')[0],
     parallel = calls(fn, 'runIndependentFixtureSetup');
-  expect(parallel).toHaveLength(1);
+  expect(parallel).toHaveLength(2);
   expect(funding.pos).toBeLessThan(parallel[0].pos);
   expect(book.pos).toBeGreaterThan(parallel[0].end);
   const lanes = parallel[0].arguments[0];
@@ -37,6 +37,11 @@ it('execution-start setup completes genuine funding before independent lanes and
   expect(calls(lanes.elements[0], 'orders.create')).toHaveLength(1);
   expect(calls(lanes.elements[1], 'startFixturePolicy')).toHaveLength(1);
   expect(calls(lanes.elements[2], 'runtime.head')).toHaveLength(1);
+  const publications = parallel[1].arguments[0];
+  expect(ts.isArrayLiteralExpression(publications)).toBe(true);
+  expect(publications.elements).toHaveLength(3);
+  for (const [index, name] of ['snapshots.publish', 'trades.publish', 'runtime.publish'].entries())
+    expect(calls(publications.elements[index], name)).toHaveLength(1);
   for (const name of ['snapshots.publish', 'trades.publish']) {
     const publication = calls(fn, name);
     expect(publication).toHaveLength(1);
