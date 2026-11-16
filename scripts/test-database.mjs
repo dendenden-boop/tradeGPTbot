@@ -1,3 +1,7 @@
+// BEGIN WRITER OWNER PARTITIONS IMPORT
+import { performance } from 'node:perf_hooks';
+import { prepareWriterOwnerClone, runWriterOwnerSuite } from './writer-owner-suite.mjs';
+// END WRITER OWNER PARTITIONS IMPORT
 // BEGIN PAPER CURRENT ORDER RISK IMPORT
 import {
   verifyPaperCurrentOrderRiskStorage,
@@ -2684,7 +2688,39 @@ async function runDatabaseProof() {
     await executionCommitDb.end();
     // END PAPER HISTORICAL INVENTORY OWNER_PROOF
     pools.delete(executionCommitDb);
-    await run(
+    // BEGIN WRITER OWNER PARTITIONS SETUP
+    const writerOwnerBudget = { wall: Date.now(), monotonic: performance.now() };
+    // The idle template connection closes normally; no backend is terminated.
+    await ownerDatabase.end();
+    pools.delete(ownerDatabase);
+    const writerOwnerClone = `ctp_p2_writer_owner_${suffix}`;
+    databases.push(writerOwnerClone);
+    const writerOwnership = await prepareWriterOwnerClone({
+      admin,
+      source: databases[2],
+      clone: writerOwnerClone,
+      ownerRole,
+      connect: (database) => {
+        const client = connect(dbUrl(database));
+        return {
+          query: (...args) => client.query(...args),
+          end: async () => {
+            await client.end();
+            pools.delete(client);
+          },
+        };
+      },
+      verify: async (client) => {
+        await verifyPaperExecutionCommitStorage(client, { ownership: 'REQUIRE_NON_BYPASS' });
+        await verifyPaperExecutedValuationStorage(client, { ownership: 'REQUIRE_NON_BYPASS' });
+        await verifyPaperHistoricalInventoryStorage(client, { ownership: 'REQUIRE_NON_BYPASS' });
+        await verifyPaperCurrentRiskStorage(client, { ownership: 'REQUIRE_NON_BYPASS' });
+        await verifyPaperCurrentRiskMarketStorage(client, { ownership: 'REQUIRE_NON_BYPASS' });
+        await verifyPaperCurrentOrderRiskStorage(client, { ownership: 'REQUIRE_NON_BYPASS' });
+      },
+    });
+    // END WRITER OWNER PARTITIONS SETUP
+    await runWriterOwnerSuite(
       process.execPath,
       [
         fileURLToPath(new URL('./vitest.mjs', import.meta.resolve('vitest/package.json'))),
@@ -2694,7 +2730,16 @@ async function runDatabaseProof() {
         'packages/database/test/paper-execution-commit.integration.test.ts',
         '--outputFile.json=test-results/paper-execution-commit-owner-tests.json',
       ],
-      { env: paperAdmissionEnvironment(databases[2]), secrets, echo: true, timeoutMs: 90000 },
+      {
+        env: paperAdmissionEnvironment(databases[2]),
+        secondaryEnv: paperAdmissionEnvironment(writerOwnerClone),
+        ownership: writerOwnership,
+        budgetStarted: writerOwnerBudget,
+        window: nativeWindow,
+        secrets,
+        echo: true,
+        timeoutMs: 90000,
+      },
     );
     const executionCommitOwner = JSON.parse(
       await readFile(

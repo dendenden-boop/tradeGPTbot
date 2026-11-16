@@ -1,5 +1,10 @@
 # PHASE 13 contracts
 
+The pending [restricted-owner acceptance correction](owner-writer-acceptance.md)
+keeps the complete sequential native49 proof and one shared90-second owner
+budget, with two isolated owner selections and mandatory raw evidence. Main
+remains HOLD until complete protected publication and own-main CI succeed.
+
 ## Verified durable-target contract checkpoint
 
 Code764d773 passes complete source/PR acceptance for [one durable untouched target](current-order-risk-source.md). Its immutable result binds actual command/scope and a finite current certificate; EVALUATED remains arithmetic, without a grant, reservation or permit. A stored intent is counted once using its real creation time and certificate bucket; public unpersisted-proposal semantics stay unchanged. Current v2 target rules coexist with immutable v1 execution. Metadata/epoch/health/loss/collateral/UNKNOWN guards and original-reader rejection remain. All24 owners and migration71 populated upgrade/redeploy/reset/compiled restart pass without changing published1–70 or financial writers. This reporting HEAD needs its own full CI and protected publication. Atomic postexecution evaluate-and-reserve/Portfolio commitments remain outstanding; PHASE13 IN_PROGRESS / NOT READY FOR PHASE14, financial PAPER/LIVE dispatch and positive native credit disabled.
