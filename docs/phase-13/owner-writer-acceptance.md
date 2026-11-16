@@ -30,6 +30,13 @@ receives a new allowance. At most two top-level test processes run. Failure or
 abort kills and drains both owned process trees, including descendants. The
 original1020-second shared native window still applies to the whole acceptance.
 
+On POSIX, direct child close can precede the worker process group disappearing.
+Success also requires ESRCH from the owned group probe. Orchestration drains
+that group within the same original remaining budget; a persistent group,
+abort, or an unexpected kernel error fails closed. The source proof on `ae2c5f4`
+passes the complete owner proof in49.877s, while its PR run reproduces immediate
+group rejection; the drainage correction still requires independent full CI.
+
 The21 executable test-side fixture/configuration inputs have an exact
 LF-normalized fingerprint. Unknown input changes require renewed isolation
 review. The49-case manifest must match the actual native source. Existing

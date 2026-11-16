@@ -2,7 +2,32 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
+import { setTimeout as delay } from 'node:timers/promises';
 import { sanitize, workspace } from './docker-test-utils.mjs';
+
+export async function waitForOwnedWriterGroup({
+  pid,
+  began,
+  timeoutMs,
+  signal,
+  probe = process.kill.bind(process),
+}) {
+  assert(Number.isSafeInteger(pid) && pid > 0);
+  assert(Number.isFinite(began) && began <= performance.now());
+  assert(Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 90000);
+  for (;;) {
+    if (signal?.aborted) throw Error('WRITER_OWNER_ABORTED');
+    if (performance.now() - began >= timeoutMs) throw Error('WRITER_OWNER_DEADLINE');
+    try {
+      probe(-pid, 0);
+    } catch (error) {
+      if (error?.code !== 'ESRCH') throw Error('WRITER_OWNER_GROUP_PROBE_FAILED');
+      if (performance.now() - began >= timeoutMs) throw Error('WRITER_OWNER_DEADLINE');
+      return;
+    }
+    await delay(10);
+  }
+}
 
 export async function runOwnedWriterProcesses(
   jobs,
@@ -101,20 +126,21 @@ export async function runOwnedWriterProcesses(
       child.stdout.on('data', receive);
       child.stderr.on('data', receive);
       child.once('error', () => finish(Error('WRITER_OWNER_PROCESS_FAILED')));
-      child.once('close', (code) => {
+      child.once('close', async (code) => {
         if (expired()) stop('WRITER_OWNER_DEADLINE');
         if (code !== 0 && !failure) stop('WRITER_OWNER_PROCESS_FAILED');
         if (!failure && process.platform !== 'win32' && child.pid) {
-          let alive = false;
           try {
-            process.kill(-child.pid, 0);
-            alive = true;
-          } catch {
-            // ESRCH means this owned process group has already physically closed.
-          }
-          if (alive) {
-            stop('WRITER_OWNER_PROCESS_TREE_ACTIVE');
-            terminate();
+            // Child close can precede the final worker group disappearing.
+            // Drain it within the original budget; only ESRCH proves closure.
+            await waitForOwnedWriterGroup({
+              pid: child.pid,
+              began,
+              timeoutMs,
+              signal: controller.signal,
+            });
+          } catch (error) {
+            stop(error.message);
           }
         }
         finish(failure);

@@ -1,5 +1,35 @@
 # PHASE 13 verification
 
+## Owned process-group drainage correction pending — 16 November 2026
+
+Checkpoint `ae2c5f451438e96fe7225379ff7d1dc6948dc5e1` passes all13 frozen
+local commands on1,111 files:6,672 unit/2,610 Paper/41 HTTP, twelve clean
+deployments and audit0. All6,617 preceding unit identities are retained.
+[Source Platform43882070703](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882070703)
+and [CodeQL43882070674](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882070674)
+are fully GREEN. Six ZIP digests/windows, two native raw logs and47 report
+copies verify, including both raw20/29 owner partitions, their labelled derived
+49-case view, all1,528 PostgreSQL cases/24 owners, and71 upgrade/reset/restart
+proofs. The primary native aggregate is304.646s; the complete owner budget,
+including clone and physical process closure, is49.877s under90s.
+
+[PR Platform43882081913](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882081913)
+is **RED** despite both matrices, Auth, Docker, primary1,528-case PostgreSQL
+and [CodeQL43882082089](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882082089)
+passing. The new owner orchestration rejects `WRITER_OWNER_PROCESS_TREE_ACTIVE`
+when the direct child has closed but its POSIX group still exists. Both complete
+six-ZIP sets and four native logs are preserved. This is not own-main acceptance.
+
+Three additional contracts reproduce RED, then pass with the existing seven
+physical-process/descendant tests. On successful direct child close, orchestration
+now awaits ESRCH for the owned group within the original remaining90s budget.
+A persistent group reaches the same deadline and is killed; abort or unexpected
+kernel probe errors fail closed. No group is ignored and no fresh budget starts.
+Complete corrected-head regression and independent source/PR/main CI remain
+pending. **HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; main `e356367`
+and accepted pointer `116c9b0` are unchanged. No atomic postexecution reservation,
+financial PAPER/LIVE dispatch or positive native collateral credit is enabled.
+
 ## Existing migration-owner profile correction — 16 November 2026
 
 Checkpoint `4ad1c8bb77420c9731db962bb1b551cfe9f8d0a7` passes all13 frozen
