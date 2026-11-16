@@ -21,8 +21,9 @@ export async function waitForOwnedWriterGroup({
     try {
       probe(-pid, 0);
     } catch (error) {
-      if (error?.code !== 'ESRCH') throw Error('WRITER_OWNER_GROUP_PROBE_FAILED');
-      if (performance.now() - began >= timeoutMs) throw Error('WRITER_OWNER_DEADLINE');
+      if (error?.code !== 'ESRCH') throw Error('WRITER_OWNER_GROUP_PROBE_FAILED', { cause: error });
+      if (performance.now() - began >= timeoutMs)
+        throw Error('WRITER_OWNER_DEADLINE', { cause: error });
       return;
     }
     await delay(10);

@@ -1,5 +1,25 @@
 # PHASE 13 verification
 
+## Kernel error diagnostic correction — 16 November 2026
+
+Checkpoint `98148696c05c0157a244f9d3916bf344e48abb96` preserves all1,112 frozen
+inputs and passes twelve of thirteen local commands:6,675 unit/2,610 Paper/41
+HTTP, build/runtime, twelve clean deployments and audit0. Lint alone is RED:
+`preserve-caught-error` requires a cause on two new kernel-probe error wrappers.
+[Source Platform43886238540](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43886238540)
+and [PR Platform43886248706](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43886248706)
+are also RED on that rule. Both CodeQL workflows pass, but native, owner, Auth
+and Docker stages are skipped and are not acceptance. All four available matrix
+ZIP sets and four matrix raw logs are retained; six-artifact/full-native
+verification correctly refuses this incomplete run.
+
+The correction preserves the caught kernel error as `cause` on both wrappers;
+group handling, ESRCH requirement and original deadline remain unchanged.
+Targeted ESLint and all ten existing group/process contracts pass. At this
+checkpoint the corrected full local/source/PR/main verification remains required.
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE
+dispatch and positive native collateral credit remain disabled.
+
 ## Owned process-group drainage correction pending — 16 November 2026
 
 Checkpoint `ae2c5f451438e96fe7225379ff7d1dc6948dc5e1` passes all13 frozen
