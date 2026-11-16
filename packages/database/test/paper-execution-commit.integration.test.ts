@@ -13,6 +13,7 @@ import { createPostgresPaperPortfolioBootstrap } from '@ctp/paper-engine/portfol
 import { paperRuntimeDependencies, type PaperRuntimePublication } from '@ctp/paper-engine/runtime';
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
+import { createNativeDefaultFixturePort } from './fixtures/native-default-port.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
 import { verifyPaperExecutedValuationStorage } from '../../../scripts/paper-executed-valuation-upgrade.mjs';
 import {
@@ -53,11 +54,12 @@ afterAll(async () => {
   for (const port of ports) await port.close();
   await closeStartFixture();
 });
-async function open(connectionString?: string) {
+const open = createNativeDefaultFixturePort(openActual, startFixtureConnection);
+async function openActual(connectionString: string) {
   const fn = (paper as unknown as Record<string, unknown>)['createPostgresPaperExecutionCommitter'];
   if (typeof fn !== 'function') throw Error('PAPER_EXECUTION_COMMITTER_MISSING');
   const port = await (fn as (o: unknown) => Promise<Port>)({
-    connectionString: connectionString ?? startFixtureConnection(),
+    connectionString,
     environment: 'test',
   });
   ports.push(port);
@@ -72,8 +74,16 @@ async function ready() {
   );
   const snapshot = structuredClone(f.f.s),
     trade = structuredClone(f.f.p);
-  const snapshotHead = await f.snapshots.read(snapshot.key, startIo()),
-    tradeHead = await f.trades.read(trade.key, startIo());
+  // Independent public reads/publications drain before the financial writer.
+  // Actual heads, native clocks, receipts and original IO deadlines remain.
+  const heads = await Promise.allSettled([
+    f.snapshots.read(snapshot.key, startIo()),
+    f.trades.read(trade.key, startIo()),
+  ]);
+  if (heads[0].status === 'rejected') throw heads[0].reason;
+  if (heads[1].status === 'rejected') throw heads[1].reason;
+  const snapshotHead = heads[0].value,
+    tradeHead = heads[1].value;
   if (!snapshotHead || !tradeHead) throw Error('EXECUTION_COMMIT_SOURCE_MISSING');
   snapshot.id = randomUUID();
   snapshot.expectedRevision = snapshotHead.revision;
@@ -88,8 +98,14 @@ async function ready() {
   if (trade.trade.sourceSequence !== null)
     trade.trade.sourceSequence = (BigInt(trade.trade.sourceSequence) + 1n).toString();
   trade.trade.receivedAt = trade.trade.exchangeTime = now;
-  expect((await f.snapshots.publish(snapshot, startIo())).status).toBe('APPLIED');
-  expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
+  const publications = await Promise.allSettled([
+    f.snapshots.publish(snapshot, startIo()),
+    f.trades.publish(trade, startIo()),
+  ]);
+  if (publications[0].status === 'rejected') throw publications[0].reason;
+  if (publications[1].status === 'rejected') throw publications[1].reason;
+  expect(publications[0].value.status).toBe('APPLIED');
+  expect(publications[1].value.status).toBe('APPLIED');
   return {
     ...f,
     start,
@@ -366,7 +382,11 @@ const executedReaders: ExecutedBookReader[] = [];
 afterAll(async () => {
   for (const reader of executedReaders) await reader.close();
 });
-async function openExecutedBook(connectionString = startFixtureConnection()) {
+const openExecutedBook = createNativeDefaultFixturePort(
+  openActualExecutedBook,
+  startFixtureConnection,
+);
+async function openActualExecutedBook(connectionString: string) {
   const fn = (paper as unknown as Record<string, unknown>)['createPostgresPaperExecutedBookSource'];
   if (typeof fn !== 'function') throw Error('PAPER_EXECUTED_BOOK_SOURCE_MISSING');
   const reader = await (fn as (o: unknown) => Promise<ExecutedBookReader>)({
@@ -567,7 +587,11 @@ const valuationReaders: ExecutedValuationReader[] = [];
 afterAll(async () => {
   for (const reader of valuationReaders) await reader.close();
 });
-async function openExecutedValuation(connectionString = startFixtureConnection()) {
+const openExecutedValuation = createNativeDefaultFixturePort(
+  openActualExecutedValuation,
+  startFixtureConnection,
+);
+async function openActualExecutedValuation(connectionString: string) {
   const fn = (paper as unknown as Record<string, unknown>)[
     'createPostgresPaperExecutedValuationSource'
   ];
@@ -633,7 +657,8 @@ const historicalReaders: HistoricalReader[] = [];
 afterAll(async () => {
   for (const reader of historicalReaders) await reader.close();
 });
-async function openHistorical(connectionString = startFixtureConnection()) {
+const openHistorical = createNativeDefaultFixturePort(openActualHistorical, startFixtureConnection);
+async function openActualHistorical(connectionString: string) {
   const reader: HistoricalReader = await paper.createPostgresPaperHistoricalInventorySource({
     connectionString,
     environment: 'test',
@@ -1196,7 +1221,11 @@ const currentRiskPorts: paper.PaperCurrentRiskCoordinator[] = [];
 afterAll(async () => {
   for (const port of currentRiskPorts) await port.close();
 });
-async function openCurrentRisk(connectionString = startFixtureConnection()) {
+const openCurrentRisk = createNativeDefaultFixturePort(
+  openActualCurrentRisk,
+  startFixtureConnection,
+);
+async function openActualCurrentRisk(connectionString: string) {
   const port = await paper.createPostgresPaperCurrentRiskCoordinator({
     connectionString,
     environment: 'test',
@@ -1207,9 +1236,18 @@ async function openCurrentRisk(connectionString = startFixtureConnection()) {
 function currentRiskRequest(f: Awaited<ReturnType<typeof ready>>) {
   return { ...f.request, kind: 'PAPER_CURRENT_RISK_CERTIFY' as const };
 }
-async function refreshCurrentRiskEvidence(f: Awaited<ReturnType<typeof ready>>) {
-  const context = await f.runtime.context(f.c.owner, startIo()),
-    head = await f.runtime.head(f.c.owner, startIo()),
+async function refreshCurrentRiskEvidence(
+  f: Awaited<ReturnType<typeof ready>>,
+  knownTradeRevision?: string,
+) {
+  const reads = await Promise.allSettled([
+    f.runtime.context(f.c.owner, startIo()),
+    f.runtime.head(f.c.owner, startIo()),
+  ]);
+  if (reads[0].status === 'rejected') throw reads[0].reason;
+  if (reads[1].status === 'rejected') throw reads[1].reason;
+  const context = reads[0].value,
+    head = reads[1].value,
     publication: PaperRuntimePublication = {
       id: randomUUID(),
       expectedRevision: head?.revision ?? '0',
@@ -1230,7 +1268,10 @@ async function refreshCurrentRiskEvidence(f: Awaited<ReturnType<typeof ready>>) 
     };
   await f.runtime.publish(publication, startIo());
   const trade = structuredClone(f.f.p),
-    tradeHead = await f.trades.read(trade.key, startIo()),
+    tradeHead =
+      knownTradeRevision === undefined
+        ? await f.trades.read(trade.key, startIo())
+        : { revision: knownTradeRevision },
     now = Date.now();
   trade.id = randomUUID();
   trade.expectedRevision = tradeHead.revision;
@@ -1245,6 +1286,275 @@ async function refreshCurrentRiskEvidence(f: Awaited<ReturnType<typeof ready>>) 
     ).toString();
   expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
 }
+
+interface CurrentOrderRiskSourcePort {
+  capture(
+    request: unknown,
+    context: ReturnType<typeof startIo>,
+  ): Promise<{
+    kind: string;
+    target: { orderId: string; intentId: string; commandHash: string; command: unknown };
+    certificate: {
+      id: string;
+      revision: string;
+      expiresAt: number;
+      snapshot: { ordersInLastMinute: number };
+    };
+    evaluation: { result: { kind: string; reasons?: readonly string[] } };
+  }>;
+  readCurrent(
+    request: unknown,
+    context: ReturnType<typeof startIo>,
+  ): ReturnType<CurrentOrderRiskSourcePort['capture']>;
+  close(): Promise<void>;
+}
+const currentOrderRiskPorts: CurrentOrderRiskSourcePort[] = [];
+afterAll(async () => {
+  for (const p of currentOrderRiskPorts) await p.close();
+});
+async function openCurrentOrderRisk(connectionString = startFixtureConnection()) {
+  const factory = (paper as unknown as Record<string, unknown>)[
+    'createPostgresPaperCurrentOrderRiskSource'
+  ];
+  if (typeof factory !== 'function') throw Error('PAPER_CURRENT_ORDER_RISK_SOURCE_MISSING');
+  const port = await (factory as (options: unknown) => Promise<CurrentOrderRiskSourcePort>)({
+    connectionString,
+    environment: 'test',
+  });
+  currentOrderRiskPorts.push(port);
+  return port;
+}
+async function currentOrderTargetReady(replaceRules = false) {
+  const f = await ready(),
+    writer = await open();
+  await writer.execute(f.request, startIo());
+  let ruleId = f.draft.dbRuleId,
+    ruleVersion = f.draft.order.ruleVersion;
+  let replacedHeadRevision: string | undefined;
+  let replacedTradeRevision: string | undefined;
+  if (replaceRules) {
+    const p = structuredClone(f.f.s),
+      old = p.key.dbRuleId;
+    replacedHeadRevision = (await f.snapshots.read(p.key, startIo())).revision;
+    replacedTradeRevision = (await f.trades.read(f.f.p.key, startIo())).revision;
+    p.key.dbRuleId = randomUUID();
+    p.record.rules.version = 'current-order-refresh-' + randomUUID();
+    p.record.rules.effectiveAt = Date.now() - 1;
+    p.record.rules.expiresAt = Date.now() + 60000;
+    await startFixtureSql(
+      'UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1',
+      [old],
+    );
+    await startFixtureSql(
+      `INSERT INTO public.instrument_rule_version(id,"instrumentId",version,"isCurrent","effectiveAt","fetchedAt","sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",rules)
+       SELECT $1,"instrumentId",version+1,true,$2,now(),"sourceHash","priceTick","quantityStep","minQuantity","maxQuantity","minNotional",$3::jsonb FROM public.instrument_rule_version WHERE id=$4`,
+      [p.key.dbRuleId, new Date(p.record.rules.effectiveAt), JSON.stringify(p.record.rules), old],
+    );
+    // Only the next synthetic publication template changes; retained original
+    // execution/source/command bytes stay in their immutable durable rows.
+    f.f.s.key = p.key;
+    f.f.s.record = p.record;
+    f.f.p.key = structuredClone(p.key);
+    f.f.p.record = structuredClone(p.record);
+    ruleId = p.key.dbRuleId;
+    ruleVersion = p.record.rules.version;
+  }
+  const target = await f.orders.create(
+    f.binding,
+    {
+      ...f.draft,
+      key: randomUUID(),
+      dbRuleId: ruleId,
+      order: {
+        ...f.draft.order,
+        ruleVersion,
+        limitPrice: parseDecimal('12.05'),
+        size: {
+          kind: 'BASE_QUANTITY',
+          asset: f.f.s.record.instrument.baseAsset,
+          value: parseDecimal('0.2'),
+        },
+      },
+    },
+    startIo(),
+  );
+  const wire = (
+    await startFixtureSql<{ hash: string; command: string }>(
+      `SELECT encode("commandHash",'hex') hash,command FROM ctp_execution.command WHERE "tenantId"=$1 AND "intentId"=$2`,
+      [f.c.owner.tenantId, target.intentId],
+    )
+  ).rows[0]!;
+  await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrdersPerMinute: 2 });
+  await refreshValuationMark(f, f.f.s, replacedHeadRevision);
+  await refreshCurrentRiskEvidence(f, replacedTradeRevision);
+  return {
+    f,
+    target,
+    wire,
+    request: {
+      kind: 'PAPER_CURRENT_ORDER_RISK_CAPTURE',
+      source: currentRiskRequest(f),
+      target: { orderId: target.id, intentId: target.intentId, commandHash: wire.hash },
+    },
+  };
+}
+it('paper-current-order-risk: authenticates a real second CREATED intent without weakening the old reader or reserving again', async () => {
+  const { f, target, wire, request } = await currentOrderTargetReady();
+  const old = await openCurrentRisk();
+  await expect(old.certify(currentRiskRequest(f), startIo())).rejects.toThrow(/^PAPER_/u);
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    port = await openCurrentOrderRisk();
+  const source = await port.capture(request, startIo());
+  expect(source).toMatchObject({
+    kind: 'PAPER_CURRENT_ORDER_RISK_SOURCE',
+    target: {
+      orderId: target.id,
+      intentId: target.intentId,
+      commandHash: wire.hash,
+      command: JSON.parse(wire.command) as unknown,
+    },
+    certificate: { snapshot: { ordersInLastMinute: 2 } },
+    evaluation: {
+      result: {
+        kind: 'EVALUATED',
+        notional: '2.41',
+        budget: {
+          current: { instrument: '6.025', user: '6.025' },
+          projected: { instrument: '8.435', user: '8.435' },
+        },
+      },
+    },
+  });
+  expect(source).not.toHaveProperty('grant');
+  expect(source).not.toHaveProperty('permit');
+  expect(source).not.toHaveProperty('reservationId');
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  await port.close();
+  const restarted = await openCurrentOrderRisk();
+  const read = await restarted.readCurrent(request, startIo());
+  expect(read.certificate).toEqual(source.certificate);
+  expect(read.target).toEqual(source.target);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: lost nonfinancial COMMIT returns no result and explicit restart read recovers one finite certificate', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  const proxy = await registryCommitProxy(startFixtureConnection(), 'PAPER_EXECUTION_SOURCE');
+  try {
+    const port = await openCurrentOrderRisk(proxy.connectionString);
+    proxy.arm();
+    await expect(port.capture(request, startIo())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(proxy.dropped()).toBe(1);
+    await port.close();
+    const restarted = await openCurrentOrderRisk(),
+      source = await restarted.readCurrent(request, startIo());
+    expect(source.evaluation.result.kind).toBe('EVALUATED');
+    const counts = await startFixtureSql<{ n: number }>(
+      `SELECT count(*)::int n FROM ctp_paper.current_risk_certificate WHERE tenant_id=$1`,
+      [f.c.owner.tenantId],
+    );
+    expect(counts.rows[0]!.n).toBe(1);
+    expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+  } finally {
+    await proxy.close();
+  }
+});
+it('paper-current-order-risk: current controls and exact authorization cannot be bypassed by a captured target', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk();
+  await port.capture(request, startIo());
+  await startFixturePause(f.c.owner.tenantId, 'PAUSED');
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    paused = await port.capture(request, startIo());
+  expect(paused.evaluation.result).toMatchObject({ kind: 'REJECTED', reasons: ['RISK_PAUSED'] });
+  await expect(
+    port.capture(
+      {
+        ...request,
+        source: {
+          ...request.source,
+          authorization: { ...request.source.authorization, permissionEpoch: '999' },
+        },
+      },
+      startIo(),
+    ),
+  ).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: an additional unselected draft invalidates the narrow complete capture', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk();
+  await port.capture(request, startIo());
+  await f.orders.create(f.binding, { ...f.draft, key: randomUUID() }, startIo());
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(port.capture(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  await expect(port.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: the executed original cannot masquerade as an untouched new target', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk(),
+    before = await startFixtureEffects(f.c.owner.tenantId);
+  await expect(
+    port.capture(
+      {
+        ...request,
+        target: {
+          orderId: f.request.admission.orderId,
+          intentId: f.request.admission.intentId,
+          commandHash: f.request.admission.commandHash,
+        },
+      },
+      startIo(),
+    ),
+  ).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: a genuine current rule replacement admits a new v2 target over immutable v1 execution', async () => {
+  const { f, target, request } = await currentOrderTargetReady(true),
+    port = await openCurrentOrderRisk();
+  const before = await startFixtureEffects(f.c.owner.tenantId),
+    source = await port.capture(request, startIo());
+  expect(source.target).toMatchObject({
+    orderId: target.id,
+    dbRuleId: f.f.s.key.dbRuleId,
+    command: { ruleVersion: f.f.s.record.rules.version },
+  });
+  expect(source.evaluation.result.kind).toBe('EVALUATED');
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: concurrent captures publish one finite certificate without reserving either time', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    first = await openCurrentOrderRisk(),
+    second = await openCurrentOrderRisk();
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  const [a, b] = await Promise.all([
+    first.capture(request, startIo()),
+    second.capture(request, startIo()),
+  ]);
+  expect(a.certificate).toEqual(b.certificate);
+  expect(a.target).toEqual(b.target);
+  const count = await startFixtureSql<{ n: number }>(
+    'SELECT count(*)::int n FROM ctp_paper.current_risk_certificate WHERE tenant_id=$1',
+    [f.c.owner.tenantId],
+  );
+  expect(count.rows[0]!.n).toBe(1);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
+it('paper-current-order-risk: retired target rules invalidate capture and restart read instead of replaying stale authority', async () => {
+  const { f, request } = await currentOrderTargetReady(),
+    port = await openCurrentOrderRisk();
+  await port.capture(request, startIo());
+  const before = await startFixtureEffects(f.c.owner.tenantId);
+  await startFixtureSql('UPDATE public.instrument_rule_version SET "isCurrent"=false WHERE id=$1', [
+    f.f.s.key.dbRuleId,
+  ]);
+  await expect(port.capture(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  await port.close();
+  const restarted = await openCurrentOrderRisk();
+  await expect(restarted.readCurrent(request, startIo())).rejects.toThrow(/^PAPER_/u);
+  expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
+});
 async function publishCurrentRiskPrice(f: Awaited<ReturnType<typeof ready>>, price: string) {
   const p = structuredClone(f.f.s),
     head = await f.snapshots.read(p.key, startIo()),

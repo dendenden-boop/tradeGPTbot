@@ -1,3 +1,10 @@
+// BEGIN PAPER CURRENT ORDER RISK IMPORT
+import {
+  verifyPaperCurrentOrderRiskStorage,
+  verifyPaperCurrentOrderRiskUpgrade,
+  verifyCompiledCurrentOrderRisk,
+} from './paper-current-order-risk-upgrade.mjs';
+// END PAPER CURRENT ORDER RISK IMPORT
 // BEGIN PAPER CURRENT RISK IMPORT
 // BEGIN PAPER CURRENT RISK MARKET IMPORT
 import {
@@ -226,6 +233,9 @@ const expectedMigrations = [
   '202611140001_paper_current_risk',
   // BEGIN PAPER CURRENT RISK MARKET MIGRATION
   '202611140002_paper_current_risk_market_coherence',
+  // BEGIN PAPER CURRENT ORDER RISK MIGRATION
+  '202611150001_paper_current_order_risk',
+  // END PAPER CURRENT ORDER RISK MIGRATION
   // END PAPER CURRENT RISK MARKET MIGRATION
   // END PAPER CURRENT RISK MIGRATION
   // END PAPER HISTORICAL INVENTORY MIGRATION
@@ -2665,6 +2675,11 @@ async function runDatabaseProof() {
       ownership: 'REQUIRE_NON_BYPASS',
     });
     // END PAPER CURRENT RISK MARKET OWNER_PROOF
+    // BEGIN PAPER CURRENT ORDER RISK OWNER_PROOF
+    await verifyPaperCurrentOrderRiskStorage(executionCommitDb, {
+      ownership: 'REQUIRE_NON_BYPASS',
+    });
+    // END PAPER CURRENT ORDER RISK OWNER_PROOF
     // END PAPER CURRENT RISK OWNER_PROOF
     await executionCommitDb.end();
     // END PAPER HISTORICAL INVENTORY OWNER_PROOF
@@ -2692,7 +2707,9 @@ async function runDatabaseProof() {
     // BEGIN PAPER EXECUTED BOOK OWNER_COUNT
     // BEGIN PAPER HISTORICAL INVENTORY OWNER_COUNT
     // BEGIN PAPER CURRENT RISK OWNER_COUNT
-    assert.equal(executionCommitOwner.numPassedTests, 41);
+    // BEGIN PAPER CURRENT ORDER RISK OWNER_COUNT
+    assert.equal(executionCommitOwner.numPassedTests, 49);
+    // END PAPER CURRENT ORDER RISK OWNER_COUNT
     // END PAPER CURRENT RISK OWNER_COUNT
     // END PAPER HISTORICAL INVENTORY OWNER_COUNT
     // END PAPER EXECUTED BOOK OWNER_COUNT
@@ -4688,7 +4705,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   assert.equal(executedValuationSeed.numFailedTests, 0);
   // BEGIN PAPER HISTORICAL INVENTORY PRE67_PENDING
   // BEGIN PAPER CURRENT RISK PRE67_COUNT
-  assert.equal(executedValuationSeed.numPendingTests, 40);
+  // BEGIN PAPER CURRENT ORDER RISK PRE67_COUNT
+  assert.equal(executedValuationSeed.numPendingTests, 48);
+  // END PAPER CURRENT ORDER RISK PRE67_COUNT
   // END PAPER CURRENT RISK PRE67_COUNT
   // END PAPER HISTORICAL INVENTORY PRE67_PENDING
   const beforeExecutedValuation = await capturePaperExecutionStartUpgrade(paperUpgrade);
@@ -4758,6 +4777,23 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   );
   assert.equal(currentRiskMarketCompiled.status, 'PASS');
   // END PAPER CURRENT RISK MARKET UPGRADE
+  // BEGIN PAPER CURRENT ORDER RISK UPGRADE
+  const beforeCurrentOrderRisk = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[70]),
+    path.join(paperMigrations, expectedMigrations[70]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperCurrentOrderRiskUpgrade(paperUpgrade, beforeCurrentOrderRisk);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperCurrentOrderRiskUpgrade(paperUpgrade, beforeCurrentOrderRisk);
+  const currentOrderRiskCompiled = await verifyCompiledCurrentOrderRisk(
+    paperUpgrade,
+    paperAdmissionEnvironment(databases[4]),
+  );
+  assert.equal(currentOrderRiskCompiled.status, 'PASS');
+  // END PAPER CURRENT ORDER RISK UPGRADE
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -5309,6 +5345,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     empty: true,
   });
   // END PAPER CURRENT RISK MARKET RESET_UPGRADE
+  // BEGIN PAPER CURRENT ORDER RISK RESET_ADMISSIONRESET
+  await verifyPaperCurrentOrderRiskStorage(admissionReset, {
+    ownership: 'STORAGE_ONLY',
+    empty: true,
+  });
+  // END PAPER CURRENT ORDER RISK RESET_ADMISSIONRESET
   // END PAPER CURRENT RISK RESET_UPGRADE
   // END PAPER HISTORICAL INVENTORY RESET_UPGRADE
   // END PAPER EXECUTED VALUATION RESET_ADMISSIONRESET
@@ -5365,6 +5407,12 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     empty: true,
   });
   // END PAPER CURRENT RISK MARKET RESET_POPULATED
+  // BEGIN PAPER CURRENT ORDER RISK RESET_STARTEDAFTERRESET
+  await verifyPaperCurrentOrderRiskStorage(startedAfterReset, {
+    ownership: 'STORAGE_ONLY',
+    empty: true,
+  });
+  // END PAPER CURRENT ORDER RISK RESET_STARTEDAFTERRESET
   // END PAPER HISTORICAL INVENTORY RESET_POPULATED
   // END PAPER EXECUTED VALUATION RESET_STARTEDAFTERRESET
   for (const table of ['execution_commit', 'execution_liquidity'])
@@ -5527,6 +5575,11 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperCurrentRiskMarketResetValidated: true,
     paperCurrentRiskMarketCompiled: currentRiskMarketCompiled,
     // END PAPER CURRENT RISK MARKET FLAGS
+    // BEGIN PAPER CURRENT ORDER RISK FLAGS
+    paperCurrentOrderRiskUpgradePreserved: true,
+    paperCurrentOrderRiskResetValidated: true,
+    paperCurrentOrderRiskCompiled: currentOrderRiskCompiled,
+    // END PAPER CURRENT ORDER RISK FLAGS
     // END PAPER CURRENT RISK FLAGS
     // END PAPER HISTORICAL INVENTORY FLAGS
     // END PAPER EXECUTED VALUATION REPORT
@@ -5594,6 +5647,9 @@ async function resetDatabaseProof(fresh) {
   // BEGIN PAPER CURRENT RISK MARKET RESET_FRESH
   await verifyPaperCurrentRiskMarketStorage(reset, { ownership: 'STORAGE_ONLY', empty: true });
   // END PAPER CURRENT RISK MARKET RESET_FRESH
+  // BEGIN PAPER CURRENT ORDER RISK RESET_RESET
+  await verifyPaperCurrentOrderRiskStorage(reset, { ownership: 'STORAGE_ONLY', empty: true });
+  // END PAPER CURRENT ORDER RISK RESET_RESET
   // END PAPER CURRENT RISK RESET_FRESH
   // END PAPER HISTORICAL INVENTORY RESET_FRESH
   // END PAPER EXECUTED VALUATION RESET_RESET
