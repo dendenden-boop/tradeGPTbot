@@ -6,6 +6,8 @@ import { createHash } from 'node:crypto';
 import { workspace } from './docker-test-utils.mjs';
 import { remainingNativeBudget } from './native-proof-window.mjs';
 import { runOwnedWriterProcesses } from './writer-owner-processes.mjs';
+import { requireWriterMigrationOwner } from './writer-owner-identity.mjs';
+export { requireWriterMigrationOwner };
 import {
   writerOwnerPartitions,
   mergeWriterOwnerReports,
@@ -118,15 +120,16 @@ export async function prepareWriterOwnerClone({
       await verify(client);
       const identity = (
         await client.query(`SELECT d.oid::text oid,d.datdba::text owner_oid,r.rolname owner_name,
-        NOT(r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole OR r.rolreplication) restricted,
+        r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolreplication,r.rolcreaterole,r.rolcanlogin,r.rolinherit,
         (SELECT jsonb_agg(jsonb_build_object('grantor',a.grantor::text,'grantee',a.grantee::text,'privilege',a.privilege_type,'grantable',a.is_grantable)
          ORDER BY a.grantor,a.grantee,a.privilege_type,a.is_grantable)
          FROM aclexplode(coalesce(d.datacl,acldefault('d',d.datdba))) a) acl
         FROM pg_database d JOIN pg_roles r ON r.oid=d.datdba WHERE d.datname=current_database()`)
       ).rows;
       assert.equal(identity.length, 1);
-      assert.equal(identity[0].owner_name, ownerRole);
-      assert.equal(identity[0].restricted, true);
+      // The existing migration-only owner has CREATEROLE for published DDL.
+      // Runtime logins retain their original NOCREATEROLE/non-bypass profile.
+      const ownerProfile = requireWriterMigrationOwner(identity[0], ownerRole);
       const migrations = (
         await client.query(
           'SELECT migration_name,checksum FROM public._prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name',
@@ -141,6 +144,7 @@ export async function prepareWriterOwnerClone({
         migrationDigest,
         nonBypassOwner: true,
         ownerOid: identity[0].owner_oid,
+        ownerProfile,
         dbAclDigest: createHash('sha256').update(JSON.stringify(identity[0].acl)).digest('hex'),
       });
     } finally {

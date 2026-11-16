@@ -6,6 +6,7 @@ import path from 'node:path';
 import { workspace } from './docker-test-utils.mjs';
 import { writerOwnerCases } from './writer-owner-manifest.mjs';
 import { writerOwnerInputs, writerOwnerInputHash } from './writer-owner-inputs.mjs';
+import { requireWriterMigrationOwner } from './writer-owner-identity.mjs';
 export { writerOwnerCases };
 export const writerOwnerPartitions = Object.freeze([
   Object.freeze({
@@ -79,7 +80,12 @@ function requireExecution(execution, ownership, window) {
     ownership[0].oid === ownership[1].oid
   )
     fail();
-  for (const p of ownership)
+  for (const p of ownership) {
+    assert.deepEqual(
+      p.ownerProfile,
+      requireWriterMigrationOwner(p.ownerProfile, ownership[0].database),
+    );
+    assert.equal(p.ownerProfile.owner_oid, p.ownerOid);
     if (
       !/^[1-9][0-9]*$/u.test(p.oid) ||
       !/^[1-9][0-9]*$/u.test(p.ownerOid) ||
@@ -89,6 +95,7 @@ function requireExecution(execution, ownership, window) {
       !/^[a-f0-9]{64}$/u.test(p.migrationDigest)
     )
       fail();
+  }
   if (ownership[0].migrationDigest !== ownership[1].migrationDigest) fail();
   if (
     ownership[0].ownerOid !== ownership[1].ownerOid ||

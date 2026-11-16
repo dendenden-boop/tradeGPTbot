@@ -62,5 +62,17 @@ export function writerOwnerEvidence(window) {
       dbAclDigest: 'd'.repeat(64),
     },
   ];
+  for (const p of ownership)
+    p.ownerProfile = {
+      owner_name: 'ctp_p2_owner_deadbeef1234',
+      owner_oid: '77',
+      rolsuper: false,
+      rolbypassrls: false,
+      rolcreatedb: false,
+      rolreplication: false,
+      rolcreaterole: true,
+      rolcanlogin: true,
+      rolinherit: true,
+    };
   return { raw, merged: mergeWriterOwnerReports(raw, execution, ownership, window) };
 }

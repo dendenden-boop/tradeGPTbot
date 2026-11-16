@@ -17,6 +17,13 @@ databases must prove all71 matching migration checksums, the same restricted
 owner and database ACL, distinct database OIDs, and the existing non-bypass
 storage/function checks. No privilege is added to a runtime login.
 
+The migration-only owner's existing profile is LOGIN/INHERIT/CREATEROLE with
+NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOREPLICATION. Runtime logins retain their
+NOCREATEROLE profile. Preflight and the aggregate gate validate actual server
+flags, not an assumption that migration and runtime roles share privileges.
+The original stricter NOCREATEROLE clone check reproduced RED in both CI runs
+on `4ad1c8b`; its correction changes no role or grant.
+
 One90-second budget starts before the new clone/storage preflight. Both child
 startups and physical closure consume that same monotonic budget; neither child
 receives a new allowance. At most two top-level test processes run. Failure or

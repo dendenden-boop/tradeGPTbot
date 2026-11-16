@@ -68,6 +68,18 @@ function fixture() {
       dbAclDigest: 'd'.repeat(64),
     },
   ];
+  for (const p of ownership)
+    p.ownerProfile = {
+      owner_name: 'ctp_p2_owner_deadbeef1234',
+      owner_oid: '77',
+      rolsuper: false,
+      rolbypassrls: false,
+      rolcreatedb: false,
+      rolreplication: false,
+      rolcreaterole: true,
+      rolcanlogin: true,
+      rolinherit: true,
+    };
   return {
     reports,
     execution,
@@ -150,3 +162,15 @@ it('rejects altered raw bytes, merged case results or physical execution proof a
   stale.provenance.execution.elapsedMs = 90001;
   expect(() => verify(stale, raw, window)).toThrow('WRITER_OWNER_EVIDENCE_INCOMPLETE');
 });
+it.each(['missing owner profile', 'SUPERUSER profile', 'changed DDL profile'])(
+  'rejects missing or altered actual owner flags: %s',
+  (defect) => {
+    const f = fixture();
+    if (defect === 'missing owner profile') delete f.ownership[1].ownerProfile;
+    if (defect === 'SUPERUSER profile') f.ownership[1].ownerProfile.rolsuper = true;
+    if (defect === 'changed DDL profile') f.ownership[1].ownerProfile.rolcreaterole = false;
+    expect(() =>
+      required('mergeWriterOwnerReports')(f.raw(), f.execution, f.ownership, window),
+    ).toThrow('WRITER_OWNER_EVIDENCE_INCOMPLETE');
+  },
+);

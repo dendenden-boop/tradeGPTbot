@@ -1,5 +1,35 @@
 # PHASE 13 verification
 
+## Existing migration-owner profile correction — 16 November 2026
+
+Checkpoint `4ad1c8bb77420c9731db962bb1b551cfe9f8d0a7` passes all13 frozen
+local commands on1,109 files:6,659 unit/2,610 Paper/41 HTTP, twelve clean
+deployments and audit0. All6,617 preceding unit identities are preserved;
+the42 additions exercise test orchestration. Both Ubuntu/Windows matrices,
+CodeQL, Auth, Docker and primary1,528-case PostgreSQL proofs pass in
+[source Platform43878208447](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43878208447)
+and [PR Platform43878220839](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43878220839).
+Both workflows nevertheless remain **RED**: the new clone preflight incorrectly
+requires NOCREATEROLE from the existing LOGIN/CREATEROLE migration-only owner.
+The20/29 owner partitions never start. Both six-ZIP sets and four native raw
+logs are retained; these workflows are not acceptance.
+
+Thirteen additional contract tests first reproduce RED, then pass. The corrected
+preflight reads actual PostgreSQL owner flags and requires the existing exact
+profile: LOGIN/INHERIT/CREATEROLE, NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOREPLICATION.
+The aggregate gate requires those actual flags in both ownership records.
+No role, grant, runtime login, migration, assertion or deadline is changed.
+
+A fresh native PostgreSQL diagnostic applies all71 migrations through Prisma.
+With the exact existing CI owner, the original predicate returns false; the
+corrected identity, clone, six storage guards, matching owner/migration/ACL
+digests and distinct OIDs pass. The cluster is physically stopped. Earlier
+NOLOGIN diagnostic failures and a diagnostic recording error remain failures,
+not acceptance. Complete corrected-head regression and source/PR/main CI remain
+required. **HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14** remains in force;
+main `e356367` and accepted pointer `116c9b0` are unchanged. Atomic postexecution
+reserve, financial PAPER/LIVE dispatch and positive native credit remain disabled.
+
 ## Restricted-owner acceptance correction pending — 16 November 2026
 
 Exact `2837fc2bddfa0de7367f113fc885dfa0e8446a2b` passes all13 frozen local commands
