@@ -1,5 +1,43 @@
 # PHASE 13 verification
 
+## Restricted-owner acceptance correction pending — 16 November 2026
+
+Exact `2837fc2bddfa0de7367f113fc885dfa0e8446a2b` passes all13 frozen local commands
+on1,096 inputs:6,617 unit/2,610 Paper/41 HTTP, twelve clean deployments and audit0.
+[Source Platform43831793966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831793966)
+and [CodeQL43831793997](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831793997)
+are GREEN; six ZIP digests/windows, two native logs and45 report copies verify,
+including1,528 PostgreSQL/24 owners/49 writer cases and71 upgrade/reset/restart
+proofs. The source native aggregate is329.063s under480s.
+
+[PR Platform43831804861](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831804861)
+remains **RED** on the unchanged90-second writer-owner deadline. Its main
+PostgreSQL job, both matrices, Auth, smoke and
+[CodeQL43831804975](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831804975)
+pass. Forty-seven writer cases complete in83.984s before the timeout; those same
+cases take58.341s in source. Both six-ZIP sets and all four native logs are
+retained. No blind rerun is acceptance.
+
+The [restricted-owner correction](owner-writer-acceptance.md) retains the complete
+sequential native49 proof and gives its additional20/29 owner selections two
+isolated PostgreSQL databases under one shared90s budget, including the new
+provisioning. Actual raw reports, exact case/input manifests and physical-close
+proofs are mandatory. Existing owner assertions, native480s/shared1020s limits,
+runtime permissions and all71 migrations remain unchanged.
+
+Raw-evidence and physical-process contracts reproduce RED, then pass; the actual
+gate first reproduces accepting missing partition evidence, then rejects it.
+The820 scripts tests pass before the final budget-anchor/input-fingerprint guards.
+Actual native PostgreSQL applies all71 migrations through Prisma and verifies
+two distinct database OIDs, identical migration/ACL digests, the same restricted
+owner and both storage proofs; the cluster is stopped. Complete corrected-head
+regression and source/PR/main CI are still pending. Earlier Windows native
+diagnostics remain failures; clock/freshness guards are not relaxed.
+
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Main stays `e356367`, and
+the last accepted-main pointer remains `116c9b0`. No atomic postexecution reserve,
+financial PAPER/LIVE dispatch or positive native collateral credit is enabled.
+
 ## PR77 preliminary CI: aggregate deadline HOLD — 16 November 2026
 
 Candidate `503539348d750be2af084b5ec893ebb0248d5996` passes all13 frozen local

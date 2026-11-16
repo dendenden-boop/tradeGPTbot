@@ -8,6 +8,11 @@ import {
 } from './native-proof-window.mjs';
 import { requireDatabaseProofReport } from './integration-proof.mjs';
 import { ownerReports, requireNativeTestArtifacts } from './native-proof-artifacts.mjs';
+import {
+  writerOwnerPartitions,
+  requireWriterOwnerProof,
+  verifyWriterOwnerInputs,
+} from './writer-owner-partitions.mjs';
 
 // GitHub supplies these results. Missing/skipped/cancelled evidence is never PASS.
 export function requireRealServicesSuccess(results) {
@@ -54,6 +59,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           await load('owners', `${name}-owner-tests`),
         ]),
       ),
+    );
+    await verifyWriterOwnerInputs();
+    requireWriterOwnerProof(
+      ownerTests['paper-execution-commit'],
+      await Promise.all(
+        writerOwnerPartitions.map((partition) =>
+          readFile(path.resolve('test-results/native-gate/owners', partition.report + '.json')),
+        ),
+      ),
+      window,
     );
     requireNativeTestArtifacts(
       ownerTests,

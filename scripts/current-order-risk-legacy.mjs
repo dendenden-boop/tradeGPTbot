@@ -1,5 +1,6 @@
 // Test-only exact accepted116 reconstruction. No runtime authority or waiver.
 import { createHash } from 'node:crypto';
+import { beforeWriterOwnerPartitions } from './writer-owner-partitions-legacy.mjs';
 export const currentOrderRiskReview = {
   'scripts/test-database.mjs': {
     predecessor: 'c2b5c3068b20e5ad4dbb30380b320787fafff313921fca851863e165ec2c490f',
@@ -167,6 +168,11 @@ export function beforeCurrentOrderRiskReview(
   source,
   code = 'PAPER_CURRENT_ORDER_RISK_REVIEW_REQUIRED',
 ) {
+  try {
+    source = beforeWriterOwnerPartitions(file, source);
+  } catch {
+    throw Error(code);
+  }
   const r = currentOrderRiskReview[file];
   if (!r || !source.includes('PAPER CURRENT ORDER RISK')) return source;
   const hash = (s) => createHash('sha256').update(s).digest('hex');
