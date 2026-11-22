@@ -1240,14 +1240,20 @@ async function refreshCurrentRiskEvidence(
   f: Awaited<ReturnType<typeof ready>>,
   knownTradeRevision?: string,
 ) {
+  const trade = structuredClone(f.f.p);
   const reads = await Promise.allSettled([
     f.runtime.context(f.c.owner, startIo()),
     f.runtime.head(f.c.owner, startIo()),
+    knownTradeRevision === undefined
+      ? f.trades.read(trade.key, startIo())
+      : Promise.resolve({ revision: knownTradeRevision }),
   ]);
   if (reads[0].status === 'rejected') throw reads[0].reason;
   if (reads[1].status === 'rejected') throw reads[1].reason;
+  if (reads[2].status === 'rejected') throw reads[2].reason;
   const context = reads[0].value,
     head = reads[1].value,
+    tradeHead = reads[2].value,
     publication: PaperRuntimePublication = {
       id: randomUUID(),
       expectedRevision: head?.revision ?? '0',
@@ -1266,13 +1272,7 @@ async function refreshCurrentRiskEvidence(
         ) as PaperRuntimePublication['observation']['health'],
       },
     };
-  await f.runtime.publish(publication, startIo());
-  const trade = structuredClone(f.f.p),
-    tradeHead =
-      knownTradeRevision === undefined
-        ? await f.trades.read(trade.key, startIo())
-        : { revision: knownTradeRevision },
-    now = Date.now();
+  const now = Date.now();
   trade.id = randomUUID();
   trade.expectedRevision = tradeHead.revision;
   trade.timestamp = now;
@@ -1284,7 +1284,13 @@ async function refreshCurrentRiskEvidence(
       BigInt(tradeHead.revision) +
       1n
     ).toString();
-  expect((await f.trades.publish(trade, startIo())).status).toBe('APPLIED');
+  const publications = await Promise.allSettled([
+    f.runtime.publish(publication, startIo()),
+    f.trades.publish(trade, startIo()),
+  ]);
+  if (publications[0].status === 'rejected') throw publications[0].reason;
+  if (publications[1].status === 'rejected') throw publications[1].reason;
+  expect(publications[1].value.status).toBe('APPLIED');
 }
 
 interface CurrentOrderRiskSourcePort {
@@ -1385,8 +1391,12 @@ async function currentOrderTargetReady(replaceRules = false) {
     )
   ).rows[0]!;
   await startFixturePolicy(f.c.owner.tenantId, 'USER', { maxOrdersPerMinute: 2 });
-  await refreshValuationMark(f, f.f.s, replacedHeadRevision);
-  await refreshCurrentRiskEvidence(f, replacedTradeRevision);
+  const evidence = await Promise.allSettled([
+    refreshValuationMark(f, f.f.s, replacedHeadRevision),
+    refreshCurrentRiskEvidence(f, replacedTradeRevision),
+  ]);
+  if (evidence[0].status === 'rejected') throw evidence[0].reason;
+  if (evidence[1].status === 'rejected') throw evidence[1].reason;
   return {
     f,
     target,

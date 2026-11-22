@@ -1,5 +1,242 @@
 # PHASE 13 verification
 
+## Owner correction code checkpoint verified — 16 November 2026
+
+Code `8189fc25872dca924beb6f0e6e42a984ab25bb76` passes all13 frozen local
+commands on1,112 unchanged inputs:6,675 unit/842 script contracts/2,610 Paper/
+41 HTTP, twelve clean deployments and audit0. All6,617 preceding unit identities
+are preserved; the58 additions cover test orchestration. Financial runtime,
+all49 native case bodies, published migrations1–71, workflows, grants and the
+90/480/1020s budgets are unchanged.
+
+| Proof                                                               | Source                                                                                | PR                                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Platform GREEN                                                      | [43888665810](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888665810) | [43888683001](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888683001) |
+| CodeQL GREEN                                                        | [43888666009](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888666009) | [43888683167](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43888683167) |
+| Primary PostgreSQL aggregate /480s                                  | 473.847s                                                                              | 320.046s                                                                              |
+| Full owner budget /90s, including clone and physical group drainage | 61.433s                                                                               | 56.698s                                                                               |
+| Admission69-case owner /90s                                         | 71.272s                                                                               | 64.729s                                                                               |
+
+Each run proves1,528 PostgreSQL cases across49 files, all24 owner suites and all49
+writer cases. Both raw20/29 reports and their labelled derived owner view verify
+against actual assertions, input hashes, owner flags, ACLs and the run window.
+All12 ZIP digests/windows, four native raw logs and94 report copies verify;
+those copies include four new raw partition reports and two derived owner views.
+Populated71 upgrade/redeploy/reset, compiled restart,32 actors, all four secondary
+ledgers, three secondary resets and physical cleanup pass. The source primary
+proof has only6.153s spare under480s; this is not a soak or timing guarantee.
+
+GitHub API confirms19 GREEN checks, matching tested merge tree, error-free source
+and PR CodeQL analyses, zero open alerts, strict five app-bound required contexts,
+mandatory PR, administrator enforcement and no force push, deletion or bypass.
+This is **GREEN SOURCE/PR CODE REVIEW, NOT OWN-MAIN ACCEPTANCE**. A later docs-only
+head requires fresh complete CI; any authorized merge requires independent new
+main CI. At this review snapshot main `e356367` remains HOLD and the accepted
+pointer stays `116c9b0`. PHASE13 remains IN_PROGRESS / NOT READY FOR PHASE14.
+Atomic postexecution reserve, financial PAPER/LIVE dispatch and positive native
+collateral credit remain disabled. Historical failures below remain failures.
+
+## Kernel error diagnostic correction — 16 November 2026
+
+Checkpoint `98148696c05c0157a244f9d3916bf344e48abb96` preserves all1,112 frozen
+inputs and passes twelve of thirteen local commands:6,675 unit/2,610 Paper/41
+HTTP, build/runtime, twelve clean deployments and audit0. Lint alone is RED:
+`preserve-caught-error` requires a cause on two new kernel-probe error wrappers.
+[Source Platform43886238540](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43886238540)
+and [PR Platform43886248706](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43886248706)
+are also RED on that rule. Both CodeQL workflows pass, but native, owner, Auth
+and Docker stages are skipped and are not acceptance. All four available matrix
+ZIP sets and four matrix raw logs are retained; six-artifact/full-native
+verification correctly refuses this incomplete run.
+
+The correction preserves the caught kernel error as `cause` on both wrappers;
+group handling, ESRCH requirement and original deadline remain unchanged.
+Targeted ESLint and all ten existing group/process contracts pass. At this
+checkpoint the corrected full local/source/PR/main verification remains required.
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; financial PAPER/LIVE
+dispatch and positive native collateral credit remain disabled.
+
+## Owned process-group drainage correction pending — 16 November 2026
+
+Checkpoint `ae2c5f451438e96fe7225379ff7d1dc6948dc5e1` passes all13 frozen
+local commands on1,111 files:6,672 unit/2,610 Paper/41 HTTP, twelve clean
+deployments and audit0. All6,617 preceding unit identities are retained.
+[Source Platform43882070703](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882070703)
+and [CodeQL43882070674](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882070674)
+are fully GREEN. Six ZIP digests/windows, two native raw logs and47 report
+copies verify, including both raw20/29 owner partitions, their labelled derived
+49-case view, all1,528 PostgreSQL cases/24 owners, and71 upgrade/reset/restart
+proofs. The primary native aggregate is304.646s; the complete owner budget,
+including clone and physical process closure, is49.877s under90s.
+
+[PR Platform43882081913](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882081913)
+is **RED** despite both matrices, Auth, Docker, primary1,528-case PostgreSQL
+and [CodeQL43882082089](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43882082089)
+passing. The new owner orchestration rejects `WRITER_OWNER_PROCESS_TREE_ACTIVE`
+when the direct child has closed but its POSIX group still exists. Both complete
+six-ZIP sets and four native logs are preserved. This is not own-main acceptance.
+
+Three additional contracts reproduce RED, then pass with the existing seven
+physical-process/descendant tests. On successful direct child close, orchestration
+now awaits ESRCH for the owned group within the original remaining90s budget.
+A persistent group reaches the same deadline and is killed; abort or unexpected
+kernel probe errors fail closed. No group is ignored and no fresh budget starts.
+Complete corrected-head regression and independent source/PR/main CI remain
+pending. **HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**; main `e356367`
+and accepted pointer `116c9b0` are unchanged. No atomic postexecution reservation,
+financial PAPER/LIVE dispatch or positive native collateral credit is enabled.
+
+## Existing migration-owner profile correction — 16 November 2026
+
+Checkpoint `4ad1c8bb77420c9731db962bb1b551cfe9f8d0a7` passes all13 frozen
+local commands on1,109 files:6,659 unit/2,610 Paper/41 HTTP, twelve clean
+deployments and audit0. All6,617 preceding unit identities are preserved;
+the42 additions exercise test orchestration. Both Ubuntu/Windows matrices,
+CodeQL, Auth, Docker and primary1,528-case PostgreSQL proofs pass in
+[source Platform43878208447](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43878208447)
+and [PR Platform43878220839](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43878220839).
+Both workflows nevertheless remain **RED**: the new clone preflight incorrectly
+requires NOCREATEROLE from the existing LOGIN/CREATEROLE migration-only owner.
+The20/29 owner partitions never start. Both six-ZIP sets and four native raw
+logs are retained; these workflows are not acceptance.
+
+Thirteen additional contract tests first reproduce RED, then pass. The corrected
+preflight reads actual PostgreSQL owner flags and requires the existing exact
+profile: LOGIN/INHERIT/CREATEROLE, NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOREPLICATION.
+The aggregate gate requires those actual flags in both ownership records.
+No role, grant, runtime login, migration, assertion or deadline is changed.
+
+A fresh native PostgreSQL diagnostic applies all71 migrations through Prisma.
+With the exact existing CI owner, the original predicate returns false; the
+corrected identity, clone, six storage guards, matching owner/migration/ACL
+digests and distinct OIDs pass. The cluster is physically stopped. Earlier
+NOLOGIN diagnostic failures and a diagnostic recording error remain failures,
+not acceptance. Complete corrected-head regression and source/PR/main CI remain
+required. **HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14** remains in force;
+main `e356367` and accepted pointer `116c9b0` are unchanged. Atomic postexecution
+reserve, financial PAPER/LIVE dispatch and positive native credit remain disabled.
+
+## Restricted-owner acceptance correction pending — 16 November 2026
+
+Exact `2837fc2bddfa0de7367f113fc885dfa0e8446a2b` passes all13 frozen local commands
+on1,096 inputs:6,617 unit/2,610 Paper/41 HTTP, twelve clean deployments and audit0.
+[Source Platform43831793966](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831793966)
+and [CodeQL43831793997](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831793997)
+are GREEN; six ZIP digests/windows, two native logs and45 report copies verify,
+including1,528 PostgreSQL/24 owners/49 writer cases and71 upgrade/reset/restart
+proofs. The source native aggregate is329.063s under480s.
+
+[PR Platform43831804861](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831804861)
+remains **RED** on the unchanged90-second writer-owner deadline. Its main
+PostgreSQL job, both matrices, Auth, smoke and
+[CodeQL43831804975](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43831804975)
+pass. Forty-seven writer cases complete in83.984s before the timeout; those same
+cases take58.341s in source. Both six-ZIP sets and all four native logs are
+retained. No blind rerun is acceptance.
+
+The [restricted-owner correction](owner-writer-acceptance.md) retains the complete
+sequential native49 proof and gives its additional20/29 owner selections two
+isolated PostgreSQL databases under one shared90s budget, including the new
+provisioning. Actual raw reports, exact case/input manifests and physical-close
+proofs are mandatory. Existing owner assertions, native480s/shared1020s limits,
+runtime permissions and all71 migrations remain unchanged.
+
+Raw-evidence and physical-process contracts reproduce RED, then pass; the actual
+gate first reproduces accepting missing partition evidence, then rejects it.
+The820 scripts tests pass before the final budget-anchor/input-fingerprint guards.
+Actual native PostgreSQL applies all71 migrations through Prisma and verifies
+two distinct database OIDs, identical migration/ACL digests, the same restricted
+owner and both storage proofs; the cluster is stopped. Complete corrected-head
+regression and source/PR/main CI are still pending. Earlier Windows native
+diagnostics remain failures; clock/freshness guards are not relaxed.
+
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Main stays `e356367`, and
+the last accepted-main pointer remains `116c9b0`. No atomic postexecution reserve,
+financial PAPER/LIVE dispatch or positive native collateral credit is enabled.
+
+## PR77 preliminary CI: aggregate deadline HOLD — 16 November 2026
+
+Candidate `503539348d750be2af084b5ec893ebb0248d5996` passes all13 frozen local
+commands on1,095 inputs:6,607 unit/2,610 Paper/41 HTTP, twelve clean deployments
+and audit0. Independent [source Platform43827687134](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827687134)
+and [source CodeQL43827687184](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827687184)
+are GREEN; six ZIP digests/windows, two raw native logs and45 report copies verify.
+Source verifies1,528 PostgreSQL,24 owners,49 writer/capture cases, all71 migrations,
+upgrade/redeploy/reset/compiled restart and secondary cleanup. Native aggregate
+is475.308s under480s; this small margin is not a performance guarantee.
+
+[PR Platform43827732376](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827732376)
+is **RED** despite all1,528 actual PostgreSQL case results passing: physical
+closure of the final `roles` cohort exceeds the existing480-second aggregate
+deadline. The final gate correctly fails. All24 owners pass separately, including
+the49-case writer suite in67.582s under90s. Both matrices, Auth, smoke and
+[PR CodeQL43827732344](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43827732344)
+are GREEN. All six PR ZIP digests/windows and both raw native logs are preserved.
+No run was blindly repeated or relabelled GREEN; main remains HOLD at `e356367`.
+
+The first Windows48/49 diagnostic and expired focused setup remain historical
+failures. After the local build/clean workload settles, the unchanged isolated
+catch-up test passes in12.252s under its original15s cap, with the same5ms diagnostic
+delivery delay; its owned cluster is stopped. This single-case result does not
+claim full native Linux acceptance.
+
+Ten additional fixture contracts reproduce serialization of current runtime/trade
+reads, their publications and target mark/runtime preparation, then pass after
+independent genuine operations are grouped and fully drained on every failure.
+Actual current reads, captured revision semantics, lossless sequence, exact target
+scope and per-operation deadlines remain unchanged. All49 native case bodies
+remain exact; no financial runtime, migration, privilege, assertion, timeout or
+workflow is weakened. All20 targeted refresh/publication/integrity tests pass.
+The new correction still requires full regression and independent source/PR CI.
+
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Atomic postexecution
+evaluate-and-reserve has not started. Financial PAPER/LIVE dispatch and positive
+native collateral credit remain disabled.
+
+## PR76 merged; own-main acceptance HOLD — 16 November 2026
+
+PR76 was merged by ordinary protected squash, exclusively for authorized source
+`d8ad3dee301523912ab5742dab2ec5ab7c0da57e`. New main is
+`e3563675bad1df50b5cf90a4ca5b6c4c957f6d2b`, with the identical approved tree and
+parent `116c9b0615779a84c5c354fbb381c4ce1a8815bd`. No protection bypass was used.
+
+Independent [main Platform43821952590](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43821952590)
+is **RED**: the writer/capture restricted-owner suite exceeded its existing
+90-second command deadline. The final Real services/Docker gate correctly failed.
+Ubuntu, Windows, the primary PostgreSQL/cohort job, Auth, Docker smoke and
+[main CodeQL43821952737](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43821952737)
+passed. All six artifact ZIP digests, producer windows and exact SHA bindings,
+plus both original native job logs, are retained. The complete 24-owner proof
+and own-main acceptance are **not** claimed; the accepted-main pointer stays at
+`116c9b0615779a84c5c354fbb381c4ce1a8815bd`.
+
+Four new tests first reproduce serialized independent snapshot/trade/runtime
+fixture publications: only the first authority starts while its result is pending.
+The test-only setup now starts all three genuine publications together and drains
+every outcome before admission, including failure paths. The same four tests then
+pass; all 15 targeted fixture tests pass, including exact preservation of all
+49 native case bodies and rejection of altered publication lanes. Existing funding, draft/bootstrap,
+context and admission ordering, per-operation IO deadlines and historical source
+integrity checks remain enforced. Full PostgreSQL and regression/CI evidence for
+this correction is still pending. Runtime and published migrations1–71 are
+unchanged; the 90/480/1020-second limits remain unchanged.
+
+Candidate `b84b2a1a37a56a0ca6374f2a6fbe79d6f777cc54` completes all13 frozen local
+commands:12 PASS; unit has one expected review failure (6,606 PASS/1 FAIL) because
+the overlap guard still pins the previous fixture. The guard correctly blocks
+unreviewed input. After reviewing the publication-only change, its fingerprint
+is renewed; historical scheduler checks restore the exact previous fingerprint,
+with all old hashes and tamper checks retained. All774 scripts tests then pass;
+a complete corrected run is still required. The Windows native diagnostic passes48/49 cases; the bounded catch-up
+case exceeds its unchanged15-second test limit. A separate focused diagnostic
+fails during setup with `PAPER_ADMISSION_EXPIRED`, so neither diagnostic is
+reported GREEN. Both owned clusters are physically stopped. Linux/native owner,
+upgrade/reset/compiled proofs and independent CI remain mandatory.
+
+**HOLD / PHASE13 IN_PROGRESS / NOT READY FOR PHASE14.** Atomic postexecution
+evaluate-and-reserve has not started. Financial PAPER/LIVE dispatch and positive
+native collateral credit remain disabled.
+
 ## Verified current durable-order Risk source — 16 November 2026
 
 Exact code **764d773eaa0a3fa01d9d77e220ade37caed66eea** passes all13 frozen local commands on1,093 unchanged files:6,602 unit/2,610 Paper/41 HTTP,twelve clean deployments and audits0. All6,546 previous unit identities remain, with only the explicit migration-count display update70→71; all41 original native case bodies remain exact. The56 additional unit contracts cover the server source, exact history/storage review and fixture lifecycle/drainage. All previous RED/incomplete checkpoints below remain historical failures, not acceptance.

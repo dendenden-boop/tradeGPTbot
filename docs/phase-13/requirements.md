@@ -1,5 +1,12 @@
 # PHASE 13 requirements
 
+The [restricted-owner acceptance correction](owner-writer-acceptance.md) is
+CI-only scope. It must preserve all49 native case bodies, the sequential native
+proof, published migrations1–71 and90/480/1020-second budgets; both actual raw
+owner selections and unchanged owner/ACL evidence are mandatory. Until complete
+source/PR/main CI is GREEN, main remains HOLD and atomic postexecution
+evaluate-and-reserve must not start.
+
 ## Verified stored-target requirements checkpoint
 
 Code764d773 completes the bounded supported [stored-target source requirements](current-order-risk-source.md). Complete source/PR CI verifies6,602 unit per OS,1,528 PostgreSQL,24 owners,49 writer/capture cases, current-rule replacement/retirement, concurrency, restart/lost COMMIT, unchanged financial rows and migration71 upgrade/redeploy/reset/compiled restart. All13 frozen local commands pass. Published1–70, original capture guards, financial writers, privileges and deadlines remain preserved. This reporting HEAD still needs independent full CI and protected publication. Atomic postexecution reservation/Portfolio commitments and wider execution remain outstanding; **PHASE13 IN_PROGRESS / NOT READY FOR PHASE14**, financial PAPER/LIVE dispatch and positive native credit disabled.

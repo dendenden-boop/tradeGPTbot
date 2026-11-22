@@ -1,5 +1,6 @@
 // Private exact review of one redundant fixture registration; never runtime authority.
 import { createHash } from 'node:crypto';
+import { beforeExecutionPublicationFingerprint } from './execution-publication-legacy.mjs';
 export const admissionConfigurationReview = {
   'packages/database/test/paper-admission.integration.test.ts': {
     predecessor: '9e27194b1d8bf053090f6621098a663d03aa06c55b074133d15618a3ea566c87',
@@ -59,6 +60,7 @@ export const admissionConfigurationReview = {
   },
 };
 export function beforeAdmissionConfiguration(file, source) {
+  source = beforeExecutionPublicationFingerprint(file, source);
   const review = admissionConfigurationReview[file];
   if (!review) return source;
   const active = review.patches.some((p) =>

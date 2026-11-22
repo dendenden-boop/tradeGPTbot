@@ -311,8 +311,6 @@ export async function readyExecutionStart(
   f.p.trade.quantity = parseDecimal('100');
   for (const levels of [f.s.book.bids, f.s.book.asks])
     for (const level of levels) level.quantity = parseDecimal('100');
-  await ports.snapshots.publish(f.s, startIo());
-  await ports.trades.publish(f.p, startIo());
   const publication: PaperRuntimePublication = {
     id: randomUUID(),
     expectedRevision: head?.revision ?? '0',
@@ -331,7 +329,13 @@ export async function readyExecutionStart(
       ) as PaperRuntimePublication['observation']['health'],
     },
   };
-  await ports.runtime.publish(publication, startIo());
+  // Independent public market and runtime evidence all settle before admission.
+  // Each authority performs its real current transaction with unchanged IO.
+  await runIndependentFixtureSetup([
+    () => ports.snapshots.publish(f.s, startIo()),
+    () => ports.trades.publish(f.p, startIo()),
+    () => ports.runtime.publish(publication, startIo()),
+  ]);
   const identity = (
     await admin.query<{ hash: string; permission: string; session: string }>(
       'SELECT encode(cmd."commandHash",\'hex\') hash,a."permissionEpoch"::text permission,u."sessionEpoch"::text session FROM ctp_execution.command cmd JOIN public.exchange_account a ON a.id=$3 AND a."tenantId"=cmd."tenantId" JOIN public."user" u ON u.id=a."tenantId" WHERE cmd."tenantId"=$1 AND cmd."intentId"=$2',

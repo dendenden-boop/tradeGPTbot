@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
+import { beforeExecutionPublications } from './execution-publication-legacy.mjs';
 
 const fixture = fs
   .readFileSync(
@@ -20,7 +21,7 @@ const hook = '  await beforeEvidence?.({ orders: ports.orders, binding, draft })
 it('started-source setup adds only an optional pre-evidence hook to the accepted START helper', () => {
   expect(fixture.split(signature)).toHaveLength(2);
   expect(fixture.split(hook)).toHaveLength(2);
-  const original = fixture
+  const original = beforeExecutionPublications(fixture)
     .replace(signature, 'export async function readyExecutionStart() {')
     .replace(hook, '');
   expect(createHash('sha256').update(original).digest('hex')).toBe(

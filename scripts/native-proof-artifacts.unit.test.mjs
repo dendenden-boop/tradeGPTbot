@@ -8,6 +8,8 @@ import { expect, it } from 'vitest';
 import { ownerReports, requireNativeTestArtifacts } from './native-proof-artifacts.mjs';
 import { createNativeWindow, remainingNativeBudget } from './native-proof-window.mjs';
 import { run } from './docker-test-utils.mjs';
+import { writerOwnerEvidence } from './fixtures/writer-owner-evidence.mjs';
+import { writerOwnerPartitions } from './writer-owner-partitions.mjs';
 import { discoverDatabaseFiles, planDatabaseCohorts } from './database-cohorts.mjs';
 import { planRoleScopedCohorts } from './role-scoped-cohorts.mjs';
 import { scopedMainManifestHash, scopedMainDatabaseName } from './native-main-scopes.mjs';
@@ -150,7 +152,7 @@ it('matches every artifact owner deadline to its actual unchanged runner invocat
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      node.expression.text === 'run' &&
+      ['run', 'runWriterOwnerSuite'].includes(node.expression.text) &&
       node.arguments[1] &&
       ts.isArrayLiteralExpression(node.arguments[1]) &&
       node.arguments[2] &&
@@ -285,6 +287,12 @@ it('actual gate accepts only complete artifacts from both isolated projects', as
           },
         },
       );
+    // Actual gate must require both retained raw partitions, never just a merged label.
+    expect(execute().status).toBe(1);
+    const writer = writerOwnerEvidence(window);
+    await store('owners', 'paper-execution-commit-owner-tests', writer.merged);
+    for (const [index, partition] of writerOwnerPartitions.entries())
+      await store('owners', partition.report, JSON.parse(writer.raw[index].toString()));
     expect(execute().status).toBe(0);
     await store('cohorts', 'database', { status: 'PARTIAL', isolatedReset: 'DELEGATED' });
     expect(execute().status).toBe(1);

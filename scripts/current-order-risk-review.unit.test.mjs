@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
+import { beforeWriterOwnerPartitions } from './writer-owner-partitions-legacy.mjs';
 import {
   beforeCurrentOrderRiskReview,
   currentOrderRiskReview,
@@ -9,7 +10,10 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 it.each(Object.entries(currentOrderRiskReview))(
   'reconstructs all accepted116 harness bytes below the exact stored-order additions: %s',
   (file, r) => {
-    const text = readFileSync(file, 'utf8').replaceAll('\r\n', '\n');
+    const text = beforeWriterOwnerPartitions(
+      file,
+      readFileSync(file, 'utf8').replaceAll('\r\n', '\n'),
+    );
     expect(hash(text)).toBe(r.current);
     const before = beforeCurrentOrderRiskReview(file, text);
     expect(hash(before)).toBe(r.predecessor);
