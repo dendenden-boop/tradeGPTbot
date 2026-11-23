@@ -66,7 +66,7 @@ export async function verifyExecutionStartParallelFiles(root = workspace) {
     [executionStart, '2c47c4bfe6bb7fa1774488b7020bb78af6b2780b2ff6d9e14d870c76ca1e0298'],
     [
       'packages/database/test/fixtures/paper-execution-start.ts',
-      'f8d9319268b5259fc421226a4090bed95cb6a79e7963db22bcc3bff172e47a3f',
+      '240bc9b24c30b0d70a8548aa42e3cd0273352b25e233b02fc778d2b1bb0dda2c',
     ],
     [
       'packages/database/test/fixtures/native-default-port.ts',

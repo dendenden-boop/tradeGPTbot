@@ -59,7 +59,7 @@ it('reuses only the reviewed default fixture constructors and retains real indep
   // Current source concurrency/restart cases retain separately created ports.
   expect(declaration('openCurrentOrderRisk')).toBeDefined();
 });
-async function actualReady(f) {
+async function actualReady(f, waitForClock = async () => 200) {
   // Execute the actual test-only ready body with controlled public transports.
   // No production import, backend injection or financial authority is involved.
   const body = declaration('ready').getText(ast);
@@ -76,7 +76,7 @@ async function actualReady(f) {
   );
   return module.bind(
     async () => f,
-    async () => 200,
+    waitForClock,
     () => ({ signal: new AbortController().signal, deadline: 2500 }),
     randomUUID,
     expect,
@@ -98,6 +98,8 @@ function fixture() {
     c: { model: { latencyMs: 100, latencyJitterMs: 0 } },
     request: {},
     journal: { start: vi.fn(async () => ({ startedAt: 100 })) },
+    snapshotReceipt: { status: 'APPLIED', revision: '71' },
+    tradeReceipt: { status: 'APPLIED', revision: '93' },
     f: {
       s: { key: {}, book: { sourceSequence: '9007199254740995' }, ticker: {} },
       p: { key: {}, trade: { sourceSequence: '9007199254740995' } },
@@ -112,15 +114,69 @@ function fixture() {
     },
   };
 }
-it.each(['heads', 'publications'])(
-  'drains the other actual public %s lane after failure and never reaches a financial writer',
-  async (stage) => {
+it('opens the actual default writer before preparing the first execution for a current-order case', async () => {
+  const error = Error('PREPARATION_REACHED');
+  const calls = [];
+  const compiled = ts.transpileModule(
+    'export function bind(open,ready){' +
+      declaration('currentOrderTargetReady').getText(ast) +
+      ';return currentOrderTargetReady;}',
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } },
+  ).outputText;
+  const { bind } = await import(
+    'data:text/javascript;base64,' + Buffer.from(compiled).toString('base64')
+  );
+  const run = bind(
+    async () => {
+      calls.push('open');
+    },
+    async () => {
+      calls.push('prepare');
+      throw error;
+    },
+  );
+  await expect(run()).rejects.toBe(error);
+  expect(calls).toEqual(['open', 'prepare']);
+});
+it('relays both initial receipt revisions and observes the clock only after START settles', async () => {
+  const f = fixture(),
+    start = deferred(),
+    observe = vi.fn(async () => 221);
+  f.journal.start.mockReturnValue(start.promise);
+  const ready = await actualReady(f, observe);
+  const result = ready();
+  const drain = result.catch((error) => error);
+  try {
+    await flush();
+    expect(f.journal.start).toHaveBeenCalledTimes(1);
+    expect(f.snapshots.read).not.toHaveBeenCalled();
+    expect(f.trades.read).not.toHaveBeenCalled();
+    expect(observe).not.toHaveBeenCalled();
+    expect(f.snapshots.publish).not.toHaveBeenCalled();
+    start.resolve({ startedAt: 101 });
+    await result;
+    expect(observe).toHaveBeenCalledWith(201, expect.objectContaining({ deadline: 2500 }));
+    expect(f.snapshots.publish.mock.calls[0][0]).toMatchObject({
+      timestamp: 221,
+      expectedRevision: '71',
+    });
+    expect(f.trades.publish.mock.calls[0][0]).toMatchObject({
+      timestamp: 221,
+      expectedRevision: '93',
+    });
+  } finally {
+    start.resolve({ startedAt: 101 });
+    await drain;
+  }
+});
+it.each(['snapshots', 'trades'])(
+  'drains both actual publications when %s fails and never reaches a financial writer',
+  async (failed) => {
     const f = fixture(),
       a = deferred(),
-      b = deferred(),
-      name = stage === 'heads' ? 'read' : 'publish';
-    f.snapshots[name].mockImplementation(() => a.promise);
-    f.trades[name].mockImplementation(() => b.promise);
+      b = deferred();
+    f[failed].publish.mockImplementation(() => a.promise);
+    f[failed === 'snapshots' ? 'trades' : 'snapshots'].publish.mockImplementation(() => b.promise);
     const ready = await actualReady(f),
       financial = vi.fn();
     let settled = false;
@@ -136,19 +192,15 @@ it.each(['heads', 'publications'])(
       },
     );
     await flush();
-    expect(f.snapshots[name]).toHaveBeenCalledTimes(1);
-    expect(f.trades[name]).toHaveBeenCalledTimes(1);
+    expect(f.snapshots.publish).toHaveBeenCalledTimes(1);
+    expect(f.trades.publish).toHaveBeenCalledTimes(1);
     const error = Error('public evidence failed');
     a.reject(error);
     await flush();
     expect(settled).toBe(false);
-    b.resolve(stage === 'heads' ? { revision: '1' } : { status: 'APPLIED' });
+    b.resolve({ status: 'APPLIED' });
     expect(await result).toBe(error);
     expect(financial).not.toHaveBeenCalled();
-    if (stage === 'heads') {
-      expect(f.snapshots.publish).not.toHaveBeenCalled();
-      expect(f.trades.publish).not.toHaveBeenCalled();
-    }
   },
 );
 it('waits for both genuine APPLIED receipts and preserves lossless sequence and existing IO deadlines', async () => {
@@ -170,7 +222,7 @@ it('waits for both genuine APPLIED receipts and preserves lossless sequence and 
   b.resolve({ status: 'APPLIED' });
   expect((await result).request.kind).toBe('PAPER_EXECUTION_COMMIT');
   for (const port of [f.snapshots, f.trades]) {
-    expect(port.read).toHaveBeenCalledTimes(1);
+    expect(port.read).not.toHaveBeenCalled();
     expect(port.publish).toHaveBeenCalledTimes(1);
     expect(port.publish.mock.calls[0][1].deadline).toBe(2500);
   }

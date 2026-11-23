@@ -1,12 +1,13 @@
 # Current durable-order Risk source
 
-Verified code checkpoint: `764d773eaa0a3fa01d9d77e220ade37caed66eea`. All13 local commands and complete [source Platform43815054605](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43815054605) / [PR Platform43815060638](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43815060638), both CodeQL workflows and all19 checks pass. Evidence verifies6,602 unit per OS,1,528 PostgreSQL,24 owners,49 writer/capture cases, migration71 populated upgrade/redeploy/reset/compiled restart,twelve clean deployments and audit0. Twelve ZIP digests/windows, four raw native logs and prior case identities verify. This reporting HEAD still requires independent full CI and protected publication; main116c9b0 is unchanged. The increment issues no financial authority; full PHASE13 acceptance remains outstanding.
+Accepted baseline for the next change: main `b7ec33cd2c2e742cbe004dc07d27969f52c39805` after PR78. Its own-main CI passed 6,675 unit and 41 HTTP tests per OS, 1,528 PostgreSQL tests, 24 owner suites, and 49 writer/capture cases. Migration 71 upgrade/redeploy, reset, compiled restart, all six artifact sets, and audit zero were verified. [Platform 45060423500](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45060423500), [CodeQL 45060423501](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45060423501).
+
+Historical source checkpoint: `764d773eaa0a3fa01d9d77e220ade37caed66eea`. All 13 local commands, both CodeQL workflows and all 19 source/PR checks passed. The reports covered 6,602 unit tests per OS, 1,528 PostgreSQL tests, 24 owners, 49 writer/capture cases, migration 71 populated upgrade/redeploy/reset/compiled restart, twelve clean deployments and audit zero. The twelve ZIP digests and run windows, four raw native logs and prior case identities were verified. Protected publication and independent main CI were pending at this checkpoint. [Source Platform 43815054605](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43815054605), [PR Platform 43815060638](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/43815060638).
 
 Status: PHASE 13 candidate, **IN_PROGRESS / NOT READY FOR PHASE 14**.
-Starting accepted main: `116c9b0615779a84c5c354fbb381c4ce1a8815bd` (PR75).
-This increment supplies server-owned capture/evaluation for a second untouched
-durable intent over the accepted single-execution book. It does not implement
-atomic postexecution admission, reserve funds, issue a Risk grant or dispatch.
+The source supplies server-owned capture/evaluation for a second untouched
+durable intent over the accepted single-execution book. Atomic postexecution
+admission, Risk grants and dispatch remain outside this reader's authority.
 
 ## Request and authentication
 
@@ -59,6 +60,66 @@ certificate and calculation. `EVALUATED` means arithmetic/policy evaluation only
 Existing position, residual order exposure, reservations and holds are counted
 once; fee coverage remains separate. A future atomic writer must independently
 repeat current capture/evaluation and reserve in its own bounded transaction.
+
+The server reader includes an immutable `commitmentBasis` when the result is
+`EVALUATED`. It binds the selected order, intent and command hash to the exact
+executed Portfolio book ID, revision and canonical state hash, and to the
+current certificate ID, hash and evaluation deadline. The reader recomputes
+spendable quote from the certified Portfolio balance and existing unreflected
+holds, then checks both sides of the proposed debit against Risk. The proposal
+describes one unreflected `RESERVED` hold. Event and hold identity, idempotency,
+revision compare-and-set and all durable effects remain the responsibility of
+the future transaction. A rejected evaluation has `commitmentBasis: null`.
+Capture remains read-only for holds, balances, positions and the monetary ledger.
+
+The fixed capture query calls the authenticated RPC once. PostgreSQL uses that
+same result under the same transaction locks to derive the quote debit from the
+durable command, current tick and lot, and certified fee model. It computes the
+fee ceiling per lot and subtracts each unreflected quote hold once from the
+executed Portfolio cash. Capture and reconciliation both require this result
+to match the TypeScript asset, debit, prior availability and remaining cash
+before COMMIT. A missing result or a discrepancy fails closed. PostgreSQL uses
+`numeric` and the wire uses decimal strings.
+
+PostgreSQL also marks the filled quantity at the current price and values any
+active residual at its original price bound and tick. The supported graph has
+one executed instrument and pristine siblings, so the same exposure contributes
+to the instrument, asset, account, and tenant budgets. The residual contributes
+one open order, with at most one existing potential position for the instrument.
+The query applies both captured policies to the proposed notional, the four
+projected exposures, the remaining cash floor, and the open-order, position, and
+minute budgets. It adds the durable target to the minute budget only if the
+target falls outside the already captured bucket. A successful capture requires
+agreement with the TypeScript budget and affirmative SQL limits before COMMIT.
+
+For the same capture, PostgreSQL independently checks the current executable
+price bounds, quote notional, identity valuation, leverage, price deviation,
+spread and participation-adjusted liquidity against both policies. It compares
+the sealed current UTC loss baseline with both realized-loss, total-loss and
+drawdown limits. Equality at a positive loss limit blocks admission. A successful
+TypeScript result also requires both SQL verdicts and exact agreement on
+liquidity before COMMIT. The query uses the source's authenticated data and
+accepts no caller-provided amounts or market facts.
+
+PostgreSQL also checks the runtime publication and trading controls from that
+certificate. A successful capture requires the exact target owner, matching
+configuration seals, permission and user-session epochs, account revision
+and all nine healthy dependencies. Probe timestamps must fit the sealed
+runtime interval and the certificate lease. The controls require one
+RUNNING global kill switch, no stopped tenant kill switch or active pause,
+and closed global, tenant and stored circuit breakers.
+
+An independent order check matches the persisted target's instrument and
+rule IDs to the captured market key and validates the exact rule revision,
+trading status and validity interval. It checks the supported order type,
+time in force, base asset, type-specific quantity bounds, lot and limit
+price tick without rounding the command. The synthetic capability must
+belong to the same runtime publication and certificate lifetime. Both
+verdicts must be affirmative before an evaluated capture can commit.
+
+These checks remain part of read-side capture. The protected writer still needs
+its own current Risk evaluation, authenticated book successor and atomic
+durable effects.
 
 `capture` may persist only the existing nonfinancial loss checkpoints/certificate.
 Exact valid source replay preserves certificate identity, revision and clocks.

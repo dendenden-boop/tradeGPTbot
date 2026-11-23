@@ -1,9 +1,17 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { immutable, newOrderSchema, timestampSchema } from '@ctp/exchange-core';
+import {
+  decimalCompare,
+  decimalSubtract,
+  immutable,
+  newOrderSchema,
+  parseDecimal,
+  timestampSchema,
+} from '@ctp/exchange-core';
 import { canonical } from '@ctp/portfolio';
 import { paperOwnerSchema } from './configuration-domain.js';
 import { openPaperAdmissionDatabase } from './admission-database.js';
+import { currentOrderRiskCaptureQuery } from './current-order-risk-query.js';
 import { lookupPaperExecutionCommitRequest } from './postgres-execution-commit.js';
 import {
   decodePaperCurrentRiskContents,
@@ -22,6 +30,34 @@ import type { PaperFundingIo } from './funding-domain.js';
 const digest = z.string().regex(/^[a-f0-9]{64}$/u),
   uuid = z.uuid().transform((s) => s.toLowerCase()),
   selection = z.strictObject({ orderId: uuid, intentId: uuid, commandHash: digest }),
+  cashProofSchema = z.strictObject({
+    asset: z.string(),
+    amount: z.string(),
+    available: z.string(),
+    remaining: z.string(),
+  }),
+  budgetProofSchema = z.strictObject({
+    notional: z.string(),
+    currentExposure: z.string(),
+    projectedExposure: z.string(),
+    openOrders: z.int().nonnegative(),
+    potentialPositions: z.int().nonnegative(),
+    ordersInLastMinute: z.int().positive(),
+    withinLimits: z.literal(true),
+  }),
+  policyProofSchema = z.strictObject({
+    liquidity: z.string(),
+    marketAllowed: z.literal(true),
+    lossAllowed: z.literal(true),
+  }),
+  operationalProofSchema = z.strictObject({
+    runtimeReady: z.literal(true),
+    tradingReady: z.literal(true),
+  }),
+  orderProofSchema = z.strictObject({
+    rulesAllowed: z.literal(true),
+    capabilityReady: z.literal(true),
+  }),
   requestSchema = z.strictObject({
     kind: z.literal('PAPER_CURRENT_ORDER_RISK_CAPTURE'),
     source: z.unknown(),
@@ -68,6 +104,14 @@ export interface PaperCurrentOrderRiskSource {
   readonly target: Readonly<z.infer<typeof targetSchema>>;
   readonly certificate: PaperCurrentRiskCertificate;
   readonly evaluation: PaperCurrentRiskEvaluationCalculation;
+  readonly commitmentBasis: Readonly<{
+    kind: 'PAPER_CURRENT_ORDER_COMMITMENT_BASIS';
+    target: PaperCurrentOrderRiskRequest['target'];
+    book: Readonly<{ id: string; revision: string; stateHash: string }>;
+    certificate: Readonly<{ id: string; hash: string; validUntil: number }>;
+    hold: Readonly<{ asset: string; amount: string; status: 'RESERVED'; reflected: false }>;
+    spendable: Readonly<{ before: string; after: string }>;
+  }> | null;
 }
 export interface PaperCurrentOrderRiskReader {
   capture(
@@ -88,6 +132,63 @@ function fail(): never {
   throw Error('PAPER_CURRENT_ORDER_RISK_EVIDENCE');
 }
 const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
+
+/** Internal content check for the already decoded current book and evaluation. */
+export function describeCurrentPaperCommitment(
+  target: PaperCurrentOrderRiskRequest['target'],
+  account: PaperCurrentRiskCertificate['inventory']['accounts'][number],
+  certificate: PaperCurrentRiskCertificate,
+  evaluation: PaperCurrentRiskEvaluationCalculation,
+): PaperCurrentOrderRiskSource['commitmentBasis'] {
+  if (evaluation.result.kind !== 'EVALUATED') return null;
+
+  const { state } = account;
+  const [debit] = evaluation.result.debits;
+  const balance = state.balances.find((b) => b.asset === certificate.snapshot.availableAsset);
+  if (
+    state.status !== 'RECONCILED' ||
+    state.holds.some((hold) => hold.status === 'UNKNOWN') ||
+    !debit ||
+    evaluation.result.debits.length !== 1 ||
+    !balance ||
+    balance.available === null ||
+    debit.asset !== balance.asset
+  )
+    fail();
+
+  const zero = parseDecimal('0');
+  const before = state.holds.reduce(
+    (spendable, hold) =>
+      hold.asset === balance.asset && !hold.reflected
+        ? decimalSubtract(spendable, parseDecimal(hold.amount))
+        : spendable,
+    parseDecimal(balance.available),
+  );
+  const amount = parseDecimal(debit.amount);
+  const after = decimalSubtract(before, amount);
+  if (
+    decimalCompare(amount, zero) <= 0 ||
+    decimalCompare(after, zero) < 0 ||
+    before !== certificate.snapshot.availableAmount ||
+    before !== debit.available ||
+    after !== debit.remaining
+  )
+    fail();
+
+  return {
+    kind: 'PAPER_CURRENT_ORDER_COMMITMENT_BASIS',
+    target,
+    book: {
+      id: account.bookId,
+      revision: account.revision,
+      stateHash: createHash('sha256').update(canonical(state)).digest('hex'),
+    },
+    certificate: { id: certificate.id, hash: certificate.hash, validUntil: evaluation.validUntil },
+    hold: { asset: debit.asset, amount, status: 'RESERVED', reflected: false },
+    spendable: { before, after },
+  };
+}
+
 function lookup(raw: unknown): PaperCurrentOrderRiskRequest {
   try {
     validatePaperCurrentRiskJson(raw);
@@ -115,12 +216,25 @@ export async function createPostgresPaperCurrentOrderRiskSource(
         request.source.admission.binding.tenantId,
         io,
         async (sql) => {
-          const rows = await sql.query<{ result: unknown }>(
-            'SELECT ctp_paper.reconcile_admission($1::jsonb) AS result',
-            [canonical({ ...request, kind: 'PAPER_CURRENT_ORDER_RISK_' + op })],
-          );
+          const rows = await sql.query<{
+            result: unknown;
+            cashProof: unknown;
+            budgetProof: unknown;
+            policyProof: unknown;
+            operationalProof: unknown;
+            orderProof: unknown;
+          }>(currentOrderRiskCaptureQuery, [
+            canonical({ ...request, kind: 'PAPER_CURRENT_ORDER_RISK_' + op }),
+          ]);
           if (rows.rows.length !== 1) fail();
-          const rawReply = rows.rows[0]!.result;
+          const {
+            result: rawReply,
+            cashProof,
+            budgetProof,
+            policyProof,
+            operationalProof,
+            orderProof,
+          } = rows.rows[0]!;
           validatePaperCurrentRiskJson(rawReply);
           const p = packetSchema.parse(rawReply),
             now = Date.now();
@@ -185,6 +299,41 @@ export async function createPostgresPaperCurrentOrderRiskSource(
             },
             t.createdAt,
           );
+          const commitmentBasis = describeCurrentPaperCommitment(
+            request.target,
+            account,
+            certificate,
+            evaluation,
+          );
+          if (evaluation.result.kind === 'EVALUATED') {
+            if (!commitmentBasis) fail();
+            const proof = cashProofSchema.parse(cashProof);
+            const limits = budgetProofSchema.parse(budgetProof);
+            const marketAndLoss = policyProofSchema.parse(policyProof);
+            operationalProofSchema.parse(operationalProof);
+            if (!orderProofSchema.safeParse(orderProof).success)
+              throw Error('PAPER_ADMISSION_EVIDENCE');
+            const budget = evaluation.result.budget;
+            const frequency =
+              certificate.snapshot.ordersInLastMinute +
+              (t.createdAt < certificate.createdAt - 60000 ? 1 : 0);
+            if (
+              proof.asset !== commitmentBasis.hold.asset ||
+              proof.amount !== commitmentBasis.hold.amount ||
+              proof.available !== commitmentBasis.spendable.before ||
+              proof.remaining !== commitmentBasis.spendable.after ||
+              limits.notional !== evaluation.result.notional ||
+              Object.values(budget.current).some((value) => value !== limits.currentExposure) ||
+              Object.values(budget.projected).some((value) => value !== limits.projectedExposure) ||
+              limits.openOrders !== budget.orders.current ||
+              limits.openOrders + 1 !== budget.orders.projected ||
+              limits.potentialPositions !== budget.potentialPositions.current ||
+              budget.potentialPositions.projected !== 1 ||
+              frequency !== limits.ordersInLastMinute ||
+              marketAndLoss.liquidity !== certificate.snapshot.market.liquidityNotional
+            )
+              fail();
+          }
           return {
             kind: 'CAPTURED' as const,
             value: immutable({
@@ -192,6 +341,7 @@ export async function createPostgresPaperCurrentOrderRiskSource(
               target: t,
               certificate,
               evaluation,
+              commitmentBasis,
             }),
           };
         },

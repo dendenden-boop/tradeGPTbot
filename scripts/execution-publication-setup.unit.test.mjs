@@ -10,7 +10,35 @@ import {
 
 const source = fs.readFileSync('packages/database/test/fixtures/paper-execution-start.ts', 'utf8');
 const begin = source.indexOf('  const now = Date.now();');
-const end = source.indexOf('  const identity = (', begin);
+const end = source.indexOf('  const approvalInput = {', begin);
+it('uses the genuine applied publication revisions for successor CAS without rereading after approval', () => {
+  const native = fs.readFileSync(
+    'packages/database/test/paper-execution-commit.integration.test.ts',
+    'utf8',
+  );
+  const ready = native.slice(
+    native.indexOf('async function ready()'),
+    native.indexOf("\nit('paper-execution-commit:"),
+  );
+  const publication = source.slice(begin, end);
+  expect(publication).toContain('const [snapshotReceipt, tradeReceipt]');
+  expect(publication).toContain("snapshotReceipt.status !== 'APPLIED'");
+  expect(publication).toContain("tradeReceipt.status !== 'APPLIED'");
+  expect(ready).toContain('snapshot.expectedRevision = f.snapshotReceipt.revision;');
+  expect(ready).toContain('trade.expectedRevision = f.tradeReceipt.revision;');
+  expect(ready).not.toMatch(/\.(snapshots|trades)\.read\(/u);
+  expect(ready).toContain('f.journal.start(f.request, startIo())');
+  expect(ready).toContain('start.startedAt + f.c.model.latencyMs + f.c.model.latencyJitterMs');
+});
+it('reads the already-created order identity after setup and before starting the evidence clock', () => {
+  const setup = source.indexOf(
+    '  await beforeEvidence?.({ orders: ports.orders, binding, draft });',
+  );
+  const identity = source.indexOf('  const identity = (');
+  expect(setup).toBeGreaterThanOrEqual(0);
+  expect(identity).toBeGreaterThan(setup);
+  expect(identity).toBeLessThan(begin);
+});
 it('preserves the exact accepted fixture below the publication-only change and all 49 original native bodies', () => {
   const hash = (text) => createHash('sha256').update(text).digest('hex');
   expect(hash(beforeExecutionPublications(source.replaceAll('\r\n', '\n')))).toBe(
@@ -144,3 +172,18 @@ it.each(['success', 'snapshot failure', 'trade failure', 'runtime failure'])(
     }
   },
 );
+it.each([
+  ['snapshots', 'RESYNC_REQUIRED'],
+  ['trades', 'DUPLICATE'],
+])('rejects %s evidence whose initial publication is %s before admission', async (lane, status) => {
+  const ports = Object.fromEntries(
+    ['snapshots', 'trades', 'runtime'].map((name) => [
+      name,
+      { publish: vi.fn(async () => ({ status: name === lane ? status : 'APPLIED' })) },
+    ]),
+  );
+  await expect(actualPublications(ports)).rejects.toThrow(
+    'EXECUTION_START_MARKET_PUBLICATION_NOT_APPLIED',
+  );
+  for (const { publish } of Object.values(ports)) expect(publish).toHaveBeenCalledTimes(1);
+});

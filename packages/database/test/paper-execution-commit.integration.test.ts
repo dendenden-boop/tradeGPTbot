@@ -14,6 +14,7 @@ import { paperRuntimeDependencies, type PaperRuntimePublication } from '@ctp/pap
 import { registryCommitProxy } from './fixtures/registry-commit-proxy.js';
 import { waitForFixtureClock } from './fixtures/preview-clock.js';
 import { createNativeDefaultFixturePort } from './fixtures/native-default-port.js';
+import { verifyPaperCurrentOrderBudgetSql } from './fixtures/paper-current-order-budget-proof.js';
 import { verifyPaperExecutionCommitStorage } from '../../../scripts/paper-execution-commit-upgrade.mjs';
 import { verifyPaperExecutedValuationStorage } from '../../../scripts/paper-executed-valuation-upgrade.mjs';
 import {
@@ -50,6 +51,7 @@ interface Port {
   close(): Promise<void>;
 }
 const ports: Port[] = [];
+beforeAll(verifyPaperCurrentOrderBudgetSql);
 afterAll(async () => {
   for (const port of ports) await port.close();
   await closeStartFixture();
@@ -66,33 +68,24 @@ async function openActual(connectionString: string) {
   return port;
 }
 async function ready() {
-  const f = await readyExecutionStart(),
-    start = await f.journal.start(f.request, startIo());
+  const f = await readyExecutionStart();
+  const snapshot = structuredClone(f.f.s),
+    trade = structuredClone(f.f.p);
+  const start = await f.journal.start(f.request, startIo());
   const now = await waitForFixtureClock(
     start.startedAt + f.c.model.latencyMs + f.c.model.latencyJitterMs,
     startIo(),
   );
-  const snapshot = structuredClone(f.f.s),
-    trade = structuredClone(f.f.p);
-  // Independent public reads/publications drain before the financial writer.
-  // Actual heads, native clocks, receipts and original IO deadlines remain.
-  const heads = await Promise.allSettled([
-    f.snapshots.read(snapshot.key, startIo()),
-    f.trades.read(trade.key, startIo()),
-  ]);
-  if (heads[0].status === 'rejected') throw heads[0].reason;
-  if (heads[1].status === 'rejected') throw heads[1].reason;
-  const snapshotHead = heads[0].value,
-    tradeHead = heads[1].value;
-  if (!snapshotHead || !tradeHead) throw Error('EXECUTION_COMMIT_SOURCE_MISSING');
   snapshot.id = randomUUID();
-  snapshot.expectedRevision = snapshotHead.revision;
+  // Genuine APPLIED receipts from setup are the expected heads. A concurrent
+  // update still hits the publisher's CAS guard.
+  snapshot.expectedRevision = f.snapshotReceipt.revision;
   snapshot.timestamp = now;
   if (snapshot.book.sourceSequence !== null)
     snapshot.book.sourceSequence = (BigInt(snapshot.book.sourceSequence) + 1n).toString();
   for (const v of [snapshot.book, snapshot.ticker]) v.receivedAt = v.exchangeTime = now;
   trade.id = randomUUID();
-  trade.expectedRevision = tradeHead.revision;
+  trade.expectedRevision = f.tradeReceipt.revision;
   trade.timestamp = now;
   trade.trade.tradeId = 'commit-' + randomUUID();
   if (trade.trade.sourceSequence !== null)
@@ -1331,8 +1324,8 @@ async function openCurrentOrderRisk(connectionString = startFixtureConnection())
   return port;
 }
 async function currentOrderTargetReady(replaceRules = false) {
-  const f = await ready(),
-    writer = await open();
+  const writer = await open(),
+    f = await ready();
   await writer.execute(f.request, startIo());
   let ruleId = f.draft.dbRuleId,
     ruleVersion = f.draft.order.ruleVersion;

@@ -1,5 +1,243 @@
 # PHASE 13 verification
 
+## PostgreSQL rule proof and Windows lease diagnosis — 23 November 2026
+
+The direct Windows PostgreSQL diagnostic initialized with only 400 KiB of
+shared buffers. Setting 32 MiB for the owned scratch cluster left 1,712 ms of
+the original lease at the writer call and the previously failing case passed.
+A fresh scratch cluster with the same buffer size and `fsync=on` passed all
+eight current-order integration cases with the prior SQL proof. This covers
+target authentication, uncertain COMMIT and explicit restart, control and
+authorization changes, inventory conflicts, rule replacement and retirement,
+and concurrent capture. The Windows-only loader adaptation is confined to the
+diagnostic. Published code, PostgreSQL/Docker configuration, lease values and
+CI deadlines were unchanged by the investigation.
+
+Four new RED unit cases reproduced a successful capture or restart read when
+the order proof was missing, negative or malformed. The fixed query uses its
+existing single authenticated capture and checks the exact target rule,
+instrument and scope, validity interval, permitted order type and time in
+force, base quantity bounds, lot size and limit-price tick. A second verdict
+binds the synthetic capability to the same runtime publication and certificate
+lease. Both are required before COMMIT.
+
+All 154 targeted unit and fixture contract tests passed. Typecheck, docs,
+changed-file format/lint and the comparison of all 71 published migrations
+passed.
+
+The complete 49-case Windows diagnostic passed all eight current-order cases
+with the new proof. Its setup hook also passed 47 controlled SQL assertions,
+14 of them new. The aggregate remained RED at 32 passed and 17 failed. Twelve
+older cases reported `PAPER_RUNTIME_CORRUPT`, with observed 1 ms clock
+disagreements in the Windows runtime context. Two hit the original execution
+lease, two failed older evidence checks and the bounded catch-up case reached
+its unchanged 15-second timeout. The RED report and cluster were retained.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The targeted local
+success is evidence for the current-order reader. Native acceptance on the
+pinned Linux PostgreSQL/Docker workflow and the protected atomic
+evaluate-and-reserve writer remain open. All 71 published migrations are
+unchanged. Financial dispatch and positive native collateral credit are
+disabled.
+
+## PostgreSQL operational checks — 23 November 2026
+
+Five RED unit cases reproduced a positive Risk capture with missing, malformed
+or negative operational evidence from PostgreSQL. The server reader now
+requires two affirmative SQL verdicts before COMMIT. The fixed query checks
+the target ownership and configuration seals, account and permission/session
+epochs, and all nine current health observations. It also checks the global
+kill switch, tenant pauses and scoped circuits using the sealed controls and
+the same transaction locks.
+
+The PostgreSQL 17.11 diagnostic passed all 33 controlled SQL assertions,
+including 19 new operational cases. The stopped scratch cluster was removed
+after its native JSON report and server log were retained. The SQL diagnostic
+uses controlled capture content and the same fixture runs before the existing
+native integration cases.
+
+Local regression passed 2,751 Paper Engine and Portfolio unit cases and 41 HTTP
+cases. All 88 fixture contract tests passed after the setup change below.
+Typecheck, docs, changed-file format/lint and the comparison of all 71
+published migrations passed.
+
+The execution fixture now retains the initial APPLIED snapshot and trade
+receipts and passes their exact revisions as the post-START publications'
+compare-and-set inputs. This removes two readbacks after approval. Both
+post-START publications must still finish with APPLIED status. The original
+49 native test bodies, application deadlines and CI time limits are preserved.
+A Windows loopback probe with the compatibility relay still reached the
+original SQL lease check 640 ms late, with 401 ms remaining at the writer call.
+The first direct probe stopped in the connection guard because its diagnostic
+loader left a Linux-only startup option in place. With that option adapted
+only in the local loader, direct PostgreSQL reached the same SQL lease check
+4 ms late, with 714 ms remaining at the writer call. Both execution attempts
+failed before the second intent existed. The RED reports and stopped clusters
+were retained. These runs do not qualify as native CI acceptance.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The earlier Windows
+execution-lease RED remains open. Full native execution and independent CI
+acceptance are pending, together with the remaining independent order checks,
+atomic successor persistence and permanent write reconciliation. Published
+migrations remain unchanged. Financial PAPER/LIVE dispatch and positive
+native collateral credit are disabled.
+
+## PostgreSQL market and daily loss checks — 23 November 2026
+
+Six RED scenarios returned a positive capture with missing, malformed or
+contradictory PostgreSQL market and loss proof. The reader now requires
+affirmative market and loss verdicts and exact liquidity agreement before
+COMMIT. The SQL performs its arithmetic from the authenticated capture
+under the same transaction locks.
+
+Fourteen cash, budget, market and loss assertions passed against PostgreSQL
+17.11 in the isolated SQL fixture. The cases cover the current MARKET price
+floor, an absent trade, exact quote liquidity and exposure boundaries,
+both policy scopes, three loss-limit equalities, incomplete loss coverage
+and the wrong UTC day. The diagnostic evaluates controlled capture content.
+The successful cluster was stopped and removed after retaining its native
+JSON report and server log. The same assertions run in the existing suite hook
+with all 49 original integration case bodies preserved.
+
+Local regression passed 2,746 Paper Engine and Portfolio unit cases, 85 fixture
+contracts and 41 HTTP cases. Changed-file format and lint, docs, typecheck and
+the published-migration comparison also passed.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The prior Windows
+execution-lease RED remains open. The read-side comparison covers funds,
+aggregate budgets, the stated market constraints and daily loss. The protected
+writer still needs the remaining Risk checks, atomic successor persistence and
+permanent write reconciliation. The 71 published migrations and financial
+PAPER/LIVE dispatch settings are unchanged.
+
+## Native fixture deadline checkpoint — 23 November 2026
+
+The targeted native RED reproduces expiry in the original
+`capture_started_execution` lease check before a second intent exists.
+The first instrumented run had 2,796 ms left after PREPARED and just 473 ms
+at the writer call. The interval between the returned START and the settled
+head reads was 527 ms. Opening the writer after publication took 281 ms.
+The fixture now opens its writer before preparation, starts both public head
+reads alongside START, and observes the publication clock after those lanes
+settle. The order identity read precedes the first evidence timestamp.
+Publications still require two genuine APPLIED results using the actual
+revisions. All application, I/O and runner deadlines remain in force.
+
+In the instrumented runs the interval from PREPARED to the writer call fell
+from 2,323 ms to 1,603 ms after the first scheduling changes. With the identity
+read moved, the last run had 611 ms left at the writer call. The unchanged
+PostgreSQL guard fired 58 ms after the original deadline, which remained
+5,001 ms after the first witness. The Windows diagnostics preserve RED.
+One earlier run failed while reading runtime context, before the timing
+path. Linux validation remains pending.
+
+The budget SQL assertions now run in a native suite hook before the
+clock-sensitive setup. The historical case fingerprint verifies all 49
+original bodies. The writer owner's input manifest includes the new SQL
+fixture and exact current fixture hashes, and historical normalizers retain
+their previous digests. All 221 targeted unit and fixture contract tests
+passed. No published migration, runtime lease, financial
+authority or dispatch setting changed. **HOLD / PHASE 13 IN_PROGRESS /
+NOT READY FOR PHASE 14.**
+
+## PostgreSQL position and order budgets checkpoint — 23 November 2026
+
+In the dedicated worktree at accepted main
+`b7ec33cd2c2e742cbe004dc07d27969f52c39805`, the prior cash and commitment
+checkpoint passes all 128 targeted baseline tests. Eight new cases reproduced
+successful capture without matching PostgreSQL budget evidence. The fixed
+reader compares the exact new notional, the filled and residual exposure, all
+four projected limits, position and order counts and the captured minute bucket.
+Missing or conflicting budget evidence now rolls back before COMMIT. All 166
+targeted cases pass, along with all 2,740 Paper Engine and Portfolio unit cases,
+41 HTTP cases, format, docs, lint and typecheck. A real PostgreSQL 17.11
+arithmetic diagnostic passes 21 cases with controlled capture content,
+including the original residual tick,
+the exact minute boundary, constraints from both policies and 18-place
+threshold comparisons. The stopped successful diagnostic cluster was removed
+after retaining the report and server log.
+
+The durable-order integration suite checks the SQL projection before
+acquiring clock-sensitive fixture evidence. It exercises the retained
+partial exposure and an exact policy boundary, then lowers each authority's
+limit by one decimal atom independently and moves the target out of its
+captured minute bucket. The isolated Windows PostgreSQL integration reached
+the original execution fixture after those four assertions. The original
+`capture_started_execution` lease check returned `PAPER_ADMISSION_EXPIRED`
+before the second intent was created. The integration result remains RED,
+with the diagnostic report and server log retained. The test deadlines and
+all 71 published migrations are unchanged.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Full native execution
+and independent CI acceptance remain pending. The current capture checks cash
+and aggregate budgets. The protected writer still needs full independent Risk,
+atomic persistence and permanent write reconciliation. Financial PAPER/LIVE
+dispatch and positive native collateral credit are disabled.
+
+## PostgreSQL cash coverage checkpoint — 23 November 2026
+
+Starting main remains the accepted PR78 result
+`b7ec33cd2c2e742cbe004dc07d27969f52c39805`. The six RED cases returned a
+positive capture despite absent, inconsistent or numeric-wire cash coverage
+in the mocked PostgreSQL reply. Before COMMIT the server reader now requires
+exact agreement on asset, debit, available and remaining cash. The fixed
+query derives these values once from the authenticated SQL capture in the same
+transaction, with an exact
+per-lot fee ceiling and one deduction per unreflected quote hold. No caller
+amount enters that query.
+
+The targeted unit run passes 158 cases across seven suites, including the
+current-order fixture and migration guards. Real PostgreSQL 17 passed
+the arithmetic diagnostic with a large decimal balance, an 18-place debit,
+and reflected and unrelated holds excluded. The first Windows integration
+diagnostic failed during connection setup because Windows PostgreSQL rejects
+the Linux connection-check interval. The loopback diagnostic adapted that
+startup parameter only. Its final disposable run with `fsync=off` recorded
+one passed and seven failed integration cases. The passed case exercised
+capture followed by target rule retirement. All seven failures were
+`PAPER_ADMISSION_EXPIRED` during the preceding execution fixture. The
+original time limits are in force. The reports record a local diagnostic
+and native acceptance remains pending.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The cash comparison
+prepares the protected PostgreSQL writer. The writer still needs complete
+independent Risk policy evaluation, an authenticated successor to the executed
+book, atomic durable holds and permanent write reconciliation. Financial
+PAPER/LIVE dispatch and positive native collateral credit are disabled.
+
+## Local postexecution commitment check — 23 November 2026
+
+Starting main `b7ec33cd2c2e742cbe004dc07d27969f52c39805` passed independent CI
+after PR78. The accepted run covers 6,675 unit and 41 HTTP tests per OS, 1,528
+PostgreSQL tests, 24 owners, 49 writer/capture cases and all 71 migrations.
+[Platform 45060423500](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45060423500),
+[CodeQL 45060423501](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45060423501).
+
+The initial RED reproduced two missing server capture results. A successful
+evaluation lacked an exact commitment basis, and a Risk rejection lacked an
+explicit null. The [server reader contract](current-order-risk-source.md)
+now binds the commitment to the certified executed book and verifies available
+quote before and after the debit using the book's unreflected holds.
+The targeted capture, current Risk and executed-exposure suites pass all 122
+tests. The new coverage checks the common Portfolio reducer without a second
+ledger posting, retained-hold arithmetic, conflicting amounts, UNKNOWN,
+Risk rejection and evidence preservation on restart.
+
+Local format, docs, lint and typecheck passed. The full Windows unit run
+reported 6,692 passed and 12 failed, with all 2,726 Paper Engine and Portfolio
+assertions passing. The failures were in admission overlap, native progress,
+the cross-adapter registry and the independent uncommitted clean-workspace
+tests. All 26 cases in the three tracked suites pass when rerun with one
+worker and the original time limits. The clean-workspace failures included
+Windows `EPERM` on hardlink and junction fixture creation. The initial HTTP
+run hit the existing Auth proxy timeout during parallel testing. The isolated
+HTTP run passed all 41 cases with the original limit.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** This is a local checkpoint.
+The authoritative PostgreSQL evaluate-and-reserve writer, permanent write replay
+and native concurrency/uncertain-COMMIT acceptance remain outstanding.
+Financial PAPER/LIVE dispatch and positive native collateral credit are disabled.
+
 ## Owner correction code checkpoint verified — 16 November 2026
 
 Code `8189fc25872dca924beb6f0e6e42a984ab25bb76` passes all13 frozen local

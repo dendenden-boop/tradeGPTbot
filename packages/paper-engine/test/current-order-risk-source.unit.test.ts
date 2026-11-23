@@ -1,20 +1,36 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { parseDecimal } from '@ctp/exchange-core';
+import { canonical, reducePortfolio } from '@ctp/portfolio';
 import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import { currentOrderRiskFixture } from './current-order-risk-fixtures.js';
 import { decodePaperCurrentRiskContents } from '../src/postgres-current-risk.js';
+import {
+  describeCurrentPaperCommitment,
+  type PaperCurrentOrderRiskSource,
+} from '../src/postgres-current-order-risk.js';
 const fake = vi.hoisted<{
   queries: string[];
   requests: unknown[];
   safe: boolean;
   payload: unknown;
+  cashProof: unknown;
+  budgetProof: unknown;
+  policyProof: unknown;
+  operationalProof: unknown;
+  orderProof: unknown;
   commitFailure: boolean;
 }>(() => ({
   queries: [],
   requests: [],
   safe: true,
   payload: null,
+  cashProof: null,
+  budgetProof: null,
+  policyProof: null,
+  operationalProof: null,
+  orderProof: null,
   commitFailure: false,
 }));
 vi.mock('pg', () => ({
@@ -28,26 +44,42 @@ vi.mock('pg', () => ({
       if (text.includes(' AS safe')) return { rows: [{ safe: fake.safe }] };
       if (text.includes(' AS result')) {
         fake.requests.push(JSON.parse(String(values?.[0])) as unknown);
-        return { rows: [{ result: fake.payload }] };
+        return {
+          rows: [
+            {
+              result: fake.payload,
+              cashProof: fake.cashProof,
+              budgetProof: fake.budgetProof,
+              policyProof: fake.policyProof,
+              operationalProof: fake.operationalProof,
+              orderProof: fake.orderProof,
+            },
+          ],
+        };
       }
       if (text === 'COMMIT' && fake.commitFailure) throw Error('private lost COMMIT');
       return { rows: [] };
     }
   },
 }));
-interface Source {
-  kind: string;
-  target: unknown;
-  certificate: { id: string; expiresAt: number };
-  evaluation: { result: { kind: string; notional?: string; reasons?: string[] } };
-}
 interface Port {
-  capture(r: unknown, context: ReturnType<typeof io>): Promise<Source>;
-  readCurrent(r: unknown, context: ReturnType<typeof io>): Promise<Source>;
+  capture(r: unknown, context: ReturnType<typeof io>): Promise<PaperCurrentOrderRiskSource>;
+  readCurrent(r: unknown, context: ReturnType<typeof io>): Promise<PaperCurrentOrderRiskSource>;
   advanceLoss(r: unknown, context: ReturnType<typeof io>): Promise<unknown>;
   close(): Promise<void>;
 }
 const ports: Port[] = [];
+const evaluatedBudget = {
+  notional: '2.1',
+  currentExposure: '6.025',
+  projectedExposure: '8.125',
+  openOrders: 0,
+  potentialPositions: 1,
+  ordersInLastMinute: 2,
+  withinLimits: true,
+};
+const evaluatedPolicy = { liquidity: '4975', marketAllowed: true, lossAllowed: true };
+const readyOperation = { runtimeReady: true, tradingReady: true };
 const options = {
   connectionString: 'postgresql://paper_current:unit-password@127.0.0.1/current_order_risk',
   environment: 'test',
@@ -73,6 +105,16 @@ beforeEach(() => {
     requests: [],
     safe: true,
     payload: null,
+    cashProof: {
+      asset: 'USDT',
+      amount: '2.1021',
+      available: '999994.969975',
+      remaining: '999992.867875',
+    },
+    budgetProof: evaluatedBudget,
+    policyProof: evaluatedPolicy,
+    operationalProof: readyOperation,
+    orderProof: { rulesAllowed: true, capabilityReady: true },
     commitFailure: false,
   });
 });
@@ -143,6 +185,116 @@ it('reconciles after close/restart without renewing evidence or inventing a mone
   expect(fake.requests[0]).toMatchObject({ kind: 'PAPER_CURRENT_ORDER_RISK_READ' });
   expect(fake.queries.filter((q) => q.includes(' AS result'))).toHaveLength(1);
 });
+it.each([
+  ['missing', null, 'capture'],
+  ['stale rules', { rulesAllowed: false, capabilityReady: true }, 'capture'],
+  ['capability declined', { rulesAllowed: true, capabilityReady: false }, 'capture'],
+  ['malformed flag on restart', { rulesAllowed: true, capabilityReady: 'true' }, 'readCurrent'],
+] as const)('rolls back when the independent order proof is %s', async (_name, proof, op) => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  const port = await open();
+  fake.orderProof = proof;
+  await expect(port[op](f.request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+  expect(fake.queries).toContain('ROLLBACK');
+  expect(fake.queries).not.toContain('COMMIT');
+});
+it('binds a single commitment to the certified book without posting a second monetary event', async () => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  const source = await (await open()).capture(f.request, io());
+  const book = source.certificate.inventory.accounts.find(
+    (a) => a.accountId === f.target.owner.accountId,
+  )!;
+  const before = book.state;
+  const basis = source.commitmentBasis;
+  expect(basis).toEqual({
+    kind: 'PAPER_CURRENT_ORDER_COMMITMENT_BASIS',
+    target: f.request.target,
+    book: {
+      id: book.bookId,
+      revision: book.revision,
+      stateHash: createHash('sha256').update(canonical(before)).digest('hex'),
+    },
+    certificate: {
+      id: source.certificate.id,
+      hash: source.certificate.hash,
+      validUntil: source.evaluation.validUntil,
+    },
+    hold: { asset: 'USDT', amount: '2.1021', status: 'RESERVED', reflected: false },
+    spendable: { before: '999994.969975', after: '999992.867875' },
+  });
+  expect(before.holds).toEqual([]);
+  expect(before.pending).toHaveLength(1);
+  const hold = { id: randomUUID(), ...basis!.hold };
+  const result = reducePortfolio(
+    before,
+    { id: randomUUID(), type: 'COMMITMENT', timestamp: f.now, hold },
+    { now: () => f.now, holdWatermark: null },
+  );
+  expect(result.ignored).toBeUndefined();
+  expect(result.holdWatermark).toMatchObject({ timestamp: f.now, released: false, unknown: false });
+  expect(result.postings).toEqual([]);
+  expect(result.state).toEqual({ ...before, holds: [hold] });
+  expect(Object.isFrozen(basis!.hold)).toBe(true);
+});
+it('subtracts a retained quote hold once and rejects stale or conflicting Risk amounts', async () => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  const { certificate, evaluation } = await (await open()).capture(f.request, io());
+  if (evaluation.result.kind !== 'EVALUATED') throw Error('EXPECTED_RISK_EVALUATION');
+  const book = certificate.inventory.accounts.find(
+    (a) => a.accountId === f.target.owner.accountId,
+  )!;
+  // This content check assumes a prior hold. The server reader still validates the actual database graph.
+  const hold = {
+    id: randomUUID(),
+    asset: 'USDT',
+    amount: parseDecimal('2.627625'),
+    status: 'RESERVED' as const,
+    reflected: false,
+  };
+  const retained = { ...book, state: { ...book.state, holds: [hold] } };
+  expect(() =>
+    describeCurrentPaperCommitment(f.request.target, retained, certificate, evaluation),
+  ).toThrow('PAPER_CURRENT_ORDER_RISK_EVIDENCE');
+  const available = parseDecimal('999992.34235');
+  const remaining = parseDecimal('999990.24025');
+  const updatedCertificate = {
+    ...certificate,
+    snapshot: { ...certificate.snapshot, availableAmount: available },
+  };
+  const updatedEvaluation = {
+    ...evaluation,
+    result: {
+      ...evaluation.result,
+      debits: [{ ...evaluation.result.debits[0]!, available, remaining }],
+    },
+  };
+  expect(
+    describeCurrentPaperCommitment(
+      f.request.target,
+      retained,
+      updatedCertificate,
+      updatedEvaluation,
+    ),
+  ).toMatchObject({ spendable: { before: available, after: remaining } });
+  const unknown = {
+    ...retained,
+    state: { ...retained.state, holds: [{ ...hold, status: 'UNKNOWN' as const }] },
+  };
+  expect(() =>
+    describeCurrentPaperCommitment(
+      f.request.target,
+      unknown,
+      updatedCertificate,
+      updatedEvaluation,
+    ),
+  ).toThrow('PAPER_CURRENT_ORDER_RISK_EVIDENCE');
+});
 it('rejects an uncertain COMMIT without returning its calculated result', async () => {
   const f = currentOrderRiskFixture();
   vi.spyOn(Date, 'now').mockReturnValue(f.now);
@@ -152,6 +304,80 @@ it('rejects an uncertain COMMIT without returning its calculated result', async 
   await expect(port.capture(f.request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
   expect(fake.queries.filter((q) => q.includes(' AS result'))).toHaveLength(1);
 });
+it.each([
+  null,
+  { asset: 'USDC' },
+  { amount: '2.1' },
+  { available: '1000000' },
+  { remaining: '999992.867874999999999999' },
+  { amount: 2.1021 },
+])('rejects missing or conflicting PostgreSQL cash proof %j before COMMIT', async (change) => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  fake.cashProof = change === null ? null : { ...(fake.cashProof as object), ...change };
+  const port = await open();
+  await expect(port.capture(f.request, io())).rejects.toThrow(/^PAPER_/u);
+  expect(fake.queries).not.toContain('COMMIT');
+});
+it.each([
+  null,
+  { notional: '2.1021' },
+  { currentExposure: '0' },
+  { projectedExposure: '8.124999999999999999' },
+  { openOrders: 1 },
+  { potentialPositions: 2 },
+  { ordersInLastMinute: 3 },
+  { withinLimits: false },
+])('rejects missing or conflicting PostgreSQL budget proof %j before COMMIT', async (change) => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  fake.budgetProof = change === null ? null : { ...evaluatedBudget, ...change };
+  const port = await open();
+  await expect(port.capture(f.request, io())).rejects.toThrow(/^PAPER_/u);
+  expect(fake.queries).toContain('ROLLBACK');
+  expect(fake.queries).not.toContain('COMMIT');
+});
+it.each([
+  null,
+  { liquidity: '4974.999999999999999999' },
+  { liquidity: 4975 },
+  { marketAllowed: false },
+  { lossAllowed: false },
+  { lossAllowed: null },
+])(
+  'rejects missing or conflicting PostgreSQL market and loss proof %j before COMMIT',
+  async (change) => {
+    const f = currentOrderRiskFixture();
+    vi.spyOn(Date, 'now').mockReturnValue(f.now);
+    fake.payload = f.reply();
+    fake.policyProof = change === null ? null : { ...evaluatedPolicy, ...change };
+    const port = await open();
+    await expect(port.capture(f.request, io())).rejects.toThrow(/^PAPER_/u);
+    expect(fake.queries).toContain('ROLLBACK');
+    expect(fake.queries).not.toContain('COMMIT');
+  },
+);
+it.each([
+  null,
+  { runtimeReady: false },
+  { tradingReady: false },
+  { runtimeReady: 'true' },
+  { tradingReady: null },
+])(
+  'rejects missing or conflicting PostgreSQL operational proof %j before COMMIT',
+  async (change) => {
+    const f = currentOrderRiskFixture();
+    vi.spyOn(Date, 'now').mockReturnValue(f.now);
+    fake.payload = f.reply();
+    fake.operationalProof = change === null ? null : { ...readyOperation, ...change };
+    const port = await open();
+    await expect(port.capture(f.request, io())).rejects.toThrow(/^PAPER_/u);
+    expect(fake.queries).toContain('ROLLBACK');
+    expect(fake.queries).not.toContain('COMMIT');
+  },
+);
 it.each(['MISSING', 'REPLACED', 'INCOMPLETE'])('fails closed on %s source state', async (kind) => {
   const f = currentOrderRiskFixture();
   vi.spyOn(Date, 'now').mockReturnValue(f.now);
@@ -225,6 +451,8 @@ it('keeps the coordinator and stored-target arithmetic absent from the pure name
   expect(pure).not.toHaveProperty('createPostgresPaperCurrentOrderRiskSource');
   expect(pure).not.toHaveProperty('calculatePaperStoredOrderRiskEvaluation');
   expect(server).not.toHaveProperty('calculatePaperStoredOrderRiskEvaluation');
+  expect(pure).not.toHaveProperty('describeCurrentPaperCommitment');
+  expect(server).not.toHaveProperty('describeCurrentPaperCommitment');
 });
 it.each([
   [
@@ -277,7 +505,9 @@ it.each([
     f.target.createdAt = f.now - age;
     fake.payload = f.reply();
     const port = await open();
-    expect((await port.capture(f.request, io())).evaluation.result.kind).toBe(kind);
+    const value = await port.capture(f.request, io());
+    expect(value.evaluation.result.kind).toBe(kind);
+    if (kind === 'REJECTED') expect(value.commitmentBasis).toBeNull();
   },
 );
 it('does not execute getters while checking a caller selector', async () => {
