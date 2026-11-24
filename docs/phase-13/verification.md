@@ -45,6 +45,12 @@ reproduced the same timeout. The successful independent CI result for the new
 fixture revision is pending. The RED archive and local diagnostics were
 retained.
 
+The first fixture revision also triggered the exact scoped-native SHA guard on
+both operating systems. The isolated fixture review pins the new source bytes
+after confirming that the changed SQL only reads per-partition counts and
+the three workers share no cluster-wide authority. Historical harness
+reconstruction still verifies the prior fingerprint.
+
 **HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Financial PAPER/LIVE
 dispatch and positive native collateral credit are disabled.
 

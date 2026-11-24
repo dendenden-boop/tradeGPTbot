@@ -1,6 +1,20 @@
 // Exact test-only restoration for historical harness reviews.
 import { createHash } from 'node:crypto';
 export const postexecutionMigrationReview = {
+  'scripts/native-main-scopes.mjs': {
+    predecessor: '70e1766879ac58d198a5eb650b84946286f2492f995b1d86fcb4bdd5f330cdd5',
+    current: 'c0551639f3b60fd637d8f5919658e0f088907e4825f24e294c6a05470e47e9b7',
+    patches: [
+      {
+        old: '',
+        next: '// PAPER POSTEXECUTION migration72 acceptance.\n',
+      },
+      {
+        old: '2488efa619605da702a98c276c94c79a16bc46e8cc601957add0c58e2cc03a71',
+        next: 'd2964d0921f1d9c47c21d2efdb64f33401b46a63833c93912868e0da4d469939',
+      },
+    ],
+  },
   'scripts/test-database.mjs': {
     predecessor: 'a4e6196fd5b70c8278ff1441db3bbe4e4366e2bca7d43c43793b57b8f140c85e',
     current: '1436058f003b30f9656f5c69ceeaee79d6ef98a944b373dec823aa38bba0ee89',

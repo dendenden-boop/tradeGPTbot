@@ -1,3 +1,4 @@
+// PAPER POSTEXECUTION migration72 acceptance.
 // Reviewed test-only database scopes at 09d13d6. These files may mutate their
 // own database, but not cluster roles. Unknown files remain behind the mutator barrier.
 import assert from 'node:assert/strict';
@@ -49,7 +50,7 @@ export const scopedMainSources = Object.freeze({
   'packages/database/test/market-data.integration.test.ts':
     '971bebfd55970fbdb3b9a041bd286287035e5e4c6a633663d7d007d05affc5cc',
   'packages/database/test/market-trades.integration.test.ts':
-    '2488efa619605da702a98c276c94c79a16bc46e8cc601957add0c58e2cc03a71',
+    'd2964d0921f1d9c47c21d2efdb64f33401b46a63833c93912868e0da4d469939',
   'packages/database/test/order-fixture-clock.integration.test.ts':
     'aa0e5a43c59ec4cc76930e16c0edfb320aa503bb1143d485543b8b0399333b20',
   'packages/database/test/order-lock-order.integration.test.ts':
