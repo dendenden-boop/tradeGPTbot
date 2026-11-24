@@ -1,3 +1,9 @@
+// PAPER POSTEXECUTION migration72 acceptance.
+import {
+  verifyCompiledPaperPostexecution,
+  verifyPaperPostexecutionStorage,
+  verifyPaperPostexecutionUpgrade,
+} from './paper-postexecution-upgrade.mjs';
 // BEGIN WRITER OWNER PARTITIONS IMPORT
 import { performance } from 'node:perf_hooks';
 import { prepareWriterOwnerClone, runWriterOwnerSuite } from './writer-owner-suite.mjs';
@@ -239,6 +245,7 @@ const expectedMigrations = [
   '202611140002_paper_current_risk_market_coherence',
   // BEGIN PAPER CURRENT ORDER RISK MIGRATION
   '202611150001_paper_current_order_risk',
+  '202611240001_paper_postexecution_reservation',
   // END PAPER CURRENT ORDER RISK MIGRATION
   // END PAPER CURRENT RISK MARKET MIGRATION
   // END PAPER CURRENT RISK MIGRATION
@@ -4839,6 +4846,21 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
   );
   assert.equal(currentOrderRiskCompiled.status, 'PASS');
   // END PAPER CURRENT ORDER RISK UPGRADE
+  const beforePostexecution = await capturePaperExecutionStartUpgrade(paperUpgrade);
+  await cp(
+    path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[71]),
+    path.join(paperMigrations, expectedMigrations[71]),
+    { recursive: true },
+  );
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperPostexecutionUpgrade(paperUpgrade, beforePostexecution);
+  await migrate(databases[4], paperConfig, true);
+  await verifyPaperPostexecutionUpgrade(paperUpgrade, beforePostexecution);
+  const postexecutionCompiled = await verifyCompiledPaperPostexecution(
+    paperUpgrade,
+    paperAdmissionEnvironment(databases[4]),
+  );
+  assert.equal(postexecutionCompiled.status, 'PASS');
 
   // Restore a genuinely populated published-19 format before applying any
   // lifecycle migration. The acceptance fixture uses actual atomic issuance;
@@ -4928,6 +4950,8 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
       nativeCohorts: 'DELEGATED',
       isolatedReset: 'DELEGATED',
       requiredNativeJob: 'Native PostgreSQL and real services',
+      paperPostexecutionUpgradePreserved: true,
+      paperPostexecutionCompiled: postexecutionCompiled,
       authenticatedRuntime: 'DELEGATED',
       authenticationHardening: 'DELEGATED',
       requiredAuthJob: 'Auth runtime and faults',
@@ -5396,6 +5420,7 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     empty: true,
   });
   // END PAPER CURRENT ORDER RISK RESET_ADMISSIONRESET
+  await verifyPaperPostexecutionStorage(admissionReset, { nonBypass: false, empty: true });
   // END PAPER CURRENT RISK RESET_UPGRADE
   // END PAPER HISTORICAL INVENTORY RESET_UPGRADE
   // END PAPER EXECUTED VALUATION RESET_ADMISSIONRESET
@@ -5624,6 +5649,9 @@ export default defineConfig({schema:${JSON.stringify(path.join(workspace, 'packa
     paperCurrentOrderRiskUpgradePreserved: true,
     paperCurrentOrderRiskResetValidated: true,
     paperCurrentOrderRiskCompiled: currentOrderRiskCompiled,
+    paperPostexecutionUpgradePreserved: true,
+    paperPostexecutionResetValidated: true,
+    paperPostexecutionCompiled: postexecutionCompiled,
     // END PAPER CURRENT ORDER RISK FLAGS
     // END PAPER CURRENT RISK FLAGS
     // END PAPER HISTORICAL INVENTORY FLAGS
@@ -5695,6 +5723,7 @@ async function resetDatabaseProof(fresh) {
   // BEGIN PAPER CURRENT ORDER RISK RESET_RESET
   await verifyPaperCurrentOrderRiskStorage(reset, { ownership: 'STORAGE_ONLY', empty: true });
   // END PAPER CURRENT ORDER RISK RESET_RESET
+  await verifyPaperPostexecutionStorage(reset, { nonBypass: false, empty: true });
   // END PAPER CURRENT RISK RESET_FRESH
   // END PAPER HISTORICAL INVENTORY RESET_FRESH
   // END PAPER EXECUTED VALUATION RESET_RESET

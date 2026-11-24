@@ -1,5 +1,199 @@
 # PHASE 13 verification
 
+## Additive postexecution migration 72 — 24 November 2026
+
+Work started from `cc53ed6b5441cc561538162db88e21c8c18d2853`. GitHub's
+protected `main` was `b7ec33cd2c2e742cbe004dc07d27969f52c39805`.
+The migration contract first failed because the chain had only 71 files.
+Migration 72 installs the private cause, forced tenant RLS, deferred
+invariants and both existing RPC wrappers in one transaction. The contract
+pins every previous migration by name and SHA-256 and checks that the fixed
+database proof matches the current-order query. The historical test harness
+can still be reproduced byte for byte.
+
+Prisma deployed 71→72 on a populated PostgreSQL 17.11 database with
+`fsync=on` and a `NOSUPERUSER NOBYPASSRLS` migration owner. Deploy and
+redeploy preserved the existing rows and created no successor by backfill.
+The compiled port then reserved once, reopened through a new database session
+and recovered the same receipt. The original execution receipt, ledger and
+submission-attempt counts matched. The disposable database reset and all 72
+migrations redeployed with an empty successor table.
+
+The first Windows diagnostic applied the SQL from a test. Its RED reports
+include original execution lease failures before the new reservation and a
+concurrent statement failure. The next run reached five of six scenarios.
+The opt-in test now requires a completed Prisma deploy instead of running DDL
+during a case. With Prisma-deployed migration 72 and non-bypass function
+owners, all six opt-in cases passed under the original timeouts. They covered
+competing keys, exact replay, current policy decline, lost COMMIT, evidence
+mismatch rollback and historical receipt retention. The two earlier RED runs
+and their logs were retained. All 261 targeted unit and contract checks passed.
+
+The ordinary native runner checks the populated upgrade, redeploy, compiled
+reopen and reset. CI still requires independent Ubuntu, Windows, PostgreSQL,
+Docker and CodeQL results. **HOLD / PHASE 13 IN_PROGRESS /
+NOT READY FOR PHASE 14.** Financial PAPER/LIVE dispatch and positive native
+collateral credit are disabled.
+
+## Postexecution reservation server port — 24 November 2026
+
+The first targeted run failed because the private port did not exist. The new
+port uses the existing restricted PostgreSQL transport. A fresh SQL write
+returns internal evidence and the persisted commitment, watermark and book
+hashes. Before COMMIT, the port reruns common Risk and applies the event through
+the common Portfolio reducer. It checks the exact successor and zero postings.
+A replay returns the original receipt, even after a stricter policy replaces
+the one used for the original decision. A lost COMMIT returns uncertainty and
+recovery uses an explicit read by the original key.
+
+An isolated Windows PostgreSQL 17.11 run with all 71 migrations, restricted
+actors and `fsync=on` passed all six opt-in cases within the existing deadlines.
+One case corrupted the response's Portfolio hash after the SQL writes. The
+port rejected it, and PostgreSQL retained neither the new certificate nor the
+causal reservation. The other cases retained the concurrency, policy decline,
+exact replay, lost COMMIT and historical storage checks. The 49 standard cases
+were deselected by the opt-in config. The JSON report and checked server log
+were retained, and the stopped successful scratch cluster was removed.
+
+The targeted unit and SQL contract run passed 85 tests. The full Windows unit
+run passed 6,726 tests and reported five `native-progress` startup failures.
+Each failed child log shows that Vite could not write its temporary config
+through the shared `node_modules` junction. The five tests passed on a
+separate run with Vite cache access and their original configuration and
+deadlines. All 41 HTTP tests passed, along with format, docs, lint, typecheck,
+Prisma schema validation and the compiled API runtime check. `pnpm build`
+stopped at its shared dependency directory guard. Direct TypeScript builds
+passed for all 15 packages with the existing generated Prisma client, and
+the compiled private port imported successfully.
+
+The port and SQL remain private to the isolated diagnostic. Migration 72,
+populated non-bypass-owner upgrade/redeploy/reset, compiled restart and
+independent full CI remain open. **HOLD / PHASE 13 IN_PROGRESS /
+NOT READY FOR PHASE 14.**
+
+## Atomic postexecution reservation candidate — 24 November 2026
+
+The native RED verified that the 71-migration schema rejects the new exact
+request on the existing restricted RPC. The opt-in SQL writer locks the
+established GLOBAL and tenant boundaries, authenticates the original execution
+and target, performs permanent key lookup, and then captures and evaluates the
+current facts for a new key. It reads the quote amount from the fixed SQL proof.
+The request admits no amount, snapshot, or Portfolio state from the caller.
+
+A new admission writes the certificate, decision, vector reservation, initial
+ACTIVE state, hold, watermark, book successor, causal key and outbox together.
+The first live diagnostic found that nested historical replay leaves the
+transaction constraints immediate. The candidate restores deferral only for
+the constraints that cover the new multi-row write and runs all required
+checks before returning the receipt. The original vector and financial
+constraints remain in force. The first focused restricted-role native run
+then confirmed one durable reservation, exact replay after a policy change,
+conflicting-key rejection and unchanged ledger counts.
+
+All five opt-in cases passed on PostgreSQL 17.11 with `fsync=on` and the
+original deadlines. A declined new request rolled back its certificate and
+created no cause. Competing keys produced one reservation and one conflict.
+A deliberately lost backend COMMIT acknowledgement returned
+`PAPER_ADMISSION_UNCERTAIN` and an explicit restart read recovered the one
+durable receipt. The populated-storage case preserved the original
+execution receipt and checked both incorrect debit amounts.
+All 163 targeted unit and fixture assertions passed. Successful diagnostic
+clusters were removed after retaining their reports and server logs.
+
+The writer is installed only by the existing opt-in diagnostic. The
+production server port, migration packaging, non-bypass-owner upgrade/reset,
+and independent full CI remain open. **HOLD / PHASE 13 IN_PROGRESS /
+NOT READY FOR PHASE 14.**
+
+## Durable successor causality diagnostic — 23 November 2026
+
+The native RED retained a genuine committed execution and advanced its book
+and head together in a rolled-back transaction. Although the extra event
+had valid predecessor linkage, the original validator returned
+`PAPER_ADMISSION_EVIDENCE`. After rollback the restricted reader returned the
+same execution receipt. The diagnostic also confirmed that the deployed
+71-migration schema had no persistent successor cause.
+
+The candidate SQL fixture adds one private, immutable cause per execution.
+It binds the tenant, execution, target intent, active reservation, historical
+certificate, exact book revisions and hashes, and permanent idempotency key.
+Deferred checks require the new Portfolio event and watermark, one additional
+unreflected hold and identical monetary state. Removing the explicitly
+reviewed successor branch reconstructs the original execution validator.
+
+A further native RED showed that cash coverage alone accepted a one-atom
+hold for the same certified command. The candidate now recomputes the
+notional and principal plus per-lot fee from the immutable command, retained
+rule revision and model. Both underfunding and overspending must fail before
+the deferred checks can settle.
+
+The populated PostgreSQL 17.11 diagnostic passed after the arithmetic fix.
+It applied the DDL after a genuine first execution and second-order capture,
+rejected the overfunded and underfunded holds, retained the exact valid
+successor, and reopened the restricted reader after a policy change. The
+original receipt remained identical and the original ledger counts matched.
+
+The tracked opt-in Vitest configuration reproduces the diagnostic on an owned
+database with all 71 published migrations. It verifies that the runtime role
+has no direct access to the cause, rejects an unwitnessed head, checks both
+debit failures, commits one valid cause and proves immutability and duplicate
+key rejection. The surrounding suite retains all 49 original case bodies.
+
+```bash
+pnpm exec vitest run --config vitest.postexecution.config.ts
+```
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** This DDL is isolated
+from Prisma deployment. The diagnostic assembles the successor with the
+database owner and a genuine capture to exercise storage and historical replay.
+The production evaluate-and-reserve transaction and permanent reservation
+reconciliation RPC remain open. All 71 published migrations remain unchanged.
+Financial PAPER/LIVE dispatch and positive native collateral credit are disabled.
+
+## Postexecution Portfolio successor proof — 23 November 2026
+
+Starting source was `cc53ed6b5441cc561538162db88e21c8c18d2853`. Its earlier
+[Platform run](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45181844773)
+and [CodeQL run](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45181844648)
+passed with 6,712 unit and 41 HTTP tests on each OS, 1,528 PostgreSQL tests,
+24 owner suites, all 49 writer/capture cases and zero audit findings.
+
+Six additional RED unit cases accepted a missing or conflicting Portfolio
+successor, including a foreign book, a skipped revision during restart read,
+a duplicated hold and a monetary balance change. The fixed query calculates
+the next book revision and the exact one-hold projection. The reader checks
+the SQL result before COMMIT and rolls back on mismatch. Replay keeps the same
+projection. A lost COMMIT returns no result and issues no automatic retry.
+All 160 targeted unit and fixture contract tests passed.
+
+The first Windows PostgreSQL diagnostic passed the 54 controlled SQL assertions
+and six of eight current-order cases. One case expired in the original
+execution fixture and one concurrent capture hit the unchanged PostgreSQL
+statement timeout inside certificate canonicalization. The report and
+stopped RED cluster were retained.
+
+The isolated rerun with `fsync=on` and no concurrent local checks passed all
+eight current-order cases and the 54 SQL assertions under the same deadlines.
+Seven controlled SQL cases cover the maximum exact successor revision,
+revision exhaustion, a foreign or gapped book, an UNKNOWN or duplicate hold
+and an overspend of one decimal atom. The successful cluster was stopped and
+removed after its JSON report and server log were preserved.
+
+The full local run passed 6,706 of 6,718 unit cases and all 41 HTTP cases.
+Seven seed cases stopped because the compiled Prisma client was absent.
+Five progress cases reproduced Windows `EPERM` when child Vitest processes
+tried to write bundled configuration into the shared dependency directory.
+After compiling the database package and permitting that temporary write,
+all 12 exact failed cases passed in isolation. Both unit reports are
+retained. Changed-file format/lint, docs and typecheck passed. Full
+GitHub CI for the successor changes remains pending.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** The projection
+carries no reservation. The database still needs an atomic successor writer
+and permanent exact replay that preserves the original execution's historical
+proof. All 71 published migrations are unchanged. Financial PAPER/LIVE
+dispatch and positive native collateral credit are disabled.
+
 ## PostgreSQL rule proof and Windows lease diagnosis — 23 November 2026
 
 The direct Windows PostgreSQL diagnostic initialized with only 400 KiB of

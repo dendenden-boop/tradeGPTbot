@@ -58,6 +58,13 @@ const digest = z.string().regex(/^[a-f0-9]{64}$/u),
     rulesAllowed: z.literal(true),
     capabilityReady: z.literal(true),
   }),
+  commitmentProofSchema = z.strictObject({
+    bookId: uuid,
+    revision: z.string(),
+    nextRevision: z.string(),
+    ready: z.literal(true),
+    after: z.record(z.string(), z.unknown()),
+  }),
   requestSchema = z.strictObject({
     kind: z.literal('PAPER_CURRENT_ORDER_RISK_CAPTURE'),
     source: z.unknown(),
@@ -107,7 +114,7 @@ export interface PaperCurrentOrderRiskSource {
   readonly commitmentBasis: Readonly<{
     kind: 'PAPER_CURRENT_ORDER_COMMITMENT_BASIS';
     target: PaperCurrentOrderRiskRequest['target'];
-    book: Readonly<{ id: string; revision: string; stateHash: string }>;
+    book: Readonly<{ id: string; revision: string; nextRevision: string; stateHash: string }>;
     certificate: Readonly<{ id: string; hash: string; validUntil: number }>;
     hold: Readonly<{ asset: string; amount: string; status: 'RESERVED'; reflected: false }>;
     spendable: Readonly<{ before: string; after: string }>;
@@ -143,10 +150,14 @@ export function describeCurrentPaperCommitment(
   if (evaluation.result.kind !== 'EVALUATED') return null;
 
   const { state } = account;
+  const revision = BigInt(account.revision);
   const [debit] = evaluation.result.debits;
   const balance = state.balances.find((b) => b.asset === certificate.snapshot.availableAsset);
   if (
     state.status !== 'RECONCILED' ||
+    revision < 2n ||
+    revision >= BigInt(Number.MAX_SAFE_INTEGER) ||
+    state.holds.length >= 1000 ||
     state.holds.some((hold) => hold.status === 'UNKNOWN') ||
     !debit ||
     evaluation.result.debits.length !== 1 ||
@@ -181,6 +192,7 @@ export function describeCurrentPaperCommitment(
     book: {
       id: account.bookId,
       revision: account.revision,
+      nextRevision: (revision + 1n).toString(),
       stateHash: createHash('sha256').update(canonical(state)).digest('hex'),
     },
     certificate: { id: certificate.id, hash: certificate.hash, validUntil: evaluation.validUntil },
@@ -189,7 +201,7 @@ export function describeCurrentPaperCommitment(
   };
 }
 
-function lookup(raw: unknown): PaperCurrentOrderRiskRequest {
+export function lookupPaperCurrentOrderRiskRequest(raw: unknown): PaperCurrentOrderRiskRequest {
   try {
     validatePaperCurrentRiskJson(raw);
     const p = requestSchema.parse(raw);
@@ -198,6 +210,150 @@ function lookup(raw: unknown): PaperCurrentOrderRiskRequest {
   } catch {
     throw Error('PAPER_CURRENT_ORDER_RISK_INPUT');
   }
+}
+
+interface PaperCurrentOrderRiskEvidence {
+  result: unknown;
+  cashProof: unknown;
+  budgetProof: unknown;
+  policyProof: unknown;
+  operationalProof: unknown;
+  orderProof: unknown;
+  commitmentProof: unknown;
+}
+
+/** Shared verification of the server-owned capture and the fixed PostgreSQL proof. */
+export function decodePaperCurrentOrderRiskEvidence(
+  row: PaperCurrentOrderRiskEvidence,
+  request: PaperCurrentOrderRiskRequest,
+  op: 'CAPTURE' | 'READ' | 'ADVANCE',
+  now: number,
+) {
+  const {
+    result: rawReply,
+    cashProof,
+    budgetProof,
+    policyProof,
+    operationalProof,
+    orderProof,
+    commitmentProof,
+  } = row;
+  validatePaperCurrentRiskJson(rawReply);
+  const p = packetSchema.parse(rawReply);
+  if (p.kind === 'MISSING' || p.kind === 'REPLACED' || p.kind === 'INCOMPLETE') fail();
+  const t = p.target,
+    b = request.source.admission.binding;
+  if (
+    !same(p.request, request) ||
+    p.capturedAt > now ||
+    t.createdAt > p.capturedAt ||
+    t.orderId !== request.target.orderId ||
+    t.intentId !== request.target.intentId ||
+    t.commandHash !== request.target.commandHash ||
+    t.owner.tenantId !== b.tenantId ||
+    t.owner.accountId !== b.accountId ||
+    t.owner.mode !== b.mode ||
+    t.orderId === request.source.admission.orderId ||
+    t.intentId === request.source.admission.intentId ||
+    createHash('sha256')
+      .update(canonical({ operation: 'createOrder', binding: b, command: t.command }))
+      .digest('hex') !== t.commandHash
+  )
+    fail();
+  if (p.kind === 'ADVANCED') {
+    if (op !== 'ADVANCE') fail();
+    return {
+      kind: 'ADVANCED' as const,
+      value: decodePaperCurrentLossProgressContents(p.source, request.source, now),
+    };
+  }
+  if (op === 'ADVANCE') fail();
+  const certificate = decodePaperCurrentRiskContents(p.certificate, request.source, now);
+  const account = certificate.inventory.accounts.find((a) => a.accountId === t.owner.accountId);
+  if (
+    !account ||
+    t.createdAt > certificate.createdAt ||
+    (t.createdAt >= certificate.createdAt - 60000 && certificate.snapshot.ordersInLastMinute < 1) ||
+    certificate.createdAt > p.capturedAt ||
+    certificate.scope.dbInstrumentId !== t.dbInstrumentId ||
+    certificate.scope.dbRuleId !== t.dbRuleId ||
+    certificate.scope.instrumentId !== t.command.instrumentId ||
+    !/^[1-9][0-9]{0,18}$/u.test(t.command.clientOrderId) ||
+    BigInt(t.command.clientOrderId) > BigInt(account.accountState.clientIdHighWatermark)
+  )
+    fail();
+  const evaluation = calculatePaperStoredOrderRiskEvaluation(
+    {
+      now,
+      sourceRequest: request.source,
+      certificate: p.certificate,
+      target: {
+        owner: t.owner,
+        orderId: t.orderId,
+        intentId: t.intentId,
+        dbInstrumentId: t.dbInstrumentId,
+        dbRuleId: t.dbRuleId,
+        command: t.command,
+      },
+    },
+    t.createdAt,
+  );
+  const commitmentBasis = describeCurrentPaperCommitment(
+    request.target,
+    account,
+    certificate,
+    evaluation,
+  );
+  if (evaluation.result.kind === 'EVALUATED') {
+    if (!commitmentBasis) fail();
+    const proof = cashProofSchema.parse(cashProof);
+    const limits = budgetProofSchema.parse(budgetProof);
+    const marketAndLoss = policyProofSchema.parse(policyProof);
+    operationalProofSchema.parse(operationalProof);
+    if (!orderProofSchema.safeParse(orderProof).success) throw Error('PAPER_ADMISSION_EVIDENCE');
+    const transition = commitmentProofSchema.safeParse(commitmentProof);
+    if (
+      !transition.success ||
+      transition.data.bookId !== commitmentBasis.book.id ||
+      transition.data.revision !== commitmentBasis.book.revision ||
+      transition.data.nextRevision !== commitmentBasis.book.nextRevision ||
+      !same(transition.data.after, {
+        ...account.state,
+        holds: [...account.state.holds, commitmentBasis.hold],
+      })
+    )
+      throw Error('PAPER_ADMISSION_EVIDENCE');
+    const budget = evaluation.result.budget;
+    const frequency =
+      certificate.snapshot.ordersInLastMinute +
+      (t.createdAt < certificate.createdAt - 60000 ? 1 : 0);
+    if (
+      proof.asset !== commitmentBasis.hold.asset ||
+      proof.amount !== commitmentBasis.hold.amount ||
+      proof.available !== commitmentBasis.spendable.before ||
+      proof.remaining !== commitmentBasis.spendable.after ||
+      limits.notional !== evaluation.result.notional ||
+      Object.values(budget.current).some((value) => value !== limits.currentExposure) ||
+      Object.values(budget.projected).some((value) => value !== limits.projectedExposure) ||
+      limits.openOrders !== budget.orders.current ||
+      limits.openOrders + 1 !== budget.orders.projected ||
+      limits.potentialPositions !== budget.potentialPositions.current ||
+      budget.potentialPositions.projected !== 1 ||
+      frequency !== limits.ordersInLastMinute ||
+      marketAndLoss.liquidity !== certificate.snapshot.market.liquidityNotional
+    )
+      fail();
+  }
+  return {
+    kind: 'CAPTURED' as const,
+    value: immutable({
+      kind: 'PAPER_CURRENT_ORDER_RISK_SOURCE' as const,
+      target: t,
+      certificate,
+      evaluation,
+      commitmentBasis,
+    }),
+  };
 }
 
 /** Fixed private database capture/evaluate port, never a Risk grant or writer. */
@@ -210,140 +366,18 @@ export async function createPostgresPaperCurrentOrderRiskSource(
     io: PaperFundingIo,
     op: 'CAPTURE' | 'READ' | 'ADVANCE',
   ) {
-    const request = lookup(raw);
+    const request = lookupPaperCurrentOrderRiskRequest(raw);
     try {
       const value = await database.transaction(
         request.source.admission.binding.tenantId,
         io,
         async (sql) => {
-          const rows = await sql.query<{
-            result: unknown;
-            cashProof: unknown;
-            budgetProof: unknown;
-            policyProof: unknown;
-            operationalProof: unknown;
-            orderProof: unknown;
-          }>(currentOrderRiskCaptureQuery, [
-            canonical({ ...request, kind: 'PAPER_CURRENT_ORDER_RISK_' + op }),
-          ]);
+          const rows = await sql.query<PaperCurrentOrderRiskEvidence>(
+            currentOrderRiskCaptureQuery,
+            [canonical({ ...request, kind: 'PAPER_CURRENT_ORDER_RISK_' + op })],
+          );
           if (rows.rows.length !== 1) fail();
-          const {
-            result: rawReply,
-            cashProof,
-            budgetProof,
-            policyProof,
-            operationalProof,
-            orderProof,
-          } = rows.rows[0]!;
-          validatePaperCurrentRiskJson(rawReply);
-          const p = packetSchema.parse(rawReply),
-            now = Date.now();
-          if (p.kind === 'MISSING' || p.kind === 'REPLACED' || p.kind === 'INCOMPLETE') fail();
-          const t = p.target,
-            b = request.source.admission.binding;
-          if (
-            !same(p.request, request) ||
-            p.capturedAt > now ||
-            t.createdAt > p.capturedAt ||
-            t.orderId !== request.target.orderId ||
-            t.intentId !== request.target.intentId ||
-            t.commandHash !== request.target.commandHash ||
-            t.owner.tenantId !== b.tenantId ||
-            t.owner.accountId !== b.accountId ||
-            t.owner.mode !== b.mode ||
-            t.orderId === request.source.admission.orderId ||
-            t.intentId === request.source.admission.intentId ||
-            createHash('sha256')
-              .update(canonical({ operation: 'createOrder', binding: b, command: t.command }))
-              .digest('hex') !== t.commandHash
-          )
-            fail();
-          if (p.kind === 'ADVANCED') {
-            if (op !== 'ADVANCE') fail();
-            return {
-              kind: 'ADVANCED' as const,
-              value: decodePaperCurrentLossProgressContents(p.source, request.source, now),
-            };
-          }
-          if (op === 'ADVANCE') fail();
-          const certificate = decodePaperCurrentRiskContents(p.certificate, request.source, now);
-          const account = certificate.inventory.accounts.find(
-            (a) => a.accountId === t.owner.accountId,
-          );
-          if (
-            !account ||
-            t.createdAt > certificate.createdAt ||
-            (t.createdAt >= certificate.createdAt - 60000 &&
-              certificate.snapshot.ordersInLastMinute < 1) ||
-            certificate.createdAt > p.capturedAt ||
-            certificate.scope.dbInstrumentId !== t.dbInstrumentId ||
-            certificate.scope.dbRuleId !== t.dbRuleId ||
-            certificate.scope.instrumentId !== t.command.instrumentId ||
-            !/^[1-9][0-9]{0,18}$/u.test(t.command.clientOrderId) ||
-            BigInt(t.command.clientOrderId) > BigInt(account.accountState.clientIdHighWatermark)
-          )
-            fail();
-          const evaluation = calculatePaperStoredOrderRiskEvaluation(
-            {
-              now,
-              sourceRequest: request.source,
-              certificate: p.certificate,
-              target: {
-                owner: t.owner,
-                orderId: t.orderId,
-                intentId: t.intentId,
-                dbInstrumentId: t.dbInstrumentId,
-                dbRuleId: t.dbRuleId,
-                command: t.command,
-              },
-            },
-            t.createdAt,
-          );
-          const commitmentBasis = describeCurrentPaperCommitment(
-            request.target,
-            account,
-            certificate,
-            evaluation,
-          );
-          if (evaluation.result.kind === 'EVALUATED') {
-            if (!commitmentBasis) fail();
-            const proof = cashProofSchema.parse(cashProof);
-            const limits = budgetProofSchema.parse(budgetProof);
-            const marketAndLoss = policyProofSchema.parse(policyProof);
-            operationalProofSchema.parse(operationalProof);
-            if (!orderProofSchema.safeParse(orderProof).success)
-              throw Error('PAPER_ADMISSION_EVIDENCE');
-            const budget = evaluation.result.budget;
-            const frequency =
-              certificate.snapshot.ordersInLastMinute +
-              (t.createdAt < certificate.createdAt - 60000 ? 1 : 0);
-            if (
-              proof.asset !== commitmentBasis.hold.asset ||
-              proof.amount !== commitmentBasis.hold.amount ||
-              proof.available !== commitmentBasis.spendable.before ||
-              proof.remaining !== commitmentBasis.spendable.after ||
-              limits.notional !== evaluation.result.notional ||
-              Object.values(budget.current).some((value) => value !== limits.currentExposure) ||
-              Object.values(budget.projected).some((value) => value !== limits.projectedExposure) ||
-              limits.openOrders !== budget.orders.current ||
-              limits.openOrders + 1 !== budget.orders.projected ||
-              limits.potentialPositions !== budget.potentialPositions.current ||
-              budget.potentialPositions.projected !== 1 ||
-              frequency !== limits.ordersInLastMinute ||
-              marketAndLoss.liquidity !== certificate.snapshot.market.liquidityNotional
-            )
-              fail();
-          }
-          return {
-            kind: 'CAPTURED' as const,
-            value: immutable({
-              kind: 'PAPER_CURRENT_ORDER_RISK_SOURCE' as const,
-              target: t,
-              certificate,
-              evaluation,
-              commitmentBasis,
-            }),
-          };
+          return decodePaperCurrentOrderRiskEvidence(rows.rows[0]!, request, op, Date.now());
         },
       );
       const now = Date.now(),

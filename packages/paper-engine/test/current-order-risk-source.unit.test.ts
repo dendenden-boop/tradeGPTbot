@@ -6,6 +6,7 @@ import * as server from '../src/risk.js';
 import * as pure from '../src/index.js';
 import { currentOrderRiskFixture } from './current-order-risk-fixtures.js';
 import { decodePaperCurrentRiskContents } from '../src/postgres-current-risk.js';
+import { createPostgresPaperPostexecutionReservation } from '../src/postgres-postexecution-reservation.js';
 import {
   describeCurrentPaperCommitment,
   type PaperCurrentOrderRiskSource,
@@ -20,6 +21,7 @@ const fake = vi.hoisted<{
   policyProof: unknown;
   operationalProof: unknown;
   orderProof: unknown;
+  commitmentProof: unknown;
   commitFailure: boolean;
 }>(() => ({
   queries: [],
@@ -31,6 +33,7 @@ const fake = vi.hoisted<{
   policyProof: null,
   operationalProof: null,
   orderProof: null,
+  commitmentProof: undefined,
   commitFailure: false,
 }));
 vi.mock('pg', () => ({
@@ -53,6 +56,10 @@ vi.mock('pg', () => ({
               policyProof: fake.policyProof,
               operationalProof: fake.operationalProof,
               orderProof: fake.orderProof,
+              commitmentProof:
+                fake.commitmentProof === undefined
+                  ? commitmentReply(fake.payload)
+                  : fake.commitmentProof,
             },
           ],
         };
@@ -80,11 +87,192 @@ const evaluatedBudget = {
 };
 const evaluatedPolicy = { liquidity: '4975', marketAllowed: true, lossAllowed: true };
 const readyOperation = { runtimeReady: true, tradingReady: true };
+function commitmentReply(raw: unknown) {
+  const packet = raw as Partial<ReturnType<ReturnType<typeof currentOrderRiskFixture>['reply']>>;
+  if (packet?.kind !== 'CAPTURED' || typeof packet.certificate?.text !== 'string') return null;
+  const captured = JSON.parse(packet.certificate.text) as {
+    source?: { inventory?: { text: string } };
+  };
+  const inventoryText = captured.source?.inventory?.text;
+  if (typeof inventoryText !== 'string') return null;
+  const inventory = JSON.parse(inventoryText) as {
+    executed: {
+      execution: {
+        source: { started: { capture: { portfolio: { bookId: string; revision: string } } } };
+        effects: { state: Record<string, unknown> & { holds: unknown[] } };
+      };
+    };
+  };
+  const execution = inventory.executed.execution;
+  const { bookId, revision } = execution.source.started.capture.portfolio;
+  const state = execution.effects.state;
+  return {
+    bookId,
+    revision: (BigInt(revision) + 1n).toString(),
+    nextRevision: (BigInt(revision) + 2n).toString(),
+    ready: true,
+    after: {
+      ...state,
+      holds: [
+        ...state.holds,
+        { asset: 'USDT', amount: '2.1021', status: 'RESERVED', reflected: false },
+      ],
+    },
+  };
+}
 const options = {
   connectionString: 'postgresql://paper_current:unit-password@127.0.0.1/current_order_risk',
   environment: 'test',
 };
 const io = () => ({ signal: new AbortController().signal, deadline: Date.now() + 2000 });
+
+async function postexecutionProof() {
+  const fixture = currentOrderRiskFixture();
+  const payload = fixture.reply();
+  vi.spyOn(Date, 'now').mockReturnValue(fixture.now);
+  fake.payload = payload;
+  const source = await (await open()).capture(fixture.request, io());
+  const basis = source.commitmentBasis!;
+  const account = source.certificate.inventory.accounts.find(
+    (a) => a.accountId === source.target.owner.accountId,
+  )!;
+  const key = 'reserve-exact-1';
+  const holdId = randomUUID();
+  const event = {
+    id: randomUUID(),
+    type: 'COMMITMENT' as const,
+    timestamp: fixture.now,
+    hold: { ...basis.hold, id: holdId },
+  };
+  const reduced = reducePortfolio(account.state, event, {
+    now: () => fixture.now,
+    holdWatermark: null,
+  });
+  const receipt = {
+    kind: 'PAPER_POSTEXECUTION_RESERVED',
+    key,
+    orderId: source.target.orderId,
+    intentId: source.target.intentId,
+    decisionId: randomUUID(),
+    reservationId: randomUUID(),
+    certificateId: source.certificate.id,
+    bookId: basis.book.id,
+    revision: basis.book.nextRevision,
+    debits: [{ asset: basis.hold.asset, amount: basis.hold.amount, holdId }],
+  };
+  const evidence = {
+    result: payload,
+    cashProof: fake.cashProof,
+    budgetProof: fake.budgetProof,
+    policyProof: fake.policyProof,
+    operationalProof: fake.operationalProof,
+    orderProof: fake.orderProof,
+    commitmentProof: commitmentReply(payload),
+  };
+  const book = {
+    previousHash: basis.book.stateHash,
+    state: canonical(reduced.state),
+    stateHash: createHash('sha256').update(canonical(reduced.state)).digest('hex'),
+  };
+  return {
+    request: { key, source: fixture.request.source, target: fixture.request.target },
+    proof: {
+      kind: 'WRITTEN',
+      receipt,
+      evidence,
+      event,
+      eventHash: createHash('sha256').update(canonical(event)).digest('hex'),
+      book,
+      watermark: reduced.holdWatermark!,
+      ledger: null,
+    },
+  };
+}
+
+it('commits a fresh postexecution reservation only after certified Risk and Portfolio agree', async () => {
+  const { request, proof } = await postexecutionProof();
+  const port = await createPostgresPaperPostexecutionReservation(options);
+  try {
+    fake.queries = [];
+    fake.payload = proof;
+    const callerMoney = { ...request, amount: '1' };
+    await expect(port.reserve(callerMoney, io())).rejects.toThrow('PAPER_ADMISSION_INPUT');
+    expect(fake.queries).toEqual([]);
+    const receipt = await port.reserve(request, io());
+    expect(receipt).toEqual(proof.receipt);
+    expect(Object.isFrozen(receipt.debits[0])).toBe(true);
+    expect(fake.queries.at(-1)).toBe('COMMIT');
+    expect(fake.requests.at(-1)).toEqual({ ...request, kind: 'PAPER_POSTEXECUTION_RESERVE' });
+  } finally {
+    await port.close();
+  }
+});
+
+it('keeps the postexecution reservation port outside the public entrypoints', () => {
+  expect(server).not.toHaveProperty('createPostgresPaperPostexecutionReservation');
+  expect(pure).not.toHaveProperty('createPostgresPaperPostexecutionReservation');
+});
+
+it.each(['risk', 'book', 'hold', 'ledger', 'watermark', 'target', 'missing-proof'] as const)(
+  'rolls back a fresh postexecution reservation with conflicting %s evidence',
+  async (field) => {
+    const { request, proof } = await postexecutionProof();
+    const port = await createPostgresPaperPostexecutionReservation(options);
+    try {
+      fake.queries = [];
+      const tampered = {
+        risk: {
+          ...proof,
+          evidence: {
+            ...proof.evidence,
+            budgetProof: { ...evaluatedBudget, projectedExposure: '1' },
+          },
+        },
+        book: {
+          ...proof,
+          book: {
+            ...proof.book,
+            state: '{}',
+            stateHash: createHash('sha256').update('{}').digest('hex'),
+          },
+        },
+        hold: { ...proof, event: { ...proof.event, hold: { ...proof.event.hold, amount: '1' } } },
+        ledger: { ...proof, ledger: 'unexpected-ledger' },
+        watermark: { ...proof, watermark: { ...proof.watermark, released: true } },
+        target: { ...proof, receipt: { ...proof.receipt, orderId: randomUUID() } },
+        'missing-proof': { kind: 'WRITTEN', receipt: proof.receipt },
+      }[field];
+      fake.payload = tampered;
+      await expect(port.reserve(request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+      expect(fake.queries).toContain('ROLLBACK');
+      expect(fake.queries).not.toContain('COMMIT');
+    } finally {
+      await port.close();
+    }
+  },
+);
+
+it('reconciles permanent receipts without recertifying and never retries a lost COMMIT', async () => {
+  const { request, proof } = await postexecutionProof();
+  const port = await createPostgresPaperPostexecutionReservation(options);
+  try {
+    fake.payload = { kind: 'REPLAYED', receipt: proof.receipt };
+    expect(await port.reserve(request, io())).toEqual(proof.receipt);
+    expect(await port.read(request, io())).toEqual(proof.receipt);
+    fake.payload = { kind: 'MISSING', key: request.key };
+    await expect(port.reserve(request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+    expect(await port.read(request, io())).toBeNull();
+    fake.payload = proof;
+    await expect(port.read(request, io())).rejects.toThrow('PAPER_ADMISSION_EVIDENCE');
+    fake.requests = [];
+    fake.commitFailure = true;
+    await expect(port.reserve(request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
+    expect(fake.requests).toHaveLength(1);
+  } finally {
+    await port.close();
+  }
+});
+
 function factory() {
   const fn = (server as unknown as Record<string, unknown>)[
     'createPostgresPaperCurrentOrderRiskSource'
@@ -115,6 +303,7 @@ beforeEach(() => {
     policyProof: evaluatedPolicy,
     operationalProof: readyOperation,
     orderProof: { rulesAllowed: true, capabilityReady: true },
+    commitmentProof: undefined,
     commitFailure: false,
   });
 });
@@ -216,6 +405,7 @@ it('binds a single commitment to the certified book without posting a second mon
     book: {
       id: book.bookId,
       revision: book.revision,
+      nextRevision: (BigInt(book.revision) + 1n).toString(),
       stateHash: createHash('sha256').update(canonical(before)).digest('hex'),
     },
     certificate: {
@@ -303,6 +493,45 @@ it('rejects an uncertain COMMIT without returning its calculated result', async 
   fake.commitFailure = true;
   await expect(port.capture(f.request, io())).rejects.toThrow('PAPER_ADMISSION_UNCERTAIN');
   expect(fake.queries.filter((q) => q.includes(' AS result'))).toHaveLength(1);
+  expect(fake.requests).toEqual([f.request]);
+  expect(fake.queries).not.toContain('ROLLBACK');
+});
+it.each([
+  'missing successor',
+  'foreign book',
+  'used predecessor',
+  'skipped revision on restart',
+  'duplicate hold',
+  'changed monetary balance',
+] as const)('rolls back a commitment with %s before exposing it', async (scenario) => {
+  const f = currentOrderRiskFixture();
+  vi.spyOn(Date, 'now').mockReturnValue(f.now);
+  fake.payload = f.reply();
+  const proof = commitmentReply(fake.payload)!;
+  const mutations = {
+    'missing successor': null,
+    'foreign book': { ...proof, bookId: randomUUID() },
+    'used predecessor': { ...proof, ready: false },
+    'skipped revision on restart': { ...proof, nextRevision: '5' },
+    'duplicate hold': {
+      ...proof,
+      after: { ...proof.after, holds: [...proof.after.holds, proof.after.holds.at(-1)] },
+    },
+    'changed monetary balance': { ...proof, after: { ...proof.after, balances: [] } },
+  };
+  fake.commitmentProof = mutations[scenario];
+  const port = await open();
+  const operation =
+    scenario === 'skipped revision on restart'
+      ? port.readCurrent(f.request, io())
+      : port.capture(f.request, io());
+  const outcome = await operation.then(
+    () => 'RETURNED',
+    () => 'REJECTED',
+  );
+  expect(outcome).toBe('REJECTED');
+  expect(fake.queries).toContain('ROLLBACK');
+  expect(fake.queries).not.toContain('COMMIT');
 });
 it.each([
   null,

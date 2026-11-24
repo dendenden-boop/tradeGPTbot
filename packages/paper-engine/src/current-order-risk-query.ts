@@ -283,6 +283,31 @@ WITH capture AS MATERIALIZED (
     AND (capability->>'expiresAt')::bigint = expires_at
   ) IS TRUE AS capability_ready
   FROM order_facts
+), commitment_inputs AS (
+  SELECT target->'owner' AS owner,
+         execution #> '{effects,state}' AS book,
+         execution #>> '{source,started,capture,portfolio,bookId}' AS book_id,
+         (execution #>> '{source,started,capture,portfolio,revision}')::numeric AS original_revision,
+         cash.asset, cash.amount, cash.available
+  FROM inputs CROSS JOIN cash
+), commitment AS (
+  SELECT *, (
+    original_revision = trunc(original_revision)
+    AND original_revision BETWEEN 1 AND 9007199254740989
+    AND book->>'status' = 'RECONCILED'
+    AND owner = jsonb_build_object('tenantId', book #> '{binding,tenantId}',
+      'accountId', book #> '{binding,accountId}', 'mode', book #> '{binding,mode}')
+    AND book #> '{binding,mode}' = '"PAPER"'::jsonb
+    AND book #> '{binding,connectionId}' = 'null'::jsonb
+    AND jsonb_typeof(book->'holds') = 'array'
+    AND jsonb_array_length(book->'holds') < 1000
+    AND (SELECT count(DISTINCT h->>'id') FROM jsonb_array_elements(book->'holds') h)
+        = jsonb_array_length(book->'holds')
+    AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(book->'holds') h
+      WHERE (h->>'status' IN ('PENDING', 'RESERVED')) IS NOT TRUE)
+    AND amount > 0 AND available >= amount
+  ) IS TRUE AS ready
+  FROM commitment_inputs
 )
 SELECT result,
        (SELECT jsonb_build_object('asset', asset, 'amount', trim_scale(amount)::text,
@@ -300,6 +325,15 @@ SELECT result,
        (SELECT jsonb_build_object('runtimeReady', runtime_ready, 'tradingReady', trading_ready)
         FROM operational) AS "operationalProof",
        (SELECT jsonb_build_object('rulesAllowed', rules_allowed, 'capabilityReady', capability_ready)
-        FROM order_checks) AS "orderProof"
+        FROM order_checks) AS "orderProof",
+       (SELECT jsonb_build_object('bookId', book_id,
+          'revision', trim_scale(original_revision + 1)::text,
+          'nextRevision', trim_scale(original_revision + 2)::text,
+          'ready', ready,
+          'after', CASE WHEN ready THEN jsonb_set(book, '{holds}',
+            (book->'holds') || jsonb_build_array(jsonb_build_object(
+              'asset', asset, 'amount', trim_scale(amount)::text,
+              'status', 'RESERVED', 'reflected', false))) END)
+        FROM commitment) AS "commitmentProof"
 FROM capture
 `;

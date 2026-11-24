@@ -58,8 +58,8 @@ semantics; no caller-supplied counter adjustment is exposed by either entrypoint
 The immutable result binds the real target command and scope, finite current
 certificate and calculation. `EVALUATED` means arithmetic/policy evaluation only.
 Existing position, residual order exposure, reservations and holds are counted
-once; fee coverage remains separate. A future atomic writer must independently
-repeat current capture/evaluation and reserve in its own bounded transaction.
+once. Fee coverage remains separate. The atomic writer independently repeats
+current capture and evaluation in its own bounded transaction.
 
 The server reader includes an immutable `commitmentBasis` when the result is
 `EVALUATED`. It binds the selected order, intent and command hash to the exact
@@ -67,10 +67,19 @@ executed Portfolio book ID, revision and canonical state hash, and to the
 current certificate ID, hash and evaluation deadline. The reader recomputes
 spendable quote from the certified Portfolio balance and existing unreflected
 holds, then checks both sides of the proposed debit against Risk. The proposal
-describes one unreflected `RESERVED` hold. Event and hold identity, idempotency,
-revision compare-and-set and all durable effects remain the responsibility of
-the future transaction. A rejected evaluation has `commitmentBasis: null`.
+describes one unreflected `RESERVED` hold. The reservation transaction assigns
+the event and hold identities and owns idempotency, the revision compare-and-set
+and all durable effects. A rejected evaluation has `commitmentBasis: null`.
 Capture remains read-only for holds, balances, positions and the monetary ledger.
+
+The basis includes the exact `nextRevision` for a possible successor.
+PostgreSQL derives the book ID and revision from the locked execution capture,
+verifies account ownership, hold identity uniqueness and remaining spendable
+quote, then projects one additional hold without an assigned identity. The
+TypeScript reader verifies that exact revision and projection before COMMIT.
+Balances, positions, prior holds and all other Portfolio fields must match the
+authenticated state. An UNKNOWN hold, exhausted revision or insufficient
+spendable quote blocks the projection.
 
 The fixed capture query calls the authenticated RPC once. PostgreSQL uses that
 same result under the same transaction locks to derive the quote debit from the
@@ -117,9 +126,42 @@ price tick without rounding the command. The synthetic capability must
 belong to the same runtime publication and certificate lifetime. Both
 verdicts must be affirmative before an evaluated capture can commit.
 
-These checks remain part of read-side capture. The protected writer still needs
-its own current Risk evaluation, authenticated book successor and atomic
-durable effects.
+The read-side capture and the reservation writer each obtain current evidence
+under their own transaction locks.
+
+The original execution validator currently requires the first execution's book
+revision to be the current head and expects a single issuance and hold
+watermark. The reservation transaction must add a causal successor that the
+database can authenticate while preserving permanent historical replay of the
+original execution. Extending the head or adding an issuance without that
+proof would break the accepted replay contract.
+
+Additive [migration 72](../../packages/database/prisma/migrations/202611240001_paper_postexecution_reservation/migration.sql)
+installs one such successor. It retains every first-execution fill, ledger and
+order check and accepts the next head only with the associated certificate,
+active debit and Portfolio evidence. A single migration transaction installs
+the cause, constraints, fixed SQL proof and the existing two RPC wrappers.
+
+The writer uses the same fixed PostgreSQL proof on a capture made inside its own
+transaction. A new key requires the current affirmative Risk proofs. An exact
+key replay reauthenticates the original scope and returns the existing durable
+receipt ahead of current Risk admission. The receipt identifies the reservation
+and cannot serve as a dispatch permit. The active successor includes one
+unreflected quote debit and leaves balances, positions and the ledger intact.
+Both operations use the two existing restricted RPC names. The diagnostic
+requires a completed Prisma deployment of migration 72. The port supports one direct
+successor per execution and exposes no route from the API or dispatch service.
+
+The [private server port](../../packages/paper-engine/src/postgres-postexecution-reservation.ts)
+checks a fresh write in the same PostgreSQL transaction. It reruns common
+Risk and compares the result with the fixed SQL proof and saved debit. It
+applies the exact persisted commitment event through the common Portfolio
+reducer and verifies the saved watermark, canonical book and hashes. Any
+monetary posting, evidence mismatch or expired certificate causes rollback.
+The proof stays inside the port. A successful transaction returns the receipt.
+An exact replay or restart read checks the durable receipt and does not
+recertify expired or replaced policies. A lost COMMIT gives an uncertain
+outcome and leaves recovery to an explicit read by the permanent key.
 
 `capture` may persist only the existing nonfinancial loss checkpoints/certificate.
 Exact valid source replay preserves certificate identity, revision and clocks.
@@ -134,10 +176,9 @@ is introduced.
 Tests cover genuine durable target authentication, count-once semantics, current
 rule replacement and retirement, original-reader rejection, conflicting selectors,
 extra drafts, pause/permission gates, concurrent capture and lost-COMMIT restart
-without additional financial effects. Migration acceptance must include populated
-70→71 upgrade/redeploy, unchanged old rows/functions, restricted owners, compiled
-restart, reset and full Ubuntu/Windows/native/Docker/CodeQL CI. Local diagnostics
-are not substitutes for independent CI.
+without additional financial effects. Migration 72 acceptance includes populated
+71→72 upgrade/redeploy, readback of the original execution, restricted owners,
+compiled reopen, reset and full Ubuntu/Windows/native/Docker/CodeQL CI.
 
 LIVE and financial PAPER dispatch, positive native collateral credit and PHASE 14
 remain disabled. Native AMEND remains Binance Spot TESTNET only. Real private

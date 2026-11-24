@@ -1,3 +1,4 @@
+// PAPER POSTEXECUTION migration72 acceptance.
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:net';
 import { readFile } from 'node:fs/promises';
@@ -160,7 +161,7 @@ try {
       // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
       // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
       // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT
-      databaseReport.nativeClusterIsolation?.migrations !== 71 ||
+      databaseReport.nativeClusterIsolation?.migrations !== 72 ||
       // END PAPER CURRENT ORDER RISK MIGRATION_COUNT
       // END PAPER CURRENT RISK MIGRATION_COUNT
       // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT

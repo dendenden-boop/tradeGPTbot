@@ -1809,3 +1809,5 @@ it('paper-current-risk: a newer ticker-only observation cannot be ignored in fav
   ).toBe(1);
   expect(await startFixtureEffects(f.c.owner.tenantId)).toEqual(before);
 });
+
+export { currentOrderTargetReady, openActual };

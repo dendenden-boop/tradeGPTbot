@@ -82,6 +82,7 @@ export async function verifyPaperCurrentOrderBudgetSql() {
     maxConcurrentPositions: 1,
     maxOrdersPerMinute: 2,
   };
+  const bookId = '00000000-0000-4000-8000-000000004010';
   const execution = {
     input: {
       attempt: { request: { admission: { command: { type: 'LIMIT', limitPrice: '10.55' } } } },
@@ -90,10 +91,6 @@ export async function verifyPaperCurrentOrderBudgetSql() {
     effects: {
       order: { executedQuantity: '0.25', remainingQuantity: '0.25' },
       reservation: { status: 'ACTIVE' },
-      state: {
-        balances: [{ asset: 'USDT', available: '100' }],
-        holds: [{ asset: 'USDT', amount: '2.64', reflected: false }],
-      },
     },
     source: {
       started: {
@@ -184,6 +181,13 @@ export async function verifyPaperCurrentOrderBudgetSql() {
     capability?: Partial<typeof capability & { expiresAt: number }>;
     rulesAllowed?: boolean;
     capabilityReady?: boolean;
+    originalRevision?: string;
+    bookScope?: string;
+    bookStatus?: string;
+    duplicateHold?: boolean;
+    holdUnknown?: boolean;
+    quote?: { balance: string; available: string; remaining: string };
+    commitmentReady?: boolean;
   }[] = [
     { name: 'exact boundaries' },
     {
@@ -406,11 +410,74 @@ export async function verifyPaperCurrentOrderBudgetSql() {
       capability: { adapterVersion: 'other-adapter' },
       capabilityReady: false,
     },
+    {
+      name: 'largest supported successor revision',
+      originalRevision: '9007199254740989',
+    },
+    {
+      name: 'successor revision exhaustion',
+      originalRevision: '9007199254740990',
+      commitmentReady: false,
+    },
+    {
+      name: 'different portfolio account',
+      bookScope: '00000000-0000-4000-8000-000000004019',
+      commitmentReady: false,
+    },
+    { name: 'gap in source book', bookStatus: 'GAP', commitmentReady: false },
+    { name: 'an unresolved hold remains in the book', holdUnknown: true, commitmentReady: false },
+    {
+      name: 'same hold identity counted twice',
+      duplicateHold: true,
+      commitmentReady: false,
+    },
+    {
+      name: 'second debit would overspend by one atom',
+      quote: {
+        balance: '4.742099999999999999',
+        available: '2.102099999999999999',
+        remaining: '-0.000000000000000001',
+      },
+      budgetAllowed: false,
+      commitmentReady: false,
+    },
   ];
   for (const sample of samples) {
     const age = sample.age ?? 60000;
     const op = operationalFixture(at);
     sample.changeOperation?.(op);
+    const originalRevision = sample.originalRevision ?? '2';
+    const book = {
+      status: sample.bookStatus ?? 'RECONCILED',
+      binding: {
+        ...op.owner,
+        accountId: sample.bookScope ?? op.owner.accountId,
+        connectionId: null,
+      },
+      balances: [{ asset: 'USDT', available: sample.quote?.balance ?? '100' }],
+      holds: [
+        {
+          asset: 'USDT',
+          amount: '2.64',
+          reflected: false,
+          id: 'first-hold',
+          status: sample.holdUnknown ? 'UNKNOWN' : 'RESERVED',
+        },
+        ...(sample.duplicateHold
+          ? [{ id: 'first-hold', asset: 'USDT', amount: '0', reflected: true, status: 'RESERVED' }]
+          : []),
+      ],
+    };
+    const capturedExecution = {
+      ...execution,
+      effects: { ...execution.effects, state: book },
+      source: {
+        started: {
+          ...execution.source.started,
+          capture: { portfolio: { bookId, revision: originalRevision } },
+        },
+      },
+    };
     const policies = (['PLATFORM', 'USER'] as const).map((kind) => ({
       scope: { kind },
       limits: {
@@ -470,7 +537,7 @@ export async function verifyPaperCurrentOrderBudgetSql() {
                 : { trade: { text: canonical({ trade: { quantity: '100' } }) } }),
             },
             loss: { text: canonical({ ...loss, ...sample.loss }) },
-            inventory: { text: canonical({ executed: { execution } }) },
+            inventory: { text: canonical({ executed: { execution: capturedExecution } }) },
           },
         }),
       },
@@ -479,7 +546,12 @@ export async function verifyPaperCurrentOrderBudgetSql() {
     expect(rows, sample.name).toEqual([
       {
         result: packet,
-        cashProof: { asset: 'USDT', amount: '2.1021', available: '97.36', remaining: '95.2579' },
+        cashProof: {
+          asset: 'USDT',
+          amount: '2.1021',
+          available: sample.quote?.available ?? '97.36',
+          remaining: sample.quote?.remaining ?? '95.2579',
+        },
         budgetProof: {
           notional: '2.1',
           currentExposure: '5.65',
@@ -501,6 +573,22 @@ export async function verifyPaperCurrentOrderBudgetSql() {
         orderProof: {
           rulesAllowed: sample.rulesAllowed ?? true,
           capabilityReady: sample.capabilityReady ?? true,
+        },
+        commitmentProof: {
+          bookId,
+          revision: (BigInt(originalRevision) + 1n).toString(),
+          nextRevision: (BigInt(originalRevision) + 2n).toString(),
+          ready: sample.commitmentReady ?? true,
+          after:
+            sample.commitmentReady === false
+              ? null
+              : {
+                  ...book,
+                  holds: [
+                    ...book.holds,
+                    { asset: 'USDT', amount: '2.1021', status: 'RESERVED', reflected: false },
+                  ],
+                },
         },
       },
     ]);
