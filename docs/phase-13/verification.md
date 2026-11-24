@@ -30,10 +30,23 @@ mismatch rollback and historical receipt retention. The two earlier RED runs
 and their logs were retained. All 261 targeted unit and contract checks passed.
 
 The ordinary native runner checks the populated upgrade, redeploy, compiled
-reopen and reset. CI still requires independent Ubuntu, Windows, PostgreSQL,
-Docker and CodeQL results. **HOLD / PHASE 13 IN_PROGRESS /
-NOT READY FOR PHASE 14.** Financial PAPER/LIVE dispatch and positive native
-collateral credit are disabled.
+reopen and reset. Platform run 45443530349 and CodeQL run 45443530437 passed
+for `5b24f96`. The six Platform archive digests match GitHub, including
+6,741 unit and 41 HTTP tests per OS, 1,528 PostgreSQL tests, 24 owner suites,
+49 writer/capture cases and zero audit findings.
+
+The independent [first PR run](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45444778265)
+failed on the existing 30-second trade journal case for 300 instruments. The
+test now batches the 300 administrative cardinality reads in six queries and
+keeps three native port operations in flight through each refresh. Every
+publish, restart read and per-instrument event, native identity and seal check
+still runs. The local Windows PostgreSQL suite passed 39 of 40 tests and
+reproduced the same timeout. The successful independent CI result for the new
+fixture revision is pending. The RED archive and local diagnostics were
+retained.
+
+**HOLD / PHASE 13 IN_PROGRESS / NOT READY FOR PHASE 14.** Financial PAPER/LIVE
+dispatch and positive native collateral credit are disabled.
 
 ## Postexecution reservation server port — 24 November 2026
 
