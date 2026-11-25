@@ -1,3 +1,4 @@
+// PAPER POSTEXECUTION migration72 acceptance.
 // REGISTRY_DOMAIN_EARLY_NATIVE: extra issued role-domain proof, no financial authority.
 // Owned acceptance infrastructure only; never a production runtime authority.
 import { proveRegistryIndependence } from './registry-domain-independence.mjs';
@@ -78,7 +79,7 @@ export async function bootstrapNativeCluster({
         // BEGIN PAPER HISTORICAL INVENTORY SECONDARY_COUNT
         // BEGIN PAPER CURRENT RISK SECONDARY_COUNT
         // BEGIN PAPER CURRENT ORDER RISK SECONDARY_COUNT
-        71,
+        72,
         // END PAPER CURRENT ORDER RISK SECONDARY_COUNT
         // END PAPER CURRENT RISK SECONDARY_COUNT
         // END PAPER HISTORICAL INVENTORY SECONDARY_COUNT
@@ -214,7 +215,7 @@ export async function bootstrapNativeCluster({
       // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
       // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
       // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT
-      migrations: 71,
+      migrations: 72,
       // END PAPER CURRENT ORDER RISK MIGRATION_COUNT
       // END PAPER CURRENT RISK MIGRATION_COUNT
       // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT

@@ -304,6 +304,12 @@ export async function readyExecutionStart(
   await ports.book.initialize(c.owner, startIo());
   await beforeEvidence?.({ orders: ports.orders, binding, draft });
   const context = await ports.runtime.context(c.owner, startIo());
+  const identity = (
+    await admin.query<{ hash: string; permission: string; session: string }>(
+      'SELECT encode(cmd."commandHash",\'hex\') hash,a."permissionEpoch"::text permission,u."sessionEpoch"::text session FROM ctp_execution.command cmd JOIN public.exchange_account a ON a.id=$3 AND a."tenantId"=cmd."tenantId" JOIN public."user" u ON u.id=a."tenantId" WHERE cmd."tenantId"=$1 AND cmd."intentId"=$2',
+      [c.owner.tenantId, order.intentId, c.owner.accountId],
+    )
+  ).rows[0]!;
   const now = Date.now();
   f.p.timestamp = f.s.timestamp = now;
   for (const record of [f.p.trade, f.s.book, f.s.ticker])
@@ -331,17 +337,13 @@ export async function readyExecutionStart(
   };
   // Independent public market and runtime evidence all settle before admission.
   // Each authority performs its real current transaction with unchanged IO.
-  await runIndependentFixtureSetup([
+  const [snapshotReceipt, tradeReceipt] = await runIndependentFixtureSetup([
     () => ports.snapshots.publish(f.s, startIo()),
     () => ports.trades.publish(f.p, startIo()),
     () => ports.runtime.publish(publication, startIo()),
   ]);
-  const identity = (
-    await admin.query<{ hash: string; permission: string; session: string }>(
-      'SELECT encode(cmd."commandHash",\'hex\') hash,a."permissionEpoch"::text permission,u."sessionEpoch"::text session FROM ctp_execution.command cmd JOIN public.exchange_account a ON a.id=$3 AND a."tenantId"=cmd."tenantId" JOIN public."user" u ON u.id=a."tenantId" WHERE cmd."tenantId"=$1 AND cmd."intentId"=$2',
-      [c.owner.tenantId, order.intentId, c.owner.accountId],
-    )
-  ).rows[0]!;
+  if (snapshotReceipt.status !== 'APPLIED' || tradeReceipt.status !== 'APPLIED')
+    throw Error('EXECUTION_START_MARKET_PUBLICATION_NOT_APPLIED');
   const approvalInput = {
     binding,
     state: { id: order.id },
@@ -375,6 +377,8 @@ export async function readyExecutionStart(
     ...ports,
     c,
     f,
+    snapshotReceipt,
+    tradeReceipt,
     binding,
     draft,
     admissionPort: ports.admission,

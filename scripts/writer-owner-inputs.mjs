@@ -2,14 +2,16 @@
 export const writerOwnerInputs = Object.freeze({
   'packages/database/test/fixtures/native-default-port.ts':
     '66cff560b81dbc3678e9f8028dcd8f5bb25c8de9e46c37e2e4880143234ef39b',
+  'packages/database/test/fixtures/paper-current-order-budget-proof.ts':
+    'f0e29886f14ff2c661edd83a3be775b22fd064cdd0f98b73743cfd0b4c7662d4',
   'packages/database/test/fixtures/paper-execution-start.ts':
-    'f8d9319268b5259fc421226a4090bed95cb6a79e7963db22bcc3bff172e47a3f',
+    '240bc9b24c30b0d70a8548aa42e3cd0273352b25e233b02fc778d2b1bb0dda2c',
   'packages/database/test/fixtures/preview-clock.ts':
     'f3ba7c20d4faccc743f9f371c51d3b845b94b017fedb7e407c69431e0c5b084c',
   'packages/database/test/fixtures/registry-commit-proxy.ts':
     'a64aefc8526cea37cc6f218c407ee730d82e58f504d8a111888d03ca0a915af4',
   'packages/database/test/paper-execution-commit.integration.test.ts':
-    '3868d48156bc3f0c454036de82420aefb36dddf45f3e3d778abc1550bd8e952a',
+    '25d8bff96bb693eb31f03b5ccd9025d30cbadc388d9cb13c4136ee8cdb23fbcd',
   'packages/exchange-core/test/fixtures/adapter.ts':
     '4183fa89da2f2b240aaf0d634fa5bc50c50b99bd774e9ff8f213fa37f66b7ec4',
   'packages/exchange-core/test/fixtures/domain.ts':
@@ -42,4 +44,4 @@ export const writerOwnerInputs = Object.freeze({
   'vitest.shared.ts': '3019e93bcdd0eb9c14ba7ce1f73c0e256d00c304e12440d76d09552b525a5c0e',
 });
 export const writerOwnerInputHash =
-  'daf01a682d6784498996bfd9a08ab44ceea61bbae58295c785cd2d1fb7533b46';
+  '55ded5d1ecdf8758c845c0e74f21487d125a78a61076a32b43eaec7a7513f6e3';

@@ -1,3 +1,4 @@
+// PAPER POSTEXECUTION migration72 acceptance.
 // REGISTRY_DOMAIN_EARLY_NATIVE: verify actual registry separation for early admission.
 // Read-only acceptance evidence; cannot mint a scheduler certificate or grant.
 import assert from 'node:assert/strict';
@@ -58,7 +59,7 @@ export function requireClusterIsolatedEvidence(cohorts, native) {
   // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
   // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
   // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT
-  assert.equal(proof.migrations, 71);
+  assert.equal(proof.migrations, 72);
   // END PAPER CURRENT ORDER RISK MIGRATION_COUNT
   // END PAPER CURRENT RISK MIGRATION_COUNT
   // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT

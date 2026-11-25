@@ -102,19 +102,29 @@ function next(
     },
   };
 }
-async function rows(p: Publication) {
+async function rowsFor(publications: readonly Publication[]) {
   return (
     await admin.query<{ events: number; native: number; seals: number }>(
-      "SELECT (SELECT count(*)::int FROM ctp_market.trade_event WHERE key=$1::jsonb) events,(SELECT count(*)::int FROM ctp_market.native_trade_seen WHERE identity->'partition'=$1::jsonb) native,(SELECT count(*)::int FROM ctp_market.trade_seal WHERE key=$1::jsonb) seals",
+      `SELECT
+        (SELECT count(*)::int FROM ctp_market.trade_event WHERE key=p.key) events,
+        (SELECT count(*)::int FROM ctp_market.native_trade_seen WHERE identity->'partition'=p.key) native,
+        (SELECT count(*)::int FROM ctp_market.trade_seal WHERE key=p.key) seals
+      FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY p(key, ordinal)
+      ORDER BY p.ordinal`,
       [
-        JSON.stringify({
-          scope: p.key.scope,
-          instrumentId: p.key.instrumentId,
-          dbInstrumentId: p.key.dbInstrumentId,
-        }),
+        JSON.stringify(
+          publications.map(({ key: { scope, instrumentId, dbInstrumentId } }) => ({
+            scope,
+            instrumentId,
+            dbInstrumentId,
+          })),
+        ),
       ],
     )
-  ).rows[0]!;
+  ).rows;
+}
+async function rows(p: Publication) {
+  return (await rowsFor([p]))[0]!;
 }
 async function raw(value: unknown) {
   const text = JSON.stringify(value);
@@ -498,12 +508,24 @@ it('300 instruments retain independent heads across consecutive refresh and rest
     expect(instruments.rowCount).toBe(50);
     expect(rules.rowCount).toBe(50);
   }
-  // Independent instruments use the port's bounded admission. Keep each
-  // instrument's two updates ordered; never schedule an unbounded queue or
-  // consume all four physical slots while one is still closing.
+  // Keep three port operations in flight without making an idle slot wait
+  // for the slowest unrelated instrument. Settle all three before the next
+  // refresh, and stop scheduling immediately on a failure.
   const wave = async (work: (p: Publication) => Promise<void>) => {
-    for (let offset = 0; offset < publications.length; offset += 3)
-      await Promise.all(publications.slice(offset, offset + 3).map(work));
+    let index = 0;
+    const failures: unknown[] = [];
+    await Promise.all(
+      Array.from({ length: 3 }, async () => {
+        while (index < publications.length && !failures.length) {
+          try {
+            await work(publications[index++]!);
+          } catch (error) {
+            failures.push(error);
+          }
+        }
+      }),
+    );
+    if (failures.length) throw failures[0];
   };
   await wave(async (p) => {
     const q = next(p, '0', p.trade.sourceSequence);
@@ -518,8 +540,13 @@ it('300 instruments retain independent heads across consecutive refresh and rest
   const restarted = await open();
   await wave(async (p) => {
     expect(await restarted.head(p.key, io())).toEqual({ revision: '2', gap: false });
-    expect(await rows(p)).toEqual({ events: 2, native: 2, seals: 2 });
   });
+  // Keep the 300 restricted restart reads and verify every partition's durable
+  // cardinality with bounded admin batches outside the three-slot port waves.
+  for (let offset = 0; offset < publications.length; offset += 50) {
+    const batch = publications.slice(offset, offset + 50);
+    expect(await rowsFor(batch)).toEqual(batch.map(() => ({ events: 2, native: 2, seals: 2 })));
+  }
 }, 30000);
 it('coherent payload and checksum rewrite cannot replace the retained original publication seal', async () => {
   const p = await fixture(),

@@ -52,7 +52,7 @@ function fixture() {
     {
       database: 'ctp_p2_owner_deadbeef1234',
       oid: '101',
-      migrations: 71,
+      migrations: 72,
       migrationDigest: 'b'.repeat(64),
       nonBypassOwner: true,
       ownerOid: '77',
@@ -61,7 +61,7 @@ function fixture() {
     {
       database: 'ctp_p2_writer_owner_deadbeef1234',
       oid: '102',
-      migrations: 71,
+      migrations: 72,
       migrationDigest: 'b'.repeat(64),
       nonBypassOwner: true,
       ownerOid: '77',

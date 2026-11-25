@@ -91,7 +91,7 @@ function requireExecution(execution, ownership, window) {
       !/^[1-9][0-9]*$/u.test(p.ownerOid) ||
       !/^[a-f0-9]{64}$/u.test(p.dbAclDigest) ||
       p.nonBypassOwner !== true ||
-      p.migrations !== 71 ||
+      p.migrations !== 72 ||
       !/^[a-f0-9]{64}$/u.test(p.migrationDigest)
     )
       fail();

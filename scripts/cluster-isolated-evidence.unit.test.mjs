@@ -1,3 +1,4 @@
+// PAPER POSTEXECUTION migration72 acceptance.
 import { expect, it } from 'vitest';
 import { requireClusterIsolatedEvidence } from './cluster-isolated-evidence.mjs';
 import { clusterIsolatedShape } from './cluster-isolated-cohorts.mjs';
@@ -44,7 +45,7 @@ function fixture() {
     // BEGIN PAPER HISTORICAL INVENTORY MIGRATION_COUNT
     // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
     // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT
-    migrations: 71,
+    migrations: 72,
     // END PAPER CURRENT ORDER RISK MIGRATION_COUNT
     // END PAPER CURRENT RISK MIGRATION_COUNT
     // END PAPER HISTORICAL INVENTORY MIGRATION_COUNT

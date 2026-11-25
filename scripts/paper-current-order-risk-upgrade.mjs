@@ -88,7 +88,7 @@ export async function verifyPaperCurrentOrderRiskUpgrade(db, before) {
   }
   await verifyPaperCurrentOrderRiskStorage(db, { ownership: 'REQUIRE_NON_BYPASS' });
 }
-async function publishCurrentFixtureEvidence(db, env, source) {
+export async function publishCurrentFixtureEvidence(db, env, source) {
   const { createPostgresMarketSnapshots, createPostgresMarketTrades } =
       await import('../packages/market-data/dist/index.js'),
     { createPostgresPaperRuntimeObservations, paperRuntimeDependencies } =

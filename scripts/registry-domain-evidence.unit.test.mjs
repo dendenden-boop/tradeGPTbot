@@ -1,3 +1,4 @@
+// PAPER POSTEXECUTION migration72 acceptance.
 import { expect, it } from 'vitest';
 import { discoverDatabaseFiles, planDatabaseCohorts } from './database-cohorts.mjs';
 import { planRoleScopedCohorts } from './role-scoped-cohorts.mjs';
@@ -50,7 +51,7 @@ function fixture() {
     actors: 32,
     // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
     // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT
-    migrations: 71,
+    migrations: 72,
     // END PAPER CURRENT ORDER RISK MIGRATION_COUNT
     // END PAPER CURRENT RISK MIGRATION_COUNT
     fixedRoleGraphHash: 'e'.repeat(64),
