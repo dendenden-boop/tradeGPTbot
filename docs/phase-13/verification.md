@@ -1,5 +1,72 @@
 # PHASE 13 verification
 
+## Additive migration 73 for the historical preparation basis — 25 November 2026
+
+Both migration contract tests failed before migration 73 was added. They now
+pin the names and bytes of migrations 1–72 and check that the existing
+reconciliation function gains only the new branch. The 234 targeted checks
+passed. The native harness checks the same 24 owner suites and 49 writer cases
+with unchanged deadlines and requires the complete migration chain.
+
+On Windows PostgreSQL 17.11 with `fsync=on`, Prisma applied migration 73 to a
+database with a committed execution and its genuine successor reservation.
+Redeploy preserved every captured row, all existing function identities and
+privileges, and the private helper's restricted access. The compiled reader
+reopened the same book and hold. Two isolated native scenarios covered the
+stricter-policy replay and recovery after a lost COMMIT reply. A fresh scratch
+database redeployed all 73 migrations, with empty postexecution storage and
+the expected RPC privileges. The first native invocation selected a fixture
+that required migration 72 before the 71→72 seed step. Its failed report was
+retained. The successful report and verified server log were saved before its
+scratch database was removed.
+
+Independent CI is required for publication. PHASE 13 remains IN_PROGRESS.
+Fresh preparation Risk is pending. PAPER/LIVE financial dispatch and positive
+native collateral credit remain disabled.
+
+## Historical postexecution preparation basis candidate — 25 November 2026
+
+The eight new contract tests failed first because the private reservation
+port lacked `readPreparationBasis`. The reader now reconstructs the original
+reservation at its persisted event time. It checks the exact cause, target,
+receipt, successor hold and Portfolio book through the existing restricted
+reconciliation channel. Before returning the evidence, it verifies the original
+Risk result and the reducer's zero-posting transition. The targeted suite passed
+all 90 cases.
+
+Two opt-in tests passed on Windows PostgreSQL 17.11 with `fsync=on`, all 72
+published migrations and restricted actors. They exercised exact evidence after
+reopening the port and replacing the policy, rejection of a conflicting key,
+an absent lookup, and explicit recovery after the COMMIT response was lost. The
+original execution receipt and database effect counts stayed equal. In the first
+diagnostic run, the transport fixture filtered the wrong RPC tag and missed the
+lost COMMIT case. That RED report and its stopped scratch cluster were retained.
+The corrected run's JSON and checksum-verified server log were retained before
+its scratch cluster was removed.
+
+The candidate also passed full repository formatting, documentation, lint and
+type checks, all 6,750 unit tests and 41 HTTP tests on Windows. Published
+migrations 1–72 and CI workflows match the accepted main checkpoint.
+
+At this checkpoint the SQL was an opt-in diagnostic fixture. Migration
+packaging, independent CI and fresh preparation Risk were pending.
+
+## Accepted main checkpoint — 25 November 2026
+
+Protected [PR 79](https://github.com/dendenden-boop/tradeGPTbot/pull/79)
+was squash merged as `5e9aa485a4bf47e6f5ca9b6975f42508b423c396`.
+The independent [main Platform run](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45579625622)
+and [main CodeQL run](https://github.com/dendenden-boop/tradeGPTbot/actions/runs/45579625682)
+passed. Verified reports cover 6,742 unit and 41 HTTP tests on each OS,
+1,528 PostgreSQL tests, 24 owner suites, 49 writer cases and zero dependency
+audit findings. All seven artifact digests matched GitHub. The 71 previous
+migration files match their published bytes. Migration 72 passed populated
+upgrade, redeploy, reset and compiled recovery. The Linux case for 300
+instruments passed in 16.042 seconds under its original 30-second deadline.
+
+That merge cleared its own HOLD. PHASE 13 remains IN_PROGRESS. Financial
+PAPER/LIVE dispatch and positive native collateral credit remain disabled.
+
 ## Additive postexecution migration 72 — 24 November 2026
 
 Work started from `cc53ed6b5441cc561538162db88e21c8c18d2853`. GitHub's

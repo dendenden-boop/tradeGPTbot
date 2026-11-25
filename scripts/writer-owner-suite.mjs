@@ -135,12 +135,12 @@ export async function prepareWriterOwnerClone({
           'SELECT migration_name,checksum FROM public._prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name',
         )
       ).rows;
-      assert.equal(migrations.length, 72);
+      assert.equal(migrations.length, 73);
       const migrationDigest = createHash('sha256').update(JSON.stringify(migrations)).digest('hex');
       result.push({
         database,
         oid: identity[0].oid,
-        migrations: 72,
+        migrations: 73,
         migrationDigest,
         nonBypassOwner: true,
         ownerOid: identity[0].owner_oid,

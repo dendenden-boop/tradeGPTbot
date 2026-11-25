@@ -1,5 +1,33 @@
 // Exact test-only restoration for historical harness reviews.
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const basisReview = JSON.parse(
+  readFileSync(
+    new URL('./fixtures/postexecution-basis-harness-review.json', import.meta.url),
+    'utf8',
+  ),
+);
+
+export function beforePostexecutionBasisMigration(
+  file,
+  text,
+  code = 'PAPER_POSTEXECUTION_BASIS_REVIEW_REQUIRED',
+) {
+  const review = basisReview[file];
+  if (!review) return text;
+  const hash = (s) => createHash('sha256').update(s).digest('hex');
+  const original = hash(text);
+  if (original === review.predecessor) return text;
+  if (original !== review.current) throw Error(code);
+  for (const patch of [...review.patches].reverse()) {
+    if (text.split(patch.next).length !== 2) throw Error(code);
+    text = text.replace(patch.next, () => patch.old);
+  }
+  if (hash(text) !== review.predecessor) throw Error(code);
+  return text;
+}
+
 export const postexecutionMigrationReview = {
   'scripts/native-main-scopes.mjs': {
     predecessor: '70e1766879ac58d198a5eb650b84946286f2492f995b1d86fcb4bdd5f330cdd5',
@@ -154,6 +182,7 @@ export function beforePostexecutionMigration(
 ) {
   const review = postexecutionMigrationReview[file];
   if (!review || !text.includes('PAPER POSTEXECUTION migration72 acceptance')) return text;
+  text = beforePostexecutionBasisMigration(file, text, code);
   const hash = (s) => createHash('sha256').update(s).digest('hex');
   if (hash(text) !== review.current) throw Error(code);
   for (const patch of [...review.patches].reverse()) {

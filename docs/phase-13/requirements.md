@@ -1,5 +1,19 @@
 # PHASE 13 requirements
 
+## Accepted migration 72 and the preparation basis
+
+Protected main at `5e9aa485a4bf47e6f5ca9b6975f42508b423c396` accepts
+the atomic reservation for one direct PAPER successor. The next read must
+recover the selected order, original certificate, reserved hold and exact
+Portfolio revision from storage before later preparation can use them.
+Unknown or conflicting evidence fails closed. This read preserves the
+original lease. Later preparation and execution require their own current
+authorization and Risk checks. Additive migration 73 packages the
+[basis contract](current-order-risk-source.md#historical-preparation-basis)
+for deployment. Its acceptance is separate from the published migration 72.
+
+## Historical restricted-owner acceptance checkpoint
+
 The [restricted-owner acceptance correction](owner-writer-acceptance.md) is
 CI-only scope. It must preserve all49 native case bodies, the sequential native
 proof, published migrations1–71 and90/480/1020-second budgets; both actual raw

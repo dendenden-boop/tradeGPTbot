@@ -139,7 +139,7 @@ it('clones only the owned owner database and verifies both actual71-migration/no
                 acl: [{ grantor: '77', grantee: '0', privilege: 'CONNECT', grantable: false }],
               },
             ]
-          : Array.from({ length: 72 }, (_, i) => ({
+          : Array.from({ length: 73 }, (_, i) => ({
               migration_name: String(i),
               checksum: 'a'.repeat(64),
             })),

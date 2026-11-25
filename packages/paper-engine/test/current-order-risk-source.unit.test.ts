@@ -273,6 +273,83 @@ it('reconciles permanent receipts without recertifying and never retries a lost 
   }
 });
 
+it('reopens the postexecution preparation basis at its original reservation time', async () => {
+  const { request, proof } = await postexecutionProof();
+  const port = await createPostgresPaperPostexecutionReservation(options);
+  try {
+    vi.spyOn(Date, 'now').mockReturnValue(proof.event.timestamp + 60000);
+    fake.payload = { ...proof, kind: 'PAPER_POSTEXECUTION_BASIS' };
+    const basis = await port.readPreparationBasis(request, io());
+    expect(basis).toMatchObject({
+      kind: 'PAPER_POSTEXECUTION_PREPARATION_BASIS',
+      receipt: proof.receipt,
+      target: { ...request.target, status: 'CREATED', orderVersion: 0 },
+      book: { previousHash: proof.book.previousHash, stateHash: proof.book.stateHash },
+      appliedAt: proof.event.timestamp,
+      hold: proof.event.hold,
+      watermark: proof.watermark,
+    });
+    expect(Object.isFrozen(basis?.book.state)).toBe(true);
+    expect(basis).not.toHaveProperty('permit');
+    expect(basis).not.toHaveProperty('grant');
+    expect(fake.requests.at(-1)).toEqual({ ...request, kind: 'PAPER_POSTEXECUTION_BASIS_READ' });
+  } finally {
+    await port.close();
+  }
+});
+
+it.each([
+  'receipt-only',
+  'wrong-key',
+  'account',
+  'book',
+  'stale-hold',
+  'future',
+  'lost-commit',
+] as const)('returns no postexecution preparation basis for %s', async (reason) => {
+  const { request, proof } = await postexecutionProof();
+  const port = await createPostgresPaperPostexecutionReservation(options);
+  try {
+    const reply = { ...proof, kind: 'PAPER_POSTEXECUTION_BASIS' };
+    const invalid = {
+      'receipt-only': { kind: 'REPLAYED', receipt: proof.receipt },
+      'wrong-key': { ...reply, receipt: { ...proof.receipt, key: 'other-reservation' } },
+      account: {
+        ...reply,
+        evidence: {
+          ...proof.evidence,
+          result: {
+            ...proof.evidence.result,
+            target: {
+              ...proof.evidence.result.target,
+              owner: { ...proof.evidence.result.target.owner, accountId: randomUUID() },
+            },
+          },
+        },
+      },
+      book: { ...reply, book: { ...proof.book, previousHash: '0'.repeat(64) } },
+      'stale-hold': {
+        ...reply,
+        watermark: { ...proof.watermark, timestamp: proof.event.timestamp - 1 },
+      },
+      future: { ...reply, event: { ...proof.event, timestamp: proof.event.timestamp + 1 } },
+      'lost-commit': reply,
+    }[reason];
+    fake.payload = invalid;
+    fake.queries = [];
+    fake.commitFailure = reason === 'lost-commit';
+    await expect(port.readPreparationBasis(request, io())).rejects.toThrow(
+      reason === 'lost-commit' ? 'PAPER_ADMISSION_UNCERTAIN' : 'PAPER_ADMISSION_EVIDENCE',
+    );
+    if (reason !== 'lost-commit') {
+      expect(fake.queries).toContain('ROLLBACK');
+      expect(fake.queries).not.toContain('COMMIT');
+    }
+  } finally {
+    await port.close();
+  }
+});
+
 function factory() {
   const fn = (server as unknown as Record<string, unknown>)[
     'createPostgresPaperCurrentOrderRiskSource'
