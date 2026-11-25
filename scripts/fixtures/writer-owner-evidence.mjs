@@ -46,7 +46,7 @@ export function writerOwnerEvidence(window) {
     {
       database: 'ctp_p2_owner_deadbeef1234',
       oid: '101',
-      migrations: 72,
+      migrations: 73,
       migrationDigest: 'b'.repeat(64),
       nonBypassOwner: true,
       ownerOid: '77',
@@ -55,7 +55,7 @@ export function writerOwnerEvidence(window) {
     {
       database: 'ctp_p2_writer_owner_deadbeef1234',
       oid: '102',
-      migrations: 72,
+      migrations: 73,
       migrationDigest: 'b'.repeat(64),
       nonBypassOwner: true,
       ownerOid: '77',

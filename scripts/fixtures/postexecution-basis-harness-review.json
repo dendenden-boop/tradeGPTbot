@@ -1,0 +1,104 @@
+{
+  "scripts/cluster-isolated-evidence.mjs": {
+    "predecessor": "c02422ea187870dd7778526cd0e82c39cebe430bbe1afc68cf1d72ae505ef4b7",
+    "current": "6c58f68036c936f07ffa82c13da7fd0f3c6a0de181418c0686d79b7e58dfb7c7",
+    "patches": [
+      {
+        "old": "  // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n  // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n  assert.equal(proof.migrations, 72);\n  // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n  // END PAPER CURRENT RISK MIGRATION_COUNT\n",
+        "next": "  // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n  // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n  assert.equal(proof.migrations, 73);\n  // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n  // END PAPER CURRENT RISK MIGRATION_COUNT\n"
+      }
+    ]
+  },
+  "scripts/cluster-isolated-evidence.unit.test.mjs": {
+    "predecessor": "b5fff48fca738e1cc9394b2f5e4927bc6e9ca2612f80140d18f9c8c6291a71f9",
+    "current": "feb3fd2781c594d1ec540a9a541dbf02f5daa509e2cdd5d4a175e77bac4ec194",
+    "patches": [
+      {
+        "old": "    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n    // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    migrations: 72,\n    // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    // END PAPER CURRENT RISK MIGRATION_COUNT\n",
+        "next": "    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n    // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    migrations: 73,\n    // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    // END PAPER CURRENT RISK MIGRATION_COUNT\n"
+      }
+    ]
+  },
+  "scripts/native-cluster-bootstrap.mjs": {
+    "predecessor": "62ca97a0929f403ddf37823e52eedc48166da3c9c234a1f22ec7033d375b5932",
+    "current": "fcf4b46af0b3fb31a79c1c3517fd454476804afe046d3ceb6c91103acb00e580",
+    "patches": [
+      {
+        "old": "        // BEGIN PAPER CURRENT RISK SECONDARY_COUNT\n        // BEGIN PAPER CURRENT ORDER RISK SECONDARY_COUNT\n        72,\n        // END PAPER CURRENT ORDER RISK SECONDARY_COUNT\n        // END PAPER CURRENT RISK SECONDARY_COUNT\n",
+        "next": "        // BEGIN PAPER CURRENT RISK SECONDARY_COUNT\n        // BEGIN PAPER CURRENT ORDER RISK SECONDARY_COUNT\n        73,\n        // END PAPER CURRENT ORDER RISK SECONDARY_COUNT\n        // END PAPER CURRENT RISK SECONDARY_COUNT\n"
+      },
+      {
+        "old": "      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n      // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      migrations: 72,\n      // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      // END PAPER CURRENT RISK MIGRATION_COUNT\n",
+        "next": "      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n      // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      migrations: 73,\n      // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      // END PAPER CURRENT RISK MIGRATION_COUNT\n"
+      }
+    ]
+  },
+  "scripts/native-migration-count.unit.test.mjs": {
+    "predecessor": "cdb8e761e4a4a04f11eeb555473089f08af33e999796dc600d301be3381b5314",
+    "current": "8e4736245778d3c166c1a00672f5e5b488f6fae89fafd21804d24bd298ce0f99",
+    "patches": [
+      {
+        "old": "// BEGIN PAPER HISTORICAL INVENTORY FIXTURE\n// BEGIN PAPER CURRENT RISK FIXTURE\nconst fixture = vi.hoisted(() => ({ count: 72, cloned: 0, inspections: [] }));\n// END PAPER CURRENT RISK FIXTURE\n// END PAPER HISTORICAL INVENTORY FIXTURE\n",
+        "next": "// BEGIN PAPER HISTORICAL INVENTORY FIXTURE\n// BEGIN PAPER CURRENT RISK FIXTURE\nconst fixture = vi.hoisted(() => ({ count: 73, cloned: 0, inspections: [] }));\n// END PAPER CURRENT RISK FIXTURE\n// END PAPER HISTORICAL INVENTORY FIXTURE\n"
+      },
+      {
+        "old": "// BEGIN PAPER HISTORICAL INVENTORY RESET\n// BEGIN PAPER CURRENT RISK RESET\nbeforeEach(() => Object.assign(fixture, { count: 72, cloned: 0, inspections: [] }));\n// END PAPER CURRENT RISK RESET\n// END PAPER HISTORICAL INVENTORY RESET\n",
+        "next": "// BEGIN PAPER HISTORICAL INVENTORY RESET\n// BEGIN PAPER CURRENT RISK RESET\nbeforeEach(() => Object.assign(fixture, { count: 73, cloned: 0, inspections: [] }));\n// END PAPER CURRENT RISK RESET\n// END PAPER HISTORICAL INVENTORY RESET\n"
+      },
+      {
+        "old": "// BEGIN PAPER HISTORICAL INVENTORY TITLE\n// BEGIN PAPER CURRENT RISK TITLE\nit('checks migration72 in all four secondary ledgers before starting actor cloning', async () => {\n  // END PAPER CURRENT RISK TITLE\n  // END PAPER HISTORICAL INVENTORY TITLE\n",
+        "next": "// BEGIN PAPER HISTORICAL INVENTORY TITLE\n// BEGIN PAPER CURRENT RISK TITLE\nit('checks migration73 in all four secondary ledgers before starting actor cloning', async () => {\n  // END PAPER CURRENT RISK TITLE\n  // END PAPER HISTORICAL INVENTORY TITLE\n"
+      },
+      {
+        "old": "  expect(fixture.cloned).toBe(1);\n});\n// BEGIN PAPER HISTORICAL INVENTORY STALE\nit('rejects a secondary ledger still at published67 before cloning any actor', async () => {\n",
+        "next": "  expect(fixture.cloned).toBe(1);\n});\nit('rejects published72 secondary state before cloning any actor', async () => {\n  fixture.count = 72;\n  const f = run();\n  await expect(f.promise).rejects.toThrow();\n  expect(f.migrated).toHaveLength(1);\n  expect(f.observed).toEqual(f.migrated);\n  expect(f.closed).toEqual(f.migrated);\n  expect(fixture.cloned).toBe(0);\n});\n// BEGIN PAPER HISTORICAL INVENTORY STALE\nit('rejects a secondary ledger still at published67 before cloning any actor', async () => {\n"
+      }
+    ]
+  },
+  "scripts/registry-domain-evidence.unit.test.mjs": {
+    "predecessor": "e4c29e0094568581e1103244f4082a18a1fc475aaec25688a19a7aa55f25df77",
+    "current": "3a7cf8e1e529889f821142ee1c86d87b3823ba063679921d007b8ac793205220",
+    "patches": [
+      {
+        "old": "    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n    // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    migrations: 72,\n    // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    // END PAPER CURRENT RISK MIGRATION_COUNT\n",
+        "next": "    // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n    // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    migrations: 73,\n    // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n    // END PAPER CURRENT RISK MIGRATION_COUNT\n"
+      }
+    ]
+  },
+  "scripts/test-database.mjs": {
+    "predecessor": "1436058f003b30f9656f5c69ceeaee79d6ef98a944b373dec823aa38bba0ee89",
+    "current": "6693af9c175d0655350ea019fdb150e9b14721ffc45cb7f41b4af5f8ea8b2458",
+    "patches": [
+      {
+        "old": "  verifyPaperPostexecutionUpgrade,\n} from './paper-postexecution-upgrade.mjs';\n// BEGIN WRITER OWNER PARTITIONS IMPORT\nimport { performance } from 'node:perf_hooks';\n",
+        "next": "  verifyPaperPostexecutionUpgrade,\n} from './paper-postexecution-upgrade.mjs';\nimport {\n  verifyPaperPostexecutionBasisStorage,\n  verifyPaperPostexecutionBasisUpgrade,\n} from './paper-postexecution-basis-upgrade.mjs';\n// BEGIN WRITER OWNER PARTITIONS IMPORT\nimport { performance } from 'node:perf_hooks';\n"
+      },
+      {
+        "old": "  '202611150001_paper_current_order_risk',\n  '202611240001_paper_postexecution_reservation',\n  // END PAPER CURRENT ORDER RISK MIGRATION\n  // END PAPER CURRENT RISK MARKET MIGRATION\n",
+        "next": "  '202611150001_paper_current_order_risk',\n  '202611240001_paper_postexecution_reservation',\n  '202611250001_paper_postexecution_preparation_basis',\n  // END PAPER CURRENT ORDER RISK MIGRATION\n  // END PAPER CURRENT RISK MARKET MIGRATION\n"
+      },
+      {
+        "old": "    paperUpgrade,\n    paperAdmissionEnvironment(databases[4]),\n  );\n  assert.equal(postexecutionCompiled.status, 'PASS');\n\n  // Restore a genuinely populated published-19 format before applying any\n",
+        "next": "    paperUpgrade,\n    paperAdmissionEnvironment(databases[4]),\n    async () => {\n      const before = await capturePaperExecutionStartUpgrade(paperUpgrade);\n      await cp(\n        path.join(workspace, 'packages/database/prisma/migrations', expectedMigrations[72]),\n        path.join(paperMigrations, expectedMigrations[72]),\n        { recursive: true },\n      );\n      await migrate(databases[4], paperConfig, true);\n      await verifyPaperPostexecutionBasisUpgrade(paperUpgrade, before);\n      await migrate(databases[4], paperConfig, true);\n      await verifyPaperPostexecutionBasisUpgrade(paperUpgrade, before);\n    },\n  );\n  assert.equal(postexecutionCompiled.status, 'PASS');\n  assert.equal(postexecutionCompiled.preparationBasis, 'PASS');\n\n  // Restore a genuinely populated published-19 format before applying any\n"
+      },
+      {
+        "old": "  // END PAPER CURRENT ORDER RISK RESET_ADMISSIONRESET\n  await verifyPaperPostexecutionStorage(admissionReset, { nonBypass: false, empty: true });\n  // END PAPER CURRENT RISK RESET_UPGRADE\n  // END PAPER HISTORICAL INVENTORY RESET_UPGRADE\n",
+        "next": "  // END PAPER CURRENT ORDER RISK RESET_ADMISSIONRESET\n  await verifyPaperPostexecutionStorage(admissionReset, { nonBypass: false, empty: true });\n  await verifyPaperPostexecutionBasisStorage(admissionReset, false);\n  // END PAPER CURRENT RISK RESET_UPGRADE\n  // END PAPER HISTORICAL INVENTORY RESET_UPGRADE\n"
+      },
+      {
+        "old": "  // END PAPER CURRENT ORDER RISK RESET_RESET\n  await verifyPaperPostexecutionStorage(reset, { nonBypass: false, empty: true });\n  // END PAPER CURRENT RISK RESET_FRESH\n  // END PAPER HISTORICAL INVENTORY RESET_FRESH\n",
+        "next": "  // END PAPER CURRENT ORDER RISK RESET_RESET\n  await verifyPaperPostexecutionStorage(reset, { nonBypass: false, empty: true });\n  await verifyPaperPostexecutionBasisStorage(reset, false);\n  // END PAPER CURRENT RISK RESET_FRESH\n  // END PAPER HISTORICAL INVENTORY RESET_FRESH\n"
+      }
+    ]
+  },
+  "scripts/test-integration.mjs": {
+    "predecessor": "f9f3cab235867abcc2fc12e8ebe81c84df1ad124e66e11f0e1903052d5a97c36",
+    "current": "c65f56b5f0228bdce15b272a09da7a90b038f116bf3685fbc71256c7d021e2ec",
+    "patches": [
+      {
+        "old": "      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n      // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      databaseReport.nativeClusterIsolation?.migrations !== 72 ||\n      // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      // END PAPER CURRENT RISK MIGRATION_COUNT\n",
+        "next": "      // BEGIN PAPER CURRENT RISK MIGRATION_COUNT\n      // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      databaseReport.nativeClusterIsolation?.migrations !== 73 ||\n      // END PAPER CURRENT ORDER RISK MIGRATION_COUNT\n      // END PAPER CURRENT RISK MIGRATION_COUNT\n"
+      }
+    ]
+  }
+}

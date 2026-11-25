@@ -171,6 +171,30 @@ read reconciles the durable nonfinancial outcome. Abort/deadline/physical cleanu
 remain bounded; no slot is freed before transport settlement and no blind retry
 is introduced.
 
+## Historical preparation basis
+
+The private reader uses the original reservation key, origin request and
+stored target selector. It authenticates this selection through the existing
+restricted reconciliation path and reads the saved certificate, exact target
+command, book revision, commitment event and hold watermark in the same
+transaction. Only the original untouched CREATED target is in scope.
+The read rejects later attempt or execution evidence. A missing key returns
+no basis. A conflicting key, book, hold or certificate fails closed.
+
+The TypeScript port checks the saved Risk and Portfolio calculation at the
+original commitment timestamp, including the exact successor and zero
+postings. The result includes the original validity deadline and the verified
+Portfolio state. Exact replay after policy replacement keeps that historical
+deadline. A later preparation transaction must obtain fresh Risk, authority
+and source evidence. A lost read COMMIT returns uncertainty and permits only
+an explicit read after reconnect.
+
+Additive migration 73 installs the reader in the existing reconciliation RPC.
+The helper stays private to the migration owner. The RPC preserves its OID and
+privileges. The reader has no path to create attempts, reservations, grants,
+permits, dispatch or monetary effects. Publication requires the populated
+upgrade, redeploy, compiled restart, isolated reset and independent CI.
+
 ## Acceptance boundary
 
 Tests cover genuine durable target authentication, count-once semantics, current

@@ -137,7 +137,7 @@ export async function verifyPaperPostexecutionUpgrade(db, before) {
   await verifyPaperPostexecutionStorage(db, { nonBypass: true, empty: true });
 }
 
-export async function verifyCompiledPaperPostexecution(db, env) {
+export async function verifyCompiledPaperPostexecution(db, env, deployBasis) {
   const { createPostgresPaperPostexecutionReservation } =
     await import('../packages/paper-engine/dist/postgres-postexecution-reservation.js');
   const { createPostgresPaperExecutionCommitter } =
@@ -198,12 +198,38 @@ export async function verifyCompiledPaperPostexecution(db, env) {
       reservations: before.reservations + 1,
       causes: 1,
     });
+    if (deployBasis) {
+      await reservation.close();
+      await deployBasis();
+      reservation = await createPostgresPaperPostexecutionReservation(options);
+      const basis = await reservation.readPreparationBasis(request, io());
+      assert.equal(basis.kind, 'PAPER_POSTEXECUTION_PREPARATION_BASIS');
+      assert.deepEqual(basis.receipt, receipt);
+      assert.equal(basis.target.commandHash, row.commandHash);
+      assert.equal(basis.originalValidUntil > basis.appliedAt, true);
+      assert.deepEqual(
+        basis.book.state.holds.find((hold) => hold.id === basis.hold.id),
+        basis.hold,
+      );
+      assert.equal(basis.book.revision, receipt.revision);
+      await reservation.close();
+      reservation = await createPostgresPaperPostexecutionReservation(options);
+      assert.deepEqual(await reservation.readPreparationBasis(request, io()), basis);
+      assert.deepEqual(await reservation.read(request, io()), receipt);
+      assert.deepEqual(await writer.read(original, io()), history);
+      assert.deepEqual(await effects(), {
+        ...before,
+        reservations: before.reservations + 1,
+        causes: 1,
+      });
+    }
     return {
       status: 'PASS',
       restart: true,
       oneHold: true,
       historicalReplay: true,
       monetaryRowsUnchanged: true,
+      ...(deployBasis ? { preparationBasis: 'PASS' } : {}),
     };
   } finally {
     await reservation?.close();

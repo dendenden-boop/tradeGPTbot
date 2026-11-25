@@ -51,7 +51,7 @@ function fixture() {
     actors: 32,
     // BEGIN PAPER CURRENT RISK MIGRATION_COUNT
     // BEGIN PAPER CURRENT ORDER RISK MIGRATION_COUNT
-    migrations: 72,
+    migrations: 73,
     // END PAPER CURRENT ORDER RISK MIGRATION_COUNT
     // END PAPER CURRENT RISK MIGRATION_COUNT
     fixedRoleGraphHash: 'e'.repeat(64),

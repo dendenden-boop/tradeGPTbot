@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 // BEGIN PAPER HISTORICAL INVENTORY FIXTURE
 // BEGIN PAPER CURRENT RISK FIXTURE
-const fixture = vi.hoisted(() => ({ count: 72, cloned: 0, inspections: [] }));
+const fixture = vi.hoisted(() => ({ count: 73, cloned: 0, inspections: [] }));
 // END PAPER CURRENT RISK FIXTURE
 // END PAPER HISTORICAL INVENTORY FIXTURE
 vi.mock('./owned-native-secondary.mjs', () => ({
@@ -27,7 +27,7 @@ import { bootstrapNativeCluster } from './native-cluster-bootstrap.mjs';
 
 // BEGIN PAPER HISTORICAL INVENTORY RESET
 // BEGIN PAPER CURRENT RISK RESET
-beforeEach(() => Object.assign(fixture, { count: 72, cloned: 0, inspections: [] }));
+beforeEach(() => Object.assign(fixture, { count: 73, cloned: 0, inspections: [] }));
 // END PAPER CURRENT RISK RESET
 // END PAPER HISTORICAL INVENTORY RESET
 function run(budget = 10000) {
@@ -73,7 +73,7 @@ function run(budget = 10000) {
 }
 // BEGIN PAPER HISTORICAL INVENTORY TITLE
 // BEGIN PAPER CURRENT RISK TITLE
-it('checks migration72 in all four secondary ledgers before starting actor cloning', async () => {
+it('checks migration73 in all four secondary ledgers before starting actor cloning', async () => {
   // END PAPER CURRENT RISK TITLE
   // END PAPER HISTORICAL INVENTORY TITLE
   const f = run();
@@ -82,6 +82,15 @@ it('checks migration72 in all four secondary ledgers before starting actor cloni
   expect(f.observed).toEqual(f.migrated);
   expect(f.closed).toEqual(f.migrated);
   expect(fixture.cloned).toBe(1);
+});
+it('rejects published72 secondary state before cloning any actor', async () => {
+  fixture.count = 72;
+  const f = run();
+  await expect(f.promise).rejects.toThrow();
+  expect(f.migrated).toHaveLength(1);
+  expect(f.observed).toEqual(f.migrated);
+  expect(f.closed).toEqual(f.migrated);
+  expect(fixture.cloned).toBe(0);
 });
 // BEGIN PAPER HISTORICAL INVENTORY STALE
 it('rejects a secondary ledger still at published67 before cloning any actor', async () => {
